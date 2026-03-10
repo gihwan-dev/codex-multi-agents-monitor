@@ -1,9 +1,15 @@
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThreadTimelineShell } from "@/features/thread-detail/ui/thread-timeline-shell";
-import type { ThreadDetail } from "@/shared/types/contracts";
+import { getThreadDrilldown } from "@/shared/lib/tauri/commands";
+import type { ThreadDetail, ThreadDrilldown } from "@/shared/types/contracts";
+
+vi.mock("@/shared/lib/tauri/commands", () => ({
+  getThreadDrilldown: vi.fn(),
+}));
 
 function buildDetail(): ThreadDetail {
   return {
@@ -79,39 +85,99 @@ function buildDetail(): ThreadDetail {
   };
 }
 
+function buildDrilldown(laneId: string): ThreadDrilldown {
+  const commentary = laneId === "thread-1" ? "main commentary" : "child commentary";
+  const rawLine = laneId === "thread-1" ? "main raw line" : "child raw line";
+
+  return {
+    lane_id: laneId,
+    latest_commentary_summary: commentary,
+    latest_commentary_at: "2026-03-10T09:59:00Z",
+    recent_tool_spans: [
+      {
+        thread_id: "thread-1",
+        agent_session_id: laneId === "thread-1" ? null : laneId,
+        tool_name: "exec_command",
+        started_at: "2026-03-10T09:58:00Z",
+        ended_at: "2026-03-10T09:59:00Z",
+        duration_ms: 60_000,
+      },
+    ],
+    related_wait_spans: [
+      {
+        thread_id: "thread-1",
+        parent_session_id: "thread-1",
+        child_session_id: laneId === "thread-1" ? "session-child" : laneId,
+        started_at: "2026-03-10T09:40:00Z",
+        ended_at: "2026-03-10T09:47:00Z",
+        duration_ms: 420_000,
+      },
+    ],
+    raw_snippet: {
+      source_label: `${laneId}.jsonl`,
+      truncated: false,
+      lines: [
+        {
+          line_number: 7,
+          content: rawLine,
+        },
+      ],
+    },
+  };
+}
+
+function renderShell(detail: ThreadDetail | null, isLoading = false) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <ThreadTimelineShell
+        threadId="thread-1"
+        detail={detail}
+        isLoading={isLoading}
+      />
+    </QueryClientProvider>,
+  );
+}
+
 describe("ThreadTimelineShell 동작", () => {
+  beforeEach(() => {
+    vi.mocked(getThreadDrilldown).mockReset();
+    vi.mocked(getThreadDrilldown).mockImplementation(async (_threadId, laneId) =>
+      buildDrilldown(laneId),
+    );
+  });
+
   it("로딩 중에는 스켈레톤을 렌더링한다", () => {
-    render(<ThreadTimelineShell threadId="thread-1" detail={null} isLoading />);
+    renderShell(null, true);
 
     expect(screen.getByText("Thread Detail")).toBeInTheDocument();
   });
 
   it("상세 데이터가 없으면 빈 상태를 렌더링한다", () => {
-    render(
-      <ThreadTimelineShell
-        threadId="thread-1"
-        detail={null}
-        isLoading={false}
-      />,
-    );
+    renderShell(null);
 
     expect(
       screen.getByText((_, node) => {
-        return (
-          node?.textContent === "thread_id=thread-1 데이터가 아직 없습니다."
-        );
+        return node?.textContent === "thread_id=thread-1 데이터가 아직 없습니다.";
       }),
     ).toBeInTheDocument();
   });
 
-  it("상세 데이터가 있으면 메인/서브 lane과 wait connector를 렌더링한다", () => {
-    render(
-      <ThreadTimelineShell
-        threadId="thread-1"
-        detail={buildDetail()}
-        isLoading={false}
-      />,
-    );
+  it("상세 데이터가 있으면 메인/서브 lane과 wait connector를 렌더링한다", async () => {
+    renderShell(buildDetail());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "main commentary",
+      );
+    });
 
     expect(screen.getByText("Detail thread")).toBeInTheDocument();
     expect(screen.getByText("inflight")).toBeInTheDocument();
@@ -121,33 +187,69 @@ describe("ThreadTimelineShell 동작", () => {
     expect(screen.getByTestId("marker-summary-panel")).toHaveTextContent(
       "final answer",
     );
+    expect(getThreadDrilldown).toHaveBeenCalledWith("thread-1", "thread-1");
   });
 
-  it("hover preview와 click 고정으로 marker summary panel을 전환한다", async () => {
+  it("lane click으로 drilldown이 바뀌고 raw snippet은 기본 접힘 후 lane 변경 시 리셋된다", async () => {
     const user = userEvent.setup();
+    renderShell(buildDetail());
 
-    render(
-      <ThreadTimelineShell
-        threadId="thread-1"
-        detail={buildDetail()}
-        isLoading={false}
-      />,
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "main commentary",
+      );
+    });
+
+    await user.click(screen.getByTestId("lane-session-child"));
+    await waitFor(() => {
+      expect(getThreadDrilldown).toHaveBeenCalledWith("thread-1", "session-child");
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "child commentary",
+      );
+    });
+    expect(screen.queryByText("child raw line")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "원문 보기" }));
+    expect(screen.getByTestId("raw-snippet-content")).toHaveTextContent(
+      "child raw line",
     );
 
-    const spawnMarker = screen.getByRole("button", { name: /spawn marker ada/i });
+    await user.click(screen.getByTestId("lane-thread-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "main commentary",
+      );
+    });
+    expect(screen.queryByTestId("raw-snippet-content")).not.toBeInTheDocument();
+  });
+
+  it("hover preview는 marker summary만 바꾸고 drilldown lane 선택은 유지한다", async () => {
+    const user = userEvent.setup();
+    renderShell(buildDetail());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "main commentary",
+      );
+    });
+
+    await user.click(screen.getByTestId("lane-session-child"));
+    await waitFor(() => {
+      expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+        "child commentary",
+      );
+    });
+
     const commentaryMarker = screen.getByRole("button", {
       name: /commentary marker recent commentary/i,
     });
-
-    await user.click(spawnMarker);
-    expect(screen.getByTestId("marker-summary-panel")).toHaveTextContent("Ada");
-
     await user.hover(commentaryMarker);
+
     expect(screen.getByTestId("marker-summary-panel")).toHaveTextContent(
       "recent commentary",
     );
-
-    await user.unhover(commentaryMarker);
-    expect(screen.getByTestId("marker-summary-panel")).toHaveTextContent("Ada");
+    expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
+      "child commentary",
+    );
   });
 });

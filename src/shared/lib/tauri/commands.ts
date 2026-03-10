@@ -4,6 +4,7 @@ import type {
   HistorySummaryPayload,
   LiveOverviewThread,
   ThreadDetail,
+  ThreadDrilldown,
 } from "@/shared/types/contracts";
 
 export type TauriCommandErrorCode =
@@ -25,6 +26,13 @@ export async function listLiveThreads() {
 
 export async function getThreadDetail(threadId: string) {
   return invoke<ThreadDetail | null>("get_thread_detail", { threadId });
+}
+
+export async function getThreadDrilldown(threadId: string, laneId: string) {
+  return invoke<ThreadDrilldown | null>("get_thread_drilldown", {
+    threadId,
+    laneId,
+  });
 }
 
 export async function getHistorySummary() {

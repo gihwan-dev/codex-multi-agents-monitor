@@ -36,6 +36,24 @@ pub(super) fn insert_thread(
     archived: i64,
     updated_at: Option<&str>,
 ) {
+    insert_thread_with_rollout(
+        connection,
+        thread_id,
+        status,
+        archived,
+        updated_at,
+        "/rollout",
+    );
+}
+
+pub(super) fn insert_thread_with_rollout(
+    connection: &Connection,
+    thread_id: &str,
+    status: &str,
+    archived: i64,
+    updated_at: Option<&str>,
+    rollout_path: &str,
+) {
     connection
         .execute(
             "
@@ -56,7 +74,7 @@ pub(super) fn insert_thread(
                 thread_id,
                 format!("title-{thread_id}"),
                 "/workspace",
-                "/rollout",
+                rollout_path,
                 archived,
                 "vscode",
                 status,
@@ -75,7 +93,15 @@ pub(super) fn insert_agent(
     depth: i64,
     started_at: Option<&str>,
 ) {
-    insert_agent_with_role(connection, session_id, thread_id, "subagent", depth, started_at);
+    insert_agent_with_role_and_rollout(
+        connection,
+        session_id,
+        thread_id,
+        "subagent",
+        depth,
+        started_at,
+        "/rollout",
+    );
 }
 
 pub(super) fn insert_agent_with_role(
@@ -85,6 +111,26 @@ pub(super) fn insert_agent_with_role(
     agent_role: &str,
     depth: i64,
     started_at: Option<&str>,
+) {
+    insert_agent_with_role_and_rollout(
+        connection,
+        session_id,
+        thread_id,
+        agent_role,
+        depth,
+        started_at,
+        "/rollout",
+    );
+}
+
+pub(super) fn insert_agent_with_role_and_rollout(
+    connection: &Connection,
+    session_id: &str,
+    thread_id: &str,
+    agent_role: &str,
+    depth: i64,
+    started_at: Option<&str>,
+    rollout_path: &str,
 ) {
     connection
         .execute(
@@ -109,7 +155,7 @@ pub(super) fn insert_agent_with_role(
                 depth,
                 started_at,
                 started_at,
-                "/rollout",
+                rollout_path,
                 "/workspace",
             ],
         )

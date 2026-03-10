@@ -5,11 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useThreadUiStore } from "@/entities/thread/model/thread-ui-store";
 import { ThreadDetailPage } from "@/pages/thread-detail/thread-detail-page";
-import { getThreadDetail } from "@/shared/lib/tauri/commands";
+import {
+  getThreadDetail,
+  getThreadDrilldown,
+} from "@/shared/lib/tauri/commands";
 import type { ThreadDetail } from "@/shared/types/contracts";
 
 vi.mock("@/shared/lib/tauri/commands", () => ({
   getThreadDetail: vi.fn(),
+  getThreadDrilldown: vi.fn(),
 }));
 
 function buildDetail(status: ThreadDetail["thread"]["status"]): ThreadDetail {
@@ -50,11 +54,31 @@ function renderThreadDetailPage() {
   );
 }
 
+async function flushPageQueries() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
 describe("ThreadDetailPage", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-10T10:00:00Z"));
     vi.mocked(getThreadDetail).mockReset();
+    vi.mocked(getThreadDrilldown).mockReset();
+    vi.mocked(getThreadDrilldown).mockResolvedValue({
+      lane_id: "thread-1",
+      latest_commentary_summary: "recent commentary",
+      latest_commentary_at: "2026-03-10T10:00:00Z",
+      recent_tool_spans: [],
+      related_wait_spans: [],
+      raw_snippet: null,
+    });
     useThreadUiStore.setState({ selectedThreadId: null });
   });
 
@@ -68,19 +92,19 @@ describe("ThreadDetailPage", () => {
 
     const rendered = renderThreadDetailPage();
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushPageQueries();
 
     expect(getThreadDetail).toHaveBeenCalledTimes(1);
+    expect(getThreadDrilldown).toHaveBeenCalledWith("thread-1", "thread-1");
     expect(useThreadUiStore.getState().selectedThreadId).toBe("thread-1");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000);
-      await Promise.resolve();
     });
+    await flushPageQueries();
 
     expect(getThreadDetail).toHaveBeenCalledTimes(2);
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(2);
 
     rendered.unmount();
     expect(useThreadUiStore.getState().selectedThreadId).toBeNull();
@@ -91,15 +115,17 @@ describe("ThreadDetailPage", () => {
 
     renderThreadDetailPage();
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushPageQueries();
+
+    expect(getThreadDetail).toHaveBeenCalledTimes(1);
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_000);
-      await Promise.resolve();
     });
+    await flushPageQueries();
 
     expect(getThreadDetail).toHaveBeenCalledTimes(1);
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
   });
 });

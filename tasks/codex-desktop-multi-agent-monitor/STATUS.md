@@ -1,42 +1,44 @@
 # Current slice
-Slice 4. Thread Detail swimlane timeline 구현
+Slice 5. Agent Drilldown과 raw expansion 구현
 - 상태: 완료
-- 커밋: 예정 (`feat(thread-detail): 스레드 상세 타임라인 스윔레인 구현`)
+- 커밋: `feat(thread-detail): agent drilldown과 raw expansion 추가`
 
 # Done
-- thread detail 전용 view-model을 추가해 global window, main lane, child lane session window, wait/tool block, commentary/spawn/final marker, wait-to-child connector를 한 곳에서 계산하도록 정리했다.
-- thread detail 화면이 skeleton 대신 실제 swimlane timeline을 렌더하고, marker summary panel에서 hover 미리보기 + click 고정 interaction을 제공하도록 바뀌었다.
-- `ThreadDetailPage`가 inflight thread에서만 2초 polling을 유지하도록 바뀌었고, thread-detail view-model/shell/page 테스트를 추가해 slice 4 동작을 고정했다.
+- Tauri `get_thread_drilldown(threadId, laneId)` command를 실제 구현해 main lane과 agent lane 모두에서 최신 commentary, 최근 tool spans, 관련 wait spans, raw JSONL snippet을 on-demand로 계산하도록 연결했다.
+- shared contract에 `ThreadDrilldown`, `RawJsonlSnippet`, `related_wait_spans`를 추가하고, frontend bridge와 thread-detail shell이 lane-centered selection + 별도 drilldown query를 사용하도록 바꿨다.
+- Thread Detail 우측 컬럼을 `Marker Summary` + `Agent Drilldown` 2단 구조로 확장했고, lane 선택, 기본 접힘 raw snippet 토글, lane 변경 시 raw expansion reset 동작을 추가했다.
+- Rust drilldown 테스트, frontend shell/page/command contract 테스트를 보강해 Slice 5 동작을 고정했다.
 
 # Decisions made during implementation
-- Slice 4의 구현 정책은 그대로 유지했다: main lane id=`thread_id`, child lane id=`agent.session_id`, child lane은 `started_at~updated_at` session window 기반, marker interaction은 hover 미리보기 + click 고정, inflight detail만 2초 polling.
-- marker summary panel의 active 우선순위는 `hovered marker > selected marker > latest marker`로 고정했다.
-- view-model은 backend contract를 늘리지 않고 frontend 내부 타입으로만 추가했고, child session과 매칭되지 않는 wait는 connector를 그리지 않도록 유지했다.
-- delegated writer 경로가 반복적으로 final/checkpoint를 반환하지 못해, 이번 slice는 thread-detail 모듈 경계 안에서 main thread가 직접 구현을 마감했다.
+- drilldown source는 `monitor.db`를 확장하지 않고 `threads/agent_sessions.rollout_path`를 통해 원본 JSONL을 on-demand로 다시 읽는 방식으로 고정했다.
+- raw snippet anchor는 `최신 commentary line`, fallback은 `최신 의미 있는 event line`으로 유지했고, snippet window는 anchor 주변 최대 8줄로 제한했다.
+- lane selection은 `ThreadTimelineShell` 내부 상태로 관리하고, marker hover는 summary panel만 바꾸며 drilldown lane selection은 변경하지 않도록 유지했다.
+- rollout path가 비어 있거나 파일을 읽을 수 없으면 command 전체를 실패시키지 않고 `raw_snippet: null`, commentary/tool 비어 있음으로 degrade 하도록 고정했다.
 
 # Verification results
-- phase 1: delegated `worker`를 두 차례 재시도했지만 checkpoint/final 미반환으로 진행이 멈춰 직접 구현으로 전환했다.
-- phase 2-1: `pnpm test` 통과
-- 결과: Vitest 8 files / 23 tests 통과
-- phase 2-2: `pnpm typecheck` 통과
-- advisory review: `module-structure-gatekeeper`, `frontend-structure-gatekeeper`, `code-quality-reviewer`를 요청했지만 응답은 받지 못했다. advisory 미응답으로 처리했다.
-- phase 3 commit: 대기 중
+- `pnpm cargo:test` 통과
+- 결과: Rust 18 tests 통과 (`get_thread_drilldown` main/agent/missing-rollout 시나리오 포함)
+- `pnpm test` 통과
+- 결과: Vitest 8 files / 25 tests 통과
+- `pnpm typecheck` 통과
+- advisory review: `module-structure-gatekeeper`, `frontend-structure-gatekeeper`, `code-quality-reviewer`, `architecture-reviewer`, `type-specialist`, `test-engineer`를 요청했지만 응답을 받지 못했다. advisory 미응답으로 처리했다.
+- commit: 성공 예정 (`feat(thread-detail): agent drilldown과 raw expansion 추가`)
 
 # Known issues / residual risk
-- child lane은 여전히 subagent 상세 메시지 타임라인이 아니라 session lifetime window만 시각화한다.
-- marker summary는 요약 텍스트와 시간 메타데이터까지만 보여주고 raw expansion은 아직 없다.
-- delegated writer liveness 문제가 남아 있어 이후 implement-task slice에서도 같은 현상이 반복될 수 있다.
-- raw expansion, agent drilldown, history/deep link, archived JSONL 본문 ingest는 여전히 후속 slice 범위다.
+- main/live thread가 state snapshot에 없는 경우 `rollout_path`가 비어 raw snippet과 commentary/tool drilldown이 비어 있을 수 있다.
+- child lane 상세 이벤트는 여전히 swimlane block으로 확장되지 않고 우측 drilldown 패널에서만 보강된다.
+- raw snippet은 원본 JSONL 일부 window만 보여주므로 anchor 밖 문맥은 추가 확장이 필요할 수 있다.
+- delegated writer liveness 문제는 해결하지 않았고, 이후 slice에서도 main-thread direct implementation이 필요할 수 있다.
 
 # Next slice
 목표
-- Slice 5에서 agent drilldown과 raw expansion을 추가해, 요약 우선 상태를 유지한 채 필요할 때만 원문 snippet을 확장해서 볼 수 있게 한다.
+- Slice 6에서 History Summary와 workspace/log deep link를 추가해 최근 7일 role별 duration/timeout/spawn 통계와 진입 경로를 완성한다.
 
 선행조건
-- slice 4에서 추가한 view-model을 재사용해 selected agent 기준 tool/wait 영향과 marker summary를 drilldown 패널로 확장할 수 있어야 한다.
-- raw JSONL snippet은 기본 접힘 상태를 유지하고, thread detail timeline과 selection state를 공유할지 먼저 정해야 한다.
+- 현재 thread-detail drilldown contract를 유지한 채 history view에서 재사용 가능한 summary/backlink 경계를 따로 잡아야 한다.
+- deep link는 frontend가 직접 파일을 읽지 않고 기존 Tauri open command만 사용하도록 유지해야 한다.
 
 먼저 볼 경계
-- `src/features/thread-detail/ui/thread-timeline-shell.tsx`
-- `src/features/thread-detail/ui/thread-swimlane-panel.tsx`
-- `src-tauri/src/commands/api/thread_detail.rs`
+- `src/pages/history/history-page.tsx`
+- `src/shared/lib/tauri/commands.ts`
+- `src-tauri/src/commands/open.rs`

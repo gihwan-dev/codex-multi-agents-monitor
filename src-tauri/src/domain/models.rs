@@ -107,6 +107,29 @@ pub struct ToolSpan {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawJsonlSnippetLine {
+    pub line_number: u32,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawJsonlSnippet {
+    pub source_label: String,
+    pub lines: Vec<RawJsonlSnippetLine>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreadDrilldown {
+    pub lane_id: String,
+    pub latest_commentary_summary: Option<String>,
+    pub latest_commentary_at: Option<DateTime<Utc>>,
+    pub recent_tool_spans: Vec<ToolSpan>,
+    pub related_wait_spans: Vec<WaitSpan>,
+    pub raw_snippet: Option<RawJsonlSnippet>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BottleneckSnapshot {
     pub generated_at: DateTime<Utc>,
     pub slow_threads: Vec<MonitorThread>,

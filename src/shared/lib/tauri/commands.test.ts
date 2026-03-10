@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getHistorySummary,
   getThreadDetail,
+  getThreadDrilldown,
   listLiveThreads,
   openLogFile,
   openWorkspace,
@@ -30,6 +31,14 @@ describe("tauri bridge command contracts", () => {
     await getThreadDetail("thread-1");
     expect(invokeMock).toHaveBeenCalledWith("get_thread_detail", {
       threadId: "thread-1",
+    });
+  });
+
+  it("pins get_thread_drilldown argument keys", async () => {
+    await getThreadDrilldown("thread-1", "session-a");
+    expect(invokeMock).toHaveBeenCalledWith("get_thread_drilldown", {
+      threadId: "thread-1",
+      laneId: "session-a",
     });
   });
 

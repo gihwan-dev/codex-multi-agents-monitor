@@ -7,7 +7,8 @@ mod sources;
 mod state;
 
 use commands::{
-    get_history_summary, get_thread_detail, list_live_threads, open_log_file, open_workspace,
+    get_history_summary, get_thread_detail, get_thread_drilldown, list_live_threads,
+    open_log_file, open_workspace,
 };
 use state::AppState;
 use tauri::Manager;
@@ -31,6 +32,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_live_threads,
             get_thread_detail,
+            get_thread_drilldown,
             get_history_summary,
             open_workspace,
             open_log_file

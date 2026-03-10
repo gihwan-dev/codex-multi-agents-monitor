@@ -1,12 +1,14 @@
 import { Activity, Clock3, GitBranch, MessageSquare, Wrench } from "lucide-react";
 
 import { cn } from "@/shared/lib/utils";
+import type { ThreadDrilldown } from "@/shared/types/contracts";
 
 import type {
   ThreadTimelineLane,
   ThreadTimelineMarker,
   ThreadTimelineViewModel,
 } from "@/features/thread-detail/lib/build-thread-timeline-view-model";
+import { ThreadDrilldownPanel } from "@/features/thread-detail/ui/thread-drilldown-panel";
 
 const LANE_HEIGHT = 68;
 const LANE_GAP = 12;
@@ -15,8 +17,12 @@ type ThreadSwimlanePanelProps = {
   viewModel: ThreadTimelineViewModel;
   activeMarker: ThreadTimelineMarker | null;
   selectedMarkerId: string | null;
+  selectedLaneId: string | null;
   onMarkerHover: (markerId: string | null) => void;
   onMarkerSelect: (markerId: string) => void;
+  onLaneSelect: (laneId: string) => void;
+  drilldown: ThreadDrilldown | null;
+  isDrilldownLoading: boolean;
 };
 
 const blockClassMap = {
@@ -35,8 +41,12 @@ export function ThreadSwimlanePanel({
   viewModel,
   activeMarker,
   selectedMarkerId,
+  selectedLaneId,
   onMarkerHover,
   onMarkerSelect,
+  onLaneSelect,
+  drilldown,
+  isDrilldownLoading,
 }: ThreadSwimlanePanelProps) {
   const timelineHeight =
     viewModel.lanes.length * LANE_HEIGHT +
@@ -45,6 +55,7 @@ export function ThreadSwimlanePanel({
     viewModel.lanes.map((lane, index) => [lane.id, index]),
   );
   const laneById = new Map(viewModel.lanes.map((lane) => [lane.id, lane]));
+  const selectedLane = selectedLaneId ? laneById.get(selectedLaneId) ?? null : null;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -87,13 +98,14 @@ export function ThreadSwimlanePanel({
               <LaneLabel
                 key={lane.id}
                 lane={lane}
+                onSelect={onLaneSelect}
+                selected={selectedLaneId === lane.id}
                 top={index * (LANE_HEIGHT + LANE_GAP)}
               />
             ))}
           </div>
 
           <div
-            aria-label="Thread swimlane timeline"
             data-testid="thread-swimlane-panel"
             className="relative overflow-hidden rounded-2xl border border-[hsl(var(--line))] bg-[linear-gradient(90deg,hsl(var(--panel)/0.88),hsl(var(--panel-2)/0.96))]"
             style={{ height: `${timelineHeight}px` }}
@@ -105,6 +117,7 @@ export function ThreadSwimlanePanel({
               viewBox={`0 0 100 ${timelineHeight}`}
               preserveAspectRatio="none"
             >
+              <title>Wait connector layer</title>
               {viewModel.connectors.map((connector) => {
                 const parentIndex = laneIndexById.get(connector.parent_lane_id);
                 const childIndex = laneIndexById.get(connector.child_lane_id);
@@ -131,19 +144,33 @@ export function ThreadSwimlanePanel({
             {viewModel.lanes.map((lane, index) => (
               <div
                 key={lane.id}
-                data-testid={`lane-${lane.id}`}
-                className="absolute inset-x-0 z-20"
+                className={cn("absolute inset-x-0 z-20", selectedLaneId === lane.id ? "z-30" : "")}
                 style={{
                   top: `${index * (LANE_HEIGHT + LANE_GAP)}px`,
                   height: `${LANE_HEIGHT}px`,
                 }}
               >
-                <div className="absolute inset-x-3 top-1/2 h-10 -translate-y-1/2 rounded-xl border border-[hsl(var(--line)/0.7)] bg-[hsl(var(--panel)/0.72)]" />
+                <button
+                  type="button"
+                  aria-label={`select lane ${lane.label}`}
+                  aria-pressed={selectedLaneId === lane.id}
+                  data-testid={`lane-${lane.id}`}
+                  className="absolute inset-0 z-0 rounded-xl"
+                  onClick={() => onLaneSelect(lane.id)}
+                />
+                <div
+                  className={cn(
+                    "absolute inset-x-3 top-1/2 z-10 h-10 -translate-y-1/2 rounded-xl border bg-[hsl(var(--panel)/0.72)]",
+                    selectedLaneId === lane.id
+                      ? "border-[hsl(var(--line-strong))] shadow-[0_0_0_1px_hsl(var(--accent-strong)/0.42)]"
+                      : "border-[hsl(var(--line)/0.7)]",
+                  )}
+                />
 
                 {lane.session_bar ? (
                   <span
                     data-testid={`session-${lane.id}`}
-                    className="absolute top-1/2 h-3 -translate-y-1/2 rounded-full bg-[hsl(var(--ok))] shadow-[0_0_0_1px_rgba(15,23,42,0.24)]"
+                    className="absolute top-1/2 z-20 h-3 -translate-y-1/2 rounded-full bg-[hsl(var(--ok))] shadow-[0_0_0_1px_rgba(15,23,42,0.24)]"
                     style={toInlineGeometry(lane.session_bar.geometry)}
                   />
                 ) : null}
@@ -189,7 +216,10 @@ export function ThreadSwimlanePanel({
                     onMouseLeave={() => onMarkerHover(null)}
                     onFocus={() => onMarkerHover(marker.id)}
                     onBlur={() => onMarkerHover(null)}
-                    onClick={() => onMarkerSelect(marker.id)}
+                    onClick={() => {
+                      onMarkerSelect(marker.id);
+                      onLaneSelect(marker.lane_id);
+                    }}
                   >
                     <MarkerGlyph kind={marker.kind} />
                   </button>
@@ -200,24 +230,31 @@ export function ThreadSwimlanePanel({
         </div>
       </section>
 
-      <aside
-        data-testid="marker-summary-panel"
-        className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2))] p-4"
-      >
-        <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
-          Marker Summary
-        </p>
-        {activeMarker ? (
-          <MarkerSummary
-            lane={laneById.get(activeMarker.lane_id) ?? null}
-            marker={activeMarker}
-          />
-        ) : (
-          <div className="mt-4 rounded-2xl border border-dashed border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.68)] p-4 text-sm text-[hsl(var(--muted))]">
-            commentary/spawn/final marker가 아직 없습니다.
-          </div>
-        )}
-      </aside>
+      <div className="space-y-4">
+        <aside
+          data-testid="marker-summary-panel"
+          className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2))] p-4"
+        >
+          <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
+            Marker Summary
+          </p>
+          {activeMarker ? (
+            <MarkerSummary
+              lane={laneById.get(activeMarker.lane_id) ?? null}
+              marker={activeMarker}
+            />
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.68)] p-4 text-sm text-[hsl(var(--muted))]">
+              commentary/spawn/final marker가 아직 없습니다.
+            </div>
+          )}
+        </aside>
+        <ThreadDrilldownPanel
+          drilldown={drilldown}
+          isLoading={isDrilldownLoading}
+          lane={selectedLane}
+        />
+      </div>
     </div>
   );
 }
@@ -239,20 +276,39 @@ function TimelineGrid() {
   );
 }
 
-function LaneLabel({ lane, top }: { lane: ThreadTimelineLane; top: number }) {
+function LaneLabel({
+  lane,
+  top,
+  selected,
+  onSelect,
+}: {
+  lane: ThreadTimelineLane;
+  top: number;
+  selected: boolean;
+  onSelect: (laneId: string) => void;
+}) {
   return (
-    <div
-      className="absolute inset-x-0 rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.74)] p-3"
+    <button
+      type="button"
+      aria-pressed={selected}
+      className={cn(
+        "absolute inset-x-0 rounded-2xl border bg-[hsl(var(--panel)/0.74)] p-3 text-left transition-colors",
+        selected
+          ? "border-[hsl(var(--line-strong))] bg-[hsl(var(--panel)/0.92)]"
+          : "border-[hsl(var(--line))]",
+      )}
+      data-testid={`lane-label-${lane.id}`}
       style={{
         top: `${top}px`,
         height: `${LANE_HEIGHT}px`,
       }}
+      onClick={() => onSelect(lane.id)}
     >
       <p className="truncate text-sm font-medium">{lane.label}</p>
       <p className="mt-1 truncate text-xs text-[hsl(var(--muted))]">
         {lane.caption}
       </p>
-    </div>
+    </button>
   );
 }
 

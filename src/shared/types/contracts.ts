@@ -81,6 +81,17 @@ export type ToolSpan = {
   duration_ms: number | null;
 };
 
+export type RawJsonlSnippetLine = {
+  line_number: number;
+  content: string;
+};
+
+export type RawJsonlSnippet = {
+  source_label: string;
+  lines: RawJsonlSnippetLine[];
+  truncated: boolean;
+};
+
 export type BottleneckSnapshot = {
   generated_at: string;
   slow_threads: MonitorThread[];
@@ -106,4 +117,13 @@ export type ThreadDetail = {
   timeline_events: TimelineEvent[];
   wait_spans: WaitSpan[];
   tool_spans: ToolSpan[];
+};
+
+export type ThreadDrilldown = {
+  lane_id: string;
+  latest_commentary_summary: string | null;
+  latest_commentary_at: string | null;
+  recent_tool_spans: ToolSpan[];
+  related_wait_spans: WaitSpan[];
+  raw_snippet: RawJsonlSnippet | null;
 };
