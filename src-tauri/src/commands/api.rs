@@ -6,7 +6,7 @@ use crate::commands::error::CommandError;
 use crate::domain::{
     BottleneckSnapshot, HistorySummary, HistorySummaryPayload, MonitorThread, ThreadDetail,
 };
-use crate::domain::models::{AgentSession, ThreadStatus};
+use crate::domain::models::{AgentSession, ThreadStatus, TimelineEvent, ToolSpan, WaitSpan};
 use crate::index_db::init_monitor_db;
 use crate::ingest::run_incremental_ingest;
 use crate::state::AppState;
@@ -24,6 +24,16 @@ fn parse_status(value: &str) -> ThreadStatus {
         "completed" => ThreadStatus::Completed,
         _ => ThreadStatus::Inflight,
     }
+}
+
+fn parse_required_timestamp(value: String) -> Result<DateTime<Utc>, CommandError> {
+    DateTime::parse_from_rfc3339(&value)
+        .map(|parsed| parsed.with_timezone(&Utc))
+        .map_err(|error| CommandError::Internal(error.to_string()))
+}
+
+fn parse_duration(value: Option<i64>) -> Option<u64> {
+    value.and_then(|value| u64::try_from(value).ok())
 }
 
 fn list_live_threads_from_db(state: &AppState) -> Result<Vec<MonitorThread>, CommandError> {
@@ -151,13 +161,189 @@ fn get_thread_detail_from_db(
     for row in rows {
         agents.push(row.map_err(|error| CommandError::Internal(error.to_string()))?);
     }
+    agents.sort_by(|left, right| {
+        left.depth
+            .cmp(&right.depth)
+            .then_with(|| left.started_at.cmp(&right.started_at))
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              event_id,
+              thread_id,
+              agent_session_id,
+              kind,
+              started_at,
+              ended_at,
+              summary
+            from timeline_events
+            where thread_id = ?1
+            order by started_at asc, event_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![thread_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut timeline_events = Vec::new();
+    for row in rows {
+        let (event_id, db_thread_id, agent_session_id, kind, started_at, ended_at, summary) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        timeline_events.push(TimelineEvent {
+            event_id,
+            thread_id: db_thread_id,
+            agent_session_id,
+            kind,
+            started_at: parse_required_timestamp(started_at)?,
+            ended_at: parse_timestamp(ended_at),
+            summary,
+        });
+    }
+    timeline_events.sort_by(|left, right| {
+        left.started_at
+            .cmp(&right.started_at)
+            .then_with(|| left.event_id.cmp(&right.event_id))
+    });
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              call_id,
+              thread_id,
+              parent_session_id,
+              child_session_id,
+              started_at,
+              ended_at,
+              duration_ms
+            from wait_spans
+            where thread_id = ?1
+            order by started_at asc, call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![thread_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<i64>>(6)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut wait_spans = Vec::new();
+    for row in rows {
+        let (call_id, db_thread_id, parent_session_id, child_session_id, started_at, ended_at, duration_ms) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        wait_spans.push((
+            call_id,
+            WaitSpan {
+                thread_id: db_thread_id,
+                parent_session_id,
+                child_session_id,
+                started_at: parse_required_timestamp(started_at)?,
+                ended_at: parse_timestamp(ended_at),
+                duration_ms: parse_duration(duration_ms),
+            },
+        ));
+    }
+    wait_spans.sort_by(|left, right| {
+        left.1
+            .started_at
+            .cmp(&right.1.started_at)
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    let wait_spans = wait_spans
+        .into_iter()
+        .map(|(_, span)| span)
+        .collect::<Vec<_>>();
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              call_id,
+              thread_id,
+              agent_session_id,
+              tool_name,
+              started_at,
+              ended_at,
+              duration_ms
+            from tool_spans
+            where thread_id = ?1
+            order by started_at asc, call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![thread_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<i64>>(6)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut tool_spans = Vec::new();
+    for row in rows {
+        let (call_id, db_thread_id, agent_session_id, tool_name, started_at, ended_at, duration_ms) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        tool_spans.push((
+            call_id,
+            ToolSpan {
+                thread_id: db_thread_id,
+                agent_session_id,
+                tool_name,
+                started_at: parse_required_timestamp(started_at)?,
+                ended_at: parse_timestamp(ended_at),
+                duration_ms: parse_duration(duration_ms),
+            },
+        ));
+    }
+    tool_spans.sort_by(|left, right| {
+        left.1
+            .started_at
+            .cmp(&right.1.started_at)
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    let tool_spans = tool_spans
+        .into_iter()
+        .map(|(_, span)| span)
+        .collect::<Vec<_>>();
 
     Ok(Some(ThreadDetail {
         thread,
         agents,
-        timeline_events: Vec::new(),
-        wait_spans: Vec::new(),
-        tool_spans: Vec::new(),
+        timeline_events,
+        wait_spans,
+        tool_spans,
     }))
 }
 
@@ -261,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn get_thread_detail_returns_thread_and_sorted_agents_with_empty_arrays() {
+    fn get_thread_detail_returns_sorted_agents_and_timeline_arrays() {
         let state = build_test_state("thread-detail");
         init_monitor_db(&state).expect("failed to initialize monitor db");
         let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
@@ -294,6 +480,73 @@ mod tests {
             1,
             Some("2026-03-10T02:05:00Z"),
         );
+        insert_timeline_event(
+            &connection,
+            "event-late",
+            "thread-main-1",
+            "tool",
+            "2026-03-10T02:08:00Z",
+            Some("2026-03-10T02:09:00Z"),
+            Some("late"),
+        );
+        insert_timeline_event(
+            &connection,
+            "event-early-b",
+            "thread-main-1",
+            "commentary",
+            "2026-03-10T02:04:00Z",
+            None,
+            Some("second same-time event"),
+        );
+        insert_timeline_event(
+            &connection,
+            "event-early-a",
+            "thread-main-1",
+            "commentary",
+            "2026-03-10T02:04:00Z",
+            None,
+            Some("first same-time event"),
+        );
+        insert_wait_span(
+            &connection,
+            "wait-b",
+            "thread-main-1",
+            "thread-main-1",
+            Some("session-depth2"),
+            "2026-03-10T02:07:00Z",
+            Some("2026-03-10T02:09:00Z"),
+            Some(2_000),
+        );
+        insert_wait_span(
+            &connection,
+            "wait-a",
+            "thread-main-1",
+            "thread-main-1",
+            Some("session-depth1-a"),
+            "2026-03-10T02:07:00Z",
+            Some("2026-03-10T02:08:00Z"),
+            Some(1_000),
+        );
+        insert_tool_span(
+            &connection,
+            "tool-b",
+            "thread-main-1",
+            None,
+            "exec_command",
+            "2026-03-10T02:06:00Z",
+            Some("2026-03-10T02:10:00Z"),
+            Some(4_000),
+        );
+        insert_tool_span(
+            &connection,
+            "tool-a",
+            "thread-main-1",
+            None,
+            "spawn_agent",
+            "2026-03-10T02:06:00Z",
+            Some("2026-03-10T02:06:30Z"),
+            Some(500),
+        );
 
         let detail = get_thread_detail_from_db(&state, "thread-main-1")
             .expect("get_thread_detail should work")
@@ -309,9 +562,30 @@ mod tests {
             session_ids,
             vec!["session-depth1-a", "session-depth1-b", "session-depth2"]
         );
-        assert!(detail.timeline_events.is_empty());
-        assert!(detail.wait_spans.is_empty());
-        assert!(detail.tool_spans.is_empty());
+        assert_eq!(
+            detail
+                .timeline_events
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["event-early-a", "event-early-b", "event-late"]
+        );
+        assert_eq!(
+            detail
+                .wait_spans
+                .iter()
+                .map(|span| span.child_session_id.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("session-depth1-a"), Some("session-depth2")]
+        );
+        assert_eq!(
+            detail
+                .tool_spans
+                .iter()
+                .map(|span| span.tool_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["spawn_agent", "exec_command"]
+        );
     }
 
     #[test]
@@ -562,6 +836,113 @@ mod tests {
                 ],
             )
             .expect("insert agent session");
+    }
+
+    fn insert_timeline_event(
+        connection: &Connection,
+        event_id: &str,
+        thread_id: &str,
+        kind: &str,
+        started_at: &str,
+        ended_at: Option<&str>,
+        summary: Option<&str>,
+    ) {
+        connection
+            .execute(
+                "
+                insert into timeline_events (
+                  event_id,
+                  thread_id,
+                  agent_session_id,
+                  kind,
+                  started_at,
+                  ended_at,
+                  summary
+                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ",
+                params![
+                    event_id,
+                    thread_id,
+                    Option::<String>::None,
+                    kind,
+                    started_at,
+                    ended_at,
+                    summary,
+                ],
+            )
+            .expect("insert timeline event");
+    }
+
+    fn insert_wait_span(
+        connection: &Connection,
+        call_id: &str,
+        thread_id: &str,
+        parent_session_id: &str,
+        child_session_id: Option<&str>,
+        started_at: &str,
+        ended_at: Option<&str>,
+        duration_ms: Option<i64>,
+    ) {
+        connection
+            .execute(
+                "
+                insert into wait_spans (
+                  call_id,
+                  thread_id,
+                  parent_session_id,
+                  child_session_id,
+                  started_at,
+                  ended_at,
+                  duration_ms
+                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ",
+                params![
+                    call_id,
+                    thread_id,
+                    parent_session_id,
+                    child_session_id,
+                    started_at,
+                    ended_at,
+                    duration_ms,
+                ],
+            )
+            .expect("insert wait span");
+    }
+
+    fn insert_tool_span(
+        connection: &Connection,
+        call_id: &str,
+        thread_id: &str,
+        agent_session_id: Option<&str>,
+        tool_name: &str,
+        started_at: &str,
+        ended_at: Option<&str>,
+        duration_ms: Option<i64>,
+    ) {
+        connection
+            .execute(
+                "
+                insert into tool_spans (
+                  call_id,
+                  thread_id,
+                  agent_session_id,
+                  tool_name,
+                  started_at,
+                  ended_at,
+                  duration_ms
+                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ",
+                params![
+                    call_id,
+                    thread_id,
+                    agent_session_id,
+                    tool_name,
+                    started_at,
+                    ended_at,
+                    duration_ms,
+                ],
+            )
+            .expect("insert tool span");
     }
 
     struct StateSeedRow<'a> {

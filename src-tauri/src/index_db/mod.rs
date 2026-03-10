@@ -49,9 +49,45 @@ pub fn init_monitor_db(state: &AppState) -> Result<()> {
           cwd text not null default ''
         );
 
+        create table if not exists timeline_events (
+          event_id text primary key,
+          thread_id text not null,
+          agent_session_id text,
+          kind text not null,
+          started_at text not null,
+          ended_at text,
+          summary text
+        );
+
+        create table if not exists wait_spans (
+          call_id text primary key,
+          thread_id text not null,
+          parent_session_id text not null,
+          child_session_id text,
+          started_at text not null,
+          ended_at text,
+          duration_ms integer
+        );
+
+        create table if not exists tool_spans (
+          call_id text primary key,
+          thread_id text not null,
+          agent_session_id text,
+          tool_name text not null,
+          started_at text not null,
+          ended_at text,
+          duration_ms integer
+        );
+
         create index if not exists idx_threads_updated_at on threads(updated_at desc);
         create index if not exists idx_agent_sessions_thread_depth_started_at
           on agent_sessions(thread_id, depth, started_at);
+        create index if not exists idx_timeline_events_thread_started_at
+          on timeline_events(thread_id, started_at, event_id);
+        create index if not exists idx_wait_spans_thread_started_at
+          on wait_spans(thread_id, started_at, call_id);
+        create index if not exists idx_tool_spans_thread_started_at
+          on tool_spans(thread_id, started_at, call_id);
         ",
     )?;
 
