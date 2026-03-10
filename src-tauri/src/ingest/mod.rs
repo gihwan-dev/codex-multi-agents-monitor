@@ -148,6 +148,7 @@ struct SessionAccumulator {
 }
 
 impl SessionAccumulator {
+    #[cfg(test)]
     fn consume_line(&mut self, line: &str) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -1764,15 +1765,12 @@ mod tests {
                 .as_nanos()
         ));
         let live_sessions_dir = root_dir.join("sessions");
-        let archived_sessions_dir = root_dir.join("archived_sessions");
         fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
-        fs::create_dir_all(&archived_sessions_dir).expect("create archived sessions dir");
 
         AppState {
             monitor_db_path: root_dir.join("monitor.db"),
             source_paths: SourcePaths {
                 live_sessions_dir,
-                archived_sessions_dir,
                 state_db_path: root_dir.join("state_5.sqlite"),
             },
         }
