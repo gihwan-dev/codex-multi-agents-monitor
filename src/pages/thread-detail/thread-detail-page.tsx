@@ -17,6 +17,8 @@ export function ThreadDetailPage() {
     queryKey: ["monitor", "thread_detail", threadId],
     queryFn: () => getThreadDetail(threadId),
     enabled: Boolean(threadId),
+    refetchInterval: (query) =>
+      query.state.data?.thread.status === "inflight" ? 2_000 : false,
   });
 
   useEffect(() => {

@@ -1,47 +1,42 @@
 # Current slice
-Slice 3. Live Overview 병목 랭킹과 필터 구현
+Slice 4. Thread Detail swimlane timeline 구현
 - 상태: 완료
-- 커밋: `212ae6e` (`feat(overview): 라이브 오버뷰 병목 랭킹과 필터 추가`)
+- 커밋: 예정 (`feat(thread-detail): 스레드 상세 타임라인 스윔레인 구현`)
 
 # Done
-- `list_live_threads`가 overview 전용 `LiveOverviewThread[]`를 반환하도록 확장됐고, inflight thread row에 `status`, `agent_roles`, `bottleneck_level`, `longest_wait_ms`, `active_tool_*`, mini timeline window anchor가 함께 내려오도록 연결했다.
-- Live Overview가 2초 polling, workspace/role/status(=severity) client-side filter, bottleneck top list, row별 wait/tool badge, mini timeline, thread detail 링크를 렌더하도록 placeholder shell을 대체했다.
-- overview 집계는 per-thread N+1 query 대신 base live thread 1회 + roles/open waits/open tools/timeline batch query로 재구성했다.
-- Rust overview 테스트, overview shell 테스트, overview page polling 테스트를 추가해 slice 3 동작을 고정했다.
+- thread detail 전용 view-model을 추가해 global window, main lane, child lane session window, wait/tool block, commentary/spawn/final marker, wait-to-child connector를 한 곳에서 계산하도록 정리했다.
+- thread detail 화면이 skeleton 대신 실제 swimlane timeline을 렌더하고, marker summary panel에서 hover 미리보기 + click 고정 interaction을 제공하도록 바뀌었다.
+- `ThreadDetailPage`가 inflight thread에서만 2초 polling을 유지하도록 바뀌었고, thread-detail view-model/shell/page 테스트를 추가해 slice 4 동작을 고정했다.
 
 # Decisions made during implementation
-- `status` filter 의미는 lifecycle이 아니라 bottleneck severity로 유지하되, contract는 additive change로 맞추기 위해 `LiveOverviewThread.status = inflight`를 복원했다.
-- mini timeline은 backend가 clip한 10분 window를 `mini_timeline_window_started_at`, `mini_timeline_window_ended_at`로 함께 내려주고 frontend는 그 anchor만 사용해 위치를 계산하도록 고정했다.
-- severity 판정은 승인된 slice 규칙대로 `open wait` 우선, `wait`가 없을 때만 `open tool >= 20s`를 warning으로 보는 방식으로 유지했다.
-- phase 1에서 same writer를 `fork_context:false`로 시작했고, 중간 checkpoint interrupt 이후 partial diff를 확인한 뒤 동일 writer를 재개해 slice를 마감했다.
-- advisory review 중 architecture/type review의 snapshot anchor, additive contract, per-thread fan-out 지적은 커밋 전에 반영했고, code-quality review의 `short wait + long tool` severity 제안은 이번 slice 승인 규칙과 충돌해 채택하지 않았다.
+- Slice 4의 구현 정책은 그대로 유지했다: main lane id=`thread_id`, child lane id=`agent.session_id`, child lane은 `started_at~updated_at` session window 기반, marker interaction은 hover 미리보기 + click 고정, inflight detail만 2초 polling.
+- marker summary panel의 active 우선순위는 `hovered marker > selected marker > latest marker`로 고정했다.
+- view-model은 backend contract를 늘리지 않고 frontend 내부 타입으로만 추가했고, child session과 매칭되지 않는 wait는 connector를 그리지 않도록 유지했다.
+- delegated writer 경로가 반복적으로 final/checkpoint를 반환하지 못해, 이번 slice는 thread-detail 모듈 경계 안에서 main thread가 직접 구현을 마감했다.
 
 # Verification results
-- phase 2-1: `pnpm lint` 통과
-- phase 2-2: `pnpm test` 통과
-- 결과: Vitest 4 files / 9 tests 통과
-- phase 2-3: `pnpm typecheck` 통과
-- phase 2-4: `pnpm cargo:test` 통과
-- 결과: Rust test 15개 모두 통과
-- 경고: `src-tauri/src/ingest/mod.rs`의 `consume_line` dead code warning, `src-tauri/src/sources/mod.rs`의 `archived_sessions_dir` unused warning은 유지됐다.
-- advisory `architecture-reviewer`, `type-specialist` finding은 commit 전 보완했고, `code-quality-reviewer` finding은 non-blocking으로 기록했다.
-- phase 3 commit: 일반 `git commit`으로 성공했고 `git commit --no-verify` 재시도는 사용하지 않았다.
+- phase 1: delegated `worker`를 두 차례 재시도했지만 checkpoint/final 미반환으로 진행이 멈춰 직접 구현으로 전환했다.
+- phase 2-1: `pnpm test` 통과
+- 결과: Vitest 8 files / 23 tests 통과
+- phase 2-2: `pnpm typecheck` 통과
+- advisory review: `module-structure-gatekeeper`, `frontend-structure-gatekeeper`, `code-quality-reviewer`를 요청했지만 응답은 받지 못했다. advisory 미응답으로 처리했다.
+- phase 3 commit: 대기 중
 
 # Known issues / residual risk
-- `LiveOverviewThread`와 TypeScript mirror는 여전히 수동 동기화라서 이후 overview contract가 더 커지면 drift 리스크가 남아 있다.
-- workspace/role/severity filter는 여전히 frontend client-side 필터이므로 inflight thread 수가 크게 늘면 polling payload 자체는 커질 수 있다.
-- `run_incremental_ingest`는 2초 polling마다 전체 snapshot + live 재구성을 다시 수행하므로, long-running session이 많아지면 SQLite lock/지연 리스크가 남아 있다.
-- Thread Detail swimlane, raw expansion, history/deep link, archived JSONL 본문 ingest는 아직 다음 slice 이후 범위다.
+- child lane은 여전히 subagent 상세 메시지 타임라인이 아니라 session lifetime window만 시각화한다.
+- marker summary는 요약 텍스트와 시간 메타데이터까지만 보여주고 raw expansion은 아직 없다.
+- delegated writer liveness 문제가 남아 있어 이후 implement-task slice에서도 같은 현상이 반복될 수 있다.
+- raw expansion, agent drilldown, history/deep link, archived JSONL 본문 ingest는 여전히 후속 slice 범위다.
 
 # Next slice
 목표
-- Slice 4에서 메인 thread와 subagent swimlane timeline, wait-to-agent 연결선, marker summary panel을 구현한다.
+- Slice 5에서 agent drilldown과 raw expansion을 추가해, 요약 우선 상태를 유지한 채 필요할 때만 원문 snippet을 확장해서 볼 수 있게 한다.
 
 선행조건
-- overview는 `timeline_events`, `wait_spans`, `tool_spans`를 요약 소비하는 상태고, `get_thread_detail`은 이미 정렬된 timeline/span 배열을 반환한다.
-- live overview contract와 2초 polling은 고정된 상태이므로 다음 slice는 thread detail 시각화와 interaction에 집중한다.
+- slice 4에서 추가한 view-model을 재사용해 selected agent 기준 tool/wait 영향과 marker summary를 drilldown 패널로 확장할 수 있어야 한다.
+- raw JSONL snippet은 기본 접힘 상태를 유지하고, thread detail timeline과 selection state를 공유할지 먼저 정해야 한다.
 
 먼저 볼 경계
-- `src/pages/thread-detail/thread-detail-page.tsx`
 - `src/features/thread-detail/ui/thread-timeline-shell.tsx`
-- `src-tauri/src/commands/api.rs`
+- `src/features/thread-detail/ui/thread-swimlane-panel.tsx`
+- `src-tauri/src/commands/api/thread_detail.rs`
