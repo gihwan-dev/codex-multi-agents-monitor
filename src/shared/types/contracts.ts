@@ -1,5 +1,38 @@
 export type ThreadStatus = "inflight" | "completed" | "failed";
 
+export type BottleneckLevel = "normal" | "warning" | "critical";
+
+export type MiniTimelineItemKind =
+  | "wait"
+  | "tool"
+  | "message"
+  | "spawn"
+  | "complete";
+
+export type MiniTimelineItem = {
+  kind: MiniTimelineItemKind;
+  started_at: string;
+  ended_at: string | null;
+};
+
+export type LiveOverviewThread = {
+  thread_id: string;
+  title: string;
+  cwd: string;
+  status: ThreadStatus;
+  started_at: string | null;
+  updated_at: string | null;
+  latest_activity_summary: string | null;
+  agent_roles: string[];
+  bottleneck_level: BottleneckLevel;
+  longest_wait_ms: number | null;
+  active_tool_name: string | null;
+  active_tool_ms: number | null;
+  mini_timeline_window_started_at: string;
+  mini_timeline_window_ended_at: string;
+  mini_timeline: MiniTimelineItem[];
+};
+
 export type MonitorThread = {
   thread_id: string;
   title: string;

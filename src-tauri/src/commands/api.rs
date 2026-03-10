@@ -1,12 +1,15 @@
-use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+
+use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::State;
 
 use crate::commands::error::CommandError;
-use crate::domain::{
-    BottleneckSnapshot, HistorySummary, HistorySummaryPayload, MonitorThread, ThreadDetail,
-};
 use crate::domain::models::{AgentSession, ThreadStatus, TimelineEvent, ToolSpan, WaitSpan};
+use crate::domain::{
+    BottleneckLevel, BottleneckSnapshot, HistorySummary, HistorySummaryPayload, LiveOverviewThread,
+    MiniTimelineItem, MiniTimelineItemKind, MonitorThread, ThreadDetail,
+};
 use crate::index_db::init_monitor_db;
 use crate::ingest::run_incremental_ingest;
 use crate::state::AppState;
@@ -36,9 +39,54 @@ fn parse_duration(value: Option<i64>) -> Option<u64> {
     value.and_then(|value| u64::try_from(value).ok())
 }
 
-fn list_live_threads_from_db(state: &AppState) -> Result<Vec<MonitorThread>, CommandError> {
-    let connection = Connection::open(&state.monitor_db_path)
-        .map_err(|error| CommandError::Internal(error.to_string()))?;
+#[derive(Debug)]
+struct LiveOverviewBaseRow {
+    thread_id: String,
+    title: String,
+    cwd: String,
+    status: ThreadStatus,
+    started_at: Option<DateTime<Utc>>,
+    updated_at: Option<DateTime<Utc>>,
+    latest_activity_summary: Option<String>,
+}
+
+#[derive(Debug)]
+struct MiniTimelineSeed {
+    sort_id: String,
+    item: MiniTimelineItem,
+}
+
+fn elapsed_ms(now: DateTime<Utc>, started_at: DateTime<Utc>) -> Option<u64> {
+    let elapsed_ms = now.signed_duration_since(started_at).num_milliseconds();
+    Some(u64::try_from(elapsed_ms.max(0)).ok()?)
+}
+
+fn format_timestamp(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn clip_span(
+    started_at: DateTime<Utc>,
+    ended_at: DateTime<Utc>,
+    window_start: DateTime<Utc>,
+    window_end: DateTime<Utc>,
+) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    if ended_at < window_start || started_at > window_end {
+        return None;
+    }
+
+    let clipped_start = started_at.max(window_start);
+    let clipped_end = ended_at.min(window_end);
+    if clipped_end < clipped_start {
+        return None;
+    }
+
+    Some((clipped_start, clipped_end))
+}
+
+fn load_live_overview_base_rows(
+    connection: &Connection,
+) -> Result<Vec<LiveOverviewBaseRow>, CommandError> {
     let mut statement = connection
         .prepare(
             "
@@ -53,20 +101,18 @@ fn list_live_threads_from_db(state: &AppState) -> Result<Vec<MonitorThread>, Com
             from threads
             where archived = 0
               and status = 'inflight'
-            order by updated_at desc
+            order by updated_at desc, thread_id asc
             ",
         )
         .map_err(|error| CommandError::Internal(error.to_string()))?;
 
     let rows = statement
         .query_map([], |row| {
-            let status = parse_status(row.get::<_, String>(3)?.as_str());
-
-            Ok(MonitorThread {
+            Ok(LiveOverviewBaseRow {
                 thread_id: row.get(0)?,
                 title: row.get(1)?,
                 cwd: row.get(2)?,
-                status,
+                status: parse_status(row.get::<_, String>(3)?.as_str()),
                 started_at: parse_timestamp(row.get(4)?),
                 updated_at: parse_timestamp(row.get(5)?),
                 latest_activity_summary: row.get(6)?,
@@ -77,6 +123,404 @@ fn list_live_threads_from_db(state: &AppState) -> Result<Vec<MonitorThread>, Com
     let mut threads = Vec::new();
     for row in rows {
         threads.push(row.map_err(|error| CommandError::Internal(error.to_string()))?);
+    }
+
+    Ok(threads)
+}
+
+fn load_agent_roles_map(
+    connection: &Connection,
+) -> Result<HashMap<String, Vec<String>>, CommandError> {
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              agent_sessions.thread_id,
+              agent_sessions.agent_role
+            from agent_sessions
+            inner join threads on threads.thread_id = agent_sessions.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and trim(agent_sessions.agent_role) <> ''
+            group by agent_sessions.thread_id, agent_sessions.agent_role
+            order by agent_sessions.thread_id asc, agent_sessions.agent_role asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut roles_map = HashMap::new();
+    for row in rows {
+        let (thread_id, agent_role) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        roles_map
+            .entry(thread_id)
+            .or_insert_with(Vec::new)
+            .push(agent_role);
+    }
+
+    Ok(roles_map)
+}
+
+fn load_longest_open_waits_map(
+    connection: &Connection,
+    now: DateTime<Utc>,
+) -> Result<HashMap<String, u64>, CommandError> {
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              wait_spans.thread_id,
+              wait_spans.started_at
+            from wait_spans
+            inner join threads on threads.thread_id = wait_spans.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and wait_spans.ended_at is null
+            order by wait_spans.thread_id asc, wait_spans.started_at asc, wait_spans.call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut wait_map = HashMap::new();
+    for row in rows {
+        let (thread_id, started_at) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        wait_map.entry(thread_id).or_insert(
+            elapsed_ms(now.clone(), parse_required_timestamp(started_at)?).unwrap_or_default(),
+        );
+    }
+
+    Ok(wait_map)
+}
+
+fn load_active_tools_map(
+    connection: &Connection,
+    now: DateTime<Utc>,
+) -> Result<HashMap<String, (String, u64)>, CommandError> {
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              tool_spans.thread_id,
+              tool_spans.tool_name,
+              tool_spans.started_at
+            from tool_spans
+            inner join threads on threads.thread_id = tool_spans.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and tool_spans.ended_at is null
+            order by tool_spans.thread_id asc, tool_spans.started_at asc, tool_spans.call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut tool_map = HashMap::new();
+    for row in rows {
+        let (thread_id, tool_name, started_at) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        tool_map.entry(thread_id).or_insert((
+            tool_name,
+            elapsed_ms(now.clone(), parse_required_timestamp(started_at)?).unwrap_or_default(),
+        ));
+    }
+
+    Ok(tool_map)
+}
+
+fn resolve_bottleneck_level(
+    longest_wait_ms: Option<u64>,
+    active_tool_ms: Option<u64>,
+) -> BottleneckLevel {
+    match longest_wait_ms {
+        Some(wait_ms) if wait_ms >= 120_000 => BottleneckLevel::Critical,
+        Some(wait_ms) if wait_ms >= 30_000 => BottleneckLevel::Warning,
+        Some(_) => BottleneckLevel::Normal,
+        None => match active_tool_ms {
+            Some(tool_ms) if tool_ms >= 20_000 => BottleneckLevel::Warning,
+            _ => BottleneckLevel::Normal,
+        },
+    }
+}
+
+fn push_mini_timeline_item(
+    timeline_map: &mut HashMap<String, Vec<MiniTimelineSeed>>,
+    thread_id: String,
+    sort_id: String,
+    item: MiniTimelineItem,
+) {
+    timeline_map
+        .entry(thread_id)
+        .or_insert_with(Vec::new)
+        .push(MiniTimelineSeed { sort_id, item });
+}
+
+fn load_mini_timeline_map(
+    connection: &Connection,
+    window_start: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<HashMap<String, Vec<MiniTimelineItem>>, CommandError> {
+    let window_start_text = format_timestamp(window_start);
+    let window_end_text = format_timestamp(now);
+    let mut timeline_map = HashMap::new();
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              wait_spans.thread_id,
+              wait_spans.call_id,
+              wait_spans.started_at,
+              wait_spans.ended_at
+            from wait_spans
+            inner join threads on threads.thread_id = wait_spans.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and wait_spans.started_at <= ?2
+              and (wait_spans.ended_at is null or wait_spans.ended_at >= ?1)
+            order by wait_spans.thread_id asc, wait_spans.started_at asc, wait_spans.call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![&window_start_text, &window_end_text], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    for row in rows {
+        let (thread_id, call_id, started_at, ended_at) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let started_at = parse_required_timestamp(started_at)?;
+        let ended_at = ended_at
+            .map(parse_required_timestamp)
+            .transpose()?
+            .unwrap_or(now.clone());
+        if let Some((started_at, ended_at)) =
+            clip_span(started_at, ended_at, window_start.clone(), now.clone())
+        {
+            push_mini_timeline_item(
+                &mut timeline_map,
+                thread_id,
+                format!("wait:{call_id}"),
+                MiniTimelineItem {
+                    kind: MiniTimelineItemKind::Wait,
+                    started_at,
+                    ended_at: Some(ended_at),
+                },
+            );
+        }
+    }
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              tool_spans.thread_id,
+              tool_spans.call_id,
+              tool_spans.started_at,
+              tool_spans.ended_at
+            from tool_spans
+            inner join threads on threads.thread_id = tool_spans.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and tool_spans.started_at <= ?2
+              and (tool_spans.ended_at is null or tool_spans.ended_at >= ?1)
+            order by tool_spans.thread_id asc, tool_spans.started_at asc, tool_spans.call_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![&window_start_text, &window_end_text], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    for row in rows {
+        let (thread_id, call_id, started_at, ended_at) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let started_at = parse_required_timestamp(started_at)?;
+        let ended_at = ended_at
+            .map(parse_required_timestamp)
+            .transpose()?
+            .unwrap_or(now.clone());
+        if let Some((started_at, ended_at)) =
+            clip_span(started_at, ended_at, window_start.clone(), now.clone())
+        {
+            push_mini_timeline_item(
+                &mut timeline_map,
+                thread_id,
+                format!("tool:{call_id}"),
+                MiniTimelineItem {
+                    kind: MiniTimelineItemKind::Tool,
+                    started_at,
+                    ended_at: Some(ended_at),
+                },
+            );
+        }
+    }
+
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              timeline_events.thread_id,
+              timeline_events.event_id,
+              timeline_events.kind,
+              timeline_events.started_at
+            from timeline_events
+            inner join threads on threads.thread_id = timeline_events.thread_id
+            where threads.archived = 0
+              and threads.status = 'inflight'
+              and timeline_events.kind in ('commentary', 'spawn', 'final')
+              and timeline_events.started_at >= ?1
+              and timeline_events.started_at <= ?2
+            order by timeline_events.thread_id asc, timeline_events.started_at asc, timeline_events.event_id asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map(params![&window_start_text, &window_end_text], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    for row in rows {
+        let (thread_id, event_id, kind, started_at) =
+            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let started_at = parse_required_timestamp(started_at)?;
+        let kind = match kind.as_str() {
+            "spawn" => MiniTimelineItemKind::Spawn,
+            "final" => MiniTimelineItemKind::Complete,
+            _ => MiniTimelineItemKind::Message,
+        };
+        push_mini_timeline_item(
+            &mut timeline_map,
+            thread_id,
+            format!("event:{event_id}"),
+            MiniTimelineItem {
+                kind,
+                started_at,
+                ended_at: None,
+            },
+        );
+    }
+
+    let timeline_map = timeline_map
+        .into_iter()
+        .map(|(thread_id, mut items)| {
+            items.sort_by(|left, right| {
+                left.item
+                    .started_at
+                    .cmp(&right.item.started_at)
+                    .then_with(|| left.item.ended_at.cmp(&right.item.ended_at))
+                    .then_with(|| left.sort_id.cmp(&right.sort_id))
+            });
+            (
+                thread_id,
+                items.into_iter().map(|seed| seed.item).collect::<Vec<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    Ok(timeline_map)
+}
+
+fn list_live_threads_from_db(state: &AppState) -> Result<Vec<LiveOverviewThread>, CommandError> {
+    list_live_threads_from_db_at(state, Utc::now())
+}
+
+fn list_live_threads_from_db_at(
+    state: &AppState,
+    now: DateTime<Utc>,
+) -> Result<Vec<LiveOverviewThread>, CommandError> {
+    let connection = Connection::open(&state.monitor_db_path)
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+    let window_start = now - chrono::Duration::minutes(10);
+    let base_rows = load_live_overview_base_rows(&connection)?;
+    let agent_roles_map = load_agent_roles_map(&connection)?;
+    let open_waits_map = load_longest_open_waits_map(&connection, now.clone())?;
+    let active_tools_map = load_active_tools_map(&connection, now.clone())?;
+    let mini_timeline_map = load_mini_timeline_map(&connection, window_start.clone(), now.clone())?;
+
+    let mut threads = Vec::new();
+    for row in base_rows {
+        let LiveOverviewBaseRow {
+            thread_id,
+            title,
+            cwd,
+            status,
+            started_at,
+            updated_at,
+            latest_activity_summary,
+        } = row;
+        let longest_wait_ms = open_waits_map.get(&thread_id).copied();
+        let active_tool = active_tools_map.get(&thread_id);
+        let active_tool_name = active_tool.map(|tool| tool.0.clone());
+        let active_tool_ms = active_tool.map(|tool| tool.1);
+        let bottleneck_level = resolve_bottleneck_level(longest_wait_ms, active_tool_ms);
+        let mini_timeline = mini_timeline_map
+            .get(&thread_id)
+            .cloned()
+            .unwrap_or_default();
+        let agent_roles = agent_roles_map.get(&thread_id).cloned().unwrap_or_default();
+
+        threads.push(LiveOverviewThread {
+            thread_id,
+            title,
+            cwd,
+            status,
+            started_at,
+            updated_at,
+            latest_activity_summary,
+            agent_roles,
+            bottleneck_level,
+            longest_wait_ms,
+            active_tool_name,
+            active_tool_ms,
+            mini_timeline_window_started_at: window_start.clone(),
+            mini_timeline_window_ended_at: now.clone(),
+            mini_timeline,
+        });
     }
 
     Ok(threads)
@@ -254,8 +698,15 @@ fn get_thread_detail_from_db(
 
     let mut wait_spans = Vec::new();
     for row in rows {
-        let (call_id, db_thread_id, parent_session_id, child_session_id, started_at, ended_at, duration_ms) =
-            row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let (
+            call_id,
+            db_thread_id,
+            parent_session_id,
+            child_session_id,
+            started_at,
+            ended_at,
+            duration_ms,
+        ) = row.map_err(|error| CommandError::Internal(error.to_string()))?;
         wait_spans.push((
             call_id,
             WaitSpan {
@@ -348,7 +799,9 @@ fn get_thread_detail_from_db(
 }
 
 #[tauri::command]
-pub fn list_live_threads(state: State<'_, AppState>) -> Result<Vec<MonitorThread>, CommandError> {
+pub fn list_live_threads(
+    state: State<'_, AppState>,
+) -> Result<Vec<LiveOverviewThread>, CommandError> {
     init_monitor_db(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
     run_incremental_ingest(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
     list_live_threads_from_db(&state)
@@ -392,15 +845,19 @@ mod tests {
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use chrono::{TimeZone, Utc};
     use rusqlite::{params, Connection};
     use serde_json::{json, Value};
 
+    use crate::domain::models::{BottleneckLevel, MiniTimelineItemKind, ThreadStatus};
     use crate::index_db::init_monitor_db;
     use crate::ingest::run_incremental_ingest;
     use crate::sources::SourcePaths;
     use crate::state::AppState;
 
-    use super::{get_thread_detail_from_db, list_live_threads_from_db};
+    use super::{
+        get_thread_detail_from_db, list_live_threads_from_db, list_live_threads_from_db_at,
+    };
 
     #[test]
     fn list_live_threads_returns_only_inflight_unarchived_threads() {
@@ -444,6 +901,196 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(ids, vec!["thread-live-new", "thread-live-old"]);
+    }
+
+    #[test]
+    fn list_live_threads_calculates_overview_fields_and_clips_mini_timeline() {
+        let state = build_test_state("list-live-overview");
+        init_monitor_db(&state).expect("failed to initialize monitor db");
+        let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+
+        insert_thread(
+            &connection,
+            "thread-critical",
+            "inflight",
+            0,
+            Some("2026-03-10T09:59:40Z"),
+        );
+        insert_thread(
+            &connection,
+            "thread-tool-warning",
+            "inflight",
+            0,
+            Some("2026-03-10T09:59:20Z"),
+        );
+        insert_thread(
+            &connection,
+            "thread-normal",
+            "inflight",
+            0,
+            Some("2026-03-10T09:58:00Z"),
+        );
+        insert_agent_with_role(
+            &connection,
+            "session-reviewer-a",
+            "thread-critical",
+            "reviewer",
+            1,
+            Some("2026-03-10T09:50:10Z"),
+        );
+        insert_agent_with_role(
+            &connection,
+            "session-reviewer-b",
+            "thread-critical",
+            "reviewer",
+            2,
+            Some("2026-03-10T09:50:20Z"),
+        );
+        insert_agent_with_role(
+            &connection,
+            "session-implementer",
+            "thread-critical",
+            "implementer",
+            1,
+            Some("2026-03-10T09:50:30Z"),
+        );
+        insert_wait_span(
+            &connection,
+            "wait-open-critical",
+            "thread-critical",
+            "thread-critical",
+            Some("session-reviewer-a"),
+            "2026-03-10T09:48:00Z",
+            None,
+            None,
+        );
+        insert_tool_span(
+            &connection,
+            "tool-closed-critical",
+            "thread-critical",
+            Some("session-reviewer-a"),
+            "spawn_agent",
+            "2026-03-10T09:55:00Z",
+            Some("2026-03-10T09:55:12Z"),
+            Some(12_000),
+        );
+        insert_tool_span(
+            &connection,
+            "tool-open-critical",
+            "thread-critical",
+            Some("session-reviewer-b"),
+            "exec_command",
+            "2026-03-10T09:59:30Z",
+            None,
+            None,
+        );
+        insert_timeline_event(
+            &connection,
+            "spawn-critical",
+            "thread-critical",
+            "spawn",
+            "2026-03-10T09:50:15Z",
+            None,
+            Some("spawned reviewer"),
+        );
+        insert_timeline_event(
+            &connection,
+            "commentary-critical-old",
+            "thread-critical",
+            "commentary",
+            "2026-03-10T09:49:00Z",
+            None,
+            Some("too old"),
+        );
+        insert_timeline_event(
+            &connection,
+            "commentary-critical",
+            "thread-critical",
+            "commentary",
+            "2026-03-10T09:59:50Z",
+            None,
+            Some("recent update"),
+        );
+        insert_timeline_event(
+            &connection,
+            "final-critical",
+            "thread-critical",
+            "final",
+            "2026-03-10T09:59:59Z",
+            None,
+            Some("done"),
+        );
+        insert_tool_span(
+            &connection,
+            "tool-open-warning",
+            "thread-tool-warning",
+            None,
+            "exec_command",
+            "2026-03-10T09:59:35Z",
+            None,
+            None,
+        );
+
+        let now = Utc
+            .with_ymd_and_hms(2026, 3, 10, 10, 0, 0)
+            .single()
+            .expect("fixed timestamp should exist");
+        let threads = list_live_threads_from_db_at(&state, now).expect("list live threads");
+
+        assert_eq!(
+            threads
+                .iter()
+                .map(|thread| thread.thread_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["thread-critical", "thread-tool-warning", "thread-normal"]
+        );
+
+        let critical = &threads[0];
+        assert_eq!(critical.status, ThreadStatus::Inflight);
+        assert_eq!(critical.agent_roles, vec!["implementer", "reviewer"]);
+        assert_eq!(critical.bottleneck_level, BottleneckLevel::Critical);
+        assert_eq!(critical.longest_wait_ms, Some(720_000));
+        assert_eq!(critical.active_tool_name.as_deref(), Some("exec_command"));
+        assert_eq!(critical.active_tool_ms, Some(30_000));
+        assert_eq!(
+            critical.mini_timeline_window_started_at,
+            Utc.with_ymd_and_hms(2026, 3, 10, 9, 50, 0)
+                .single()
+                .expect("window start should exist")
+        );
+        assert_eq!(critical.mini_timeline_window_ended_at, now);
+        assert_eq!(
+            critical
+                .mini_timeline
+                .iter()
+                .map(|item| item.kind.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                MiniTimelineItemKind::Wait,
+                MiniTimelineItemKind::Spawn,
+                MiniTimelineItemKind::Tool,
+                MiniTimelineItemKind::Tool,
+                MiniTimelineItemKind::Message,
+                MiniTimelineItemKind::Complete,
+            ]
+        );
+        assert_eq!(
+            critical.mini_timeline[0].started_at,
+            Utc.with_ymd_and_hms(2026, 3, 10, 9, 50, 0)
+                .single()
+                .expect("window start should exist")
+        );
+        assert_eq!(critical.mini_timeline[0].ended_at, Some(now));
+
+        let warning = threads
+            .iter()
+            .find(|thread| thread.thread_id == "thread-tool-warning")
+            .expect("tool warning thread should exist");
+        assert_eq!(warning.agent_roles, Vec::<String>::new());
+        assert_eq!(warning.longest_wait_ms, None);
+        assert_eq!(warning.active_tool_name.as_deref(), Some("exec_command"));
+        assert_eq!(warning.active_tool_ms, Some(25_000));
+        assert_eq!(warning.bottleneck_level, BottleneckLevel::Warning);
     }
 
     #[test]
@@ -808,6 +1455,19 @@ mod tests {
         depth: i64,
         started_at: Option<&str>,
     ) {
+        insert_agent_with_role(
+            connection, session_id, thread_id, "subagent", depth, started_at,
+        );
+    }
+
+    fn insert_agent_with_role(
+        connection: &Connection,
+        session_id: &str,
+        thread_id: &str,
+        agent_role: &str,
+        depth: i64,
+        started_at: Option<&str>,
+    ) {
         connection
             .execute(
                 "
@@ -826,7 +1486,7 @@ mod tests {
                 params![
                     session_id,
                     thread_id,
-                    "subagent",
+                    agent_role,
                     Option::<String>::None,
                     depth,
                     started_at,

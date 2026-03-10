@@ -13,6 +13,7 @@ export function OverviewPage() {
   const liveThreadsQuery = useQuery({
     queryKey: ["monitor", "live_threads"],
     queryFn: listLiveThreads,
+    refetchInterval: 2_000,
   });
 
   useEffect(() => {

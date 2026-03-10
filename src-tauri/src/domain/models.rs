@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ThreadStatus {
     Inflight,
@@ -18,6 +18,50 @@ pub struct MonitorThread {
     pub started_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
     pub latest_activity_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BottleneckLevel {
+    Normal,
+    Warning,
+    Critical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MiniTimelineItemKind {
+    Wait,
+    Tool,
+    Message,
+    Spawn,
+    Complete,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MiniTimelineItem {
+    pub kind: MiniTimelineItemKind,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LiveOverviewThread {
+    pub thread_id: String,
+    pub title: String,
+    pub cwd: String,
+    pub status: ThreadStatus,
+    pub started_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub latest_activity_summary: Option<String>,
+    pub agent_roles: Vec<String>,
+    pub bottleneck_level: BottleneckLevel,
+    pub longest_wait_ms: Option<u64>,
+    pub active_tool_name: Option<String>,
+    pub active_tool_ms: Option<u64>,
+    pub mini_timeline_window_started_at: DateTime<Utc>,
+    pub mini_timeline_window_ended_at: DateTime<Utc>,
+    pub mini_timeline: Vec<MiniTimelineItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

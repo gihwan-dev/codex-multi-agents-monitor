@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   HistorySummaryPayload,
-  MonitorThread,
+  LiveOverviewThread,
   ThreadDetail,
 } from "@/shared/types/contracts";
 
@@ -20,7 +20,7 @@ export type TauriCommandError = {
 };
 
 export async function listLiveThreads() {
-  return invoke<MonitorThread[]>("list_live_threads");
+  return invoke<LiveOverviewThread[]>("list_live_threads");
 }
 
 export async function getThreadDetail(threadId: string) {

@@ -1,5 +1,6 @@
 pub mod models;
 
 pub use models::{
-    BottleneckSnapshot, HistorySummary, HistorySummaryPayload, MonitorThread, ThreadDetail,
+    BottleneckLevel, BottleneckSnapshot, HistorySummary, HistorySummaryPayload, LiveOverviewThread,
+    MiniTimelineItem, MiniTimelineItemKind, MonitorThread, ThreadDetail,
 };
