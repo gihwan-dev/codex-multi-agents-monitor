@@ -37,12 +37,7 @@ pub(super) fn insert_thread(
     updated_at: Option<&str>,
 ) {
     insert_thread_with_rollout(
-        connection,
-        thread_id,
-        status,
-        archived,
-        updated_at,
-        "/rollout",
+        connection, thread_id, status, archived, updated_at, "/rollout",
     );
 }
 
@@ -94,13 +89,7 @@ pub(super) fn insert_agent(
     started_at: Option<&str>,
 ) {
     insert_agent_with_role_and_rollout(
-        connection,
-        session_id,
-        thread_id,
-        "subagent",
-        depth,
-        started_at,
-        "/rollout",
+        connection, session_id, thread_id, "subagent", depth, started_at, "/rollout",
     );
 }
 
@@ -113,14 +102,47 @@ pub(super) fn insert_agent_with_role(
     started_at: Option<&str>,
 ) {
     insert_agent_with_role_and_rollout(
-        connection,
-        session_id,
-        thread_id,
-        agent_role,
-        depth,
-        started_at,
-        "/rollout",
+        connection, session_id, thread_id, agent_role, depth, started_at, "/rollout",
     );
+}
+
+pub(super) fn insert_agent_with_role_and_times(
+    connection: &Connection,
+    session_id: &str,
+    thread_id: &str,
+    agent_role: &str,
+    depth: i64,
+    started_at: Option<&str>,
+    updated_at: Option<&str>,
+) {
+    connection
+        .execute(
+            "
+            insert into agent_sessions (
+              session_id,
+              thread_id,
+              agent_role,
+              agent_nickname,
+              depth,
+              started_at,
+              updated_at,
+              rollout_path,
+              cwd
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ",
+            params![
+                session_id,
+                thread_id,
+                agent_role,
+                Option::<String>::None,
+                depth,
+                started_at,
+                updated_at,
+                "/rollout",
+                "/workspace",
+            ],
+        )
+        .expect("insert agent session with custom times");
 }
 
 pub(super) fn insert_agent_with_role_and_rollout(

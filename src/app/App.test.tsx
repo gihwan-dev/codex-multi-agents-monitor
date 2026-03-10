@@ -8,17 +8,15 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
   getThreadDetail: vi.fn(async () => null),
   getHistorySummary: vi.fn(async () => ({
     history: {
-      from_date: "2026-03-10",
+      from_date: "2026-03-04",
       to_date: "2026-03-10",
+      thread_count: 0,
       average_duration_ms: null,
       timeout_count: 0,
       spawn_count: 0,
     },
-    bottleneck: {
-      generated_at: "2026-03-10T00:00:00Z",
-      slow_threads: [],
-      longest_wait_ms: null,
-    },
+    roles: [],
+    slow_threads: [],
   })),
   openWorkspace: vi.fn(async () => undefined),
   openLogFile: vi.fn(async () => undefined),

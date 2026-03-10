@@ -142,15 +142,40 @@ pub struct BottleneckSnapshot {
 pub struct HistorySummary {
     pub from_date: String,
     pub to_date: String,
+    pub thread_count: u32,
     pub average_duration_ms: Option<u64>,
     pub timeout_count: u32,
     pub spawn_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryRoleSummary {
+    pub agent_role: String,
+    pub session_count: u32,
+    pub average_duration_ms: Option<u64>,
+    pub timeout_count: u32,
+    pub spawn_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistorySlowThread {
+    pub thread_id: String,
+    pub title: String,
+    pub cwd: String,
+    pub updated_at: DateTime<Utc>,
+    pub latest_activity_summary: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub timeout_count: u32,
+    pub spawn_count: u32,
+    pub agent_roles: Vec<String>,
+    pub rollout_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistorySummaryPayload {
     pub history: HistorySummary,
-    pub bottleneck: BottleneckSnapshot,
+    pub roles: Vec<HistoryRoleSummary>,
+    pub slow_threads: Vec<HistorySlowThread>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

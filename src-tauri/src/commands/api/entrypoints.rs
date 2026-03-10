@@ -45,5 +45,6 @@ pub fn get_history_summary(
     state: State<'_, AppState>,
 ) -> Result<HistorySummaryPayload, CommandError> {
     init_monitor_db(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
-    Ok(build_history_summary())
+    run_incremental_ingest(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
+    build_history_summary(&state)
 }

@@ -103,14 +103,37 @@ export type BottleneckSnapshot = {
 export type HistorySummary = {
   from_date: string;
   to_date: string;
+  thread_count: number;
   average_duration_ms: number | null;
   timeout_count: number;
   spawn_count: number;
 };
 
+export type HistoryRoleSummary = {
+  agent_role: string;
+  session_count: number;
+  average_duration_ms: number | null;
+  timeout_count: number;
+  spawn_count: number;
+};
+
+export type HistorySlowThread = {
+  thread_id: string;
+  title: string;
+  cwd: string;
+  updated_at: string;
+  latest_activity_summary: string | null;
+  duration_ms: number | null;
+  timeout_count: number;
+  spawn_count: number;
+  agent_roles: string[];
+  rollout_path: string | null;
+};
+
 export type HistorySummaryPayload = {
   history: HistorySummary;
-  bottleneck: BottleneckSnapshot;
+  roles: HistoryRoleSummary[];
+  slow_threads: HistorySlowThread[];
 };
 
 export type ThreadDetail = {
