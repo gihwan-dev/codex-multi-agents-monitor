@@ -1,14 +1,18 @@
-import { Activity, Clock3, GitBranch, MessageSquare, Wrench } from "lucide-react";
-
-import { cn } from "@/shared/lib/utils";
-import type { ThreadDrilldown } from "@/shared/types/contracts";
-
+import {
+  Activity,
+  Clock3,
+  GitBranch,
+  MessageSquare,
+  Wrench,
+} from "lucide-react";
 import type {
   ThreadTimelineLane,
   ThreadTimelineMarker,
   ThreadTimelineViewModel,
 } from "@/features/thread-detail/lib/build-thread-timeline-view-model";
 import { ThreadDrilldownPanel } from "@/features/thread-detail/ui/thread-drilldown-panel";
+import { cn } from "@/shared/lib/utils";
+import type { ThreadDrilldown } from "@/shared/types/contracts";
 
 const LANE_HEIGHT = 68;
 const LANE_GAP = 12;
@@ -55,7 +59,9 @@ export function ThreadSwimlanePanel({
     viewModel.lanes.map((lane, index) => [lane.id, index]),
   );
   const laneById = new Map(viewModel.lanes.map((lane) => [lane.id, lane]));
-  const selectedLane = selectedLaneId ? laneById.get(selectedLaneId) ?? null : null;
+  const selectedLane = selectedLaneId
+    ? (laneById.get(selectedLaneId) ?? null)
+    : null;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -144,7 +150,10 @@ export function ThreadSwimlanePanel({
             {viewModel.lanes.map((lane, index) => (
               <div
                 key={lane.id}
-                className={cn("absolute inset-x-0 z-20", selectedLaneId === lane.id ? "z-30" : "")}
+                className={cn(
+                  "absolute inset-x-0 z-20",
+                  selectedLaneId === lane.id ? "z-30" : "",
+                )}
                 style={{
                   top: `${index * (LANE_HEIGHT + LANE_GAP)}px`,
                   height: `${LANE_HEIGHT}px`,
@@ -327,7 +336,8 @@ function MarkerSummary({
             {renderMarkerKind(marker.kind)}
           </p>
           <p className="mt-1 text-sm text-[hsl(var(--muted))]">
-            {lane?.label ?? "main thread"} • {formatTimestamp(marker.started_at)}
+            {lane?.label ?? "main thread"} •{" "}
+            {formatTimestamp(marker.started_at)}
           </p>
         </div>
         <span
@@ -356,13 +366,7 @@ function MarkerSummary({
   );
 }
 
-function LegendPill({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
+function LegendPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--line))] px-3 py-1">
       {icon}
@@ -383,10 +387,7 @@ function MarkerGlyph({ kind }: { kind: ThreadTimelineMarker["kind"] }) {
   return <span className="font-semibold">C</span>;
 }
 
-function toInlineGeometry(geometry: {
-  left_pct: number;
-  width_pct: number;
-}) {
+function toInlineGeometry(geometry: { left_pct: number; width_pct: number }) {
   return {
     left: `${geometry.left_pct}%`,
     width: `${geometry.width_pct}%`,

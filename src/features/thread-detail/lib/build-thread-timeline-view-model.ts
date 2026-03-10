@@ -97,13 +97,16 @@ export function buildThreadTimelineViewModel(
       kind: "main",
       label: "main thread",
       caption:
-        detail.thread.latest_activity_summary ?? detail.thread.cwd ?? "latest activity 없음",
+        detail.thread.latest_activity_summary ??
+        detail.thread.cwd ??
+        "latest activity 없음",
       session_bar: null,
       blocks: [],
       markers: [],
     },
     ...sortedAgents.map((agent) => {
-      const startedAt = agent.started_at ?? detail.thread.started_at ?? window.started_at;
+      const startedAt =
+        agent.started_at ?? detail.thread.started_at ?? window.started_at;
       const endedAt = agent.updated_at ?? null;
       const captionParts = [
         agent.agent_role ? agent.agent_role : `depth ${agent.depth}`,
@@ -182,8 +185,9 @@ export function buildThreadTimelineViewModel(
   ];
 
   const markers = detail.timeline_events
-    .filter((event): event is typeof event & { kind: ThreadTimelineMarkerKind } =>
-      MARKER_KINDS.has(event.kind as ThreadTimelineMarkerKind),
+    .filter(
+      (event): event is typeof event & { kind: ThreadTimelineMarkerKind } =>
+        MARKER_KINDS.has(event.kind as ThreadTimelineMarkerKind),
     )
     .map((event) => {
       const laneId =
@@ -226,11 +230,14 @@ export function buildThreadTimelineViewModel(
         id: `connector-${index}`,
         parent_lane_id: waitBlock.lane_id,
         child_lane_id: span.child_session_id,
-        source_left_pct: waitBlock.geometry.left_pct + waitBlock.geometry.width_pct,
+        source_left_pct:
+          waitBlock.geometry.left_pct + waitBlock.geometry.width_pct,
         target_left_pct: childLane.session_bar.geometry.left_pct,
       };
     })
-    .filter((connector): connector is ThreadTimelineConnector => connector !== null);
+    .filter(
+      (connector): connector is ThreadTimelineConnector => connector !== null,
+    );
 
   for (const lane of lanes) {
     lane.blocks = blocks.filter((block) => block.lane_id === lane.id);
@@ -282,7 +289,8 @@ function buildWindow(detail: ThreadDetail): ThreadTimelineWindow {
         ? Math.min(...ends)
         : 0;
   const latestCandidate = [...starts, ...ends];
-  const latest = latestCandidate.length > 0 ? Math.max(...latestCandidate) : earliest;
+  const latest =
+    latestCandidate.length > 0 ? Math.max(...latestCandidate) : earliest;
   const endedAtMs = latest > earliest ? latest : earliest + MIN_WINDOW_MS;
 
   return {
@@ -313,7 +321,8 @@ function buildSpanGeometry(
     window.ended_at_ms,
   );
   const left = ((start - window.started_at_ms) / window.duration_ms) * 100;
-  const unclampedWidth = ((Math.max(end, start) - start) / window.duration_ms) * 100;
+  const unclampedWidth =
+    ((Math.max(end, start) - start) / window.duration_ms) * 100;
   const width = Math.min(
     Math.max(unclampedWidth, MIN_VISIBLE_WIDTH_PCT),
     Math.max(100 - left, MIN_VISIBLE_WIDTH_PCT),
