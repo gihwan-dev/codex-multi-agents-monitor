@@ -140,9 +140,25 @@ fn get_thread_detail_returns_sorted_agents_and_timeline_arrays() {
         detail
             .wait_spans
             .iter()
+            .map(|span| span.call_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["wait-a", "wait-b"]
+    );
+    assert_eq!(
+        detail
+            .wait_spans
+            .iter()
             .map(|span| span.child_session_id.as_deref())
             .collect::<Vec<_>>(),
         vec![Some("session-depth1-a"), Some("session-depth2")]
+    );
+    assert_eq!(
+        detail
+            .tool_spans
+            .iter()
+            .map(|span| span.call_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["tool-a", "tool-b"]
     );
     assert_eq!(
         detail
@@ -363,6 +379,14 @@ fn get_thread_drilldown_returns_main_lane_raw_summary_tools_and_latest_waits() {
         drilldown
             .recent_tool_spans
             .iter()
+            .map(|span| span.call_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["call-tool-4", "call-tool-3", "call-tool-2"]
+    );
+    assert_eq!(
+        drilldown
+            .recent_tool_spans
+            .iter()
             .map(|span| span.tool_name.as_str())
             .collect::<Vec<_>>(),
         vec!["exec_command", "exec_command", "request_user_input"]
@@ -378,6 +402,14 @@ fn get_thread_drilldown_returns_main_lane_raw_summary_tools_and_latest_waits() {
             "2026-03-10T02:00:10+00:00",
             "2026-03-10T02:00:08+00:00",
         ]
+    );
+    assert_eq!(
+        drilldown
+            .related_wait_spans
+            .iter()
+            .map(|span| span.call_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["wait-4", "wait-3", "wait-2"]
     );
     assert_eq!(
         drilldown

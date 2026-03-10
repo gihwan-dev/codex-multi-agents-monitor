@@ -56,6 +56,7 @@ function buildDetail(): ThreadDetail {
     ],
     wait_spans: [
       {
+        call_id: "wait-session-a",
         thread_id: "thread-main",
         parent_session_id: "thread-main",
         child_session_id: "session-a",
@@ -64,6 +65,7 @@ function buildDetail(): ThreadDetail {
         duration_ms: 120_000,
       },
       {
+        call_id: "wait-missing-session",
         thread_id: "thread-main",
         parent_session_id: "thread-main",
         child_session_id: "missing-session",
@@ -74,6 +76,7 @@ function buildDetail(): ThreadDetail {
     ],
     tool_spans: [
       {
+        call_id: "tool-session-a",
         thread_id: "thread-main",
         agent_session_id: "session-a",
         tool_name: "exec_command",

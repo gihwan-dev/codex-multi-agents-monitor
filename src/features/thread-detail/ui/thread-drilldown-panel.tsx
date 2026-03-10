@@ -42,7 +42,8 @@ export function ThreadDrilldownPanel({
             {lane?.label ?? "lane 없음"}
           </p>
           <p className="mt-1 text-xs text-[hsl(var(--muted))]">
-            {lane?.caption ?? "선택한 lane의 최근 commentary, tool, wait 영향, raw snippet"}
+            {lane?.caption ??
+              "선택한 lane의 최근 commentary, tool, wait 영향, raw snippet"}
           </p>
         </div>
         {lane ? (
@@ -55,7 +56,9 @@ export function ThreadDrilldownPanel({
       {isLoading ? (
         <PanelNotice>선택한 lane drilldown을 불러오는 중입니다.</PanelNotice>
       ) : !drilldown ? (
-        <PanelNotice>선택한 lane drilldown을 아직 계산하지 못했습니다.</PanelNotice>
+        <PanelNotice>
+          선택한 lane drilldown을 아직 계산하지 못했습니다.
+        </PanelNotice>
       ) : (
         <div className="mt-4 space-y-4">
           <section className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.74)] p-4">
@@ -64,7 +67,8 @@ export function ThreadDrilldownPanel({
               Latest Commentary
             </div>
             <p className="mt-2 text-sm leading-6">
-              {drilldown.latest_commentary_summary ?? "commentary가 아직 없습니다."}
+              {drilldown.latest_commentary_summary ??
+                "commentary가 아직 없습니다."}
             </p>
             <p className="mt-2 text-xs text-[hsl(var(--muted))]">
               {drilldown.latest_commentary_at
@@ -82,7 +86,7 @@ export function ThreadDrilldownPanel({
               <div className="mt-3 space-y-2">
                 {drilldown.recent_tool_spans.map((span) => (
                   <article
-                    key={`${span.tool_name}-${span.started_at}`}
+                    key={span.call_id}
                     className="rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.68)] px-3 py-2"
                   >
                     <div className="flex items-center justify-between gap-3 text-sm">
@@ -98,7 +102,9 @@ export function ThreadDrilldownPanel({
                 ))}
               </div>
             ) : (
-              <EmptyCopy>선택한 lane에서 기록된 tool span이 없습니다.</EmptyCopy>
+              <EmptyCopy>
+                선택한 lane에서 기록된 tool span이 없습니다.
+              </EmptyCopy>
             )}
           </section>
 
@@ -111,12 +117,16 @@ export function ThreadDrilldownPanel({
               <div className="mt-3 space-y-2">
                 {drilldown.related_wait_spans.map((span) => (
                   <article
-                    key={`${span.parent_session_id}-${span.child_session_id}-${span.started_at}`}
+                    key={span.call_id}
                     className="rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.68)] px-3 py-2"
                   >
                     <div className="flex items-center justify-between gap-3 text-sm">
                       <span className="font-medium">
-                        {renderWaitPeerLabel(lane, span.parent_session_id, span.child_session_id)}
+                        {renderWaitPeerLabel(
+                          lane,
+                          span.parent_session_id,
+                          span.child_session_id,
+                        )}
                       </span>
                       <span className="text-[11px] text-[hsl(var(--muted))]">
                         {renderDuration(span.duration_ms)}
@@ -129,7 +139,9 @@ export function ThreadDrilldownPanel({
                 ))}
               </div>
             ) : (
-              <EmptyCopy>선택한 lane과 직접 연결된 wait span이 없습니다.</EmptyCopy>
+              <EmptyCopy>
+                선택한 lane과 직접 연결된 wait span이 없습니다.
+              </EmptyCopy>
             )}
           </section>
 
@@ -162,7 +174,10 @@ export function ThreadDrilldownPanel({
                     className="mt-3 overflow-x-auto rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--bg)/0.78)] p-3 text-xs leading-6 text-[hsl(var(--fg))]"
                   >
                     {drilldown.raw_snippet.lines
-                      .map((line) => `${String(line.line_number).padStart(4, " ")} ${line.content}`)
+                      .map(
+                        (line) =>
+                          `${String(line.line_number).padStart(4, " ")} ${line.content}`,
+                      )
                       .join("\n")}
                   </pre>
                 ) : (

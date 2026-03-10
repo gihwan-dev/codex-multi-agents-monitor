@@ -88,6 +88,7 @@ pub struct TimelineEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaitSpan {
+    pub call_id: String,
     pub thread_id: String,
     pub parent_session_id: String,
     pub child_session_id: Option<String>,
@@ -98,6 +99,7 @@ pub struct WaitSpan {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolSpan {
+    pub call_id: String,
     pub thread_id: String,
     pub agent_session_id: Option<String>,
     pub tool_name: String,

@@ -64,6 +64,7 @@ export type TimelineEvent = {
 };
 
 export type WaitSpan = {
+  call_id: string;
   thread_id: string;
   parent_session_id: string;
   child_session_id: string | null;
@@ -73,6 +74,7 @@ export type WaitSpan = {
 };
 
 export type ToolSpan = {
+  call_id: string;
   thread_id: string;
   agent_session_id: string | null;
   tool_name: string;

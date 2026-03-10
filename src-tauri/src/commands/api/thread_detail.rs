@@ -223,9 +223,11 @@ pub(super) fn get_thread_detail_from_db(
             ended_at,
             duration_ms,
         ) = row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let span_call_id = call_id.clone();
         wait_spans.push((
             call_id,
             WaitSpan {
+                call_id: span_call_id,
                 thread_id: db_thread_id,
                 parent_session_id,
                 child_session_id,
@@ -282,9 +284,11 @@ pub(super) fn get_thread_detail_from_db(
     for row in rows {
         let (call_id, db_thread_id, agent_session_id, tool_name, started_at, ended_at, duration_ms) =
             row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let span_call_id = call_id.clone();
         tool_spans.push((
             call_id,
             ToolSpan {
+                call_id: span_call_id,
                 thread_id: db_thread_id,
                 agent_session_id,
                 tool_name,
@@ -403,6 +407,7 @@ fn load_related_wait_spans(
     let sql = if agent_session_id.is_some() {
         "
         select
+          call_id,
           thread_id,
           parent_session_id,
           child_session_id,
@@ -418,6 +423,7 @@ fn load_related_wait_spans(
     } else {
         "
         select
+          call_id,
           thread_id,
           parent_session_id,
           child_session_id,
@@ -440,19 +446,29 @@ fn load_related_wait_spans(
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<i64>>(6)?,
             ))
         })
         .map_err(|error| CommandError::Internal(error.to_string()))?;
 
     let mut wait_spans = Vec::new();
     for row in rows {
-        let (db_thread_id, parent_session_id, child_session_id, started_at, ended_at, duration_ms) =
+        let (
+            call_id,
+            db_thread_id,
+            parent_session_id,
+            child_session_id,
+            started_at,
+            ended_at,
+            duration_ms,
+        ) =
             row.map_err(|error| CommandError::Internal(error.to_string()))?;
         wait_spans.push(WaitSpan {
+            call_id,
             thread_id: db_thread_id,
             parent_session_id,
             child_session_id,
@@ -562,7 +578,7 @@ fn load_raw_lane_insights(
 
     let mut recent_tool_spans = function_calls
         .into_iter()
-        .filter_map(|(_, record)| {
+        .filter_map(|(call_id, record)| {
             let tool_name = record.name?;
             if matches!(tool_name.as_str(), "spawn_agent" | "wait") {
                 return None;
@@ -580,6 +596,7 @@ fn load_raw_lane_insights(
             });
 
             Some(ToolSpan {
+                call_id,
                 thread_id: thread_id.to_string(),
                 agent_session_id: agent_session_id.map(str::to_string),
                 tool_name,
@@ -594,6 +611,7 @@ fn load_raw_lane_insights(
             .started_at
             .cmp(&left.started_at)
             .then_with(|| right.tool_name.cmp(&left.tool_name))
+            .then_with(|| right.call_id.cmp(&left.call_id))
     });
     recent_tool_spans.truncate(3);
 

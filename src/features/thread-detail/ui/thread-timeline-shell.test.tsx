@@ -64,6 +64,7 @@ function buildDetail(): ThreadDetail {
     ],
     wait_spans: [
       {
+        call_id: "wait-main-child",
         thread_id: "thread-1",
         parent_session_id: "thread-1",
         child_session_id: "session-child",
@@ -74,6 +75,7 @@ function buildDetail(): ThreadDetail {
     ],
     tool_spans: [
       {
+        call_id: "tool-main-exec",
         thread_id: "thread-1",
         agent_session_id: null,
         tool_name: "exec_command",
@@ -86,7 +88,8 @@ function buildDetail(): ThreadDetail {
 }
 
 function buildDrilldown(laneId: string): ThreadDrilldown {
-  const commentary = laneId === "thread-1" ? "main commentary" : "child commentary";
+  const commentary =
+    laneId === "thread-1" ? "main commentary" : "child commentary";
   const rawLine = laneId === "thread-1" ? "main raw line" : "child raw line";
 
   return {
@@ -95,6 +98,7 @@ function buildDrilldown(laneId: string): ThreadDrilldown {
     latest_commentary_at: "2026-03-10T09:59:00Z",
     recent_tool_spans: [
       {
+        call_id: laneId === "thread-1" ? "tool-main-drilldown" : "tool-child-drilldown",
         thread_id: "thread-1",
         agent_session_id: laneId === "thread-1" ? null : laneId,
         tool_name: "exec_command",
@@ -105,6 +109,7 @@ function buildDrilldown(laneId: string): ThreadDrilldown {
     ],
     related_wait_spans: [
       {
+        call_id: laneId === "thread-1" ? "wait-main-drilldown" : "wait-child-drilldown",
         thread_id: "thread-1",
         parent_session_id: "thread-1",
         child_session_id: laneId === "thread-1" ? "session-child" : laneId,
@@ -149,8 +154,8 @@ function renderShell(detail: ThreadDetail | null, isLoading = false) {
 describe("ThreadTimelineShell 동작", () => {
   beforeEach(() => {
     vi.mocked(getThreadDrilldown).mockReset();
-    vi.mocked(getThreadDrilldown).mockImplementation(async (_threadId, laneId) =>
-      buildDrilldown(laneId),
+    vi.mocked(getThreadDrilldown).mockImplementation(
+      async (_threadId, laneId) => buildDrilldown(laneId),
     );
   });
 
@@ -165,7 +170,9 @@ describe("ThreadTimelineShell 동작", () => {
 
     expect(
       screen.getByText((_, node) => {
-        return node?.textContent === "thread_id=thread-1 데이터가 아직 없습니다.";
+        return (
+          node?.textContent === "thread_id=thread-1 데이터가 아직 없습니다."
+        );
       }),
     ).toBeInTheDocument();
   });
@@ -202,7 +209,10 @@ describe("ThreadTimelineShell 동작", () => {
 
     await user.click(screen.getByTestId("lane-session-child"));
     await waitFor(() => {
-      expect(getThreadDrilldown).toHaveBeenCalledWith("thread-1", "session-child");
+      expect(getThreadDrilldown).toHaveBeenCalledWith(
+        "thread-1",
+        "session-child",
+      );
       expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
         "child commentary",
       );
