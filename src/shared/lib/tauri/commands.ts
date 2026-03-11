@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   HistorySummaryPayload,
   LiveOverviewThread,
+  SessionFlowPayload,
   ThreadDetail,
   ThreadDrilldown,
 } from "@/shared/types/contracts";
@@ -26,6 +27,10 @@ export async function listLiveThreads() {
 
 export async function getThreadDetail(threadId: string) {
   return invoke<ThreadDetail | null>("get_thread_detail", { threadId });
+}
+
+export async function getSessionFlow(threadId: string) {
+  return invoke<SessionFlowPayload | null>("get_session_flow", { threadId });
 }
 
 export async function getThreadDrilldown(threadId: string, laneId: string) {

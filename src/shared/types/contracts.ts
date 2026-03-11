@@ -176,3 +176,40 @@ export type ThreadDrilldown = {
   related_wait_spans: WaitSpan[];
   raw_snippet: RawJsonlSnippet | null;
 };
+
+export type SessionFlowColumn = "user" | "main" | "subagent";
+
+export type SessionFlowItemKind =
+  | "user_message"
+  | "commentary"
+  | "tool_call"
+  | "wait"
+  | "spawn"
+  | "final_answer";
+
+export type SessionLane = {
+  lane_id: string;
+  column: SessionFlowColumn;
+  label: string;
+  agent_session_id: AgentSessionId | null;
+  depth: number;
+  started_at: string | null;
+  updated_at: string | null;
+};
+
+export type SessionFlowItem = {
+  item_id: string;
+  lane_id: string;
+  kind: SessionFlowItemKind;
+  started_at: string;
+  ended_at: string | null;
+  summary: string | null;
+  agent_session_id: AgentSessionId | null;
+  target_lane_id: string | null;
+};
+
+export type SessionFlowPayload = {
+  session: MonitorThread;
+  lanes: SessionLane[];
+  items: SessionFlowItem[];
+};

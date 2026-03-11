@@ -132,6 +132,55 @@ pub struct ThreadDrilldown {
     pub raw_snippet: Option<RawJsonlSnippet>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionFlowColumn {
+    User,
+    Main,
+    Subagent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionFlowItemKind {
+    UserMessage,
+    Commentary,
+    ToolCall,
+    Wait,
+    Spawn,
+    FinalAnswer,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionLane {
+    pub lane_id: String,
+    pub column: SessionFlowColumn,
+    pub label: String,
+    pub agent_session_id: Option<String>,
+    pub depth: u8,
+    pub started_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionFlowItem {
+    pub item_id: String,
+    pub lane_id: String,
+    pub kind: SessionFlowItemKind,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub summary: Option<String>,
+    pub agent_session_id: Option<String>,
+    pub target_lane_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionFlowPayload {
+    pub session: MonitorThread,
+    pub lanes: Vec<SessionLane>,
+    pub items: Vec<SessionFlowItem>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BottleneckSnapshot {
     pub generated_at: DateTime<Utc>,
