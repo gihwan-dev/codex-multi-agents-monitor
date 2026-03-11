@@ -213,3 +213,29 @@ export type SessionFlowPayload = {
   lanes: SessionLane[];
   items: SessionFlowItem[];
 };
+
+export type ArchiveListFilters = {
+  workspace?: WorkspaceKey | null;
+  query?: string | null;
+  from_date?: string | null;
+  to_date?: string | null;
+};
+
+export type ArchivedSessionSummary = {
+  thread_id: SessionId;
+  title: string;
+  cwd: WorkspaceKey;
+  archived: boolean;
+  status: ThreadStatus;
+  started_at: string | null;
+  updated_at: string | null;
+  latest_activity_summary: string | null;
+  agent_roles: string[];
+  rollout_path: string | null;
+};
+
+export type ArchivedSessionListPayload = {
+  filters: ArchiveListFilters;
+  workspaces: WorkspaceKey[];
+  sessions: ArchivedSessionSummary[];
+};

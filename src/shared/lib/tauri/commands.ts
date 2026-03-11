@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  ArchiveListFilters,
+  ArchivedSessionListPayload,
   HistorySummaryPayload,
   LiveOverviewThread,
   SessionFlowPayload,
@@ -23,6 +25,12 @@ export type TauriCommandError = {
 
 export async function listLiveThreads() {
   return invoke<LiveOverviewThread[]>("list_live_threads");
+}
+
+export async function listArchivedSessions(filters: ArchiveListFilters = {}) {
+  return invoke<ArchivedSessionListPayload>("list_archived_sessions", {
+    filters,
+  });
 }
 
 export async function getThreadDetail(threadId: string) {

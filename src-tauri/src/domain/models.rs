@@ -181,6 +181,35 @@ pub struct SessionFlowPayload {
     pub items: Vec<SessionFlowItem>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ArchiveListFilters {
+    pub workspace: Option<String>,
+    pub query: Option<String>,
+    pub from_date: Option<String>,
+    pub to_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchivedSessionSummary {
+    pub thread_id: String,
+    pub title: String,
+    pub cwd: String,
+    pub archived: bool,
+    pub status: ThreadStatus,
+    pub started_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub latest_activity_summary: Option<String>,
+    pub agent_roles: Vec<String>,
+    pub rollout_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchivedSessionListPayload {
+    pub filters: ArchiveListFilters,
+    pub workspaces: Vec<String>,
+    pub sessions: Vec<ArchivedSessionSummary>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BottleneckSnapshot {
     pub generated_at: DateTime<Utc>,

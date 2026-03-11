@@ -2,12 +2,14 @@ use tauri::State;
 
 use crate::commands::error::CommandError;
 use crate::domain::{
-    HistorySummaryPayload, LiveOverviewThread, SessionFlowPayload, ThreadDetail, ThreadDrilldown,
+    ArchiveListFilters, ArchivedSessionListPayload, HistorySummaryPayload, LiveOverviewThread,
+    SessionFlowPayload, ThreadDetail, ThreadDrilldown,
 };
 use crate::index_db::init_monitor_db;
 use crate::ingest::run_incremental_ingest;
 use crate::state::AppState;
 
+use super::archive_list::list_archived_sessions_from_db;
 use super::history_summary::build_history_summary;
 use super::live_overview::list_live_threads_from_db;
 use super::session_flow::get_session_flow_from_db;
@@ -20,6 +22,16 @@ pub fn list_live_threads(
     init_monitor_db(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
     run_incremental_ingest(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
     list_live_threads_from_db(&state)
+}
+
+#[tauri::command]
+pub fn list_archived_sessions(
+    filters: Option<ArchiveListFilters>,
+    state: State<'_, AppState>,
+) -> Result<ArchivedSessionListPayload, CommandError> {
+    init_monitor_db(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
+    run_incremental_ingest(&state).map_err(|error| CommandError::Internal(error.to_string()))?;
+    list_archived_sessions_from_db(&state, filters)
 }
 
 #[tauri::command]

@@ -1,3 +1,4 @@
+mod archive_list;
 mod decode;
 mod entrypoints;
 mod history_summary;
@@ -10,5 +11,5 @@ mod tests;
 
 pub use entrypoints::{
     get_history_summary, get_session_flow, get_thread_detail, get_thread_drilldown,
-    list_live_threads,
+    list_archived_sessions, list_live_threads,
 };

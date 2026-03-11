@@ -1,3 +1,4 @@
+mod archive_list;
 mod history_summary;
 mod ingest_visibility;
 mod live_overview;
