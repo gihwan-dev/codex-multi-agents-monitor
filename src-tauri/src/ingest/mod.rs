@@ -885,13 +885,25 @@ pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
     Ok(())
 }
 
-fn load_state_snapshot(state: &AppState) -> Result<(Vec<StateRootThreadRow>, Vec<AgentSessionRow>)> {
-    let state_connection = Connection::open(&state.source_paths.state_db_path).with_context(|| {
-        format!(
-            "failed to open state db at {}",
-            state.source_paths.state_db_path.display()
-        )
-    })?;
+fn load_state_snapshot(
+    state: &AppState,
+) -> Result<(Vec<StateRootThreadRow>, Vec<AgentSessionRow>)> {
+    let state_connection = match Connection::open(&state.source_paths.state_db_path) {
+        Ok(connection) => connection,
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::CannotOpen =>
+        {
+            return Ok((Vec::new(), Vec::new()));
+        }
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!(
+                    "failed to open state db at {}",
+                    state.source_paths.state_db_path.display()
+                )
+            });
+        }
+    };
 
     let mut statement = state_connection
         .prepare(
@@ -1766,11 +1778,15 @@ mod tests {
         ));
         let live_sessions_dir = root_dir.join("sessions");
         fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
+        let archived_sessions_dir = root_dir.join("archived_sessions");
+        fs::create_dir_all(&archived_sessions_dir).expect("create archived sessions dir");
+        fs::File::create(root_dir.join("state_5.sqlite")).expect("create state db file");
 
         AppState {
             monitor_db_path: root_dir.join("monitor.db"),
             source_paths: SourcePaths {
                 live_sessions_dir,
+                archived_sessions_dir,
                 state_db_path: root_dir.join("state_5.sqlite"),
             },
         }

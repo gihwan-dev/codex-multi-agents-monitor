@@ -7,7 +7,10 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use crate::commands::error::CommandError;
-use crate::domain::{HistoryRoleSummary, HistorySlowThread, HistorySummary, HistorySummaryPayload};
+use crate::domain::{
+    HistoryHealth, HistoryRoleSummary, HistorySlowThread, HistorySourceKey, HistorySummary,
+    HistorySummaryPayload,
+};
 use crate::index_db::open_monitor_db;
 use crate::state::AppState;
 
@@ -40,6 +43,18 @@ struct ThreadDerivedMetrics {
     spawn_count: u32,
     timeout_count: u32,
     role_timeout_counts: HashMap<String, u32>,
+}
+
+#[derive(Debug, Default)]
+struct RolloutMetricsSummary {
+    metrics_by_thread: HashMap<String, ThreadDerivedMetrics>,
+    degraded_rollout_threads: u32,
+}
+
+#[derive(Debug, Default)]
+struct RolloutMetricsResult {
+    metrics: ThreadDerivedMetrics,
+    degraded: bool,
 }
 
 #[derive(Debug, Default)]
@@ -80,7 +95,8 @@ pub(super) fn build_history_summary_at(
         .iter()
         .map(|session| (session.session_id.clone(), session.agent_role.clone()))
         .collect::<HashMap<_, _>>();
-    let thread_metrics = collect_thread_metrics(&threads, &session_role_map);
+    let rollout_metrics = collect_thread_metrics(&threads, &session_role_map);
+    let thread_metrics = &rollout_metrics.metrics_by_thread;
 
     let thread_count = u32::try_from(threads.len()).unwrap_or(u32::MAX);
     let average_duration_ms =
@@ -192,6 +208,10 @@ pub(super) fn build_history_summary_at(
             average_duration_ms,
             timeout_count,
             spawn_count,
+        },
+        health: HistoryHealth {
+            missing_sources: detect_missing_sources(state),
+            degraded_rollout_threads: rollout_metrics.degraded_rollout_threads,
         },
         roles,
         slow_threads,
@@ -334,41 +354,60 @@ fn collect_agent_roles_by_thread(sessions: &[AgentSessionRow]) -> HashMap<String
 fn collect_thread_metrics(
     threads: &[ThreadCandidateRow],
     session_role_map: &HashMap<String, String>,
-) -> HashMap<String, ThreadDerivedMetrics> {
-    threads
-        .iter()
-        .map(|thread| {
-            (
-                thread.thread_id.clone(),
-                collect_metrics_from_rollout(&thread.rollout_path, session_role_map),
-            )
-        })
-        .collect()
+) -> RolloutMetricsSummary {
+    let mut metrics_by_thread = HashMap::with_capacity(threads.len());
+    let mut degraded_rollout_threads = 0;
+
+    for thread in threads {
+        let result = collect_metrics_from_rollout(&thread.rollout_path, session_role_map);
+        if result.degraded {
+            degraded_rollout_threads += 1;
+        }
+        metrics_by_thread.insert(thread.thread_id.clone(), result.metrics);
+    }
+
+    RolloutMetricsSummary {
+        metrics_by_thread,
+        degraded_rollout_threads,
+    }
 }
 
 fn collect_metrics_from_rollout(
     rollout_path: &str,
     session_role_map: &HashMap<String, String>,
-) -> ThreadDerivedMetrics {
+) -> RolloutMetricsResult {
     let Some(rollout_path) = normalize_optional_text(rollout_path) else {
-        return ThreadDerivedMetrics::default();
+        return RolloutMetricsResult {
+            degraded: true,
+            ..RolloutMetricsResult::default()
+        };
     };
     let Ok(metadata) = std::fs::metadata(&rollout_path) else {
-        return ThreadDerivedMetrics::default();
+        return RolloutMetricsResult {
+            degraded: true,
+            ..RolloutMetricsResult::default()
+        };
     };
     if !metadata.is_file() {
-        return ThreadDerivedMetrics::default();
+        return RolloutMetricsResult {
+            degraded: true,
+            ..RolloutMetricsResult::default()
+        };
     }
     let Ok(file) = File::open(&rollout_path) else {
-        return ThreadDerivedMetrics::default();
+        return RolloutMetricsResult {
+            degraded: true,
+            ..RolloutMetricsResult::default()
+        };
     };
 
     let reader = BufReader::new(file);
-    let mut metrics = ThreadDerivedMetrics::default();
+    let mut result = RolloutMetricsResult::default();
     let mut wait_calls = HashMap::<String, WaitCallRecord>::new();
 
     for line in reader.lines() {
         let Ok(line) = line else {
+            result.degraded = true;
             break;
         };
         let trimmed = line.trim();
@@ -377,6 +416,7 @@ fn collect_metrics_from_rollout(
         }
 
         let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+            result.degraded = true;
             continue;
         };
         if value.get("type").and_then(Value::as_str) != Some("response_item") {
@@ -401,7 +441,7 @@ fn collect_metrics_from_rollout(
                     .and_then(normalize_optional_text)
                     .as_deref()
                 {
-                    Some("spawn_agent") => metrics.spawn_count += 1,
+                    Some("spawn_agent") => result.metrics.spawn_count += 1,
                     Some("wait") => {
                         wait_calls.insert(
                             call_id,
@@ -431,10 +471,11 @@ fn collect_metrics_from_rollout(
                     continue;
                 }
 
-                metrics.timeout_count += 1;
+                result.metrics.timeout_count += 1;
                 if let Some(session_id) = resolve_wait_child_session_id(wait_record, &output) {
                     if let Some(agent_role) = session_role_map.get(&session_id) {
-                        *metrics
+                        *result
+                            .metrics
                             .role_timeout_counts
                             .entry(agent_role.clone())
                             .or_default() += 1;
@@ -445,7 +486,23 @@ fn collect_metrics_from_rollout(
         }
     }
 
-    metrics
+    result
+}
+
+fn detect_missing_sources(state: &AppState) -> Vec<HistorySourceKey> {
+    let mut missing_sources = Vec::new();
+
+    if !state.source_paths.live_sessions_dir.exists() {
+        missing_sources.push(HistorySourceKey::LiveSessions);
+    }
+    if !state.source_paths.archived_sessions_dir.exists() {
+        missing_sources.push(HistorySourceKey::ArchivedSessions);
+    }
+    if !state.source_paths.state_db_path.exists() {
+        missing_sources.push(HistorySourceKey::StateDb);
+    }
+
+    missing_sources
 }
 
 fn parse_wait_argument_ids(raw_arguments: Option<&Value>) -> Vec<String> {

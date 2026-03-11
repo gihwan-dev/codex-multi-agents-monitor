@@ -19,11 +19,15 @@ pub(super) fn build_test_state(label: &str) -> AppState {
     ));
     let live_sessions_dir = root_dir.join("sessions");
     fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
+    let archived_sessions_dir = root_dir.join("archived_sessions");
+    fs::create_dir_all(&archived_sessions_dir).expect("create archived sessions dir");
+    fs::File::create(root_dir.join("state_5.sqlite")).expect("create state db file");
 
     AppState {
         monitor_db_path: root_dir.join("monitor.db"),
         source_paths: SourcePaths {
             live_sessions_dir,
+            archived_sessions_dir,
             state_db_path: root_dir.join("state_5.sqlite"),
         },
     }

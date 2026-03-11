@@ -21,6 +21,10 @@ function buildSummary(): HistorySummaryPayload {
       timeout_count: 3,
       spawn_count: 5,
     },
+    health: {
+      missing_sources: [],
+      degraded_rollout_threads: 0,
+    },
     roles: [
       {
         agent_role: "reviewer",
@@ -87,6 +91,7 @@ describe("HistoryShell 컴포넌트", () => {
     expect(screen.getByText("reviewer")).toBeInTheDocument();
     expect(screen.getByText("History thread A")).toBeInTheDocument();
     expect(screen.getByText("recent commentary")).toBeInTheDocument();
+    expect(screen.queryByText(/누락된 source:/)).not.toBeInTheDocument();
   });
 
   it("workspace와 log deep link를 올바른 인자로 호출한다", async () => {
@@ -120,6 +125,55 @@ describe("HistoryShell 컴포넌트", () => {
 
     expect(
       await screen.findByText("failed to open workspace"),
+    ).toBeInTheDocument();
+  });
+
+  it("missing source와 partial rollout health를 상단 warning card로 보여준다", () => {
+    render(
+      <HistoryShell
+        summary={{
+          ...buildSummary(),
+          health: {
+            missing_sources: ["archived_sessions", "state_db"],
+            degraded_rollout_threads: 2,
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(/누락된 source: archived sessions, state db/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2개 thread는 rollout parsing이 불완전해/),
+    ).toBeInTheDocument();
+  });
+
+  it("요약 데이터가 없어도 health warning과 empty state를 함께 보여준다", () => {
+    render(
+      <HistoryShell
+        summary={{
+          ...buildSummary(),
+          history: {
+            ...buildSummary().history,
+            thread_count: 0,
+          },
+          slow_threads: [],
+          health: {
+            missing_sources: ["live_sessions"],
+            degraded_rollout_threads: 0,
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      screen.getByText("누락된 source: live sessions"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("7일 요약 데이터가 아직 없습니다."),
     ).toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ use chrono::{TimeZone, Utc};
 use rusqlite::Connection;
 use serde_json::json;
 
+use crate::domain::HistorySourceKey;
 use crate::index_db::init_monitor_db;
 
 use super::super::history_summary::build_history_summary_at;
@@ -17,13 +18,22 @@ fn build_history_summary_limits_to_recent_completed_root_threads() {
     let state = build_test_state("history-window");
     init_monitor_db(&state).expect("failed to initialize monitor db");
     let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+    let rollout_path = state
+        .source_paths
+        .live_sessions_dir
+        .join("2026/03/10/history-window.jsonl");
+    if let Some(parent) = rollout_path.parent() {
+        fs::create_dir_all(parent).expect("create rollout dir");
+    }
+    fs::write(&rollout_path, "").expect("write empty rollout");
 
-    insert_thread(
+    insert_thread_with_rollout(
         &connection,
         "thread-recent",
         "completed",
         0,
         Some("2026-03-10T10:00:00Z"),
+        &rollout_path.display().to_string(),
     );
     insert_thread(
         &connection,
@@ -52,6 +62,8 @@ fn build_history_summary_limits_to_recent_completed_root_threads() {
     assert_eq!(summary.history.average_duration_ms, Some(36_000_000));
     assert_eq!(summary.history.timeout_count, 0);
     assert_eq!(summary.history.spawn_count, 0);
+    assert!(summary.health.missing_sources.is_empty());
+    assert_eq!(summary.health.degraded_rollout_threads, 0);
     assert!(summary.roles.is_empty());
     assert_eq!(summary.slow_threads.len(), 1);
     assert_eq!(summary.slow_threads[0].thread_id, "thread-recent");
@@ -167,6 +179,8 @@ fn build_history_summary_aggregates_role_duration_spawn_and_timeout_metrics() {
     assert_eq!(summary.history.thread_count, 1);
     assert_eq!(summary.history.spawn_count, 2);
     assert_eq!(summary.history.timeout_count, 2);
+    assert!(summary.health.missing_sources.is_empty());
+    assert_eq!(summary.health.degraded_rollout_threads, 0);
     assert_eq!(summary.roles.len(), 2);
     assert_eq!(summary.roles[0].agent_role, "reviewer");
     assert_eq!(summary.roles[0].session_count, 1);
@@ -188,6 +202,34 @@ fn build_history_summary_aggregates_role_duration_spawn_and_timeout_metrics() {
         summary.slow_threads[0].rollout_path.as_deref(),
         Some(expected_rollout_path.as_str())
     );
+}
+
+#[test]
+fn build_history_summary_reports_missing_sources() {
+    let state = build_test_state("history-missing-sources");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+
+    fs::remove_dir_all(&state.source_paths.live_sessions_dir).expect("remove live sessions dir");
+    fs::remove_dir_all(&state.source_paths.archived_sessions_dir)
+        .expect("remove archived sessions dir");
+    fs::remove_file(&state.source_paths.state_db_path).expect("remove state db file");
+
+    let now = Utc
+        .with_ymd_and_hms(2026, 3, 10, 12, 0, 0)
+        .single()
+        .expect("fixed timestamp should exist");
+    let summary = build_history_summary_at(&state, now).expect("history summary should build");
+
+    assert_eq!(
+        summary.health.missing_sources,
+        vec![
+            HistorySourceKey::LiveSessions,
+            HistorySourceKey::ArchivedSessions,
+            HistorySourceKey::StateDb,
+        ]
+    );
+    assert_eq!(summary.health.degraded_rollout_threads, 0);
+    assert_eq!(summary.history.thread_count, 0);
 }
 
 #[test]
@@ -250,6 +292,8 @@ fn build_history_summary_degrades_when_rollout_is_missing_unreadable_or_malforme
     assert_eq!(summary.history.thread_count, 3);
     assert_eq!(summary.history.spawn_count, 1);
     assert_eq!(summary.history.timeout_count, 0);
+    assert!(summary.health.missing_sources.is_empty());
+    assert_eq!(summary.health.degraded_rollout_threads, 3);
     let missing_thread = summary
         .slow_threads
         .iter()

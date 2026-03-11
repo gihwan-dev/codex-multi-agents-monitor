@@ -14,7 +14,11 @@ import {
   openWorkspace,
   type TauriCommandError,
 } from "@/shared/lib/tauri/commands";
-import type { HistorySummaryPayload } from "@/shared/types/contracts";
+import type {
+  HistoryHealth,
+  HistorySourceKey,
+  HistorySummaryPayload,
+} from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
 
 type HistoryShellProps = {
@@ -37,10 +41,16 @@ const historyLoadingCardIds = [
   "timeouts",
   "spawns",
 ] as const;
+const sourceLabelByKey: Record<HistorySourceKey, string> = {
+  live_sessions: "live sessions",
+  archived_sessions: "archived sessions",
+  state_db: "state db",
+};
 
 export function HistoryShell({ summary, isLoading }: HistoryShellProps) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const healthNotice = summary ? buildHealthNotice(summary.health) : null;
 
   async function runAction(
     threadId: string,
@@ -85,6 +95,7 @@ export function HistoryShell({ summary, isLoading }: HistoryShellProps) {
     return (
       <section className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">History</h2>
+        {healthNotice ? <HistoryHealthNotice notice={healthNotice} /> : null}
         <div className="rounded-2xl border border-dashed border-[hsl(var(--line-strong))] bg-[hsl(var(--panel-2)/0.7)] p-8 text-sm text-[hsl(var(--muted))]">
           7일 요약 데이터가 아직 없습니다.
         </div>
@@ -108,6 +119,7 @@ export function HistoryShell({ summary, isLoading }: HistoryShellProps) {
             {actionError}
           </div>
         ) : null}
+        {healthNotice ? <HistoryHealthNotice notice={healthNotice} /> : null}
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -329,6 +341,34 @@ function MetricBadge({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-mono text-sm">{value}</p>
     </div>
   );
+}
+
+function HistoryHealthNotice({ notice }: { notice: string }) {
+  return (
+    <div className="rounded-2xl border border-[hsl(var(--warn)/0.35)] bg-[hsl(var(--warn)/0.12)] px-4 py-3 text-sm text-[hsl(var(--warn))]">
+      {notice}
+    </div>
+  );
+}
+
+function buildHealthNotice(health: HistoryHealth) {
+  const messages = [];
+  if (health.missing_sources.length > 0) {
+    messages.push(
+      `누락된 source: ${health.missing_sources.map(formatSourceLabel).join(", ")}`,
+    );
+  }
+  if (health.degraded_rollout_threads > 0) {
+    messages.push(
+      `${health.degraded_rollout_threads}개 thread는 rollout parsing이 불완전해 timeout/spawn 수치가 과소 집계될 수 있습니다.`,
+    );
+  }
+
+  return messages.length > 0 ? messages.join(" ") : null;
+}
+
+function formatSourceLabel(source: HistorySourceKey) {
+  return sourceLabelByKey[source];
 }
 
 function formatActionError(error: unknown, kind: ActionKind) {

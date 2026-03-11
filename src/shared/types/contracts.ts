@@ -109,6 +109,16 @@ export type HistorySummary = {
   spawn_count: number;
 };
 
+export type HistorySourceKey =
+  | "live_sessions"
+  | "archived_sessions"
+  | "state_db";
+
+export type HistoryHealth = {
+  missing_sources: HistorySourceKey[];
+  degraded_rollout_threads: number;
+};
+
 export type HistoryRoleSummary = {
   agent_role: string;
   session_count: number;
@@ -132,6 +142,7 @@ export type HistorySlowThread = {
 
 export type HistorySummaryPayload = {
   history: HistorySummary;
+  health: HistoryHealth;
   roles: HistoryRoleSummary[];
   slow_threads: HistorySlowThread[];
 };

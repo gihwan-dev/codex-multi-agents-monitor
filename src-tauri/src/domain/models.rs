@@ -148,6 +148,20 @@ pub struct HistorySummary {
     pub spawn_count: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HistorySourceKey {
+    LiveSessions,
+    ArchivedSessions,
+    StateDb,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryHealth {
+    pub missing_sources: Vec<HistorySourceKey>,
+    pub degraded_rollout_threads: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryRoleSummary {
     pub agent_role: String,
@@ -174,6 +188,7 @@ pub struct HistorySlowThread {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistorySummaryPayload {
     pub history: HistorySummary,
+    pub health: HistoryHealth,
     pub roles: Vec<HistoryRoleSummary>,
     pub slow_threads: Vec<HistorySlowThread>,
 }

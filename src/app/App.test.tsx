@@ -15,6 +15,10 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
       timeout_count: 0,
       spawn_count: 0,
     },
+    health: {
+      missing_sources: [],
+      degraded_rollout_threads: 0,
+    },
     roles: [],
     slow_threads: [],
   })),
