@@ -35,7 +35,7 @@ sequenceDiagram
 
     UI->>Bridge: listLiveThreads()
     Bridge->>Cmd: invoke("list_live_threads")
-    Cmd->>DB: read inflight summary
+    Cmd->>DB: read unarchived root thread summary
     Cmd-->>Bridge: MonitorThread[]
     Bridge-->>UI: render overview shell
 
