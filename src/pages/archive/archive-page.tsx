@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useThreadUiStore } from "@/entities/thread/model/thread-ui-store";
 import { SessionWorkspaceShell } from "@/features/session-browser/ui/session-workspace-shell";
+import { SessionFlowWorkspace } from "@/features/session-flow/ui/session-flow-workspace";
 import { listArchivedSessions } from "@/shared/lib/tauri/commands";
 import { Button } from "@/shared/ui/button";
 
@@ -38,8 +39,8 @@ export function ArchivePage() {
   return (
     <SessionWorkspaceShell
       eyebrow="Archive"
-      title="아카이브된 챗"
-      description="archived root session browser skeleton입니다. 다음 slice에서 reusable flow workspace를 그대로 연결합니다."
+      title="아카이브 챗 세션"
+      description="workspace별로 archived root session을 탐색하고 같은 shell 안에서 flow workspace를 연다."
       sidebar={
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
@@ -69,9 +70,9 @@ export function ArchivePage() {
       listPane={
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Archived sessions</p>
+            <p className="text-sm font-medium">Archived chat sessions</p>
             <span className="text-xs text-[hsl(var(--muted))]">
-              {archiveQuery.data?.sessions.length ?? 0} items
+              {archiveQuery.data?.sessions.length ?? 0} sessions
             </span>
           </div>
           {archiveQuery.isLoading ? (
@@ -83,12 +84,30 @@ export function ArchivePage() {
               {(archiveQuery.data?.sessions ?? []).map((session) => (
                 <li key={session.thread_id}>
                   <Link
-                    className="block rounded-2xl border border-[hsl(var(--line))] px-3 py-3 text-sm hover:border-[hsl(var(--line-strong))]"
+                    className={`block rounded-2xl border px-3 py-3 text-sm transition-colors ${
+                      session.thread_id === sessionId
+                        ? "border-[hsl(var(--accent-strong))] bg-[hsl(var(--panel)/0.84)]"
+                        : "border-[hsl(var(--line))] hover:border-[hsl(var(--line-strong))]"
+                    }`}
                     to={`/archive/${session.thread_id}${activeWorkspace ? `?workspace=${encodeURIComponent(activeWorkspace)}` : ""}`}
                   >
-                    <div className="font-medium">{session.title}</div>
-                    <div className="mt-1 text-xs text-[hsl(var(--muted))]">
-                      {session.cwd}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{session.title}</div>
+                        <div className="mt-1 text-xs text-[hsl(var(--muted))]">
+                          {session.cwd}
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-[hsl(var(--line))] px-2 py-1 text-[11px] text-[hsl(var(--muted))]">
+                        {session.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-[hsl(var(--muted))]">
+                      {session.latest_activity_summary ?? "latest activity summary 없음"}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--muted))]">
+                      <span>{session.agent_roles.join(", ") || "role 없음"}</span>
+                      <span>{session.rollout_path ?? "rollout 없음"}</span>
                     </div>
                   </Link>
                 </li>
@@ -104,25 +123,7 @@ export function ArchivePage() {
       }
       detailPane={
         selectedSession ? (
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
-              Archive inspector
-            </p>
-            <h3 className="text-base font-semibold">{selectedSession.title}</h3>
-            <p className="text-sm text-[hsl(var(--muted))]">
-              archive browser detail과 flow workspace는 다음 slice에서 결합된다.
-            </p>
-            <dl className="grid gap-2 text-sm">
-              <div className="rounded-xl border border-[hsl(var(--line))] px-3 py-2">
-                <dt className="text-[hsl(var(--muted))]">session id</dt>
-                <dd className="font-mono">{selectedSession.thread_id}</dd>
-              </div>
-              <div className="rounded-xl border border-[hsl(var(--line))] px-3 py-2">
-                <dt className="text-[hsl(var(--muted))]">rollout</dt>
-                <dd>{selectedSession.rollout_path ?? "-"}</dd>
-              </div>
-            </dl>
-          </div>
+          <SessionFlowWorkspace sessionId={selectedSession.thread_id} />
         ) : (
           <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--line-strong))] text-sm text-[hsl(var(--muted))]">
             archive session을 선택하면 이 shell 안에서 flow workspace가 열린다.
