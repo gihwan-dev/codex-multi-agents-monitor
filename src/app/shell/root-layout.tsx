@@ -1,4 +1,4 @@
-import { Activity, History, LayoutDashboard } from "lucide-react";
+import { Activity, Archive, Radio, Rows3 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { useThreadUiStore } from "@/entities/thread/model/thread-ui-store";
@@ -7,14 +7,19 @@ import { Button } from "@/shared/ui/button";
 
 const navItems = [
   {
-    to: "/",
-    icon: LayoutDashboard,
-    label: "Overview",
+    to: "/live",
+    icon: Radio,
+    label: "Live",
   },
   {
-    to: "/history",
-    icon: History,
-    label: "History",
+    to: "/archive",
+    icon: Archive,
+    label: "Archive",
+  },
+  {
+    to: "/summary",
+    icon: Rows3,
+    label: "Summary",
   },
 ];
 
@@ -56,14 +61,14 @@ export function RootLayout() {
         <footer className="mt-4 flex items-center justify-between rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.72)] px-4 py-2 text-xs text-[hsl(var(--muted))]">
           <div className="flex items-center gap-2">
             <Activity size={14} className="text-[hsl(var(--ok))]" />
-            <span>Timeline-first shell active</span>
+            <span>Session-first shell active</span>
           </div>
           <span
             className={cn("font-mono", selectedThreadId ? "" : "opacity-70")}
           >
             {selectedThreadId
-              ? `selected=${selectedThreadId}`
-              : "selected=none"}
+              ? `selected_session=${selectedThreadId}`
+              : "selected_session=none"}
           </span>
         </footer>
       </div>

@@ -5,6 +5,25 @@ import { App } from "@/app/App";
 
 vi.mock("@/shared/lib/tauri/commands", () => ({
   listLiveThreads: vi.fn(async () => []),
+  listArchivedSessions: vi.fn(async () => ({
+    filters: {},
+    workspaces: [],
+    sessions: [],
+  })),
+  getSessionFlow: vi.fn(async () => null),
+  getSummaryDashboard: vi.fn(async () => ({
+    filters: {},
+    kpis: {
+      session_count: 0,
+      active_session_count: 0,
+      completed_session_count: 0,
+      average_duration_ms: null,
+      workspace_count: 0,
+    },
+    workspace_distribution: [],
+    role_mix: [],
+    session_compare: [],
+  })),
   getThreadDetail: vi.fn(async () => null),
   getHistorySummary: vi.fn(async () => ({
     history: {
@@ -35,6 +54,11 @@ describe("App", () => {
   it("renders monitor shell", async () => {
     render(<App />);
     expect(await screen.findByText("Multi-Agent Monitor")).toBeInTheDocument();
-    expect(await screen.findByText("Live Overview")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: "Live",
+      }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("현재 진행 중인 챗")).toBeInTheDocument();
   });
 });

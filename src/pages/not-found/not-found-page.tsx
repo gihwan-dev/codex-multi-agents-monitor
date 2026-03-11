@@ -10,11 +10,11 @@ export function NotFoundPage() {
       </p>
       <h2 className="text-2xl font-semibold tracking-tight">Route not found</h2>
       <p className="max-w-lg text-sm text-[hsl(var(--muted))]">
-        monitor 라우팅은 `/`, `/threads/:threadId`, `/history` 세 경로만 초기
-        지원합니다.
+        monitor 라우팅은 `/live`, `/archive`, `/summary`와 legacy
+        `/threads/:threadId` redirect를 지원합니다.
       </p>
-      <Link to="/">
-        <Button size="sm">overview로 이동</Button>
+      <Link to="/live">
+        <Button size="sm">live로 이동</Button>
       </Link>
     </section>
   );
