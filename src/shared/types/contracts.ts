@@ -1,3 +1,11 @@
+// User-facing hierarchy:
+// Workspace > Chat(Session) > Agent Session > Item(Event)
+// `thread` and `thread_id` remain internal/storage compatibility names.
+
+export type WorkspaceKey = string;
+export type SessionId = string;
+export type AgentSessionId = string;
+
 export type ThreadStatus = "inflight" | "completed" | "failed";
 
 export type BottleneckLevel = "normal" | "warning" | "critical";
@@ -16,9 +24,11 @@ export type MiniTimelineItem = {
 };
 
 export type LiveOverviewThread = {
-  thread_id: string;
+  // Legacy storage identifier for the root chat(session).
+  thread_id: SessionId;
   title: string;
-  cwd: string;
+  // MVP workspace key. A dedicated workspace entity is introduced later.
+  cwd: WorkspaceKey;
   status: ThreadStatus;
   started_at: string | null;
   updated_at: string | null;
@@ -34,9 +44,10 @@ export type LiveOverviewThread = {
 };
 
 export type MonitorThread = {
-  thread_id: string;
+  // Legacy storage identifier for the root chat(session).
+  thread_id: SessionId;
   title: string;
-  cwd: string;
+  cwd: WorkspaceKey;
   archived: boolean;
   status: ThreadStatus;
   started_at: string | null;
@@ -45,8 +56,8 @@ export type MonitorThread = {
 };
 
 export type AgentSession = {
-  session_id: string;
-  thread_id: string;
+  session_id: AgentSessionId;
+  thread_id: SessionId;
   agent_role: string;
   agent_nickname: string | null;
   depth: number;
@@ -56,8 +67,8 @@ export type AgentSession = {
 
 export type TimelineEvent = {
   event_id: string;
-  thread_id: string;
-  agent_session_id: string | null;
+  thread_id: SessionId;
+  agent_session_id: AgentSessionId | null;
   kind: string;
   started_at: string;
   ended_at: string | null;
@@ -66,9 +77,9 @@ export type TimelineEvent = {
 
 export type WaitSpan = {
   call_id: string;
-  thread_id: string;
-  parent_session_id: string;
-  child_session_id: string | null;
+  thread_id: SessionId;
+  parent_session_id: AgentSessionId;
+  child_session_id: AgentSessionId | null;
   started_at: string;
   ended_at: string | null;
   duration_ms: number | null;
@@ -76,8 +87,8 @@ export type WaitSpan = {
 
 export type ToolSpan = {
   call_id: string;
-  thread_id: string;
-  agent_session_id: string | null;
+  thread_id: SessionId;
+  agent_session_id: AgentSessionId | null;
   tool_name: string;
   started_at: string;
   ended_at: string | null;
@@ -130,9 +141,9 @@ export type HistoryRoleSummary = {
 };
 
 export type HistorySlowThread = {
-  thread_id: string;
+  thread_id: SessionId;
   title: string;
-  cwd: string;
+  cwd: WorkspaceKey;
   updated_at: string;
   latest_activity_summary: string | null;
   duration_ms: number | null;
