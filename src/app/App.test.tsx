@@ -11,6 +11,7 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
     sessions: [],
   })),
   getSessionFlow: vi.fn(async () => null),
+  getThreadDrilldown: vi.fn(async () => null),
   getSummaryDashboard: vi.fn(async () => ({
     filters: {},
     kpis: {
@@ -59,6 +60,6 @@ describe("App", () => {
         name: "Live",
       }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("현재 진행 중인 챗")).toBeInTheDocument();
+    expect(await screen.findByText("실시간 챗 세션")).toBeInTheDocument();
   });
 });

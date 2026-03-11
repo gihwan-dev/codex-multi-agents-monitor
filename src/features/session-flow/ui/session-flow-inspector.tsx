@@ -1,14 +1,35 @@
-import type { SessionFlowPayload } from "@/shared/types/contracts";
+import { useEffect, useState } from "react";
+
+import type { SessionFlowPayload, ThreadDrilldown } from "@/shared/types/contracts";
+import { Button } from "@/shared/ui/button";
 
 type SessionFlowInspectorProps = {
   flow: SessionFlowPayload | null;
   selectedItemId: string | null;
+  drilldown: ThreadDrilldown | null;
+  isDrilldownLoading: boolean;
 };
 
 export function SessionFlowInspector({
   flow,
   selectedItemId,
+  drilldown,
+  isDrilldownLoading,
 }: SessionFlowInspectorProps) {
+  const [isRawSnippetExpanded, setIsRawSnippetExpanded] = useState(false);
+  const selectedItem =
+    flow?.items.find((item) => item.item_id === selectedItemId) ??
+    flow?.items[flow.items.length - 1] ??
+    null;
+  const lane = selectedItem
+    ? flow?.lanes.find((candidate) => candidate.lane_id === selectedItem.lane_id) ??
+      null
+    : null;
+
+  useEffect(() => {
+    setIsRawSnippetExpanded(false);
+  }, [lane?.lane_id]);
+
   if (!flow) {
     return (
       <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--line-strong))] text-sm text-[hsl(var(--muted))]">
@@ -16,14 +37,6 @@ export function SessionFlowInspector({
       </div>
     );
   }
-
-  const selectedItem =
-    flow.items.find((item) => item.item_id === selectedItemId) ??
-    flow.items[flow.items.length - 1] ??
-    null;
-  const lane = selectedItem
-    ? flow.lanes.find((candidate) => candidate.lane_id === selectedItem.lane_id)
-    : null;
 
   return (
     <div className="space-y-3">
@@ -37,17 +50,80 @@ export function SessionFlowInspector({
         </p>
       </div>
       {selectedItem ? (
-        <dl className="grid gap-2 text-sm">
-          <InspectorCard label="kind" value={selectedItem.kind} />
-          <InspectorCard label="lane" value={lane?.label ?? selectedItem.lane_id} />
-          <InspectorCard label="started" value={selectedItem.started_at} />
-          <InspectorCard label="ended" value={selectedItem.ended_at ?? "open"} />
-          <InspectorCard label="summary" value={selectedItem.summary ?? "-"} />
-          <InspectorCard
-            label="target"
-            value={selectedItem.target_lane_id ?? "-"}
-          />
-        </dl>
+        <div className="space-y-3">
+          <dl className="grid gap-2 text-sm">
+            <InspectorCard label="kind" value={selectedItem.kind} />
+            <InspectorCard
+              label="lane"
+              value={lane?.label ?? selectedItem.lane_id}
+            />
+            <InspectorCard label="started" value={selectedItem.started_at} />
+            <InspectorCard label="ended" value={selectedItem.ended_at ?? "open"} />
+            <InspectorCard label="summary" value={selectedItem.summary ?? "-"} />
+            <InspectorCard
+              label="target"
+              value={selectedItem.target_lane_id ?? "-"}
+            />
+          </dl>
+
+          <div className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.56)] p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
+              Latest lane commentary
+            </p>
+            <p className="mt-2 text-sm leading-6">
+              {isDrilldownLoading
+                ? "lane commentary를 불러오는 중입니다."
+                : drilldown?.latest_commentary_summary ?? "commentary가 없습니다."}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.56)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
+                Raw snippet
+              </p>
+              {drilldown?.raw_snippet ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsRawSnippetExpanded((current) => !current)}
+                >
+                  {isRawSnippetExpanded ? "접기" : "원문 보기"}
+                </Button>
+              ) : null}
+            </div>
+            {drilldown?.raw_snippet ? (
+              <>
+                <p className="mt-2 text-xs text-[hsl(var(--muted))]">
+                  {drilldown.raw_snippet.source_label}
+                  {drilldown.raw_snippet.truncated ? " • truncated" : ""}
+                </p>
+                {isRawSnippetExpanded ? (
+                  <pre
+                    data-testid="session-flow-raw-snippet"
+                    className="mt-3 overflow-x-auto rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--bg)/0.78)] p-3 text-xs leading-6 text-[hsl(var(--fg))]"
+                  >
+                    {drilldown.raw_snippet.lines
+                      .map(
+                        (line) =>
+                          `${String(line.line_number).padStart(4, " ")} ${line.content}`,
+                      )
+                      .join("\n")}
+                  </pre>
+                ) : (
+                  <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--line))] px-3 py-3 text-sm text-[hsl(var(--muted))]">
+                    raw snippet은 기본 접힘 상태입니다.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--line))] px-3 py-3 text-sm text-[hsl(var(--muted))]">
+                원본 rollout path를 아직 읽을 수 없습니다.
+              </p>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-[hsl(var(--line-strong))] p-4 text-sm text-[hsl(var(--muted))]">
           item을 선택하면 inspector가 열린다.

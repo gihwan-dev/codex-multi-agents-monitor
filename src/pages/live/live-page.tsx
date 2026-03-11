@@ -4,6 +4,8 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useThreadUiStore } from "@/entities/thread/model/thread-ui-store";
 import { SessionWorkspaceShell } from "@/features/session-browser/ui/session-workspace-shell";
+import { SessionFlowWorkspace } from "@/features/session-flow/ui/session-flow-workspace";
+import { formatDuration } from "@/features/overview/lib/live-overview-formatters";
 import { listLiveThreads } from "@/shared/lib/tauri/commands";
 import { Button } from "@/shared/ui/button";
 
@@ -40,8 +42,8 @@ export function LivePage() {
   return (
     <SessionWorkspaceShell
       eyebrow="Live"
-      title="현재 진행 중인 챗"
-      description="route IA skeleton 단계입니다. 다음 slice에서 session list와 flow workspace를 이 shell에 그대로 결합합니다."
+      title="실시간 챗 세션"
+      description="workspace sidebar, root session list, embedded flow workspace를 한 화면에서 유지한다."
       sidebar={
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
@@ -71,9 +73,9 @@ export function LivePage() {
       listPane={
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Current sessions</p>
+            <p className="text-sm font-medium">Live chat sessions</p>
             <span className="text-xs text-[hsl(var(--muted))]">
-              {filteredThreads.length} items
+              {filteredThreads.length} sessions
             </span>
           </div>
           {liveQuery.isLoading ? (
@@ -85,12 +87,34 @@ export function LivePage() {
               {filteredThreads.map((thread) => (
                 <li key={thread.thread_id}>
                   <Link
-                    className="block rounded-2xl border border-[hsl(var(--line))] px-3 py-3 text-sm hover:border-[hsl(var(--line-strong))]"
+                    className={`block rounded-2xl border px-3 py-3 text-sm transition-colors ${
+                      thread.thread_id === sessionId
+                        ? "border-[hsl(var(--accent-strong))] bg-[hsl(var(--panel)/0.84)]"
+                        : "border-[hsl(var(--line))] hover:border-[hsl(var(--line-strong))]"
+                    }`}
                     to={`/live/${thread.thread_id}${activeWorkspace ? `?workspace=${encodeURIComponent(activeWorkspace)}` : ""}`}
                   >
-                    <div className="font-medium">{thread.title}</div>
-                    <div className="mt-1 text-xs text-[hsl(var(--muted))]">
-                      {thread.cwd}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{thread.title}</div>
+                        <div className="mt-1 text-xs text-[hsl(var(--muted))]">
+                          {thread.cwd}
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-[hsl(var(--line))] px-2 py-1 text-[11px] text-[hsl(var(--muted))]">
+                        {thread.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-[hsl(var(--muted))]">
+                      {thread.latest_activity_summary ?? "latest activity summary 없음"}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--muted))]">
+                      <span>{thread.agent_roles.join(", ") || "role 없음"}</span>
+                      <span>
+                        {thread.longest_wait_ms !== null
+                          ? `wait ${formatDuration(thread.longest_wait_ms)}`
+                          : "active wait 없음"}
+                      </span>
                     </div>
                   </Link>
                 </li>
@@ -106,25 +130,7 @@ export function LivePage() {
       }
       detailPane={
         selectedSession ? (
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
-              Session workspace
-            </p>
-            <h3 className="text-base font-semibold">{selectedSession.title}</h3>
-            <p className="text-sm text-[hsl(var(--muted))]">
-              `session flow` diagram과 inspector는 다음 slice에서 이 영역에 들어온다.
-            </p>
-            <dl className="grid gap-2 text-sm">
-              <div className="rounded-xl border border-[hsl(var(--line))] px-3 py-2">
-                <dt className="text-[hsl(var(--muted))]">session id</dt>
-                <dd className="font-mono">{selectedSession.thread_id}</dd>
-              </div>
-              <div className="rounded-xl border border-[hsl(var(--line))] px-3 py-2">
-                <dt className="text-[hsl(var(--muted))]">workspace</dt>
-                <dd>{selectedSession.cwd}</dd>
-              </div>
-            </dl>
-          </div>
+          <SessionFlowWorkspace sessionId={selectedSession.thread_id} />
         ) : (
           <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--line-strong))] text-sm text-[hsl(var(--muted))]">
             live session을 선택하면 같은 shell 안에서 flow workspace가 열린다.
