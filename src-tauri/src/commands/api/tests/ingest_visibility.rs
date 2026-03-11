@@ -152,6 +152,7 @@ fn ingest_unarchives_archived_snapshot_root_for_live_overview_and_detail() {
     let detail = get_thread_detail_from_db(&state, "thread-archived-live")
         .expect("detail query should succeed")
         .expect("archived-live detail should exist");
+    assert!(!detail.thread.archived);
     assert!(detail.agents.is_empty());
     assert!(detail.timeline_events.is_empty());
     assert!(detail.wait_spans.is_empty());

@@ -37,6 +37,7 @@ export type MonitorThread = {
   thread_id: string;
   title: string;
   cwd: string;
+  archived: boolean;
   status: ThreadStatus;
   started_at: string | null;
   updated_at: string | null;

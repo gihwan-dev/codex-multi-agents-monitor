@@ -9,6 +9,7 @@ function buildDetail(): ThreadDetail {
       thread_id: "thread-main",
       title: "Detail thread",
       cwd: "/workspace/detail",
+      archived: false,
       status: "inflight",
       started_at: "2026-03-10T10:00:00Z",
       updated_at: "2026-03-10T10:10:00Z",

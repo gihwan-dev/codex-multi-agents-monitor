@@ -3,6 +3,7 @@ use std::fs;
 use rusqlite::Connection;
 use serde_json::json;
 
+use crate::domain::models::ThreadStatus;
 use crate::index_db::init_monitor_db;
 
 use super::super::thread_detail::{get_thread_detail_from_db, get_thread_drilldown_from_db};
@@ -119,6 +120,7 @@ fn get_thread_detail_returns_sorted_agents_and_timeline_arrays() {
         .expect("thread detail should exist");
 
     assert_eq!(detail.thread.thread_id, "thread-main-1");
+    assert!(!detail.thread.archived);
     let session_ids = detail
         .agents
         .iter()
@@ -168,6 +170,28 @@ fn get_thread_detail_returns_sorted_agents_and_timeline_arrays() {
             .collect::<Vec<_>>(),
         vec!["spawn_agent", "exec_command"]
     );
+}
+
+#[test]
+fn get_thread_detail_serializes_archived_flag() {
+    let state = build_test_state("thread-detail-archived");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+    let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+
+    insert_thread(
+        &connection,
+        "thread-archived-1",
+        "completed",
+        1,
+        Some("2026-03-10T02:00:00Z"),
+    );
+
+    let detail = get_thread_detail_from_db(&state, "thread-archived-1")
+        .expect("get_thread_detail should work")
+        .expect("thread detail should exist");
+
+    assert!(detail.thread.archived);
+    assert_eq!(detail.thread.status, ThreadStatus::Completed);
 }
 
 #[test]

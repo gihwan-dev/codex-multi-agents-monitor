@@ -56,6 +56,7 @@ pub(super) fn get_thread_detail_from_db(
               thread_id,
               title,
               cwd,
+              archived,
               status,
               started_at,
               updated_at,
@@ -65,15 +66,17 @@ pub(super) fn get_thread_detail_from_db(
             ",
             params![thread_id],
             |row| {
-                let status = parse_status(row.get::<_, String>(3)?.as_str());
+                let archived = row.get::<_, i64>(3)? != 0;
+                let status = parse_status(row.get::<_, String>(4)?.as_str());
                 Ok(MonitorThread {
                     thread_id: row.get(0)?,
                     title: row.get(1)?,
                     cwd: row.get(2)?,
+                    archived,
                     status,
-                    started_at: parse_timestamp(row.get(4)?),
-                    updated_at: parse_timestamp(row.get(5)?),
-                    latest_activity_summary: row.get(6)?,
+                    started_at: parse_timestamp(row.get(5)?),
+                    updated_at: parse_timestamp(row.get(6)?),
+                    latest_activity_summary: row.get(7)?,
                 })
             },
         )

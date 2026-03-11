@@ -22,6 +22,7 @@ function buildDetail(status: ThreadDetail["thread"]["status"]): ThreadDetail {
       thread_id: "thread-1",
       title: "Detail thread",
       cwd: "/workspace/detail",
+      archived: false,
       status,
       started_at: "2026-03-10T09:30:00Z",
       updated_at: "2026-03-10T10:00:00Z",

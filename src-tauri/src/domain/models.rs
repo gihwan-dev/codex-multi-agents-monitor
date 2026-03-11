@@ -14,6 +14,7 @@ pub struct MonitorThread {
     pub thread_id: String,
     pub title: String,
     pub cwd: String,
+    pub archived: bool,
     pub status: ThreadStatus,
     pub started_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
