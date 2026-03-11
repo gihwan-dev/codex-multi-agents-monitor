@@ -40,14 +40,26 @@ fn get_summary_dashboard_applies_workspace_session_and_date_filters() {
 
     connection
         .execute(
-            "update threads set title = ?1, cwd = ?2, latest_activity_summary = ?3 where thread_id = ?4",
-            ("Alpha", "/workspace/alpha", Some("alpha summary"), "thread-alpha"),
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3, latest_activity_summary = ?4 where thread_id = ?5",
+            (
+                "Alpha",
+                "/workspace/alpha",
+                "/workspace/alpha",
+                Some("alpha summary"),
+                "thread-alpha",
+            ),
         )
         .expect("update alpha");
     connection
         .execute(
-            "update threads set title = ?1, cwd = ?2, latest_activity_summary = ?3 where thread_id = ?4",
-            ("Beta", "/workspace/beta", Some("beta summary"), "thread-beta"),
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3, latest_activity_summary = ?4 where thread_id = ?5",
+            (
+                "Beta",
+                "/workspace/beta",
+                "/workspace/beta",
+                Some("beta summary"),
+                "thread-beta",
+            ),
         )
         .expect("update beta");
 
@@ -83,6 +95,7 @@ fn get_summary_dashboard_applies_workspace_session_and_date_filters() {
     assert_eq!(payload.session_compare.len(), 1);
     assert_eq!(payload.session_compare[0].session_id, "thread-alpha");
     assert_eq!(payload.session_compare[0].workspace, "/workspace/alpha");
+    assert_eq!(payload.session_compare[0].workspace_hint, None);
     assert_eq!(payload.session_compare[0].status, SessionStatus::Completed);
 }
 
@@ -109,14 +122,14 @@ fn get_summary_dashboard_summarizes_mixed_session_states() {
 
     connection
         .execute(
-            "update threads set title = ?1, cwd = ?2 where thread_id = ?3",
-            ("New", "/workspace/a", "thread-new"),
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3 where thread_id = ?4",
+            ("New", "/workspace/a", "/workspace/a", "thread-new"),
         )
         .expect("update new");
     connection
         .execute(
-            "update threads set title = ?1, cwd = ?2 where thread_id = ?3",
-            ("Old", "/workspace/b", "thread-old"),
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3 where thread_id = ?4",
+            ("Old", "/workspace/b", "/workspace/b", "thread-old"),
         )
         .expect("update old");
 
@@ -134,5 +147,60 @@ fn get_summary_dashboard_summarizes_mixed_session_states() {
             .map(|row| row.session_id.as_str())
             .collect::<Vec<_>>(),
         vec!["thread-new", "thread-old"]
+    );
+}
+
+#[test]
+fn get_summary_dashboard_groups_worktree_rows_by_workspace_root() {
+    let state = build_test_state("summary-dashboard-worktree");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+    let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+
+    insert_thread(&connection, "thread-main", "completed", 0, Some("2026-03-10T05:00:00Z"));
+    insert_thread(
+        &connection,
+        "thread-worktree",
+        "completed",
+        0,
+        Some("2026-03-10T06:00:00Z"),
+    );
+
+    connection
+        .execute(
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3 where thread_id = ?4",
+            (
+                "Main",
+                "/repo/main",
+                "/repo/main",
+                "thread-main",
+            ),
+        )
+        .expect("update main");
+    connection
+        .execute(
+            "update threads set title = ?1, cwd = ?2, workspace_root = ?3, latest_activity_summary = ?4 where thread_id = ?5",
+            (
+                "Worktree",
+                "/Users/example/.codex/worktrees/1234/repo",
+                "/repo/main",
+                Some("worktree summary"),
+                "thread-worktree",
+            ),
+        )
+        .expect("update worktree");
+
+    let payload =
+        get_summary_dashboard_from_db(&state, None).expect("summary dashboard should work");
+
+    assert_eq!(payload.kpis.workspace_count, 1);
+    assert_eq!(payload.workspace_distribution.len(), 1);
+    assert_eq!(payload.workspace_distribution[0].workspace, "/repo/main");
+    assert_eq!(
+        payload
+            .session_compare
+            .iter()
+            .find(|row| row.session_id == "thread-worktree")
+            .and_then(|row| row.workspace_hint.clone()),
+        Some("/Users/example/.codex/worktrees/1234/repo".to_string())
     );
 }

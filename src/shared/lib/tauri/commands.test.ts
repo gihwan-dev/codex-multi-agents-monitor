@@ -31,6 +31,7 @@ describe("tauri bridge command contracts", () => {
           session_id: "thread-1",
           title: "Session alpha",
           workspace: "/workspace/alpha",
+          workspace_hint: "/Users/example/.codex/worktrees/1234/alpha",
           archived: false,
           status: "inflight",
           started_at: "2026-03-10T09:00:00Z",
@@ -59,6 +60,9 @@ describe("tauri bridge command contracts", () => {
     });
     expect(payload.sessions[0].session_id).toBe("thread-1");
     expect(payload.sessions[0].workspace).toBe("/workspace/alpha");
+    expect(payload.sessions[0].workspace_hint).toBe(
+      "/Users/example/.codex/worktrees/1234/alpha",
+    );
   });
 
   it("get_session_flow 호출과 payload decode를 함께 고정한다", async () => {
@@ -67,6 +71,7 @@ describe("tauri bridge command contracts", () => {
         session_id: "thread-1",
         title: "Session alpha",
         workspace: "/workspace/alpha",
+        workspace_hint: "/Users/example/.codex/worktrees/1234/alpha",
         archived: false,
         status: "completed",
         started_at: "2026-03-10T09:00:00Z",
@@ -74,13 +79,6 @@ describe("tauri bridge command contracts", () => {
         latest_activity_summary: "final answer delivered",
         agent_roles: ["implementer"],
         rollout_path: "/tmp/thread-1.jsonl",
-        bottleneck_level: null,
-        longest_wait_ms: null,
-        active_tool_name: null,
-        active_tool_ms: null,
-        mini_timeline_window_started_at: null,
-        mini_timeline_window_ended_at: null,
-        mini_timeline: [],
       },
       lanes: [
         {
@@ -111,6 +109,9 @@ describe("tauri bridge command contracts", () => {
       sessionId: "session-1",
     });
     expect(payload?.session.session_id).toBe("thread-1");
+    expect(payload?.session.workspace_hint).toBe(
+      "/Users/example/.codex/worktrees/1234/alpha",
+    );
     expect(payload?.items[0].kind).toBe("final_answer");
   });
 
@@ -194,6 +195,7 @@ describe("tauri bridge command contracts", () => {
           session_id: "thread-1",
           title: "Session alpha",
           workspace: "/workspace/alpha",
+          workspace_hint: "/Users/example/.codex/worktrees/1234/alpha",
           status: "completed",
           updated_at: "2026-03-10T09:10:00Z",
           latest_activity_summary: "done",
@@ -216,6 +218,9 @@ describe("tauri bridge command contracts", () => {
     });
     expect(payload.session_compare[0].session_id).toBe("thread-1");
     expect(payload.session_compare[0].workspace).toBe("/workspace/alpha");
+    expect(payload.session_compare[0].workspace_hint).toBe(
+      "/Users/example/.codex/worktrees/1234/alpha",
+    );
   });
 
   it("open_workspace 인자 키를 고정한다", async () => {

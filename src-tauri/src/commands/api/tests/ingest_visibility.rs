@@ -1,3 +1,5 @@
+use std::fs;
+
 use rusqlite::{params, Connection};
 use serde_json::json;
 
@@ -195,5 +197,89 @@ fn ingest_unarchives_archived_snapshot_root_for_live_session_views() {
             Some("Live Title".to_string()),
             "2026-03-10T07:00:01+00:00".to_string(),
         )]
+    );
+}
+
+#[test]
+fn ingest_groups_main_repo_and_worktree_under_same_workspace_root() {
+    let state = build_test_state("workspace-root-grouping");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+
+    let fixture_root = state
+        .source_paths
+        .state_db_path
+        .parent()
+        .expect("test root should exist");
+    let repo_root = fixture_root.join("repo");
+    let worktree_root = fixture_root.join(".codex/worktrees/1234/repo");
+    let gitdir = repo_root.join(".git/worktrees/repo");
+
+    fs::create_dir_all(repo_root.join(".git")).expect("create repo .git");
+    fs::create_dir_all(&gitdir).expect("create worktree gitdir");
+    fs::create_dir_all(&worktree_root).expect("create worktree root");
+    fs::write(
+        worktree_root.join(".git"),
+        format!("gitdir: {}\n", gitdir.display()),
+    )
+    .expect("write worktree .git");
+    fs::write(gitdir.join("commondir"), "../..\n").expect("write commondir");
+    let repo_cwd = repo_root.to_string_lossy().into_owned();
+    let worktree_cwd = worktree_root.to_string_lossy().into_owned();
+
+    seed_state_db(
+        &state.source_paths.state_db_path,
+        &[
+            StateSeedRow {
+                id: "thread-main",
+                rollout_path: "/rollout/main",
+                created_at: 1_778_300_000,
+                updated_at: 1_778_300_100,
+                source: "vscode",
+                cwd: repo_cwd.as_str(),
+                title: "Main Repo",
+                archived: 0,
+                agent_role: None,
+                agent_nickname: None,
+            },
+            StateSeedRow {
+                id: "thread-worktree",
+                rollout_path: "/rollout/worktree",
+                created_at: 1_778_300_010,
+                updated_at: 1_778_300_110,
+                source: "vscode",
+                cwd: worktree_cwd.as_str(),
+                title: "Worktree Repo",
+                archived: 0,
+                agent_role: None,
+                agent_nickname: None,
+            },
+        ],
+    );
+
+    run_incremental_ingest(&state).expect("ingest should succeed");
+
+    let live_threads =
+        list_sessions_from_db(&state, SessionScope::Live, None).expect("list live sessions");
+    let expected_workspace = repo_root.display().to_string();
+    let expected_hint = worktree_root.display().to_string();
+
+    assert_eq!(live_threads.workspaces, vec![expected_workspace.clone()]);
+    assert_eq!(live_threads.sessions.len(), 2);
+    assert!(live_threads.sessions.iter().all(|session| session.workspace == expected_workspace));
+    assert_eq!(
+        live_threads
+            .sessions
+            .iter()
+            .find(|session| session.session_id == "thread-main")
+            .and_then(|session| session.workspace_hint.clone()),
+        None
+    );
+    assert_eq!(
+        live_threads
+            .sessions
+            .iter()
+            .find(|session| session.session_id == "thread-worktree")
+            .and_then(|session| session.workspace_hint.clone()),
+        Some(expected_hint)
     );
 }

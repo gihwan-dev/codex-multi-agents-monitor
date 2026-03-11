@@ -59,6 +59,7 @@ pub(super) fn insert_thread_with_rollout(
               thread_id,
               title,
               cwd,
+              workspace_root,
               rollout_path,
               archived,
               source_kind,
@@ -66,11 +67,12 @@ pub(super) fn insert_thread_with_rollout(
               started_at,
               updated_at,
               latest_activity_summary
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             ",
             params![
                 thread_id,
                 format!("title-{thread_id}"),
+                "/workspace",
                 "/workspace",
                 rollout_path,
                 archived,

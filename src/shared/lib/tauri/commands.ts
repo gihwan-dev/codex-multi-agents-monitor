@@ -16,6 +16,7 @@ import type {
   SessionListPayload,
   SessionScope,
   SessionStatus,
+  SessionSummary,
   SummaryDashboardFilters,
   SummaryDashboardPayload,
 } from "@/shared/types/contracts";
@@ -101,18 +102,7 @@ function decodeSessionListFilters(value: unknown): SessionListFilters {
 function decodeSessionListItem(value: unknown, label: string): SessionListItem {
   const record = expectRecord(value, label);
   return {
-    session_id: expectString(record.session_id, `${label}.session_id`),
-    title: expectString(record.title, `${label}.title`),
-    workspace: expectString(record.workspace, `${label}.workspace`),
-    archived: expectBoolean(record.archived, `${label}.archived`),
-    status: expectStatus(record.status),
-    started_at: expectNullableString(record.started_at),
-    updated_at: expectNullableString(record.updated_at),
-    latest_activity_summary: expectNullableString(
-      record.latest_activity_summary,
-    ),
-    agent_roles: expectStringArray(record.agent_roles, `${label}.agent_roles`),
-    rollout_path: expectNullableString(record.rollout_path),
+    ...decodeSessionSummary(record, label),
     bottleneck_level: expectNullableBottleneck(record.bottleneck_level),
     longest_wait_ms: expectNullableNumber(record.longest_wait_ms),
     active_tool_name: expectNullableString(record.active_tool_name),
@@ -147,8 +137,8 @@ function decodeMiniTimelineItem(
 function decodeSessionFlowPayload(value: unknown): SessionFlowPayload {
   const record = expectRecord(value, "SessionFlowPayload");
   return {
-    session: decodeSessionListItem(
-      record.session,
+    session: decodeSessionSummary(
+      expectRecord(record.session, "SessionFlowPayload.session"),
       "SessionFlowPayload.session",
     ),
     lanes: expectArray(record.lanes, "SessionFlowPayload.lanes").map(
@@ -159,6 +149,27 @@ function decodeSessionFlowPayload(value: unknown): SessionFlowPayload {
       (item, index) =>
         decodeSessionFlowItem(item, `SessionFlowPayload.items[${index}]`),
     ),
+  };
+}
+
+function decodeSessionSummary(
+  record: Record<string, unknown>,
+  label: string,
+): SessionSummary {
+  return {
+    session_id: expectString(record.session_id, `${label}.session_id`),
+    title: expectString(record.title, `${label}.title`),
+    workspace: expectString(record.workspace, `${label}.workspace`),
+    workspace_hint: expectNullableString(record.workspace_hint),
+    archived: expectBoolean(record.archived, `${label}.archived`),
+    status: expectStatus(record.status),
+    started_at: expectNullableString(record.started_at),
+    updated_at: expectNullableString(record.updated_at),
+    latest_activity_summary: expectNullableString(
+      record.latest_activity_summary,
+    ),
+    agent_roles: expectStringArray(record.agent_roles, `${label}.agent_roles`),
+    rollout_path: expectNullableString(record.rollout_path),
   };
 }
 
@@ -388,6 +399,7 @@ function decodeSessionCompareRow(
     session_id: expectString(record.session_id, `${label}.session_id`),
     title: expectString(record.title, `${label}.title`),
     workspace: expectString(record.workspace, `${label}.workspace`),
+    workspace_hint: expectNullableString(record.workspace_hint),
     status: expectStatus(record.status),
     updated_at: expectNullableString(record.updated_at),
     latest_activity_summary: expectNullableString(

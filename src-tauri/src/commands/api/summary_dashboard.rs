@@ -18,6 +18,7 @@ struct ThreadRow {
     thread_id: String,
     title: String,
     cwd: String,
+    workspace_root: String,
     status: SessionStatus,
     started_at: Option<DateTime<Utc>>,
     updated_at: Option<DateTime<Utc>>,
@@ -69,7 +70,7 @@ pub(super) fn get_summary_dashboard_from_db(
     let workspace_count = u32::try_from(
         filtered_threads
             .iter()
-            .map(|thread| thread.cwd.clone())
+            .map(|thread| thread.workspace_root.clone())
             .collect::<BTreeSet<_>>()
             .len(),
     )
@@ -83,7 +84,7 @@ pub(super) fn get_summary_dashboard_from_db(
     let mut workspace_accumulators = BTreeMap::<String, Vec<&ThreadRow>>::new();
     for thread in &filtered_threads {
         workspace_accumulators
-            .entry(thread.cwd.clone())
+            .entry(thread.workspace_root.clone())
             .or_default()
             .push(thread);
     }
@@ -126,7 +127,8 @@ pub(super) fn get_summary_dashboard_from_db(
         .map(|thread| SummarySessionCompareRow {
             session_id: thread.thread_id.clone(),
             title: thread.title,
-            workspace: thread.cwd,
+            workspace: thread.workspace_root.clone(),
+            workspace_hint: workspace_hint(&thread.cwd, &thread.workspace_root),
             status: thread.status,
             updated_at: thread.updated_at,
             latest_activity_summary: thread.latest_activity_summary,
@@ -183,6 +185,7 @@ fn load_threads(connection: &Connection) -> Result<Vec<ThreadRow>, CommandError>
               thread_id,
               title,
               cwd,
+              coalesce(nullif(workspace_root, ''), cwd) as workspace_root,
               status,
               started_at,
               updated_at,
@@ -199,10 +202,11 @@ fn load_threads(connection: &Connection) -> Result<Vec<ThreadRow>, CommandError>
                 thread_id: row.get(0)?,
                 title: row.get(1)?,
                 cwd: row.get(2)?,
-                status: parse_status(row.get::<_, String>(3)?.as_str()),
-                started_at: parse_timestamp(row.get(4)?),
-                updated_at: parse_timestamp(row.get(5)?),
-                latest_activity_summary: row.get(6)?,
+                workspace_root: row.get(3)?,
+                status: parse_status(row.get::<_, String>(4)?.as_str()),
+                started_at: parse_timestamp(row.get(5)?),
+                updated_at: parse_timestamp(row.get(6)?),
+                latest_activity_summary: row.get(7)?,
             })
         })
         .map_err(|error| CommandError::Internal(error.to_string()))?;
@@ -279,7 +283,7 @@ fn collect_agent_roles_by_thread(
 
 fn matches_filters(thread: &ThreadRow, filters: &SummaryDashboardFilters) -> bool {
     if let Some(workspace) = filters.workspace.as_deref() {
-        if thread.cwd != workspace {
+        if thread.workspace_root != workspace {
             return false;
         }
     }
@@ -311,6 +315,10 @@ fn matches_filters(thread: &ThreadRow, filters: &SummaryDashboardFilters) -> boo
     }
 
     true
+}
+
+fn workspace_hint(cwd: &str, workspace_root: &str) -> Option<String> {
+    (cwd.trim() != workspace_root.trim()).then(|| cwd.to_string())
 }
 
 fn duration_ms(

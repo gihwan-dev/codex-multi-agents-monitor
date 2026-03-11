@@ -34,6 +34,7 @@ function buildSessionListPayload(): SessionListPayload {
         session_id: "thread-1",
         title: "Session alpha",
         workspace: "/workspace/alpha",
+        workspace_hint: "/Users/example/.codex/worktrees/1234/alpha",
         archived: false,
         status: "inflight",
         started_at: "2026-03-10T09:30:00Z",
@@ -59,6 +60,7 @@ function buildFlow(): SessionFlowPayload {
       session_id: "thread-1",
       title: "Session alpha",
       workspace: "/workspace/alpha",
+      workspace_hint: "/Users/example/.codex/worktrees/1234/alpha",
       archived: false,
       status: "inflight",
       started_at: "2026-03-10T09:30:00Z",
@@ -192,6 +194,9 @@ describe("LivePage", () => {
     expect(screen.getByText("Session workspace")).toBeInTheDocument();
     expect(screen.getByText("Latest lane commentary")).toBeInTheDocument();
     expect(screen.getByText("main commentary")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("/Users/example/.codex/worktrees/1234/alpha").length,
+    ).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "원문 보기" }));
     expect(screen.getByTestId("session-flow-raw-snippet")).toHaveTextContent(

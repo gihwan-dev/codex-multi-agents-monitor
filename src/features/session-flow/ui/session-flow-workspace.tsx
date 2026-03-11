@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { getSessionLaneKey } from "@/features/session-flow/lib/build-session-flow-view-model";
 import { SessionFlowDiagram } from "@/features/session-flow/ui/session-flow-diagram";
@@ -96,7 +96,11 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
           </div>
         </div>
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
-          <MetaCard label="workspace" value={flow.session.workspace} />
+          <MetaCard
+            label="workspace"
+            value={flow.session.workspace}
+            secondary={flow.session.workspace_hint ? `cwd ${flow.session.workspace_hint}` : null}
+          />
           <MetaCard label="status" value={flow.session.status} />
           <MetaCard label="lanes" value={`${flow.lanes.length}`} />
         </dl>
@@ -119,13 +123,26 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
   );
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function MetaCard({
+  label,
+  value,
+  secondary = null,
+}: {
+  label: string;
+  value: ReactNode;
+  secondary?: ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.72)] px-3 py-2">
       <dt className="text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--muted))]">
         {label}
       </dt>
       <dd className="mt-1 break-all font-medium">{value}</dd>
+      {secondary ? (
+        <dd className="mt-1 break-all text-xs text-[hsl(var(--muted))]">
+          {secondary}
+        </dd>
+      ) : null}
     </div>
   );
 }

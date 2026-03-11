@@ -11,6 +11,7 @@ function buildFlow(): SessionFlowPayload {
       session_id: "thread-1",
       title: "Session one",
       workspace: "/workspace/alpha",
+      workspace_hint: null,
       archived: false,
       status: "completed",
       started_at: "2026-03-10T09:00:00Z",

@@ -28,6 +28,7 @@ struct ThreadOverviewRow {
     thread_id: String,
     title: String,
     cwd: String,
+    workspace_root: String,
     status: String,
     started_at: Option<String>,
     updated_at: Option<String>,
@@ -80,6 +81,7 @@ struct StateRootThreadRow {
     thread_id: String,
     title: String,
     cwd: String,
+    workspace_root: String,
     rollout_path: String,
     archived: i64,
     source_kind: String,
@@ -372,11 +374,13 @@ impl SessionAccumulator {
         } else {
             STATUS_INFLIGHT
         };
+        let cwd = self.cwd.unwrap_or_default();
 
         let overview = ThreadOverviewRow {
             thread_id: thread_id.clone(),
             title,
-            cwd: self.cwd.unwrap_or_default(),
+            workspace_root: resolve_workspace_root(&cwd),
+            cwd,
             status: status.to_string(),
             started_at: self.started_at,
             updated_at: self.updated_at,
@@ -672,6 +676,7 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
               thread_id,
               title,
               cwd,
+              workspace_root,
               rollout_path,
               archived,
               source_kind,
@@ -679,12 +684,13 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
               started_at,
               updated_at,
               latest_activity_summary
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             ",
             params![
                 root.thread_id,
                 root.title,
                 root.cwd,
+                root.workspace_root,
                 root.rollout_path,
                 root.archived,
                 root.source_kind,
@@ -738,6 +744,7 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
             thread_id,
             title,
             cwd,
+            workspace_root,
             status,
             started_at,
             updated_at,
@@ -750,6 +757,7 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
               thread_id,
               title,
               cwd,
+              workspace_root,
               rollout_path,
               archived,
               source_kind,
@@ -757,10 +765,11 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
               started_at,
               updated_at,
               latest_activity_summary
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             on conflict(thread_id) do update set
               title = excluded.title,
               cwd = excluded.cwd,
+              workspace_root = excluded.workspace_root,
               archived = 0,
               status = excluded.status,
               started_at = excluded.started_at,
@@ -771,6 +780,7 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
                 thread_id,
                 title,
                 cwd,
+                workspace_root,
                 "",
                 0_i64,
                 "live_session",
@@ -945,6 +955,7 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
             SourceClassification::Root { source_kind } => roots.push(StateRootThreadRow {
                 thread_id: session_or_thread_id.clone(),
                 title: normalize_text(&title).unwrap_or(session_or_thread_id),
+                workspace_root: resolve_workspace_root(&cwd),
                 cwd,
                 rollout_path,
                 archived,
@@ -979,6 +990,67 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
         agent_sessions: sessions,
         source_health: Vec::new(),
     })
+}
+
+fn resolve_workspace_root(cwd: &str) -> String {
+    let trimmed = cwd.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    for ancestor in Path::new(trimmed).ancestors() {
+        let git_entry = ancestor.join(".git");
+        if git_entry.is_dir() {
+            return ancestor.display().to_string();
+        }
+        if git_entry.is_file() {
+            return resolve_workspace_root_from_git_file(&git_entry)
+                .map(|root| root.display().to_string())
+                .unwrap_or_else(|| trimmed.to_string());
+        }
+    }
+
+    trimmed.to_string()
+}
+
+fn resolve_workspace_root_from_git_file(git_file: &Path) -> Option<PathBuf> {
+    let gitdir = read_gitdir_path(git_file)?;
+    let canonical_git_dir = read_commondir_path(&gitdir)?;
+    canonical_git_dir.parent().map(Path::to_path_buf)
+}
+
+fn read_gitdir_path(git_file: &Path) -> Option<PathBuf> {
+    let contents = fs::read_to_string(git_file).ok()?;
+    let gitdir = contents.strip_prefix("gitdir:")?.trim();
+    if gitdir.is_empty() {
+        return None;
+    }
+
+    let base_dir = git_file.parent()?;
+    let path = if Path::new(gitdir).is_absolute() {
+        PathBuf::from(gitdir)
+    } else {
+        base_dir.join(gitdir)
+    };
+
+    fs::canonicalize(path).ok()
+}
+
+fn read_commondir_path(gitdir: &Path) -> Option<PathBuf> {
+    let contents = fs::read_to_string(gitdir.join("commondir")).ok()?;
+    let commondir = contents.trim();
+    if commondir.is_empty() {
+        return None;
+    }
+
+    let path = if Path::new(commondir).is_absolute() {
+        PathBuf::from(commondir)
+    } else {
+        gitdir.join(commondir)
+    };
+
+    let canonical_path = fs::canonicalize(path).ok()?;
+    canonical_path.is_dir().then_some(canonical_path)
 }
 
 fn missing_state_db_health() -> SourceHealthRow {
@@ -1076,7 +1148,7 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1087,7 +1159,10 @@ mod tests {
     use crate::sources::SourcePaths;
     use crate::state::AppState;
 
-    use super::{parse_live_session_file, run_incremental_ingest, SessionAccumulator};
+    use super::{
+        parse_live_session_file, resolve_workspace_root, run_incremental_ingest,
+        SessionAccumulator,
+    };
 
     #[test]
     fn parses_main_thread_overview_fields() {
@@ -1769,6 +1844,91 @@ mod tests {
         assert_eq!(parsed.wait_spans[0].child_session_id, None);
     }
 
+    #[test]
+    fn resolve_workspace_root_uses_repo_dir_when_git_directory_exists() {
+        let root = temp_path("resolver-repo");
+        fs::create_dir_all(root.join(".git")).expect("create .git dir");
+        fs::create_dir_all(root.join("src/nested")).expect("create nested cwd");
+
+        assert_eq!(
+            resolve_workspace_root(root.join("src/nested").to_string_lossy().as_ref()),
+            root.display().to_string()
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_root_uses_commondir_for_git_worktree() {
+        let root = temp_path("resolver-worktree");
+        let repo_root = root.join("repo");
+        let worktree_root = root.join(".codex/worktrees/1234/repo");
+        let nested_cwd = worktree_root.join("src/nested");
+        let gitdir = repo_root.join(".git/worktrees/repo");
+
+        fs::create_dir_all(&gitdir).expect("create gitdir");
+        fs::create_dir_all(&nested_cwd).expect("create worktree");
+        fs::write(
+            worktree_root.join(".git"),
+            format!("gitdir: {}\n", gitdir.display()),
+        )
+        .expect("write worktree .git");
+        fs::write(gitdir.join("commondir"), "../..\n").expect("write commondir");
+
+        assert_eq!(
+            resolve_workspace_root(nested_cwd.to_string_lossy().as_ref()),
+            repo_root.display().to_string()
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_root_falls_back_to_raw_cwd_when_gitdir_is_broken() {
+        let root = temp_path("resolver-broken");
+        let worktree_root = root.join("workspace");
+        let cwd = worktree_root.join("src/nested");
+        fs::create_dir_all(&cwd).expect("create cwd");
+        fs::write(
+            worktree_root.join(".git"),
+            "gitdir: /missing/repo/.git/worktrees/workspace\n",
+        )
+        .expect("write broken git file");
+
+        assert_eq!(
+            resolve_workspace_root(cwd.to_string_lossy().as_ref()),
+            cwd.display().to_string()
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_root_falls_back_to_raw_cwd_when_commondir_is_missing() {
+        let root = temp_path("resolver-missing-commondir");
+        let worktree_root = root.join("workspace");
+        let cwd = worktree_root.join("src/nested");
+        let gitdir = root.join("repo/.git/worktrees/workspace");
+
+        fs::create_dir_all(&gitdir).expect("create gitdir");
+        fs::create_dir_all(&cwd).expect("create cwd");
+        fs::write(
+            worktree_root.join(".git"),
+            format!("gitdir: {}\n", gitdir.display()),
+        )
+        .expect("write worktree .git");
+
+        assert_eq!(
+            resolve_workspace_root(cwd.to_string_lossy().as_ref()),
+            cwd.display().to_string()
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_root_falls_back_to_raw_cwd_for_non_git_paths() {
+        let cwd = temp_path("resolver-non-git");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(
+            resolve_workspace_root(cwd.to_string_lossy().as_ref()),
+            cwd.display().to_string()
+        );
+    }
+
     struct StateSeedRow<'a> {
         id: &'a str,
         rollout_path: &'a str,
@@ -1885,5 +2045,16 @@ mod tests {
         parse_live_session_file(&path)
             .expect("fixture parse should succeed")
             .expect("fixture should produce a root thread")
+    }
+
+    fn temp_path(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "codex-monitor-ingest-paths-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock should be monotonic")
+                .as_nanos()
+        ))
     }
 }

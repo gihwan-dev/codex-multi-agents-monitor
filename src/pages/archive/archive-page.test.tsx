@@ -34,6 +34,7 @@ function buildArchivePayload(): SessionListPayload {
         session_id: "archived-1",
         title: "Archived alpha",
         workspace: "/workspace/archive-alpha",
+        workspace_hint: "/Users/example/.codex/worktrees/archived/alpha",
         archived: true,
         status: "completed",
         started_at: "2026-03-09T09:00:00Z",
@@ -59,6 +60,7 @@ function buildFlow(): SessionFlowPayload {
       session_id: "archived-1",
       title: "Archived alpha",
       workspace: "/workspace/archive-alpha",
+      workspace_hint: "/Users/example/.codex/worktrees/archived/alpha",
       archived: true,
       status: "completed",
       started_at: "2026-03-09T09:00:00Z",
@@ -182,6 +184,10 @@ describe("ArchivePage", () => {
 
     expect(screen.getByText("Session workspace")).toBeInTheDocument();
     expect(screen.getByText("archived lane commentary")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("/Users/example/.codex/worktrees/archived/alpha")
+        .length,
+    ).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "원문 보기" }));
     expect(screen.getByTestId("session-flow-raw-snippet")).toHaveTextContent(

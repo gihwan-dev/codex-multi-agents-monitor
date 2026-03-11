@@ -27,6 +27,7 @@ export type SessionSummary = {
   session_id: SessionId;
   title: string;
   workspace: WorkspaceKey;
+  workspace_hint: string | null;
   archived: boolean;
   status: SessionStatus;
   started_at: string | null;
@@ -175,6 +176,7 @@ export type SummarySessionCompareRow = {
   session_id: SessionId;
   title: string;
   workspace: WorkspaceKey;
+  workspace_hint: string | null;
   status: SessionStatus;
   updated_at: string | null;
   latest_activity_summary: string | null;

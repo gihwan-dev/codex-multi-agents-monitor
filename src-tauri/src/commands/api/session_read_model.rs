@@ -64,6 +64,7 @@ pub(super) fn load_session_summary(
               thread_id,
               title,
               cwd,
+              coalesce(nullif(workspace_root, ''), cwd) as workspace_root,
               archived,
               status,
               started_at,
@@ -78,14 +79,15 @@ pub(super) fn load_session_summary(
                 Ok(SessionSummary {
                     session_id: row.get(0)?,
                     title: row.get(1)?,
-                    workspace: row.get(2)?,
-                    archived: row.get::<_, i64>(3)? != 0,
-                    status: parse_status(row.get::<_, String>(4)?.as_str()),
-                    started_at: parse_timestamp(row.get(5)?),
-                    updated_at: parse_timestamp(row.get(6)?),
-                    latest_activity_summary: row.get(7)?,
+                    workspace: row.get(3)?,
+                    workspace_hint: workspace_hint(row.get::<_, String>(2)?, row.get::<_, String>(3)?),
+                    archived: row.get::<_, i64>(4)? != 0,
+                    status: parse_status(row.get::<_, String>(5)?.as_str()),
+                    started_at: parse_timestamp(row.get(6)?),
+                    updated_at: parse_timestamp(row.get(7)?),
+                    latest_activity_summary: row.get(8)?,
                     agent_roles: Vec::new(),
-                    rollout_path: row.get(8)?,
+                    rollout_path: row.get(9)?,
                 })
             },
         )
@@ -97,6 +99,10 @@ pub(super) fn load_session_summary(
     };
     session.agent_roles = load_agent_roles(connection, session_id)?;
     Ok(Some(session))
+}
+
+fn workspace_hint(cwd: String, workspace_root: String) -> Option<String> {
+    (cwd.trim() != workspace_root.trim()).then_some(cwd)
 }
 
 fn load_agent_roles(

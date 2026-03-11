@@ -29,7 +29,10 @@ export function SessionListCard({
         <div>
           <div className="font-medium">{session.title}</div>
           <div className="mt-1 text-xs text-[hsl(var(--muted))]">
-            {session.workspace}
+            <div>{session.workspace}</div>
+            {session.workspace_hint ? (
+              <div>{session.workspace_hint}</div>
+            ) : null}
           </div>
         </div>
         <span className="rounded-full border border-[hsl(var(--line))] px-2 py-1 text-[11px] text-[hsl(var(--muted))]">

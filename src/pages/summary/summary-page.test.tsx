@@ -56,6 +56,10 @@ function buildPayload(
         title:
           workspace === "/workspace/alpha" ? "Alpha session" : "Beta session",
         workspace,
+        workspace_hint:
+          workspace === "/workspace/alpha"
+            ? "/Users/example/.codex/worktrees/1234/alpha"
+            : null,
         status: "completed",
         updated_at: "2026-03-10T10:00:00Z",
         latest_activity_summary: "summary ready",
@@ -116,5 +120,8 @@ describe("SummaryPage", () => {
     expect(screen.getByText("Workspace distribution")).toBeInTheDocument();
     expect(screen.getByText("Role mix")).toBeInTheDocument();
     expect(screen.getByText("Session compare")).toBeInTheDocument();
+    expect(
+      screen.getByText("/Users/example/.codex/worktrees/1234/alpha"),
+    ).toBeInTheDocument();
   });
 });

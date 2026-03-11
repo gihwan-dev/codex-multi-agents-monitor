@@ -289,6 +289,11 @@ export function SummaryPage() {
                           <p className="mt-1 text-xs text-[hsl(var(--muted))]">
                             {session.workspace}
                           </p>
+                          {session.workspace_hint ? (
+                            <p className="mt-1 text-xs text-[hsl(var(--muted))]">
+                              {session.workspace_hint}
+                            </p>
+                          ) : null}
                         </div>
                         <span className="rounded-full border border-[hsl(var(--line))] px-2 py-1 text-[11px] text-[hsl(var(--muted))]">
                           {session.status}

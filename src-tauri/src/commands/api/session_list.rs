@@ -18,6 +18,7 @@ struct BaseSessionRow {
     thread_id: String,
     title: String,
     cwd: String,
+    workspace_root: String,
     archived: bool,
     status: crate::domain::models::SessionStatus,
     started_at: Option<DateTime<Utc>>,
@@ -42,7 +43,7 @@ pub(super) fn list_sessions_from_db(
     let base_rows = load_session_rows(&connection, &scope)?;
     let workspaces = base_rows
         .iter()
-        .map(|session| session.cwd.clone())
+        .map(|session| session.workspace_root.clone())
         .filter(|workspace| !workspace.trim().is_empty())
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -72,7 +73,8 @@ pub(super) fn list_sessions_from_db(
             SessionListItem {
                 session_id: row.thread_id.clone(),
                 title: row.title,
-                workspace: row.cwd,
+                workspace: row.workspace_root.clone(),
+                workspace_hint: workspace_hint(&row.cwd, &row.workspace_root),
                 archived: row.archived,
                 status: row.status,
                 started_at: row.started_at,
@@ -130,6 +132,7 @@ fn load_session_rows(
               thread_id,
               title,
               cwd,
+              coalesce(nullif(workspace_root, ''), cwd) as workspace_root,
               archived,
               status,
               started_at,
@@ -148,12 +151,13 @@ fn load_session_rows(
                 thread_id: row.get(0)?,
                 title: row.get(1)?,
                 cwd: row.get(2)?,
-                archived: row.get::<_, i64>(3)? != 0,
-                status: parse_status(row.get::<_, String>(4)?.as_str()),
-                started_at: parse_timestamp(row.get(5)?),
-                updated_at: parse_timestamp(row.get(6)?),
-                latest_activity_summary: row.get(7)?,
-                rollout_path: row.get(8)?,
+                workspace_root: row.get(3)?,
+                archived: row.get::<_, i64>(4)? != 0,
+                status: parse_status(row.get::<_, String>(5)?.as_str()),
+                started_at: parse_timestamp(row.get(6)?),
+                updated_at: parse_timestamp(row.get(7)?),
+                latest_activity_summary: row.get(8)?,
+                rollout_path: row.get(9)?,
             })
         })
         .map_err(|error| CommandError::Internal(error.to_string()))?;
@@ -530,7 +534,7 @@ fn load_mini_timeline_map(
 
 fn matches_filters(session: &BaseSessionRow, filters: &SessionListFilters) -> bool {
     if let Some(workspace) = filters.workspace.as_deref() {
-        if session.cwd != workspace {
+        if session.workspace_root != workspace {
             return false;
         }
     }
@@ -540,6 +544,7 @@ fn matches_filters(session: &BaseSessionRow, filters: &SessionListFilters) -> bo
             session.thread_id.to_lowercase(),
             session.title.to_lowercase(),
             session.cwd.to_lowercase(),
+            session.workspace_root.to_lowercase(),
             session
                 .latest_activity_summary
                 .clone()
@@ -567,4 +572,8 @@ fn matches_filters(session: &BaseSessionRow, filters: &SessionListFilters) -> bo
         }
     }
     true
+}
+
+fn workspace_hint(cwd: &str, workspace_root: &str) -> Option<String> {
+    (cwd.trim() != workspace_root.trim()).then(|| cwd.to_string())
 }

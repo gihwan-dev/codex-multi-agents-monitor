@@ -1,44 +1,40 @@
 # Current slice
-Session-First Canonical Refactor
+Git Worktree Workspace Canonicalization
 - 상태: 완료
 - 범위:
-  - public DTO와 Tauri command surface를 `session-first`로 통일
-  - `session_read_model` 기반 조회 경계 추가
-  - `rollout_decoder` / snapshot refresh facade 도입
-  - Live/Archive 공용 browser 구조와 Summary dashboard 재정렬
-  - legacy `thread-*` runtime/test surface 제거, `/threads/:threadId` redirect만 유지
+  - `cwd` 대신 canonical git repository root를 workspace identity로 고정
+  - `threads.workspace_root` 저장과 ingest resolver 도입
+  - `workspace_hint` public contract 추가
+  - Live/Archive/Summary/Session Flow의 workspace 표시를 `루트 + 힌트`로 통일
 
 # Done
-- [`src/shared/types/contracts.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/types/contracts.ts)와 [`src/shared/lib/tauri/commands.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/lib/tauri/commands.ts)에서 canonical public surface를 `list_sessions`, `get_session_flow`, `get_session_lane_inspector`, `get_summary_dashboard` 4개로 고정했다.
-- [`src-tauri/src/commands/api/session_read_model.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/session_read_model.rs), [`src-tauri/src/commands/api/session_flow.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/session_flow.rs), [`src-tauri/src/commands/api/session_lane_inspector.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/session_lane_inspector.rs)로 session-first read model 경계를 분리했다.
-- [`src-tauri/src/ingest/mod.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/ingest/mod.rs), [`src-tauri/src/ingest/orchestrator.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/ingest/orchestrator.rs), [`src-tauri/src/ingest/rollout_decoder.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/ingest/rollout_decoder.rs)에서 snapshot refresh facade와 shared rollout decoder를 도입했다.
-- [`src/pages/live/live-page.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/pages/live/live-page.tsx), [`src/pages/archive/archive-page.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/pages/archive/archive-page.tsx), [`src/features/session-browser/lib/use-session-browser-page.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-browser/lib/use-session-browser-page.ts), [`src/features/session-browser/ui/session-list-card.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-browser/ui/session-list-card.tsx)로 Live/Archive 브라우저 조립을 공용화했다.
-- [`src/features/session-flow/ui/session-flow-workspace.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/session-flow-workspace.tsx), [`src/features/session-flow/ui/session-flow-diagram.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/session-flow-diagram.tsx), [`src/features/session-flow/ui/use-session-viewport.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/use-session-viewport.ts), [`src/features/session-flow/ui/session-flow-inspector.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/session-flow-inspector.tsx)에서 `SessionLaneRef` 기반 flow/inspector 계약으로 전환했다.
-- [`src/pages/summary/summary-page.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/pages/summary/summary-page.tsx)에서 summary filter state와 dashboard content를 분리하고 error state를 추가했다.
-- legacy runtime/test surface는 `archive_list`, `history_summary`, `live_overview`, `thread_detail` 계열 기준으로 모듈 export와 tracked 파일 모두 제거됐다. `/threads/:threadId` redirect만 호환 경로로 유지한다.
+- backend ingest가 state snapshot과 live session root 모두에서 `cwd -> workspace_root`를 계산해 저장하도록 바뀌었다.
+- session list, session flow session summary, summary dashboard가 모두 canonical `workspace_root` 기준으로 필터링/집계/표시를 수행한다.
+- public contract에 `workspace_hint`가 추가되어 worktree 경로를 session-level 보조 정보로 노출한다.
+- Live/Archive 세션 카드, Session workspace header, Summary session compare가 canonical workspace를 primary로, actual worktree path를 secondary로 렌더한다.
+- Rust/TS 테스트에 worktree grouping 시나리오와 hint 노출 시나리오를 추가했다.
 
 # Decisions made during implementation
-- 저장소/SQLite 식별자는 계속 `thread_id`와 `threads`를 유지하고, 외부 contract adapter에서만 `session_id`와 `workspace`로 변환한다.
-- `SessionLaneRef`를 public canonical lane identity로 고정하고 raw `lane_id`/`target_lane_id` 문자열을 제거했다.
-- Rust↔TS drift 방지는 codegen 대신 `serde + runtime decoder + contract test` 조합으로 유지한다.
-- `refresh_monitor_snapshot_if_stale(max_age=2s)`를 조회 command 앞의 단일 snapshot gate로 사용하고, archive/summary는 추가 polling 없이 기존 규칙을 유지한다.
-- `/threads/:threadId` redirect는 호환 경로로 유지하되 별도 legacy lookup surface는 만들지 않는다.
-- 커밋은 수행하지 않았다. 이번 턴은 구현과 검증, 상태 갱신까지만 마감했다.
+- workspace grouping 기준은 remote URL이나 branch가 아니라 local git repository root 공유 여부로 고정했다.
+- `workspace_root` 계산은 query-time이 아니라 ingest-time에만 수행하고, read-model은 `coalesce(nullif(workspace_root, ''), cwd)`로 구버전 DB fallback을 유지한다.
+- `workspace_hint`는 string equality가 아니라 저장된 actual `cwd`와 canonical `workspace`가 다를 때만 노출한다.
+- 경로 정규화는 display path 보존을 위해 `canonicalize()` 대신 lexical normalize를 우선 사용하고, worktree의 `commondir`만 해석한다.
+- worker sub-agent가 반복적으로 체크포인트 없이 종료돼 구현은 메인 스레드에서 직접 마무리했다.
 
 # Verification results
-- `pnpm typecheck` 통과
 - `pnpm cargo:test` 통과
+- `pnpm typecheck` 통과
 - `pnpm test` 통과
 - `pnpm lint` 통과
 - `pnpm tauri:build` 통과
-- legacy Rust test 모듈 4개 삭제 후 [`src-tauri/src/commands/api/tests/mod.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/tests/mod.rs) 기준으로 session-first test set만 남겼다.
-- [`src/shared/lib/tauri/commands.test.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/lib/tauri/commands.test.ts)에서 invoke 이름/인자뿐 아니라 runtime decode까지 검증했다.
-- 커밋: 미수행(사용자 요청 없음)
+- 커밋: 예정
 
 # Known issues / residual risk
-- large session에서 [`src/features/session-flow/ui/session-flow-diagram.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/session-flow-diagram.tsx)의 SVG pan/zoom 사용성은 추가 UX 조정 여지가 있다.
+- `.git` file을 사용하는 특수 git layout 중 `commondir` 없이도 별도 canonical root가 필요한 케이스는 현재 명시적으로 다루지 않는다. 현재 구현은 worktree와 일반 repo를 우선한다.
+- workspace hint는 session-level UI에만 노출되므로, workspace distribution 자체에서 worktree별 분포를 따로 보고 싶다면 후속 slice가 필요하다.
 
 # Next slice
 없음.
-- 후속 우선순위 후보:
-  - large-session UX/polish 별도 계획 수립
+- 후속 후보:
+  - workspace rail에 search/pinning이 필요할 정도로 저장소 수가 많아질 때 UX 보강
+  - worktree별 분포를 Summary 보조 drilldown으로 추가할지 별도 설계

@@ -33,6 +33,7 @@ pub fn init_monitor_db(state: &AppState) -> Result<()> {
           thread_id text primary key,
           title text not null,
           cwd text not null,
+          workspace_root text not null default '',
           rollout_path text not null default '',
           archived integer not null default 0,
           source_kind text not null default '',
@@ -105,6 +106,12 @@ fn ensure_threads_columns(connection: &Connection) -> Result<()> {
     add_column_if_missing(
         connection,
         "threads",
+        "workspace_root",
+        "text not null default ''",
+    )?;
+    add_column_if_missing(
+        connection,
+        "threads",
         "rollout_path",
         "text not null default ''",
     )?;
@@ -115,6 +122,21 @@ fn ensure_threads_columns(connection: &Connection) -> Result<()> {
         "source_kind",
         "text not null default ''",
     )?;
+    backfill_threads_workspace_root(connection)?;
+    Ok(())
+}
+
+fn backfill_threads_workspace_root(connection: &Connection) -> Result<()> {
+    connection
+        .execute(
+            "
+            update threads
+            set workspace_root = cwd
+            where trim(workspace_root) = ''
+            ",
+            [],
+        )
+        .with_context(|| "failed to backfill threads.workspace_root from cwd".to_string())?;
     Ok(())
 }
 
@@ -149,4 +171,80 @@ fn has_column(connection: &Connection, table: &str, column: &str) -> Result<bool
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+    use rusqlite::Connection;
+
+    use crate::sources::SourcePaths;
+    use crate::state::AppState;
+
+    use super::init_monitor_db;
+
+    #[test]
+    fn init_monitor_db_backfills_workspace_root_for_legacy_threads() {
+        let state = build_test_state("workspace-root-backfill");
+        let connection = Connection::open(&state.monitor_db_path).expect("open legacy monitor db");
+        connection
+            .execute_batch(
+                "
+                create table threads (
+                  thread_id text primary key,
+                  title text not null,
+                  cwd text not null,
+                  status text not null,
+                  started_at text,
+                  updated_at text,
+                  latest_activity_summary text
+                );
+
+                insert into threads (
+                  thread_id,
+                  title,
+                  cwd,
+                  status
+                ) values ('thread-legacy', 'Legacy Thread', '/workspace/legacy', 'completed');
+                ",
+            )
+            .expect("seed legacy threads table");
+
+        init_monitor_db(&state).expect("initialize monitor db");
+
+        let workspace_root: String = connection
+            .query_row(
+                "select workspace_root from threads where thread_id = ?1",
+                ["thread-legacy"],
+                |row| row.get(0),
+            )
+            .expect("read backfilled workspace_root");
+        assert_eq!(workspace_root, "/workspace/legacy");
+    }
+
+    fn build_test_state(label: &str) -> AppState {
+        let root_dir = std::env::temp_dir().join(format!(
+            "codex-monitor-index-db-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock should be monotonic")
+                .as_nanos()
+        ));
+        let live_sessions_dir = root_dir.join("sessions");
+        fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
+        fs::File::create(root_dir.join("state_5.sqlite")).expect("create state db file");
+
+        AppState {
+            monitor_db_path: root_dir.join("monitor.db"),
+            source_paths: SourcePaths {
+                live_sessions_dir,
+                state_db_path: root_dir.join("state_5.sqlite"),
+            },
+            last_snapshot_refresh_at: Arc::new(Mutex::new(Some(Instant::now()))),
+        }
+    }
 }
