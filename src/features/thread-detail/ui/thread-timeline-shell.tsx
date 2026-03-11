@@ -29,7 +29,7 @@ export function ThreadTimelineShell({
     queryKey: ["monitor", "thread_drilldown", threadId, selectedLaneId],
     queryFn: () => getThreadDrilldown(threadId, selectedLaneId ?? ""),
     enabled: Boolean(threadId && detail && selectedLaneId),
-    refetchInterval: detail?.thread.status === "inflight" ? 2_000 : false,
+    refetchInterval: detail && !detail.thread.archived ? 2_000 : false,
   });
 
   useEffect(() => {

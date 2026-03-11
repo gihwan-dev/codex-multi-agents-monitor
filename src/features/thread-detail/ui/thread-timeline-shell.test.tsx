@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThreadTimelineShell } from "@/features/thread-detail/ui/thread-timeline-shell";
 import { getThreadDrilldown } from "@/shared/lib/tauri/commands";
@@ -11,7 +11,9 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
   getThreadDrilldown: vi.fn(),
 }));
 
-function buildDetail(): ThreadDetail {
+function buildDetail(
+  overrides?: Partial<ThreadDetail["thread"]>,
+): ThreadDetail {
   return {
     thread: {
       thread_id: "thread-1",
@@ -22,6 +24,7 @@ function buildDetail(): ThreadDetail {
       started_at: "2026-03-10T09:30:00Z",
       updated_at: "2026-03-10T10:00:00Z",
       latest_activity_summary: "recent commentary",
+      ...overrides,
     },
     agents: [
       {
@@ -152,12 +155,28 @@ function renderShell(detail: ThreadDetail | null, isLoading = false) {
   );
 }
 
+async function flushShellQueries() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
 describe("ThreadTimelineShell 동작", () => {
   beforeEach(() => {
     vi.mocked(getThreadDrilldown).mockReset();
     vi.mocked(getThreadDrilldown).mockImplementation(
       async (_threadId, laneId) => buildDrilldown(laneId),
     );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("로딩 중에는 스켈레톤을 렌더링한다", () => {
@@ -262,5 +281,45 @@ describe("ThreadTimelineShell 동작", () => {
     expect(screen.getByTestId("thread-drilldown-panel")).toHaveTextContent(
       "child commentary",
     );
+  });
+
+  it("completed-but-unarchived detail은 drilldown polling을 유지한다", async () => {
+    vi.useFakeTimers();
+    renderShell(
+      buildDetail({
+        status: "completed",
+        archived: false,
+      }),
+    );
+
+    await flushShellQueries();
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    await flushShellQueries();
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(2);
+  });
+
+  it("archived detail은 drilldown polling을 멈춘다", async () => {
+    vi.useFakeTimers();
+    renderShell(
+      buildDetail({
+        status: "completed",
+        archived: true,
+      }),
+    );
+
+    await flushShellQueries();
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+
+    await flushShellQueries();
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
   });
 });

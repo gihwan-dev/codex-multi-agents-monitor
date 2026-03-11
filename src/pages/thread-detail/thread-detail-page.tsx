@@ -18,7 +18,7 @@ export function ThreadDetailPage() {
     queryFn: () => getThreadDetail(threadId),
     enabled: Boolean(threadId),
     refetchInterval: (query) =>
-      query.state.data?.thread.status === "inflight" ? 2_000 : false,
+      query.state.data && !query.state.data.thread.archived ? 2_000 : false,
   });
 
   useEffect(() => {

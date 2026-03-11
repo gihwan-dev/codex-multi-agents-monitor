@@ -16,13 +16,16 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
   getThreadDrilldown: vi.fn(),
 }));
 
-function buildDetail(status: ThreadDetail["thread"]["status"]): ThreadDetail {
+function buildDetail(
+  status: ThreadDetail["thread"]["status"],
+  archived = false,
+): ThreadDetail {
   return {
     thread: {
       thread_id: "thread-1",
       title: "Detail thread",
       cwd: "/workspace/detail",
-      archived: false,
+      archived,
       status,
       started_at: "2026-03-10T09:30:00Z",
       updated_at: "2026-03-10T10:00:00Z",
@@ -111,8 +114,27 @@ describe("ThreadDetailPage", () => {
     expect(useThreadUiStore.getState().selectedThreadId).toBeNull();
   });
 
-  it("does not poll completed detail after the first fetch", async () => {
-    vi.mocked(getThreadDetail).mockResolvedValue(buildDetail("completed"));
+  it("completed-but-unarchived detail은 2000ms마다 계속 polling한다", async () => {
+    vi.mocked(getThreadDetail).mockResolvedValue(buildDetail("completed", false));
+
+    renderThreadDetailPage();
+
+    await flushPageQueries();
+
+    expect(getThreadDetail).toHaveBeenCalledTimes(1);
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    await flushPageQueries();
+
+    expect(getThreadDetail).toHaveBeenCalledTimes(2);
+    expect(getThreadDrilldown).toHaveBeenCalledTimes(2);
+  });
+
+  it("archived detail은 첫 fetch 이후 polling하지 않는다", async () => {
+    vi.mocked(getThreadDetail).mockResolvedValue(buildDetail("completed", true));
 
     renderThreadDetailPage();
 
