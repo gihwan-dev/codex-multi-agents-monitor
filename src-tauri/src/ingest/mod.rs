@@ -14,6 +14,9 @@ use crate::state::AppState;
 const STATUS_COMPLETED: &str = "completed";
 const STATUS_INFLIGHT: &str = "inflight";
 const DEFAULT_SUBAGENT_ROLE: &str = "subagent";
+const SOURCE_KEY_STATE_DB: &str = "state_db";
+const SOURCE_STATUS_MISSING: &str = "missing";
+const SOURCE_STATUS_DEGRADED: &str = "degraded";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ThreadOverviewRow {
@@ -90,6 +93,19 @@ struct AgentSessionRow {
     updated_at: Option<String>,
     rollout_path: String,
     cwd: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SourceHealthRow {
+    source_key: &'static str,
+    status: &'static str,
+}
+
+#[derive(Debug, Default)]
+struct StateSnapshot {
+    roots: Vec<StateRootThreadRow>,
+    agent_sessions: Vec<AgentSessionRow>,
+    source_health: Vec<SourceHealthRow>,
 }
 
 #[derive(Debug)]
@@ -657,7 +673,11 @@ fn parse_live_session_file(path: &Path) -> Result<Option<LiveRootThreadRow>> {
 }
 
 pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
-    let (state_roots, state_agent_sessions) = load_state_snapshot(state)?;
+    let StateSnapshot {
+        roots: state_roots,
+        agent_sessions: state_agent_sessions,
+        source_health,
+    } = load_state_snapshot(state)?;
     let mut session_files = Vec::new();
     collect_live_session_files(&state.source_paths.live_sessions_dir, &mut session_files)?;
     session_files.sort();
@@ -684,6 +704,21 @@ pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
         .context("failed to clear wait_spans before snapshot ingest")?;
     tx.execute("delete from tool_spans", [])
         .context("failed to clear tool_spans before snapshot ingest")?;
+    tx.execute("delete from ingest_source_health", [])
+        .context("failed to clear ingest_source_health before snapshot ingest")?;
+
+    for source_health_row in source_health {
+        tx.execute(
+            "
+            insert into ingest_source_health (
+              source_key,
+              status
+            ) values (?1, ?2)
+            ",
+            params![source_health_row.source_key, source_health_row.status],
+        )
+        .context("failed to persist ingest source health")?;
+    }
 
     for root in state_roots {
         tx.execute(
@@ -885,11 +920,12 @@ pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
     Ok(())
 }
 
-fn load_state_snapshot(
-    state: &AppState,
-) -> Result<(Vec<StateRootThreadRow>, Vec<AgentSessionRow>)> {
+fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
     if !state.source_paths.state_db_path.is_file() {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok(StateSnapshot {
+            source_health: vec![missing_state_db_health()],
+            ..StateSnapshot::default()
+        });
     }
 
     let state_connection = match Connection::open_with_flags(
@@ -897,41 +933,30 @@ fn load_state_snapshot(
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     ) {
         Ok(connection) => connection,
-        Err(rusqlite::Error::SqliteFailure(error, _))
-            if error.code == rusqlite::ErrorCode::CannotOpen =>
-        {
-            return Ok((Vec::new(), Vec::new()));
-        }
-        Err(error) => {
-            return Err(error).with_context(|| {
-                format!(
-                    "failed to open state db at {}",
-                    state.source_paths.state_db_path.display()
-                )
-            });
-        }
+        Err(_) => return Ok(degraded_state_snapshot()),
     };
 
-    let mut statement = state_connection
-        .prepare(
-            "
-            select
-              id,
-              rollout_path,
-              created_at,
-              updated_at,
-              source,
-              cwd,
-              title,
-              archived,
-              agent_role,
-              agent_nickname
-            from threads
-            ",
-        )
-        .context("failed to query state threads snapshot")?;
+    let mut statement = match state_connection.prepare(
+        "
+        select
+          id,
+          rollout_path,
+          created_at,
+          updated_at,
+          source,
+          cwd,
+          title,
+          archived,
+          agent_role,
+          agent_nickname
+        from threads
+        ",
+    ) {
+        Ok(statement) => statement,
+        Err(_) => return Ok(degraded_state_snapshot()),
+    };
 
-    let rows = statement.query_map([], |row| {
+    let rows = match statement.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
@@ -944,7 +969,10 @@ fn load_state_snapshot(
             row.get::<_, Option<String>>(8)?,
             row.get::<_, Option<String>>(9)?,
         ))
-    })?;
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return Ok(degraded_state_snapshot()),
+    };
 
     let mut roots = Vec::new();
     let mut sessions = Vec::new();
@@ -961,7 +989,10 @@ fn load_state_snapshot(
             archived,
             row_agent_role,
             row_agent_nickname,
-        ) = row.context("failed to decode state thread row")?;
+        ) = match row {
+            Ok(row) => row,
+            Err(_) => return Ok(degraded_state_snapshot()),
+        };
         let started_at = epoch_to_rfc3339_utc(created_at);
         let updated_at = epoch_to_rfc3339_utc(updated_at);
 
@@ -998,7 +1029,28 @@ fn load_state_snapshot(
         }
     }
 
-    Ok((roots, sessions))
+    Ok(StateSnapshot {
+        roots,
+        agent_sessions: sessions,
+        source_health: Vec::new(),
+    })
+}
+
+fn missing_state_db_health() -> SourceHealthRow {
+    SourceHealthRow {
+        source_key: SOURCE_KEY_STATE_DB,
+        status: SOURCE_STATUS_MISSING,
+    }
+}
+
+fn degraded_state_snapshot() -> StateSnapshot {
+    StateSnapshot {
+        source_health: vec![SourceHealthRow {
+            source_key: SOURCE_KEY_STATE_DB,
+            status: SOURCE_STATUS_DEGRADED,
+        }],
+        ..StateSnapshot::default()
+    }
 }
 
 fn classify_state_source(source: &str) -> SourceClassification {

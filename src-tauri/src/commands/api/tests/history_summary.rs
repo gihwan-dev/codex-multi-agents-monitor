@@ -64,6 +64,7 @@ fn build_history_summary_limits_to_recent_completed_root_threads() {
     assert_eq!(summary.history.timeout_count, 0);
     assert_eq!(summary.history.spawn_count, 0);
     assert!(summary.health.missing_sources.is_empty());
+    assert!(summary.health.degraded_sources.is_empty());
     assert_eq!(summary.health.degraded_rollout_threads, 0);
     assert!(summary.roles.is_empty());
     assert_eq!(summary.slow_threads.len(), 1);
@@ -181,6 +182,7 @@ fn build_history_summary_aggregates_role_duration_spawn_and_timeout_metrics() {
     assert_eq!(summary.history.spawn_count, 2);
     assert_eq!(summary.history.timeout_count, 2);
     assert!(summary.health.missing_sources.is_empty());
+    assert!(summary.health.degraded_sources.is_empty());
     assert_eq!(summary.health.degraded_rollout_threads, 0);
     assert_eq!(summary.roles.len(), 2);
     assert_eq!(summary.roles[0].agent_role, "reviewer");
@@ -229,6 +231,7 @@ fn build_history_summary_reports_missing_sources() {
             HistorySourceKey::StateDb,
         ]
     );
+    assert!(summary.health.degraded_sources.is_empty());
     assert_eq!(summary.health.degraded_rollout_threads, 0);
     assert_eq!(summary.history.thread_count, 0);
 }
@@ -248,6 +251,91 @@ fn run_incremental_ingest_degrades_when_state_db_is_missing() {
     let summary = build_history_summary_at(&state, now).expect("history summary should build");
 
     assert_eq!(summary.health.missing_sources, vec![HistorySourceKey::StateDb]);
+    assert!(summary.health.degraded_sources.is_empty());
+    assert_eq!(summary.history.thread_count, 0);
+}
+
+#[test]
+fn run_incremental_ingest_degrades_when_state_db_is_not_sqlite() {
+    let state = build_test_state("history-corrupt-state-db");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+    fs::write(&state.source_paths.state_db_path, "not-a-sqlite-db")
+        .expect("write invalid state db");
+
+    let live_path = state
+        .source_paths
+        .live_sessions_dir
+        .join("2026/03/10/history-corrupt-state-db.jsonl");
+    seed_live_session(
+        &live_path,
+        &[json!({
+            "timestamp": "2026-03-10T10:00:00Z",
+            "type": "session_meta",
+            "payload": {
+                "id": "thread-live-corrupt",
+                "timestamp": "2026-03-10T10:00:00Z",
+                "cwd": "/workspace/corrupt",
+                "source": "vscode"
+            }
+        })],
+    );
+
+    run_incremental_ingest(&state).expect("ingest should tolerate non-sqlite state db");
+
+    let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+    let thread_ids = connection
+        .prepare("select thread_id from threads order by thread_id asc")
+        .expect("prepare thread query")
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("query threads")
+        .map(|row| row.expect("decode thread row"))
+        .collect::<Vec<_>>();
+    assert_eq!(thread_ids, vec!["thread-live-corrupt".to_string()]);
+
+    let degraded_sources = connection
+        .prepare(
+            "
+            select source_key
+            from ingest_source_health
+            where status = 'degraded'
+            order by source_key asc
+            ",
+        )
+        .expect("prepare health query")
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("query health rows")
+        .map(|row| row.expect("decode health row"))
+        .collect::<Vec<_>>();
+    assert_eq!(degraded_sources, vec!["state_db".to_string()]);
+}
+
+#[test]
+fn build_history_summary_reports_degraded_state_db_when_threads_table_is_missing() {
+    let state = build_test_state("history-state-db-missing-threads");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+
+    let state_connection =
+        Connection::open(&state.source_paths.state_db_path).expect("open state db for setup");
+    state_connection
+        .execute_batch(
+            "
+            create table metadata (
+              id integer primary key
+            );
+            ",
+        )
+        .expect("create unrelated table");
+
+    run_incremental_ingest(&state).expect("ingest should tolerate missing threads table");
+
+    let now = Utc
+        .with_ymd_and_hms(2026, 3, 10, 12, 0, 0)
+        .single()
+        .expect("fixed timestamp should exist");
+    let summary = build_history_summary_at(&state, now).expect("history summary should build");
+
+    assert!(summary.health.missing_sources.is_empty());
+    assert_eq!(summary.health.degraded_sources, vec![HistorySourceKey::StateDb]);
     assert_eq!(summary.history.thread_count, 0);
 }
 
@@ -312,6 +400,7 @@ fn build_history_summary_degrades_when_rollout_is_missing_unreadable_or_malforme
     assert_eq!(summary.history.spawn_count, 1);
     assert_eq!(summary.history.timeout_count, 0);
     assert!(summary.health.missing_sources.is_empty());
+    assert!(summary.health.degraded_sources.is_empty());
     assert_eq!(summary.health.degraded_rollout_threads, 3);
     let missing_thread = summary
         .slow_threads

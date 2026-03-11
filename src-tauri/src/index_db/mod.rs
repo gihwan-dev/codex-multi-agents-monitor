@@ -24,6 +24,11 @@ pub fn init_monitor_db(state: &AppState) -> Result<()> {
           updated_at text not null
         );
 
+        create table if not exists ingest_source_health (
+          source_key text primary key,
+          status text not null check (status in ('missing', 'degraded'))
+        );
+
         create table if not exists threads (
           thread_id text primary key,
           title text not null,

@@ -18,6 +18,8 @@ use super::decode::parse_timestamp;
 
 const HISTORY_WINDOW_DAYS: i64 = 6;
 const MAX_SLOW_THREADS: usize = 8;
+const SOURCE_STATUS_MISSING: &str = "missing";
+const SOURCE_STATUS_DEGRADED: &str = "degraded";
 
 #[derive(Debug)]
 struct ThreadCandidateRow {
@@ -97,6 +99,7 @@ pub(super) fn build_history_summary_at(
         .collect::<HashMap<_, _>>();
     let rollout_metrics = collect_thread_metrics(&threads, &session_role_map);
     let thread_metrics = &rollout_metrics.metrics_by_thread;
+    let recorded_source_health = load_recorded_source_health(&connection)?;
 
     let thread_count = u32::try_from(threads.len()).unwrap_or(u32::MAX);
     let average_duration_ms =
@@ -210,7 +213,11 @@ pub(super) fn build_history_summary_at(
             spawn_count,
         },
         health: HistoryHealth {
-            missing_sources: detect_missing_sources(state),
+            missing_sources: merge_source_keys(
+                detect_missing_sources(state),
+                recorded_source_health.missing_sources,
+            ),
+            degraded_sources: recorded_source_health.degraded_sources,
             degraded_rollout_threads: rollout_metrics.degraded_rollout_threads,
         },
         roles,
@@ -503,6 +510,84 @@ fn detect_missing_sources(state: &AppState) -> Vec<HistorySourceKey> {
     }
 
     missing_sources
+}
+
+#[derive(Debug, Default)]
+struct RecordedSourceHealth {
+    missing_sources: Vec<HistorySourceKey>,
+    degraded_sources: Vec<HistorySourceKey>,
+}
+
+fn load_recorded_source_health(
+    connection: &Connection,
+) -> Result<RecordedSourceHealth, CommandError> {
+    let mut statement = connection
+        .prepare(
+            "
+            select
+              source_key,
+              status
+            from ingest_source_health
+            order by source_key asc
+            ",
+        )
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let rows = statement
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .map_err(|error| CommandError::Internal(error.to_string()))?;
+
+    let mut missing_sources = Vec::new();
+    let mut degraded_sources = Vec::new();
+
+    for row in rows {
+        let (source_key, status) = row.map_err(|error| CommandError::Internal(error.to_string()))?;
+        let Some(source_key) = parse_source_key(&source_key) else {
+            continue;
+        };
+        match status.as_str() {
+            SOURCE_STATUS_MISSING => missing_sources.push(source_key),
+            SOURCE_STATUS_DEGRADED => degraded_sources.push(source_key),
+            _ => {}
+        }
+    }
+
+    Ok(RecordedSourceHealth {
+        missing_sources: sort_and_dedup_source_keys(missing_sources),
+        degraded_sources: sort_and_dedup_source_keys(degraded_sources),
+    })
+}
+
+fn merge_source_keys(
+    base: Vec<HistorySourceKey>,
+    additional: Vec<HistorySourceKey>,
+) -> Vec<HistorySourceKey> {
+    let mut merged = base;
+    merged.extend(additional);
+    sort_and_dedup_source_keys(merged)
+}
+
+fn sort_and_dedup_source_keys(mut sources: Vec<HistorySourceKey>) -> Vec<HistorySourceKey> {
+    sources.sort_by_key(source_order_key);
+    sources.dedup();
+    sources
+}
+
+fn source_order_key(source: &HistorySourceKey) -> usize {
+    match source {
+        HistorySourceKey::LiveSessions => 0,
+        HistorySourceKey::ArchivedSessions => 1,
+        HistorySourceKey::StateDb => 2,
+    }
+}
+
+fn parse_source_key(raw: &str) -> Option<HistorySourceKey> {
+    match raw {
+        "live_sessions" => Some(HistorySourceKey::LiveSessions),
+        "archived_sessions" => Some(HistorySourceKey::ArchivedSessions),
+        "state_db" => Some(HistorySourceKey::StateDb),
+        _ => None,
+    }
 }
 
 fn parse_wait_argument_ids(raw_arguments: Option<&Value>) -> Vec<String> {

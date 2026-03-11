@@ -23,6 +23,7 @@ function buildSummary(): HistorySummaryPayload {
     },
     health: {
       missing_sources: [],
+      degraded_sources: [],
       degraded_rollout_threads: 0,
     },
     roles: [
@@ -135,6 +136,7 @@ describe("HistoryShell 컴포넌트", () => {
           ...buildSummary(),
           health: {
             missing_sources: ["archived_sessions", "state_db"],
+            degraded_sources: ["state_db"],
             degraded_rollout_threads: 2,
           },
         }}
@@ -144,6 +146,11 @@ describe("HistoryShell 컴포넌트", () => {
 
     expect(
       screen.getByText(/누락된 source: archived sessions, state db/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /state db를 읽지 못해 archived thread 메타데이터 보강이 일부 비활성화되었습니다\./,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/2개 thread는 rollout parsing이 불완전해/),
@@ -162,6 +169,7 @@ describe("HistoryShell 컴포넌트", () => {
           slow_threads: [],
           health: {
             missing_sources: ["live_sessions"],
+            degraded_sources: [],
             degraded_rollout_threads: 0,
           },
         }}

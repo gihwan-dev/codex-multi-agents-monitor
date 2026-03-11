@@ -17,6 +17,7 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
     },
     health: {
       missing_sources: [],
+      degraded_sources: [],
       degraded_rollout_threads: 0,
     },
     roles: [],

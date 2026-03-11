@@ -116,6 +116,7 @@ export type HistorySourceKey =
 
 export type HistoryHealth = {
   missing_sources: HistorySourceKey[];
+  degraded_sources: HistorySourceKey[];
   degraded_rollout_threads: number;
 };
 

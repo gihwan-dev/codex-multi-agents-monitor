@@ -358,6 +358,9 @@ function buildHealthNotice(health: HistoryHealth) {
       `누락된 source: ${health.missing_sources.map(formatSourceLabel).join(", ")}`,
     );
   }
+  if (health.degraded_sources.length > 0) {
+    messages.push(buildDegradedSourceNotice(health.degraded_sources));
+  }
   if (health.degraded_rollout_threads > 0) {
     messages.push(
       `${health.degraded_rollout_threads}개 thread는 rollout parsing이 불완전해 timeout/spawn 수치가 과소 집계될 수 있습니다.`,
@@ -369,6 +372,17 @@ function buildHealthNotice(health: HistoryHealth) {
 
 function formatSourceLabel(source: HistorySourceKey) {
   return sourceLabelByKey[source];
+}
+
+function buildDegradedSourceNotice(sources: HistorySourceKey[]) {
+  if (
+    sources.length === 1 &&
+    sources[0] === "state_db"
+  ) {
+    return "state db를 읽지 못해 archived thread 메타데이터 보강이 일부 비활성화되었습니다.";
+  }
+
+  return `읽지 못한 source: ${sources.map(formatSourceLabel).join(", ")}`;
 }
 
 function formatActionError(error: unknown, kind: ActionKind) {

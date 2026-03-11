@@ -159,6 +159,7 @@ pub enum HistorySourceKey {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryHealth {
     pub missing_sources: Vec<HistorySourceKey>,
+    pub degraded_sources: Vec<HistorySourceKey>,
     pub degraded_rollout_threads: u32,
 }
 
