@@ -99,7 +99,11 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
           <MetaCard
             label="workspace"
             value={flow.session.workspace}
-            secondary={flow.session.workspace_hint ? `cwd ${flow.session.workspace_hint}` : null}
+            secondary={
+              flow.session.workspace_hint
+                ? `cwd ${flow.session.workspace_hint}`
+                : null
+            }
           />
           <MetaCard label="status" value={flow.session.status} />
           <MetaCard label="lanes" value={`${flow.lanes.length}`} />

@@ -1,10 +1,10 @@
 mod orchestrator;
 pub mod rollout_decoder;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -82,6 +82,7 @@ struct StateRootThreadRow {
     title: String,
     cwd: String,
     workspace_root: String,
+    git_origin_url: Option<String>,
     rollout_path: String,
     archived: i64,
     source_kind: String,
@@ -627,6 +628,10 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
         agent_sessions: state_agent_sessions,
         source_health,
     } = load_state_snapshot(state)?;
+    let state_workspace_roots = state_roots
+        .iter()
+        .map(|root| (root.thread_id.clone(), root.workspace_root.clone()))
+        .collect::<BTreeMap<_, _>>();
     let mut session_files = Vec::new();
     collect_live_session_files(&state.source_paths.live_sessions_dir, &mut session_files)?;
     session_files.sort();
@@ -750,6 +755,8 @@ pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
             updated_at,
             latest_activity_summary,
         } = overview;
+        let workspace_root =
+            resolve_live_workspace_root(&thread_id, &cwd, &workspace_root, &state_workspace_roots);
 
         tx.execute(
             "
@@ -891,7 +898,12 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
         Err(_) => return Ok(degraded_state_snapshot()),
     };
 
-    let mut statement = match state_connection.prepare(
+    let select_git_origin_url = if state_threads_has_column(&state_connection, "git_origin_url") {
+        "git_origin_url"
+    } else {
+        "null as git_origin_url"
+    };
+    let query = format!(
         "
         select
           id,
@@ -903,10 +915,12 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
           title,
           archived,
           agent_role,
-          agent_nickname
+          agent_nickname,
+          {select_git_origin_url}
         from threads
-        ",
-    ) {
+        "
+    );
+    let mut statement = match state_connection.prepare(&query) {
         Ok(statement) => statement,
         Err(_) => return Ok(degraded_state_snapshot()),
     };
@@ -923,6 +937,7 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
             row.get::<_, i64>(7)?,
             row.get::<_, Option<String>>(8)?,
             row.get::<_, Option<String>>(9)?,
+            row.get::<_, Option<String>>(10)?,
         ))
     }) {
         Ok(rows) => rows,
@@ -944,6 +959,7 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
             archived,
             row_agent_role,
             row_agent_nickname,
+            git_origin_url,
         ) = match row {
             Ok(row) => row,
             Err(_) => return Ok(degraded_state_snapshot()),
@@ -956,6 +972,7 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
                 thread_id: session_or_thread_id.clone(),
                 title: normalize_text(&title).unwrap_or(session_or_thread_id),
                 workspace_root: resolve_workspace_root(&cwd),
+                git_origin_url: normalize_optional_text(git_origin_url),
                 cwd,
                 rollout_path,
                 archived,
@@ -985,6 +1002,8 @@ fn load_state_snapshot(state: &AppState) -> Result<StateSnapshot> {
         }
     }
 
+    reconcile_state_workspace_roots(&mut roots);
+
     Ok(StateSnapshot {
         roots,
         agent_sessions: sessions,
@@ -998,7 +1017,9 @@ fn resolve_workspace_root(cwd: &str) -> String {
         return String::new();
     }
 
-    for ancestor in Path::new(trimmed).ancestors() {
+    let normalized_cwd = normalize_path(Path::new(trimmed));
+
+    for ancestor in normalized_cwd.ancestors() {
         let git_entry = ancestor.join(".git");
         if git_entry.is_dir() {
             return ancestor.display().to_string();
@@ -1006,17 +1027,20 @@ fn resolve_workspace_root(cwd: &str) -> String {
         if git_entry.is_file() {
             return resolve_workspace_root_from_git_file(&git_entry)
                 .map(|root| root.display().to_string())
-                .unwrap_or_else(|| trimmed.to_string());
+                .unwrap_or_else(|| normalized_cwd.display().to_string());
         }
     }
 
-    trimmed.to_string()
+    normalized_cwd.display().to_string()
 }
 
 fn resolve_workspace_root_from_git_file(git_file: &Path) -> Option<PathBuf> {
     let gitdir = read_gitdir_path(git_file)?;
-    let canonical_git_dir = read_commondir_path(&gitdir)?;
-    canonical_git_dir.parent().map(Path::to_path_buf)
+    if let Some(canonical_git_dir) = read_commondir_path(&gitdir) {
+        return canonical_git_dir.parent().map(normalize_path);
+    }
+
+    git_file.parent().map(normalize_path)
 }
 
 fn read_gitdir_path(git_file: &Path) -> Option<PathBuf> {
@@ -1033,7 +1057,7 @@ fn read_gitdir_path(git_file: &Path) -> Option<PathBuf> {
         base_dir.join(gitdir)
     };
 
-    fs::canonicalize(path).ok()
+    Some(normalize_path(&path))
 }
 
 fn read_commondir_path(gitdir: &Path) -> Option<PathBuf> {
@@ -1049,8 +1073,130 @@ fn read_commondir_path(gitdir: &Path) -> Option<PathBuf> {
         gitdir.join(commondir)
     };
 
-    let canonical_path = fs::canonicalize(path).ok()?;
-    canonical_path.is_dir().then_some(canonical_path)
+    path.is_dir().then_some(normalize_path(&path))
+}
+
+fn resolve_live_workspace_root(
+    thread_id: &str,
+    cwd: &str,
+    workspace_root: &str,
+    state_workspace_roots: &BTreeMap<String, String>,
+) -> String {
+    if !is_deleted_codex_worktree_path(cwd) || !paths_match(cwd, workspace_root) {
+        return workspace_root.to_string();
+    }
+
+    state_workspace_roots
+        .get(thread_id)
+        .filter(|candidate| !paths_match(candidate, workspace_root))
+        .cloned()
+        .unwrap_or_else(|| workspace_root.to_string())
+}
+
+fn reconcile_state_workspace_roots(roots: &mut [StateRootThreadRow]) {
+    let mut candidates = BTreeMap::<String, BTreeSet<String>>::new();
+
+    for root in roots.iter() {
+        let Some(origin_url) = root.git_origin_url.as_ref() else {
+            continue;
+        };
+        if !is_workspace_root_candidate(root) {
+            continue;
+        }
+        candidates
+            .entry(origin_url.clone())
+            .or_default()
+            .insert(root.workspace_root.clone());
+    }
+
+    for root in roots.iter_mut() {
+        let Some(origin_url) = root.git_origin_url.as_ref() else {
+            continue;
+        };
+        if !is_deleted_codex_worktree_path(&root.cwd) || !paths_match(&root.cwd, &root.workspace_root)
+        {
+            continue;
+        }
+        let Some(candidate_roots) = candidates.get(origin_url) else {
+            continue;
+        };
+        if candidate_roots.len() != 1 {
+            continue;
+        }
+        if let Some(candidate) = candidate_roots.iter().next() {
+            root.workspace_root = candidate.clone();
+        }
+    }
+}
+
+fn is_workspace_root_candidate(root: &StateRootThreadRow) -> bool {
+    Path::new(&root.workspace_root).exists()
+        && (!is_codex_worktree_path(&root.cwd) || !paths_match(&root.cwd, &root.workspace_root))
+}
+
+fn is_deleted_codex_worktree_path(path: &str) -> bool {
+    is_codex_worktree_path(path) && !Path::new(path).exists()
+}
+
+fn is_codex_worktree_path(path: &str) -> bool {
+    let mut saw_codex = false;
+    for component in Path::new(path).components() {
+        let Component::Normal(name) = component else {
+            continue;
+        };
+        if saw_codex && name == "worktrees" {
+            return true;
+        }
+        saw_codex = name == ".codex";
+    }
+    false
+}
+
+fn paths_match(left: &str, right: &str) -> bool {
+    normalize_path(Path::new(left)) == normalize_path(Path::new(right))
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(value) => normalized.push(value),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+        }
+    }
+
+    normalized
+}
+
+fn state_threads_has_column(connection: &Connection, column: &str) -> bool {
+    let mut statement = match connection.prepare("pragma table_info(threads)") {
+        Ok(statement) => statement,
+        Err(_) => return false,
+    };
+    let mut rows = match statement.query([]) {
+        Ok(rows) => rows,
+        Err(_) => return false,
+    };
+
+    loop {
+        match rows.next() {
+            Ok(Some(row)) => {
+                let Ok(current) = row.get::<_, String>(1) else {
+                    continue;
+                };
+                if current == column {
+                    return true;
+                }
+            }
+            Ok(None) | Err(_) => return false,
+        }
+    }
 }
 
 fn missing_state_db_health() -> SourceHealthRow {
@@ -1292,6 +1438,7 @@ mod tests {
                     archived: 0,
                     agent_role: None,
                     agent_nickname: None,
+                    git_origin_url: None,
                 },
                 StateSeedRow {
                     id: "thread-sub-1",
@@ -1304,6 +1451,7 @@ mod tests {
                     archived: 0,
                     agent_role: Some("top-role"),
                     agent_nickname: None,
+                    git_origin_url: None,
                 },
             ],
         );
@@ -1418,6 +1566,7 @@ mod tests {
                     archived: 0,
                     agent_role: None,
                     agent_nickname: None,
+                    git_origin_url: None,
                 },
                 StateSeedRow {
                     id: "thread-cli",
@@ -1430,6 +1579,7 @@ mod tests {
                     archived: 0,
                     agent_role: None,
                     agent_nickname: None,
+                    git_origin_url: None,
                 },
                 StateSeedRow {
                     id: "thread-sub",
@@ -1442,6 +1592,7 @@ mod tests {
                     archived: 0,
                     agent_role: None,
                     agent_nickname: None,
+                    git_origin_url: None,
                 },
             ],
         );
@@ -1880,7 +2031,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_workspace_root_falls_back_to_raw_cwd_when_gitdir_is_broken() {
+    fn resolve_workspace_root_uses_checkout_root_when_gitdir_is_broken() {
         let root = temp_path("resolver-broken");
         let worktree_root = root.join("workspace");
         let cwd = worktree_root.join("src/nested");
@@ -1893,12 +2044,12 @@ mod tests {
 
         assert_eq!(
             resolve_workspace_root(cwd.to_string_lossy().as_ref()),
-            cwd.display().to_string()
+            worktree_root.display().to_string()
         );
     }
 
     #[test]
-    fn resolve_workspace_root_falls_back_to_raw_cwd_when_commondir_is_missing() {
+    fn resolve_workspace_root_uses_checkout_root_when_commondir_is_missing() {
         let root = temp_path("resolver-missing-commondir");
         let worktree_root = root.join("workspace");
         let cwd = worktree_root.join("src/nested");
@@ -1914,7 +2065,7 @@ mod tests {
 
         assert_eq!(
             resolve_workspace_root(cwd.to_string_lossy().as_ref()),
-            cwd.display().to_string()
+            worktree_root.display().to_string()
         );
     }
 
@@ -1940,6 +2091,7 @@ mod tests {
         archived: i64,
         agent_role: Option<&'a str>,
         agent_nickname: Option<&'a str>,
+        git_origin_url: Option<&'a str>,
     }
 
     fn build_test_state(label: &str) -> AppState {
@@ -1975,38 +2127,40 @@ mod tests {
                   rollout_path text not null,
                   created_at integer not null,
                   updated_at integer not null,
-                  source text not null,
-                  cwd text not null,
-                  title text not null,
-                  archived integer not null default 0,
-                  agent_role text,
-                  agent_nickname text
-                );
-                ",
-            )
+                source text not null,
+                cwd text not null,
+                title text not null,
+                archived integer not null default 0,
+                agent_role text,
+                agent_nickname text,
+                git_origin_url text
+            );
+            ",
+        )
             .expect("create state threads table");
 
         for row in rows {
             connection
                 .execute(
                     "
-                    insert into threads (
-                      id, rollout_path, created_at, updated_at, source, cwd, title, archived, agent_role, agent_nickname
-                    ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-                    ",
-                    params![
-                        row.id,
+                insert into threads (
+                  id, rollout_path, created_at, updated_at, source, cwd, title, archived, agent_role, agent_nickname, git_origin_url
+                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                ",
+                params![
+                    row.id,
                         row.rollout_path,
                         row.created_at,
                         row.updated_at,
                         row.source,
                         row.cwd,
                         row.title,
-                        row.archived,
-                        row.agent_role,
-                        row.agent_nickname,
-                    ],
-                )
+                    row.archived,
+                    row.agent_role,
+                    row.agent_nickname,
+                    row.git_origin_url,
+                ],
+            )
                 .expect("insert state row");
         }
     }

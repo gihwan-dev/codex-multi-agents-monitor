@@ -121,6 +121,7 @@ fn ingest_unarchives_archived_snapshot_root_for_live_session_views() {
             archived: 1,
             agent_role: None,
             agent_nickname: None,
+            git_origin_url: None,
         }],
     );
     seed_live_session(
@@ -240,6 +241,7 @@ fn ingest_groups_main_repo_and_worktree_under_same_workspace_root() {
                 archived: 0,
                 agent_role: None,
                 agent_nickname: None,
+                git_origin_url: Some("http://gitlab.exem.xyz/fe1/example.git"),
             },
             StateSeedRow {
                 id: "thread-worktree",
@@ -252,6 +254,7 @@ fn ingest_groups_main_repo_and_worktree_under_same_workspace_root() {
                 archived: 0,
                 agent_role: None,
                 agent_nickname: None,
+                git_origin_url: Some("http://gitlab.exem.xyz/fe1/example.git"),
             },
         ],
     );
@@ -281,5 +284,98 @@ fn ingest_groups_main_repo_and_worktree_under_same_workspace_root() {
             .find(|session| session.session_id == "thread-worktree")
             .and_then(|session| session.workspace_hint.clone()),
         Some(expected_hint)
+    );
+}
+
+#[test]
+fn ingest_infers_deleted_worktree_workspace_root_from_origin_url() {
+    let state = build_test_state("deleted-worktree-grouping");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+
+    let fixture_root = state
+        .source_paths
+        .state_db_path
+        .parent()
+        .expect("test root should exist");
+    let repo_root = fixture_root.join("repo");
+    let deleted_worktree_root = fixture_root.join(".codex/worktrees/1f0e/repo");
+
+    fs::create_dir_all(repo_root.join(".git")).expect("create repo .git");
+    fs::create_dir_all(&repo_root).expect("create repo root");
+
+    let repo_cwd = repo_root.to_string_lossy().into_owned();
+    let deleted_worktree_cwd = deleted_worktree_root.to_string_lossy().into_owned();
+    let git_origin_url = "http://gitlab.exem.xyz/fe1/example.git";
+
+    seed_state_db(
+        &state.source_paths.state_db_path,
+        &[
+            StateSeedRow {
+                id: "thread-main",
+                rollout_path: "/rollout/main",
+                created_at: 1_778_310_000,
+                updated_at: 1_778_310_100,
+                source: "vscode",
+                cwd: repo_cwd.as_str(),
+                title: "Main Repo",
+                archived: 0,
+                agent_role: None,
+                agent_nickname: None,
+                git_origin_url: Some(git_origin_url),
+            },
+            StateSeedRow {
+                id: "thread-deleted-worktree",
+                rollout_path: "/rollout/worktree",
+                created_at: 1_778_310_010,
+                updated_at: 1_778_310_110,
+                source: "vscode",
+                cwd: deleted_worktree_cwd.as_str(),
+                title: "Deleted Worktree Repo",
+                archived: 0,
+                agent_role: None,
+                agent_nickname: None,
+                git_origin_url: Some(git_origin_url),
+            },
+        ],
+    );
+    seed_live_session(
+        &state
+            .source_paths
+            .live_sessions_dir
+            .join("2026/03/10/thread-deleted-worktree.jsonl"),
+        &[json!({
+            "timestamp": "2026-03-10T08:00:00Z",
+            "type": "session_meta",
+            "payload": {
+                "id": "thread-deleted-worktree",
+                "timestamp": "2026-03-10T08:00:00Z",
+                "cwd": deleted_worktree_cwd,
+                "source": "vscode"
+            }
+        }), json!({
+            "timestamp": "2026-03-10T08:00:01Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "user_message",
+                "message": "Deleted worktree title"
+            }
+        })],
+    );
+
+    run_incremental_ingest(&state).expect("ingest should succeed");
+
+    let live_threads =
+        list_sessions_from_db(&state, SessionScope::Live, None).expect("list live sessions");
+    let expected_workspace = repo_root.display().to_string();
+    let expected_hint = deleted_worktree_root.display().to_string();
+
+    assert_eq!(live_threads.workspaces, vec![expected_workspace.clone()]);
+    assert_eq!(
+        live_threads
+            .sessions
+            .iter()
+            .find(|session| session.session_id == "thread-deleted-worktree")
+            .map(|session| (session.workspace.clone(), session.workspace_hint.clone())),
+        Some((expected_workspace, Some(expected_hint)))
     );
 }

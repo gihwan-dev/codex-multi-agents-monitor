@@ -247,6 +247,7 @@ pub(super) struct StateSeedRow<'a> {
     pub archived: i64,
     pub agent_role: Option<&'a str>,
     pub agent_nickname: Option<&'a str>,
+    pub git_origin_url: Option<&'a str>,
 }
 
 pub(super) fn seed_state_db(path: &Path, rows: &[StateSeedRow<'_>]) {
@@ -264,7 +265,8 @@ pub(super) fn seed_state_db(path: &Path, rows: &[StateSeedRow<'_>]) {
               title text not null,
               archived integer not null default 0,
               agent_role text,
-              agent_nickname text
+              agent_nickname text,
+              git_origin_url text
             );
             ",
         )
@@ -275,8 +277,8 @@ pub(super) fn seed_state_db(path: &Path, rows: &[StateSeedRow<'_>]) {
             .execute(
                 "
                 insert into threads (
-                  id, rollout_path, created_at, updated_at, source, cwd, title, archived, agent_role, agent_nickname
-                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                  id, rollout_path, created_at, updated_at, source, cwd, title, archived, agent_role, agent_nickname, git_origin_url
+                ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                 ",
                 params![
                     row.id,
@@ -289,6 +291,7 @@ pub(super) fn seed_state_db(path: &Path, rows: &[StateSeedRow<'_>]) {
                     row.archived,
                     row.agent_role,
                     row.agent_nickname,
+                    row.git_origin_url,
                 ],
             )
             .expect("insert state thread row");
