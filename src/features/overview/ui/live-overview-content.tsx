@@ -44,7 +44,7 @@ export function LiveOverviewContent({
 
       {filteredThreads.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[hsl(var(--line-strong))] bg-[hsl(var(--panel-2)/0.7)] p-8 text-center text-sm text-[hsl(var(--muted))]">
-          현재 필터와 일치하는 inflight thread가 없습니다.
+          현재 필터와 일치하는 현재 대화 thread가 없습니다.
         </div>
       ) : (
         <ul className="space-y-3">

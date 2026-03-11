@@ -47,6 +47,21 @@ describe("LiveOverviewShell", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders current-conversation copy for the shell and empty state", () => {
+    render(
+      <MemoryRouter>
+        <LiveOverviewShell isLoading={false} threads={[]} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("현재 대화 thread")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "현재 대화 thread가 없습니다. 아직 아카이브되지 않은 thread가 없어도 앱은 정상입니다.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("filters threads by workspace, role, and severity", async () => {
     const user = userEvent.setup();
     const threads = [
@@ -127,6 +142,16 @@ describe("LiveOverviewShell", () => {
     expect(
       screen.queryByTestId("live-thread-thread-gamma"),
     ).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Workspace filter"), "all");
+    await user.selectOptions(
+      screen.getByLabelText("Role filter"),
+      "reviewer",
+    );
+    await user.selectOptions(screen.getByLabelText("Status filter"), "critical");
+    expect(
+      screen.getByText("현재 필터와 일치하는 현재 대화 thread가 없습니다."),
+    ).toBeInTheDocument();
   });
 
   it("renders bottleneck ranking, wait/tool badges, and mini timeline segments", () => {
@@ -185,6 +210,8 @@ describe("LiveOverviewShell", () => {
         <LiveOverviewShell isLoading={false} threads={threads} />
       </MemoryRouter>,
     );
+
+    expect(screen.getByText("현재 대화 thread")).toBeInTheDocument();
 
     const ranking = within(screen.getByLabelText("Bottleneck ranking"));
     expect(

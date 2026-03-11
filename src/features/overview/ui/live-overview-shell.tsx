@@ -21,9 +21,7 @@ export function LiveOverviewShell({
         <p className="text-xs uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
           Live Overview
         </p>
-        <h2 className="text-lg font-semibold tracking-tight">
-          Inflight thread timeline shell
-        </h2>
+        <h2 className="text-lg font-semibold tracking-tight">현재 대화 thread</h2>
       </header>
 
       {isLoading ? <LiveOverviewLoadingState /> : null}
