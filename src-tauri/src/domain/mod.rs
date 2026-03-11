@@ -5,5 +5,7 @@ pub use models::{
     HistoryHealth, HistoryRoleSummary, HistorySlowThread, HistorySourceKey, HistorySummary,
     HistorySummaryPayload, LiveOverviewThread, MiniTimelineItem, MiniTimelineItemKind,
     MonitorThread, SessionFlowColumn, SessionFlowItem, SessionFlowItemKind, SessionFlowPayload,
-    SessionLane, ThreadDetail, ThreadDrilldown,
+    SessionLane, SummaryDashboardFilters, SummaryDashboardKpis, SummaryDashboardPayload,
+    SummaryRoleMetric, SummarySessionCompareRow, SummaryWorkspaceMetric, ThreadDetail,
+    ThreadDrilldown,
 };

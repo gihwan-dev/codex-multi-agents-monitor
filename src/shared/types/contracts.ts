@@ -239,3 +239,50 @@ export type ArchivedSessionListPayload = {
   workspaces: WorkspaceKey[];
   sessions: ArchivedSessionSummary[];
 };
+
+export type SummaryDashboardFilters = {
+  workspace?: WorkspaceKey | null;
+  session_id?: SessionId | null;
+  from_date?: string | null;
+  to_date?: string | null;
+};
+
+export type SummaryDashboardKpis = {
+  session_count: number;
+  active_session_count: number;
+  completed_session_count: number;
+  average_duration_ms: number | null;
+  workspace_count: number;
+};
+
+export type SummaryWorkspaceMetric = {
+  workspace: WorkspaceKey;
+  session_count: number;
+  average_duration_ms: number | null;
+  latest_updated_at: string | null;
+};
+
+export type SummaryRoleMetric = {
+  agent_role: string;
+  session_count: number;
+  average_duration_ms: number | null;
+};
+
+export type SummarySessionCompareRow = {
+  thread_id: SessionId;
+  title: string;
+  cwd: WorkspaceKey;
+  status: ThreadStatus;
+  updated_at: string | null;
+  latest_activity_summary: string | null;
+  duration_ms: number | null;
+  agent_roles: string[];
+};
+
+export type SummaryDashboardPayload = {
+  filters: SummaryDashboardFilters;
+  kpis: SummaryDashboardKpis;
+  workspace_distribution: SummaryWorkspaceMetric[];
+  role_mix: SummaryRoleMetric[];
+  session_compare: SummarySessionCompareRow[];
+};

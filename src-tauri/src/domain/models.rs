@@ -210,6 +210,59 @@ pub struct ArchivedSessionListPayload {
     pub sessions: Vec<ArchivedSessionSummary>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SummaryDashboardFilters {
+    pub workspace: Option<String>,
+    pub session_id: Option<String>,
+    pub from_date: Option<String>,
+    pub to_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SummaryDashboardKpis {
+    pub session_count: u32,
+    pub active_session_count: u32,
+    pub completed_session_count: u32,
+    pub average_duration_ms: Option<u64>,
+    pub workspace_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SummaryWorkspaceMetric {
+    pub workspace: String,
+    pub session_count: u32,
+    pub average_duration_ms: Option<u64>,
+    pub latest_updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SummaryRoleMetric {
+    pub agent_role: String,
+    pub session_count: u32,
+    pub average_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SummarySessionCompareRow {
+    pub thread_id: String,
+    pub title: String,
+    pub cwd: String,
+    pub status: ThreadStatus,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub latest_activity_summary: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub agent_roles: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SummaryDashboardPayload {
+    pub filters: SummaryDashboardFilters,
+    pub kpis: SummaryDashboardKpis,
+    pub workspace_distribution: Vec<SummaryWorkspaceMetric>,
+    pub role_mix: Vec<SummaryRoleMetric>,
+    pub session_compare: Vec<SummarySessionCompareRow>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BottleneckSnapshot {
     pub generated_at: DateTime<Utc>,

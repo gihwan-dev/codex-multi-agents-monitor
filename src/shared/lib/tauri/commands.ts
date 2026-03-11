@@ -6,6 +6,8 @@ import type {
   HistorySummaryPayload,
   LiveOverviewThread,
   SessionFlowPayload,
+  SummaryDashboardFilters,
+  SummaryDashboardPayload,
   ThreadDetail,
   ThreadDrilldown,
 } from "@/shared/types/contracts";
@@ -50,6 +52,14 @@ export async function getThreadDrilldown(threadId: string, laneId: string) {
 
 export async function getHistorySummary() {
   return invoke<HistorySummaryPayload>("get_history_summary");
+}
+
+export async function getSummaryDashboard(
+  filters: SummaryDashboardFilters = {},
+) {
+  return invoke<SummaryDashboardPayload>("get_summary_dashboard", {
+    filters,
+  });
 }
 
 export async function openWorkspace(path: string) {
