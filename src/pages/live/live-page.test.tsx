@@ -22,7 +22,9 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
   getThreadDrilldown: vi.fn(),
 }));
 
-function buildThread(overrides?: Partial<LiveOverviewThread>): LiveOverviewThread {
+function buildThread(
+  overrides?: Partial<LiveOverviewThread>,
+): LiveOverviewThread {
   return {
     thread_id: "thread-1",
     title: "Session alpha",

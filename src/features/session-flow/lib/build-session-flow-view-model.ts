@@ -47,7 +47,9 @@ export type SessionFlowViewModel = {
 export function buildSessionFlowViewModel(
   flow: SessionFlowPayload,
 ): SessionFlowViewModel {
-  const sortedSubagentLanes = flow.lanes.filter((lane) => lane.column === "subagent");
+  const sortedSubagentLanes = flow.lanes.filter(
+    (lane) => lane.column === "subagent",
+  );
   const lanes = flow.lanes.map((lane) => ({
     lane_id: lane.lane_id,
     label: lane.label,
@@ -78,7 +80,9 @@ export function buildSessionFlowViewModel(
     .filter((item) => item.kind === "wait" && item.target_lane_id)
     .map((item) => {
       const source = itemMap.get(item.item_id);
-      const target = item.target_lane_id ? laneMap.get(item.target_lane_id) : null;
+      const target = item.target_lane_id
+        ? laneMap.get(item.target_lane_id)
+        : null;
       if (!source || !target) {
         return null;
       }
@@ -91,7 +95,9 @@ export function buildSessionFlowViewModel(
         to_y: source.y + source.height / 2,
       };
     })
-    .filter((connector): connector is NonNullable<typeof connector> => Boolean(connector));
+    .filter((connector): connector is NonNullable<typeof connector> =>
+      Boolean(connector),
+    );
 
   return {
     width: Math.max(

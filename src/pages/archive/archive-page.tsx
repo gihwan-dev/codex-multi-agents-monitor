@@ -24,8 +24,9 @@ export function ArchivePage() {
   });
 
   const selectedSession =
-    archiveQuery.data?.sessions.find((session) => session.thread_id === sessionId) ??
-    null;
+    archiveQuery.data?.sessions.find(
+      (session) => session.thread_id === sessionId,
+    ) ?? null;
   const workspaces = useMemo(
     () => archiveQuery.data?.workspaces ?? [],
     [archiveQuery.data],
@@ -103,10 +104,13 @@ export function ArchivePage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-[hsl(var(--muted))]">
-                      {session.latest_activity_summary ?? "latest activity summary 없음"}
+                      {session.latest_activity_summary ??
+                        "latest activity summary 없음"}
                     </p>
                     <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--muted))]">
-                      <span>{session.agent_roles.join(", ") || "role 없음"}</span>
+                      <span>
+                        {session.agent_roles.join(", ") || "role 없음"}
+                      </span>
                       <span>{session.rollout_path ?? "rollout 없음"}</span>
                     </div>
                   </Link>

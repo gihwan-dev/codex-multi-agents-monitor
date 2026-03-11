@@ -7,6 +7,12 @@ import type { SummaryDashboardFilters } from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
 
 export function SummaryPage() {
+  const filterIds = {
+    workspace: "summary-filter-workspace",
+    session: "summary-filter-session",
+    fromDate: "summary-filter-from-date",
+    toDate: "summary-filter-to-date",
+  };
   const [draftFilters, setDraftFilters] = useState({
     workspace: "",
     sessionId: "",
@@ -25,9 +31,14 @@ export function SummaryPage() {
     ],
     queryFn: () => getSummaryDashboard(filters),
   });
-  const kpis = useMemo(() => summaryQuery.data?.kpis ?? null, [summaryQuery.data]);
+  const kpis = useMemo(
+    () => summaryQuery.data?.kpis ?? null,
+    [summaryQuery.data],
+  );
   const workspaceOptions = useMemo(
-    () => summaryQuery.data?.workspace_distribution.map((item) => item.workspace) ?? [],
+    () =>
+      summaryQuery.data?.workspace_distribution.map((item) => item.workspace) ??
+      [],
     [summaryQuery.data],
   );
   const sessionOptions = useMemo(
@@ -46,17 +57,21 @@ export function SummaryPage() {
           Summary
         </p>
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight">필터 기반 Summary</h2>
+          <h2 className="text-lg font-semibold tracking-tight">
+            필터 기반 Summary
+          </h2>
           <p className="max-w-3xl text-sm text-[hsl(var(--muted))]">
-            workspace, session, 날짜 범위를 기준으로 KPI, 분포, 비교 뷰를 좁혀본다.
+            workspace, session, 날짜 범위를 기준으로 KPI, 분포, 비교 뷰를
+            좁혀본다.
           </p>
         </div>
       </header>
 
       <div className="rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.72)] p-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_160px_160px_auto_auto]">
-          <FilterField label="Workspace">
+          <FilterField id={filterIds.workspace} label="Workspace">
             <select
+              id={filterIds.workspace}
               className="h-10 w-full rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel))] px-3 text-sm"
               value={draftFilters.workspace}
               onChange={(event) =>
@@ -75,8 +90,9 @@ export function SummaryPage() {
             </select>
           </FilterField>
 
-          <FilterField label="Session">
+          <FilterField id={filterIds.session} label="Session">
             <select
+              id={filterIds.session}
               className="h-10 w-full rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel))] px-3 text-sm"
               value={draftFilters.sessionId}
               onChange={(event) =>
@@ -95,8 +111,9 @@ export function SummaryPage() {
             </select>
           </FilterField>
 
-          <FilterField label="From">
+          <FilterField id={filterIds.fromDate} label="From">
             <input
+              id={filterIds.fromDate}
               type="date"
               className="h-10 w-full rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel))] px-3 text-sm"
               value={draftFilters.fromDate}
@@ -109,8 +126,9 @@ export function SummaryPage() {
             />
           </FilterField>
 
-          <FilterField label="To">
+          <FilterField id={filterIds.toDate} label="To">
             <input
+              id={filterIds.toDate}
               type="date"
               className="h-10 w-full rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel))] px-3 text-sm"
               value={draftFilters.toDate}
@@ -126,9 +144,7 @@ export function SummaryPage() {
           <div className="flex items-end gap-2">
             <Button
               className="w-full"
-              onClick={() =>
-                setFilters(buildFiltersFromDraft(draftFilters))
-              }
+              onClick={() => setFilters(buildFiltersFromDraft(draftFilters))}
             >
               필터 적용
             </Button>
@@ -157,20 +173,28 @@ export function SummaryPage() {
       {summaryQuery.isLoading ? (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-28 animate-pulse rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2))]"
-              />
-            ))}
+            {["sessions", "active", "completed", "avg", "workspaces"].map(
+              (key) => (
+                <div
+                  key={key}
+                  className="h-28 animate-pulse rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2))]"
+                />
+              ),
+            )}
           </div>
           <div className="h-64 animate-pulse rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2))]" />
         </div>
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="sessions" value={`${kpis?.session_count ?? 0}`} />
-            <MetricCard label="active" value={`${kpis?.active_session_count ?? 0}`} />
+            <MetricCard
+              label="sessions"
+              value={`${kpis?.session_count ?? 0}`}
+            />
+            <MetricCard
+              label="active"
+              value={`${kpis?.active_session_count ?? 0}`}
+            />
             <MetricCard
               label="completed"
               value={`${kpis?.completed_session_count ?? 0}`}
@@ -206,14 +230,17 @@ export function SummaryPage() {
                         </span>
                       </div>
                       <p className="mt-2 text-xs text-[hsl(var(--muted))]">
-                        avg {item.average_duration_ms !== null
+                        avg{" "}
+                        {item.average_duration_ms !== null
                           ? formatDuration(item.average_duration_ms)
                           : "-"}
                       </p>
                     </article>
                   ))
                 ) : (
-                  <EmptyPanelCopy>선택한 범위의 workspace가 없습니다.</EmptyPanelCopy>
+                  <EmptyPanelCopy>
+                    선택한 범위의 workspace가 없습니다.
+                  </EmptyPanelCopy>
                 )}
               </div>
             </SummaryPanel>
@@ -233,14 +260,17 @@ export function SummaryPage() {
                         </span>
                       </div>
                       <p className="mt-2 text-xs text-[hsl(var(--muted))]">
-                        avg {item.average_duration_ms !== null
+                        avg{" "}
+                        {item.average_duration_ms !== null
                           ? formatDuration(item.average_duration_ms)
                           : "-"}
                       </p>
                     </article>
                   ))
                 ) : (
-                  <EmptyPanelCopy>선택한 범위의 role 데이터가 없습니다.</EmptyPanelCopy>
+                  <EmptyPanelCopy>
+                    선택한 범위의 role 데이터가 없습니다.
+                  </EmptyPanelCopy>
                 )}
               </div>
             </SummaryPanel>
@@ -265,7 +295,8 @@ export function SummaryPage() {
                         </span>
                       </div>
                       <p className="mt-2 text-xs text-[hsl(var(--muted))]">
-                        {session.latest_activity_summary ?? "latest activity summary 없음"}
+                        {session.latest_activity_summary ??
+                          "latest activity summary 없음"}
                       </p>
                       <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--muted))]">
                         <span>
@@ -318,19 +349,24 @@ function buildFiltersFromDraft(draftFilters: {
 }
 
 function FilterField({
+  id,
   label,
   children,
 }: {
+  id?: string;
   label: string;
   children: ReactNode;
 }) {
   return (
-    <label className="space-y-2 text-sm">
-      <span className="text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted))]">
+    <div className="space-y-2 text-sm">
+      <label
+        htmlFor={id}
+        className="block text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--muted))]"
+      >
         {label}
-      </span>
+      </label>
       {children}
-    </label>
+    </div>
   );
 }
 

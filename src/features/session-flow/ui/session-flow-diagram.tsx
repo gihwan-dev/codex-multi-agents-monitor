@@ -187,34 +187,51 @@ export function SessionFlowDiagram({
             const hovered = hoveredItemId === item.item_id;
             const fill = kindFill(item.kind);
             return (
-              <g
+              <a
                 key={item.item_id}
                 data-testid={`session-flow-item-${item.item_id}`}
-                onClick={() => onSelectItem(item.item_id)}
+                href={`#${item.item_id}`}
+                aria-label={`${item.kind} ${item.summary ?? item.item_id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onSelectItem(item.item_id);
+                }}
                 onMouseEnter={() => setHovered(item.item_id)}
                 onMouseLeave={() => setHovered(null)}
               >
-                <rect
-                  x={x}
-                  y={y}
-                  width={width}
-                  height={height}
-                  rx={14}
-                  fill={fill}
-                  stroke={
-                    selected || hovered
-                      ? "hsl(var(--accent-strong))"
-                      : "hsl(var(--line))"
-                  }
-                  strokeWidth={selected ? 3 : 1.5}
-                />
-                <text x={x + 12} y={y + 18} fontSize={11} fill="hsl(var(--muted))">
-                  {item.kind}
-                </text>
-                <text x={x + 12} y={y + 31} fontSize={13} fill="hsl(var(--fg))">
-                  {truncate(item.summary ?? item.item_id, 22)}
-                </text>
-              </g>
+                <g>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    rx={14}
+                    fill={fill}
+                    stroke={
+                      selected || hovered
+                        ? "hsl(var(--accent-strong))"
+                        : "hsl(var(--line))"
+                    }
+                    strokeWidth={selected ? 3 : 1.5}
+                  />
+                  <text
+                    x={x + 12}
+                    y={y + 18}
+                    fontSize={11}
+                    fill="hsl(var(--muted))"
+                  >
+                    {item.kind}
+                  </text>
+                  <text
+                    x={x + 12}
+                    y={y + 31}
+                    fontSize={13}
+                    fill="hsl(var(--fg))"
+                  >
+                    {truncate(item.summary ?? item.item_id, 22)}
+                  </text>
+                </g>
+              </a>
             );
           })}
         </svg>

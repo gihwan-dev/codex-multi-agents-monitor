@@ -3,15 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import { SessionFlowDiagram } from "@/features/session-flow/ui/session-flow-diagram";
 import { SessionFlowInspector } from "@/features/session-flow/ui/session-flow-inspector";
-import { getSessionFlow, getThreadDrilldown } from "@/shared/lib/tauri/commands";
+import {
+  getSessionFlow,
+  getThreadDrilldown,
+} from "@/shared/lib/tauri/commands";
 
 type SessionFlowWorkspaceProps = {
   sessionId: string;
 };
 
-export function SessionFlowWorkspace({
-  sessionId,
-}: SessionFlowWorkspaceProps) {
+export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const flowQuery = useQuery({
     queryKey: ["monitor", "session_flow", sessionId],
@@ -28,7 +29,10 @@ export function SessionFlowWorkspace({
       return;
     }
 
-    if (selectedItemId && flow.items.some((item) => item.item_id === selectedItemId)) {
+    if (
+      selectedItemId &&
+      flow.items.some((item) => item.item_id === selectedItemId)
+    ) {
       return;
     }
 
@@ -77,7 +81,8 @@ export function SessionFlowWorkspace({
           <div className="space-y-1">
             <h3 className="text-lg font-semibold">{flow.session.title}</h3>
             <p className="text-sm text-[hsl(var(--muted))]">
-              {flow.session.latest_activity_summary ?? "latest activity summary 없음"}
+              {flow.session.latest_activity_summary ??
+                "latest activity summary 없음"}
             </p>
           </div>
         </div>

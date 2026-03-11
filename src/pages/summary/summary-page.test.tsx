@@ -33,7 +33,8 @@ function buildPayload(
       {
         workspace,
         session_count: workspace === "/workspace/alpha" ? 1 : 2,
-        average_duration_ms: workspace === "/workspace/alpha" ? 180_000 : 240_000,
+        average_duration_ms:
+          workspace === "/workspace/alpha" ? 180_000 : 240_000,
         latest_updated_at: "2026-03-10T10:00:00Z",
       },
     ],
@@ -52,7 +53,8 @@ function buildPayload(
     session_compare: [
       {
         thread_id: sessionId,
-        title: workspace === "/workspace/alpha" ? "Alpha session" : "Beta session",
+        title:
+          workspace === "/workspace/alpha" ? "Alpha session" : "Beta session",
         cwd: workspace,
         status: "completed",
         updated_at: "2026-03-10T10:00:00Z",

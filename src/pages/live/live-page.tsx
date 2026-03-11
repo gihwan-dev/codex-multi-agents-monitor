@@ -3,9 +3,9 @@ import { useEffect, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useThreadUiStore } from "@/entities/thread/model/thread-ui-store";
+import { formatDuration } from "@/features/overview/lib/live-overview-formatters";
 import { SessionWorkspaceShell } from "@/features/session-browser/ui/session-workspace-shell";
 import { SessionFlowWorkspace } from "@/features/session-flow/ui/session-flow-workspace";
-import { formatDuration } from "@/features/overview/lib/live-overview-formatters";
 import { listLiveThreads } from "@/shared/lib/tauri/commands";
 import { Button } from "@/shared/ui/button";
 
@@ -22,14 +22,18 @@ export function LivePage() {
   });
 
   const workspaces = useMemo(() => {
-    return [...new Set((liveQuery.data ?? []).map((thread) => thread.cwd))].sort();
+    return [
+      ...new Set((liveQuery.data ?? []).map((thread) => thread.cwd)),
+    ].sort();
   }, [liveQuery.data]);
   const activeWorkspace = searchParams.get("workspace");
   const filteredThreads = useMemo(() => {
     if (!activeWorkspace) {
       return liveQuery.data ?? [];
     }
-    return (liveQuery.data ?? []).filter((thread) => thread.cwd === activeWorkspace);
+    return (liveQuery.data ?? []).filter(
+      (thread) => thread.cwd === activeWorkspace,
+    );
   }, [activeWorkspace, liveQuery.data]);
   const selectedSession =
     filteredThreads.find((thread) => thread.thread_id === sessionId) ?? null;
@@ -106,10 +110,13 @@ export function LivePage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-[hsl(var(--muted))]">
-                      {thread.latest_activity_summary ?? "latest activity summary 없음"}
+                      {thread.latest_activity_summary ??
+                        "latest activity summary 없음"}
                     </p>
                     <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[hsl(var(--muted))]">
-                      <span>{thread.agent_roles.join(", ") || "role 없음"}</span>
+                      <span>
+                        {thread.agent_roles.join(", ") || "role 없음"}
+                      </span>
                       <span>
                         {thread.longest_wait_ms !== null
                           ? `wait ${formatDuration(thread.longest_wait_ms)}`
