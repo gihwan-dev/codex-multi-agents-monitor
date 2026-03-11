@@ -1,50 +1,50 @@
 # Current slice
-Slice 5. Agent Drilldown과 raw expansion 구현
+Slice 7B. `state_5.sqlite` 손상/스키마 드리프트 non-fatal degrade
 - 상태: 완료
-- 커밋: `feat(thread-detail): agent drilldown과 raw expansion 추가`
-- 후속 수정: drilldown row key 안정성 보강 완료
+- 커밋:
+  - `cfacb01 fix(history): state db 손상 degrade 보강`
 
 # Done
-- Tauri `get_thread_drilldown(threadId, laneId)` command를 실제 구현해 main lane과 agent lane 모두에서 최신 commentary, 최근 tool spans, 관련 wait spans, raw JSONL snippet을 on-demand로 계산하도록 연결했다.
-- shared contract에 `ThreadDrilldown`, `RawJsonlSnippet`, `related_wait_spans`를 추가하고, frontend bridge와 thread-detail shell이 lane-centered selection + 별도 drilldown query를 사용하도록 바꿨다.
-- Thread Detail 우측 컬럼을 `Marker Summary` + `Agent Drilldown` 2단 구조로 확장했고, lane 선택, 기본 접힘 raw snippet 토글, lane 변경 시 raw expansion reset 동작을 추가했다.
-- Rust drilldown 테스트, frontend shell/page/command contract 테스트를 보강해 Slice 5 동작을 고정했다.
-- `WaitSpan`/`ToolSpan`에 stable `call_id`를 계약으로 추가하고, drilldown panel row key를 visible field 조합에서 `call_id`로 바꿔 polling 중 row 재사용 충돌 가능성을 제거했다.
+- ingest가 `state_5.sqlite` 부재뿐 아니라 손상/non-sqlite 파일, `threads` 테이블 부재, row decode 실패 같은 recoverable read 오류도 `state_db degraded`로 기록하고 live session ingest를 계속 진행하도록 바꿨다.
+- monitor DB에 `ingest_source_health` 테이블을 추가해 각 ingest run의 최신 source 상태를 기록하고, History summary가 `missing_sources`와 `degraded_sources`를 분리해 읽도록 연결했다.
+- `HistoryHealth`에 `degraded_sources`를 추가해 Rust/TypeScript contract를 확장했고, History warning card가 `state db를 읽지 못해 archived thread 메타데이터 보강이 일부 비활성화되었습니다.` 문구를 표시하도록 반영했다.
+- non-sqlite `state_5.sqlite`, `threads` 테이블 부재, 기존 missing file 케이스를 Rust 테스트로 고정했고, HistoryShell/App mock payload도 새 contract에 맞게 갱신했다.
 
 # Decisions made during implementation
-- drilldown source는 `monitor.db`를 확장하지 않고 `threads/agent_sessions.rollout_path`를 통해 원본 JSONL을 on-demand로 다시 읽는 방식으로 고정했다.
-- raw snippet anchor는 `최신 commentary line`, fallback은 `최신 의미 있는 event line`으로 유지했고, snippet window는 anchor 주변 최대 8줄로 제한했다.
-- lane selection은 `ThreadTimelineShell` 내부 상태로 관리하고, marker hover는 summary panel만 바꾸며 drilldown lane selection은 변경하지 않도록 유지했다.
-- rollout path가 비어 있거나 파일을 읽을 수 없으면 command 전체를 실패시키지 않고 `raw_snippet: null`, commentary/tool 비어 있음으로 degrade 하도록 고정했다.
-- stable key 보장은 UI 임시 조합키로 우회하지 않고, DB의 `call_id`를 `WaitSpan`/`ToolSpan` 공용 계약으로 승격해 thread detail과 drilldown 양쪽이 같은 식별자를 공유하도록 고정했다.
+- `state_5.sqlite` 관련 오류는 source-level recoverable fault로 한정하고, monitor DB transaction 오류와 live JSONL parse/read 오류는 기존대로 fatal 경로를 유지했다.
+- source health는 세부 에러 문자열까지 계약에 넣지 않고 `HistorySourceKey` 기반의 `missing`/`degraded` 상태만 남기도록 제한했다.
+- `missing_sources`는 경로 부재만 의미하도록 유지하고, recoverable read 오류는 `degraded_sources`로만 노출하도록 분리했다.
+- source health 노출 범위는 이번 slice에서도 History 화면에만 한정하고 Overview/Thread Detail 배너 확장은 후속 slice로 남겼다.
 
 # Verification results
-- `pnpm cargo:test` 통과
-- 결과: Rust 18 tests 통과 (`get_thread_drilldown` main/agent/missing-rollout 시나리오 포함)
-- `pnpm test` 통과
-- 결과: Vitest 8 files / 25 tests 통과
+- `pnpm cargo:test -- history_summary ingest_visibility` 통과
+- 결과: Rust tests 7건 통과
+- `pnpm test -- --run src/features/history/ui/history-shell.test.tsx` 통과
+- 결과: Vitest 1 file / 5 tests 통과
 - `pnpm typecheck` 통과
-- `pnpm test -- --run src/features/thread-detail/ui/thread-timeline-shell.test.tsx src/features/thread-detail/lib/build-thread-timeline-view-model.test.ts` 통과
-- `pnpm cargo:test -- thread_detail` 통과
-- `pnpm typecheck` 재실행 통과
-- advisory review: `module-structure-gatekeeper`, `frontend-structure-gatekeeper`, `code-quality-reviewer`, `architecture-reviewer`, `type-specialist`, `test-engineer`를 요청했지만 응답을 받지 못했다. advisory 미응답으로 처리했다.
-- follow-up commit: `fix(thread-detail): drilldown span 식별자 안정화`
+- `git diff --check` 통과
+- 커밋 시도 결과: 기본 커밋 1회 성공 (`cfacb01`, `--no-verify` 미사용)
+- manual closeout review 결과: 최종 diff 기준으로 blocking module boundary/type/test 회귀는 확인하지 못했다
+- advisory reviewer(`code-quality-reviewer`, `type-specialist`, `module-structure-gatekeeper`)는 응답을 받지 못해 advisory 미응답으로 처리했다
+- `pnpm lint`는 이번 slice focused validation 범위에서 제외했다
+- 이유: 이전 slice에서 확인된 범위 밖 기존 포맷 이슈(`src/features/thread-detail/ui/thread-timeline-shell.test.tsx`)가 남아 있어 현재 slice sign-off 신호로 적합하지 않았다
 
 # Known issues / residual risk
-- main/live thread가 state snapshot에 없는 경우 `rollout_path`가 비어 raw snippet과 commentary/tool drilldown이 비어 있을 수 있다.
-- child lane 상세 이벤트는 여전히 swimlane block으로 확장되지 않고 우측 drilldown 패널에서만 보강된다.
-- raw snippet은 원본 JSONL 일부 window만 보여주므로 anchor 밖 문맥은 추가 확장이 필요할 수 있다.
-- delegated writer liveness 문제는 해결하지 않았고, 이후 slice에서도 main-thread direct implementation이 필요할 수 있다.
+- source health warning은 여전히 History 화면에만 붙어 있고 Overview/Thread Detail은 `state_db degraded`를 별도 경고 없이 consume한다.
+- `degraded_sources`는 source key만 노출하므로 왜 `state_db`가 degraded였는지의 세부 원인은 UI/API에서 바로 확인할 수 없다.
+- History summary는 여전히 최근 7일 archived rollout 전체를 재계산하므로 archived volume이 더 커지면 응답 지연이 다시 병목이 될 수 있다.
+- `src/features/history/ui/history-shell.tsx`는 이번 slice 이후에도 큰 view 파일로 남아 있어, 다음 구조 정리 때 health notice/action banner 일부를 분리할 여지가 있다.
+- macOS packaging과 archived cold scan 성능 관찰은 여전히 Slice 7 전체 범위에서 남아 있다.
 
 # Next slice
 목표
-- Slice 6에서 History Summary와 workspace/log deep link를 추가해 최근 7일 role별 duration/timeout/spawn 통계와 진입 경로를 완성한다.
+- Slice 7C에서 source health 경고를 Overview/Thread Detail까지 확장해 `missing/degraded` source를 history 외 화면에서도 동일한 문구 체계로 드러낸다.
 
 선행조건
-- 현재 thread-detail drilldown contract를 유지한 채 history view에서 재사용 가능한 summary/backlink 경계를 따로 잡아야 한다.
-- deep link는 frontend가 직접 파일을 읽지 않고 기존 Tauri open command만 사용하도록 유지해야 한다.
+- History 전용 `health` contract를 다른 화면에서도 재사용할지, 별도 `ingest health snapshot` query를 둘지 먼저 결정해야 한다.
+- warning banner를 screen별로 복제하지 않도록 공용 notice/view-model 경계를 먼저 정리해야 한다.
 
 먼저 볼 경계
-- `src/pages/history/history-page.tsx`
-- `src/shared/lib/tauri/commands.ts`
-- `src-tauri/src/commands/open.rs`
+- `src-tauri/src/commands/api/live_overview.rs`
+- `src-tauri/src/commands/api/thread_detail.rs`
+- `src/features/history/ui/history-shell.tsx`
