@@ -13,7 +13,7 @@ use super::support::{
 };
 
 #[test]
-fn list_live_threads_returns_only_inflight_unarchived_threads() {
+fn list_live_threads_returns_unarchived_root_threads_even_when_completed() {
     let state = build_test_state("list-live");
     init_monitor_db(&state).expect("failed to initialize monitor db");
     let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
@@ -53,7 +53,38 @@ fn list_live_threads_returns_only_inflight_unarchived_threads() {
         .map(|thread| thread.thread_id.as_str())
         .collect::<Vec<_>>();
 
-    assert_eq!(ids, vec!["thread-live-new", "thread-live-old"]);
+    assert_eq!(
+        ids,
+        vec!["thread-completed", "thread-live-new", "thread-live-old"]
+    );
+}
+
+#[test]
+fn list_live_threads_excludes_archived_threads_but_preserves_completed_status() {
+    let state = build_test_state("list-live-completed");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+    let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
+
+    insert_thread(
+        &connection,
+        "thread-completed",
+        "completed",
+        0,
+        Some("2026-03-10T04:00:00Z"),
+    );
+    insert_thread(
+        &connection,
+        "thread-archived",
+        "completed",
+        1,
+        Some("2026-03-10T05:00:00Z"),
+    );
+
+    let threads = list_live_threads_from_db(&state).expect("list_live_threads should work");
+
+    assert_eq!(threads.len(), 1);
+    assert_eq!(threads[0].thread_id, "thread-completed");
+    assert_eq!(threads[0].status, ThreadStatus::Completed);
 }
 
 #[test]

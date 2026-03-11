@@ -73,7 +73,6 @@ fn load_live_overview_base_rows(
               latest_activity_summary
             from threads
             where archived = 0
-              and status = 'inflight'
             order by updated_at desc, thread_id asc
             ",
         )
@@ -113,7 +112,6 @@ fn load_agent_roles_map(
             from agent_sessions
             inner join threads on threads.thread_id = agent_sessions.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and trim(agent_sessions.agent_role) <> ''
             group by agent_sessions.thread_id, agent_sessions.agent_role
             order by agent_sessions.thread_id asc, agent_sessions.agent_role asc
@@ -153,7 +151,6 @@ fn load_longest_open_waits_map(
             from wait_spans
             inner join threads on threads.thread_id = wait_spans.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and wait_spans.ended_at is null
             order by wait_spans.thread_id asc, wait_spans.started_at asc, wait_spans.call_id asc
             ",
@@ -192,7 +189,6 @@ fn load_active_tools_map(
             from tool_spans
             inner join threads on threads.thread_id = tool_spans.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and tool_spans.ended_at is null
             order by tool_spans.thread_id asc, tool_spans.started_at asc, tool_spans.call_id asc
             ",
@@ -269,7 +265,6 @@ fn load_mini_timeline_map(
             from wait_spans
             inner join threads on threads.thread_id = wait_spans.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and wait_spans.started_at <= ?2
               and (wait_spans.ended_at is null or wait_spans.ended_at >= ?1)
             order by wait_spans.thread_id asc, wait_spans.started_at asc, wait_spans.call_id asc
@@ -324,7 +319,6 @@ fn load_mini_timeline_map(
             from tool_spans
             inner join threads on threads.thread_id = tool_spans.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and tool_spans.started_at <= ?2
               and (tool_spans.ended_at is null or tool_spans.ended_at >= ?1)
             order by tool_spans.thread_id asc, tool_spans.started_at asc, tool_spans.call_id asc
@@ -379,7 +373,6 @@ fn load_mini_timeline_map(
             from timeline_events
             inner join threads on threads.thread_id = timeline_events.thread_id
             where threads.archived = 0
-              and threads.status = 'inflight'
               and timeline_events.kind in ('commentary', 'spawn', 'final')
               and timeline_events.started_at >= ?1
               and timeline_events.started_at <= ?2
