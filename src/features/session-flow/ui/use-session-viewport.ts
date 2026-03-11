@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 type ViewBoxState = {
   x: number;
@@ -28,16 +28,16 @@ export function useSessionViewport({
     viewBox: ViewBoxState;
   } | null>(null);
 
-  function reset() {
+  const reset = useCallback(() => {
     setViewBox({
       x: 0,
       y: 0,
       width,
       height,
     });
-  }
+  }, [height, width]);
 
-  function syncBounds() {
+  const syncBounds = useCallback(() => {
     setViewBox((current) =>
       current.width === width && current.height === height
         ? current
@@ -48,7 +48,7 @@ export function useSessionViewport({
             height,
           },
     );
-  }
+  }, [height, width]);
 
   function zoom(multiplier: number) {
     setViewBox((current) => {
@@ -71,11 +71,7 @@ export function useSessionViewport({
     };
   }
 
-  function onPointerMove(
-    clientX: number,
-    clientY: number,
-    bounds: DOMRect,
-  ) {
+  function onPointerMove(clientX: number, clientY: number, bounds: DOMRect) {
     if (!dragState.current) {
       return;
     }

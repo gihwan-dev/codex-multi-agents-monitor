@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  buildSessionFlowViewModel,
-} from "@/features/session-flow/lib/build-session-flow-view-model";
+import { buildSessionFlowViewModel } from "@/features/session-flow/lib/build-session-flow-view-model";
+import { useSessionViewport } from "@/features/session-flow/ui/use-session-viewport";
 import type { SessionFlowPayload } from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
-import { useSessionViewport } from "@/features/session-flow/ui/use-session-viewport";
 
 type SessionFlowDiagramProps = {
   flow: SessionFlowPayload;
@@ -30,7 +28,7 @@ export function SessionFlowDiagram({
 
   useEffect(() => {
     viewport.syncBounds();
-  }, [viewModel.height, viewModel.width]);
+  }, [viewport.syncBounds]);
 
   function setHovered(itemId: string | null) {
     setHoveredItemId(itemId);

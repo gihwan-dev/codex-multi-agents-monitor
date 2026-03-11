@@ -49,7 +49,9 @@ describe("tauri bridge command contracts", () => {
       ],
     });
 
-    const payload = await listSessions("live", { workspace: "/workspace/alpha" });
+    const payload = await listSessions("live", {
+      workspace: "/workspace/alpha",
+    });
 
     expect(invokeMock).toHaveBeenCalledWith("list_sessions", {
       scope: "live",
@@ -147,7 +149,9 @@ describe("tauri bridge command contracts", () => {
       degraded_reason: null,
     });
 
-    const payload = await getSessionLaneInspector("session-1", { kind: "user" });
+    const payload = await getSessionLaneInspector("session-1", {
+      kind: "user",
+    });
 
     expect(invokeMock).toHaveBeenCalledWith("get_session_lane_inspector", {
       sessionId: "session-1",

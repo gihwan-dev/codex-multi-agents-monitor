@@ -77,9 +77,13 @@ function decodeSessionListPayload(value: unknown): SessionListPayload {
   return {
     scope: expectScope(record.scope),
     filters: decodeSessionListFilters(record.filters),
-    workspaces: expectStringArray(record.workspaces, "SessionListPayload.workspaces"),
-    sessions: expectArray(record.sessions, "SessionListPayload.sessions").map((item, index) =>
-      decodeSessionListItem(item, `SessionListPayload.sessions[${index}]`),
+    workspaces: expectStringArray(
+      record.workspaces,
+      "SessionListPayload.workspaces",
+    ),
+    sessions: expectArray(record.sessions, "SessionListPayload.sessions").map(
+      (item, index) =>
+        decodeSessionListItem(item, `SessionListPayload.sessions[${index}]`),
     ),
   };
 }
@@ -94,10 +98,7 @@ function decodeSessionListFilters(value: unknown): SessionListFilters {
   };
 }
 
-function decodeSessionListItem(
-  value: unknown,
-  label: string,
-): SessionListItem {
+function decodeSessionListItem(value: unknown, label: string): SessionListItem {
   const record = expectRecord(value, label);
   return {
     session_id: expectString(record.session_id, `${label}.session_id`),
@@ -107,7 +108,9 @@ function decodeSessionListItem(
     status: expectStatus(record.status),
     started_at: expectNullableString(record.started_at),
     updated_at: expectNullableString(record.updated_at),
-    latest_activity_summary: expectNullableString(record.latest_activity_summary),
+    latest_activity_summary: expectNullableString(
+      record.latest_activity_summary,
+    ),
     agent_roles: expectStringArray(record.agent_roles, `${label}.agent_roles`),
     rollout_path: expectNullableString(record.rollout_path),
     bottleneck_level: expectNullableBottleneck(record.bottleneck_level),
@@ -120,8 +123,11 @@ function decodeSessionListItem(
     mini_timeline_window_ended_at: expectNullableString(
       record.mini_timeline_window_ended_at,
     ),
-    mini_timeline: expectArray(record.mini_timeline, `${label}.mini_timeline`).map(
-      (item, index) => decodeMiniTimelineItem(item, `${label}.mini_timeline[${index}]`),
+    mini_timeline: expectArray(
+      record.mini_timeline,
+      `${label}.mini_timeline`,
+    ).map((item, index) =>
+      decodeMiniTimelineItem(item, `${label}.mini_timeline[${index}]`),
     ),
   };
 }
@@ -141,12 +147,17 @@ function decodeMiniTimelineItem(
 function decodeSessionFlowPayload(value: unknown): SessionFlowPayload {
   const record = expectRecord(value, "SessionFlowPayload");
   return {
-    session: decodeSessionListItem(record.session, "SessionFlowPayload.session"),
-    lanes: expectArray(record.lanes, "SessionFlowPayload.lanes").map((lane, index) =>
-      decodeSessionLane(lane, `SessionFlowPayload.lanes[${index}]`),
+    session: decodeSessionListItem(
+      record.session,
+      "SessionFlowPayload.session",
     ),
-    items: expectArray(record.items, "SessionFlowPayload.items").map((item, index) =>
-      decodeSessionFlowItem(item, `SessionFlowPayload.items[${index}]`),
+    lanes: expectArray(record.lanes, "SessionFlowPayload.lanes").map(
+      (lane, index) =>
+        decodeSessionLane(lane, `SessionFlowPayload.lanes[${index}]`),
+    ),
+    items: expectArray(record.items, "SessionFlowPayload.items").map(
+      (item, index) =>
+        decodeSessionFlowItem(item, `SessionFlowPayload.items[${index}]`),
     ),
   };
 }
@@ -253,41 +264,63 @@ function decodeWaitSpan(
 function decodeRawSnippet(value: unknown): RawJsonlSnippet {
   const record = expectRecord(value, "RawJsonlSnippet");
   return {
-    source_label: expectString(record.source_label, "RawJsonlSnippet.source_label"),
-    lines: expectArray(record.lines, "RawJsonlSnippet.lines").map((line, index) => {
-      const lineRecord = expectRecord(line, `RawJsonlSnippet.lines[${index}]`);
-      return {
-        line_number: expectNumber(
-          lineRecord.line_number,
-          `RawJsonlSnippet.lines[${index}].line_number`,
-        ),
-        content: expectString(
-          lineRecord.content,
-          `RawJsonlSnippet.lines[${index}].content`,
-        ),
-      };
-    }),
+    source_label: expectString(
+      record.source_label,
+      "RawJsonlSnippet.source_label",
+    ),
+    lines: expectArray(record.lines, "RawJsonlSnippet.lines").map(
+      (line, index) => {
+        const lineRecord = expectRecord(
+          line,
+          `RawJsonlSnippet.lines[${index}]`,
+        );
+        return {
+          line_number: expectNumber(
+            lineRecord.line_number,
+            `RawJsonlSnippet.lines[${index}].line_number`,
+          ),
+          content: expectString(
+            lineRecord.content,
+            `RawJsonlSnippet.lines[${index}].content`,
+          ),
+        };
+      },
+    ),
     truncated: expectBoolean(record.truncated, "RawJsonlSnippet.truncated"),
   };
 }
 
-function decodeSummaryDashboardPayload(value: unknown): SummaryDashboardPayload {
+function decodeSummaryDashboardPayload(
+  value: unknown,
+): SummaryDashboardPayload {
   const record = expectRecord(value, "SummaryDashboardPayload");
   return {
     filters: {
-      workspace: expectNullableString(expectRecord(record.filters, "SummaryDashboardPayload.filters").workspace),
-      session_id: expectNullableString(expectRecord(record.filters, "SummaryDashboardPayload.filters").session_id),
-      from_date: expectNullableString(expectRecord(record.filters, "SummaryDashboardPayload.filters").from_date),
-      to_date: expectNullableString(expectRecord(record.filters, "SummaryDashboardPayload.filters").to_date),
+      workspace: expectNullableString(
+        expectRecord(record.filters, "SummaryDashboardPayload.filters")
+          .workspace,
+      ),
+      session_id: expectNullableString(
+        expectRecord(record.filters, "SummaryDashboardPayload.filters")
+          .session_id,
+      ),
+      from_date: expectNullableString(
+        expectRecord(record.filters, "SummaryDashboardPayload.filters")
+          .from_date,
+      ),
+      to_date: expectNullableString(
+        expectRecord(record.filters, "SummaryDashboardPayload.filters").to_date,
+      ),
     },
     kpis: decodeKpis(record.kpis),
     workspace_distribution: expectArray(
       record.workspace_distribution,
       "SummaryDashboardPayload.workspace_distribution",
     ).map((item, index) => decodeWorkspaceMetric(item, index)),
-    role_mix: expectArray(record.role_mix, "SummaryDashboardPayload.role_mix").map(
-      (item, index) => decodeRoleMetric(item, index),
-    ),
+    role_mix: expectArray(
+      record.role_mix,
+      "SummaryDashboardPayload.role_mix",
+    ).map((item, index) => decodeRoleMetric(item, index)),
     session_compare: expectArray(
       record.session_compare,
       "SummaryDashboardPayload.session_compare",
@@ -295,12 +328,13 @@ function decodeSummaryDashboardPayload(value: unknown): SummaryDashboardPayload 
   };
 }
 
-function decodeKpis(
-  value: unknown,
-): SummaryDashboardPayload["kpis"] {
+function decodeKpis(value: unknown): SummaryDashboardPayload["kpis"] {
   const record = expectRecord(value, "SummaryDashboardKpis");
   return {
-    session_count: expectNumber(record.session_count, "SummaryDashboardKpis.session_count"),
+    session_count: expectNumber(
+      record.session_count,
+      "SummaryDashboardKpis.session_count",
+    ),
     active_session_count: expectNumber(
       record.active_session_count,
       "SummaryDashboardKpis.active_session_count",
@@ -310,7 +344,10 @@ function decodeKpis(
       "SummaryDashboardKpis.completed_session_count",
     ),
     average_duration_ms: expectNullableNumber(record.average_duration_ms),
-    workspace_count: expectNumber(record.workspace_count, "SummaryDashboardKpis.workspace_count"),
+    workspace_count: expectNumber(
+      record.workspace_count,
+      "SummaryDashboardKpis.workspace_count",
+    ),
   };
 }
 
@@ -353,7 +390,9 @@ function decodeSessionCompareRow(
     workspace: expectString(record.workspace, `${label}.workspace`),
     status: expectStatus(record.status),
     updated_at: expectNullableString(record.updated_at),
-    latest_activity_summary: expectNullableString(record.latest_activity_summary),
+    latest_activity_summary: expectNullableString(
+      record.latest_activity_summary,
+    ),
     duration_ms: expectNullableNumber(record.duration_ms),
     agent_roles: expectStringArray(record.agent_roles, `${label}.agent_roles`),
   };
@@ -383,10 +422,7 @@ function decodeSessionLaneRef(value: unknown, label: string): SessionLaneRef {
   }
 }
 
-function expectRecord(
-  value: unknown,
-  label: string,
-): Record<string, unknown> {
+function expectRecord(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
@@ -461,9 +497,7 @@ function expectStatus(value: unknown): SessionStatus {
   throw new Error(`Unexpected session status: ${String(value)}`);
 }
 
-function expectNullableBottleneck(
-  value: unknown,
-): BottleneckLevel | null {
+function expectNullableBottleneck(value: unknown): BottleneckLevel | null {
   if (value === null || value === undefined) {
     return null;
   }
@@ -473,9 +507,7 @@ function expectNullableBottleneck(
   throw new Error(`Unexpected bottleneck level: ${String(value)}`);
 }
 
-function expectTimelineKind(
-  value: unknown,
-): MiniTimelineItemKind {
+function expectTimelineKind(value: unknown): MiniTimelineItemKind {
   if (
     value === "wait" ||
     value === "tool" ||
@@ -488,18 +520,14 @@ function expectTimelineKind(
   throw new Error(`Unexpected mini timeline item kind: ${String(value)}`);
 }
 
-function expectFlowColumn(
-  value: unknown,
-): SessionFlowColumn {
+function expectFlowColumn(value: unknown): SessionFlowColumn {
   if (value === "user" || value === "main" || value === "subagent") {
     return value;
   }
   throw new Error(`Unexpected session flow column: ${String(value)}`);
 }
 
-function expectFlowItemKind(
-  value: unknown,
-): SessionFlowItemKind {
+function expectFlowItemKind(value: unknown): SessionFlowItemKind {
   if (
     value === "user_message" ||
     value === "commentary" ||

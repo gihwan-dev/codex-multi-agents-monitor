@@ -1,6 +1,6 @@
-import { SessionWorkspaceShell } from "@/features/session-browser/ui/session-workspace-shell";
-import { SessionListCard } from "@/features/session-browser/ui/session-list-card";
 import { useSessionBrowserPage } from "@/features/session-browser/lib/use-session-browser-page";
+import { SessionListCard } from "@/features/session-browser/ui/session-list-card";
+import { SessionWorkspaceShell } from "@/features/session-browser/ui/session-workspace-shell";
 import { SessionFlowWorkspace } from "@/features/session-flow/ui/session-flow-workspace";
 import { Button } from "@/shared/ui/button";
 

@@ -52,7 +52,9 @@ export function buildSessionFlowViewModel(
   const sortedSubagentLanes = flow.lanes.filter(
     (lane) => lane.column === "subagent",
   );
-  const lanes = flow.lanes.map((lane) => buildLaneLayout(lane, sortedSubagentLanes));
+  const lanes = flow.lanes.map((lane) =>
+    buildLaneLayout(lane, sortedSubagentLanes),
+  );
   const laneMap = new Map(lanes.map((lane) => [lane.lane_key, lane]));
   const items = flow.items.map((item, index) => {
     const lane = laneMap.get(getSessionLaneKey(item.lane));

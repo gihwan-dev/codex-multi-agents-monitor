@@ -29,18 +29,16 @@ Session-First Canonical Refactor
 - `pnpm typecheck` 통과
 - `pnpm cargo:test` 통과
 - `pnpm test` 통과
+- `pnpm lint` 통과
+- `pnpm tauri:build` 통과
 - legacy Rust test 모듈 4개 삭제 후 [`src-tauri/src/commands/api/tests/mod.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/tests/mod.rs) 기준으로 session-first test set만 남겼다.
 - [`src/shared/lib/tauri/commands.test.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/lib/tauri/commands.test.ts)에서 invoke 이름/인자뿐 아니라 runtime decode까지 검증했다.
 - 커밋: 미수행(사용자 요청 없음)
 
 # Known issues / residual risk
-- Rust dead-code warning이 일부 남아 있다: [`src-tauri/src/domain/models.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/domain/models.rs), [`src-tauri/src/sources/mod.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/sources/mod.rs), [`src-tauri/src/commands/api/tests/support.rs`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/commands/api/tests/support.rs).
 - large session에서 [`src/features/session-flow/ui/session-flow-diagram.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-flow/ui/session-flow-diagram.tsx)의 SVG pan/zoom 사용성은 추가 UX 조정 여지가 있다.
-- repo-wide `pnpm lint`, `pnpm tauri:build`는 이번 턴 범위에서 다시 돌리지 않았다.
 
 # Next slice
 없음.
 - 후속 우선순위 후보:
-  - 남은 Rust warning 정리
-  - repo-wide lint/tauri build 재확인
   - large-session UX/polish 별도 계획 수립

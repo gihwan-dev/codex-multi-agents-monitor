@@ -1,12 +1,11 @@
 import { useState } from "react";
-
+import { getSessionLaneKey } from "@/features/session-flow/lib/build-session-flow-view-model";
 import type {
   RawJsonlSnippet,
   SessionFlowPayload,
   SessionLaneInspectorPayload,
 } from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
-import { getSessionLaneKey } from "@/features/session-flow/lib/build-session-flow-view-model";
 
 type SessionFlowInspectorProps = {
   flow: SessionFlowPayload | null;
@@ -187,7 +186,9 @@ function RawSnippetPanel({
   );
 }
 
-function renderLaneRef(laneRef: SessionFlowPayload["lanes"][number]["lane_ref"]) {
+function renderLaneRef(
+  laneRef: SessionFlowPayload["lanes"][number]["lane_ref"],
+) {
   switch (laneRef.kind) {
     case "user":
       return "user";
