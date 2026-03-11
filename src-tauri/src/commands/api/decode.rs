@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::commands::error::CommandError;
-use crate::domain::models::ThreadStatus;
+use crate::domain::models::SessionStatus;
 
 pub(super) fn parse_timestamp(value: Option<String>) -> Option<DateTime<Utc>> {
     value.and_then(|value| {
@@ -11,10 +11,11 @@ pub(super) fn parse_timestamp(value: Option<String>) -> Option<DateTime<Utc>> {
     })
 }
 
-pub(super) fn parse_status(value: &str) -> ThreadStatus {
+pub(super) fn parse_status(value: &str) -> SessionStatus {
     match value {
-        "completed" => ThreadStatus::Completed,
-        _ => ThreadStatus::Inflight,
+        "completed" => SessionStatus::Completed,
+        "failed" => SessionStatus::Failed,
+        _ => SessionStatus::Inflight,
     }
 }
 

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
@@ -19,17 +20,15 @@ pub(super) fn build_test_state(label: &str) -> AppState {
     ));
     let live_sessions_dir = root_dir.join("sessions");
     fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
-    let archived_sessions_dir = root_dir.join("archived_sessions");
-    fs::create_dir_all(&archived_sessions_dir).expect("create archived sessions dir");
     fs::File::create(root_dir.join("state_5.sqlite")).expect("create state db file");
 
     AppState {
         monitor_db_path: root_dir.join("monitor.db"),
         source_paths: SourcePaths {
             live_sessions_dir,
-            archived_sessions_dir,
             state_db_path: root_dir.join("state_5.sqlite"),
         },
+        last_snapshot_refresh_at: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -83,31 +82,6 @@ pub(super) fn insert_thread_with_rollout(
             ],
         )
         .expect("insert thread");
-}
-
-pub(super) fn insert_agent(
-    connection: &Connection,
-    session_id: &str,
-    thread_id: &str,
-    depth: i64,
-    started_at: Option<&str>,
-) {
-    insert_agent_with_role_and_rollout(
-        connection, session_id, thread_id, "subagent", depth, started_at, "/rollout",
-    );
-}
-
-pub(super) fn insert_agent_with_role(
-    connection: &Connection,
-    session_id: &str,
-    thread_id: &str,
-    agent_role: &str,
-    depth: i64,
-    started_at: Option<&str>,
-) {
-    insert_agent_with_role_and_rollout(
-        connection, session_id, thread_id, agent_role, depth, started_at, "/rollout",
-    );
 }
 
 pub(super) fn insert_agent_with_role_and_times(
@@ -186,41 +160,6 @@ pub(super) fn insert_agent_with_role_and_rollout(
             ],
         )
         .expect("insert agent session");
-}
-
-pub(super) fn insert_timeline_event(
-    connection: &Connection,
-    event_id: &str,
-    thread_id: &str,
-    kind: &str,
-    started_at: &str,
-    ended_at: Option<&str>,
-    summary: Option<&str>,
-) {
-    connection
-        .execute(
-            "
-            insert into timeline_events (
-              event_id,
-              thread_id,
-              agent_session_id,
-              kind,
-              started_at,
-              ended_at,
-              summary
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            ",
-            params![
-                event_id,
-                thread_id,
-                Option::<String>::None,
-                kind,
-                started_at,
-                ended_at,
-                summary,
-            ],
-        )
-        .expect("insert timeline event");
 }
 
 pub(super) fn insert_wait_span(

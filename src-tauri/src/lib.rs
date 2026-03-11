@@ -7,8 +7,7 @@ mod sources;
 mod state;
 
 use commands::{
-    get_history_summary, get_session_flow, get_summary_dashboard, get_thread_detail,
-    get_thread_drilldown, list_archived_sessions, list_live_threads,
+    get_session_flow, get_session_lane_inspector, get_summary_dashboard, list_sessions,
     open_log_file, open_workspace,
 };
 use state::AppState;
@@ -31,13 +30,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            list_live_threads,
-            list_archived_sessions,
+            list_sessions,
             get_session_flow,
+            get_session_lane_inspector,
             get_summary_dashboard,
-            get_thread_detail,
-            get_thread_drilldown,
-            get_history_summary,
             open_workspace,
             open_log_file
         ])

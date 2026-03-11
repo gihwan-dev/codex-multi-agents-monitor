@@ -1,6 +1,8 @@
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use tauri::{AppHandle, Manager};
@@ -11,6 +13,7 @@ use crate::sources::SourcePaths;
 pub struct AppState {
     pub monitor_db_path: PathBuf,
     pub source_paths: SourcePaths,
+    pub last_snapshot_refresh_at: Arc<Mutex<Option<Instant>>>,
 }
 
 impl AppState {
@@ -33,6 +36,7 @@ impl AppState {
         Ok(Self {
             monitor_db_path: app_data_dir.join("monitor.db"),
             source_paths,
+            last_snapshot_refresh_at: Arc::new(Mutex::new(None)),
         })
     }
 }

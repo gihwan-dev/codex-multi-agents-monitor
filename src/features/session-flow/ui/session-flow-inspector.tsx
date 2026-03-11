@@ -3,21 +3,22 @@ import { useState } from "react";
 import type {
   RawJsonlSnippet,
   SessionFlowPayload,
-  ThreadDrilldown,
+  SessionLaneInspectorPayload,
 } from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
+import { getSessionLaneKey } from "@/features/session-flow/lib/build-session-flow-view-model";
 
 type SessionFlowInspectorProps = {
   flow: SessionFlowPayload | null;
   selectedItemId: string | null;
-  drilldown: ThreadDrilldown | null;
+  inspector: SessionLaneInspectorPayload | null;
   isDrilldownLoading: boolean;
 };
 
 export function SessionFlowInspector({
   flow,
   selectedItemId,
-  drilldown,
+  inspector,
   isDrilldownLoading,
 }: SessionFlowInspectorProps) {
   const selectedItem =
@@ -26,7 +27,9 @@ export function SessionFlowInspector({
     null;
   const lane = selectedItem
     ? (flow?.lanes.find(
-        (candidate) => candidate.lane_id === selectedItem.lane_id,
+        (candidate) =>
+          getSessionLaneKey(candidate.lane_ref) ===
+          getSessionLaneKey(selectedItem.lane),
       ) ?? null)
     : null;
 
@@ -56,7 +59,7 @@ export function SessionFlowInspector({
             <InspectorCard label="kind" value={selectedItem.kind} />
             <InspectorCard
               label="lane"
-              value={lane?.label ?? selectedItem.lane_id}
+              value={lane?.label ?? renderLaneRef(selectedItem.lane)}
             />
             <InspectorCard label="started" value={selectedItem.started_at} />
             <InspectorCard
@@ -69,19 +72,23 @@ export function SessionFlowInspector({
             />
             <InspectorCard
               label="target"
-              value={selectedItem.target_lane_id ?? "-"}
+              value={
+                selectedItem.target_lane
+                  ? renderLaneRef(selectedItem.target_lane)
+                  : "-"
+              }
             />
           </dl>
 
           <CommentaryPanel
             isDrilldownLoading={isDrilldownLoading}
             latestCommentarySummary={
-              drilldown?.latest_commentary_summary ?? null
+              inspector?.latest_commentary_summary ?? null
             }
           />
           <RawSnippetPanel
-            key={lane?.lane_id ?? "lane-none"}
-            rawSnippet={drilldown?.raw_snippet ?? null}
+            key={lane ? getSessionLaneKey(lane.lane_ref) : "lane-none"}
+            rawSnippet={inspector?.raw_snippet ?? null}
           />
         </div>
       ) : (
@@ -178,4 +185,15 @@ function RawSnippetPanel({
       )}
     </div>
   );
+}
+
+function renderLaneRef(laneRef: SessionFlowPayload["lanes"][number]["lane_ref"]) {
+  switch (laneRef.kind) {
+    case "user":
+      return "user";
+    case "main":
+      return laneRef.session_id;
+    case "subagent":
+      return laneRef.agent_session_id;
+  }
 }

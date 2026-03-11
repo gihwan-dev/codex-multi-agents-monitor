@@ -52,10 +52,10 @@ function buildPayload(
     ],
     session_compare: [
       {
-        thread_id: sessionId,
+        session_id: sessionId,
         title:
           workspace === "/workspace/alpha" ? "Alpha session" : "Beta session",
-        cwd: workspace,
+        workspace,
         status: "completed",
         updated_at: "2026-03-10T10:00:00Z",
         latest_activity_summary: "summary ready",
@@ -90,7 +90,7 @@ describe("SummaryPage", () => {
     );
   });
 
-  it("applies filters and renders KPI/distribution/compare views", async () => {
+  it("session_id와 workspace 필터를 사용해 dashboard를 갱신한다", async () => {
     const user = userEvent.setup();
 
     renderSummaryPage();

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
 use crate::commands::error::CommandError;
-use crate::domain::models::ThreadStatus;
+use crate::domain::models::SessionStatus;
 use crate::domain::{
     SummaryDashboardFilters, SummaryDashboardKpis, SummaryDashboardPayload, SummaryRoleMetric,
     SummarySessionCompareRow, SummaryWorkspaceMetric,
@@ -18,7 +18,7 @@ struct ThreadRow {
     thread_id: String,
     title: String,
     cwd: String,
-    status: ThreadStatus,
+    status: SessionStatus,
     started_at: Option<DateTime<Utc>>,
     updated_at: Option<DateTime<Utc>>,
     latest_activity_summary: Option<String>,
@@ -55,14 +55,14 @@ pub(super) fn get_summary_dashboard_from_db(
     let active_session_count = u32::try_from(
         filtered_threads
             .iter()
-            .filter(|thread| matches!(thread.status, ThreadStatus::Inflight))
+            .filter(|thread| matches!(thread.status, SessionStatus::Inflight))
             .count(),
     )
     .unwrap_or(u32::MAX);
     let completed_session_count = u32::try_from(
         filtered_threads
             .iter()
-            .filter(|thread| matches!(thread.status, ThreadStatus::Completed))
+            .filter(|thread| matches!(thread.status, SessionStatus::Completed))
             .count(),
     )
     .unwrap_or(u32::MAX);
@@ -124,9 +124,9 @@ pub(super) fn get_summary_dashboard_from_db(
     let mut session_compare = filtered_threads
         .into_iter()
         .map(|thread| SummarySessionCompareRow {
-            thread_id: thread.thread_id.clone(),
+            session_id: thread.thread_id.clone(),
             title: thread.title,
-            cwd: thread.cwd,
+            workspace: thread.cwd,
             status: thread.status,
             updated_at: thread.updated_at,
             latest_activity_summary: thread.latest_activity_summary,
@@ -141,7 +141,7 @@ pub(super) fn get_summary_dashboard_from_db(
         right
             .updated_at
             .cmp(&left.updated_at)
-            .then_with(|| left.thread_id.cmp(&right.thread_id))
+            .then_with(|| left.session_id.cmp(&right.session_id))
     });
 
     Ok(SummaryDashboardPayload {

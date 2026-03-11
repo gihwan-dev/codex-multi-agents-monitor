@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app/App";
 
 vi.mock("@/shared/lib/tauri/commands", () => ({
-  listLiveThreads: vi.fn(async () => []),
-  listArchivedSessions: vi.fn(async () => ({
+  listSessions: vi.fn(async () => ({
+    scope: "live",
     filters: {},
     workspaces: [],
     sessions: [],
   })),
   getSessionFlow: vi.fn(async () => null),
-  getThreadDrilldown: vi.fn(async () => null),
+  getSessionLaneInspector: vi.fn(async () => null),
   getSummaryDashboard: vi.fn(async () => ({
     filters: {},
     kpis: {
@@ -25,24 +25,6 @@ vi.mock("@/shared/lib/tauri/commands", () => ({
     role_mix: [],
     session_compare: [],
   })),
-  getThreadDetail: vi.fn(async () => null),
-  getHistorySummary: vi.fn(async () => ({
-    history: {
-      from_date: "2026-03-04",
-      to_date: "2026-03-10",
-      thread_count: 0,
-      average_duration_ms: null,
-      timeout_count: 0,
-      spawn_count: 0,
-    },
-    health: {
-      missing_sources: [],
-      degraded_sources: [],
-      degraded_rollout_threads: 0,
-    },
-    roles: [],
-    slow_threads: [],
-  })),
   openWorkspace: vi.fn(async () => undefined),
   openLogFile: vi.fn(async () => undefined),
 }));
@@ -52,7 +34,7 @@ describe("App", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("renders monitor shell", async () => {
+  it("모니터 기본 셸을 렌더한다", async () => {
     render(<App />);
     expect(await screen.findByText("Multi-Agent Monitor")).toBeInTheDocument();
     expect(

@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use crate::domain::SummaryDashboardFilters;
-use crate::domain::models::ThreadStatus;
+use crate::domain::models::SessionStatus;
 use crate::index_db::init_monitor_db;
 
 use super::super::summary_dashboard::get_summary_dashboard_from_db;
@@ -81,8 +81,9 @@ fn get_summary_dashboard_applies_workspace_session_and_date_filters() {
     assert_eq!(payload.role_mix.len(), 1);
     assert_eq!(payload.role_mix[0].agent_role, "reviewer");
     assert_eq!(payload.session_compare.len(), 1);
-    assert_eq!(payload.session_compare[0].thread_id, "thread-alpha");
-    assert_eq!(payload.session_compare[0].status, ThreadStatus::Completed);
+    assert_eq!(payload.session_compare[0].session_id, "thread-alpha");
+    assert_eq!(payload.session_compare[0].workspace, "/workspace/alpha");
+    assert_eq!(payload.session_compare[0].status, SessionStatus::Completed);
 }
 
 #[test]
@@ -130,7 +131,7 @@ fn get_summary_dashboard_summarizes_mixed_session_states() {
         payload
             .session_compare
             .iter()
-            .map(|row| row.thread_id.as_str())
+            .map(|row| row.session_id.as_str())
             .collect::<Vec<_>>(),
         vec!["thread-new", "thread-old"]
     );

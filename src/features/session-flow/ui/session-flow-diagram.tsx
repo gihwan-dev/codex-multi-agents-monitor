@@ -1,21 +1,17 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildSessionFlowViewModel } from "@/features/session-flow/lib/build-session-flow-view-model";
+import {
+  buildSessionFlowViewModel,
+} from "@/features/session-flow/lib/build-session-flow-view-model";
 import type { SessionFlowPayload } from "@/shared/types/contracts";
 import { Button } from "@/shared/ui/button";
+import { useSessionViewport } from "@/features/session-flow/ui/use-session-viewport";
 
 type SessionFlowDiagramProps = {
   flow: SessionFlowPayload;
   selectedItemId: string | null;
   onSelectItem: (itemId: string) => void;
   onHoverItem?: (itemId: string | null) => void;
-};
-
-type ViewBoxState = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 };
 
 export function SessionFlowDiagram({
@@ -26,30 +22,15 @@ export function SessionFlowDiagram({
 }: SessionFlowDiagramProps) {
   const viewModel = useMemo(() => buildSessionFlowViewModel(flow), [flow]);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
-  const [viewBox, setViewBox] = useState<ViewBoxState>({
-    x: 0,
-    y: 0,
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const viewport = useSessionViewport({
     width: viewModel.width,
     height: viewModel.height,
   });
-  const dragState = useRef<{
-    pointerX: number;
-    pointerY: number;
-    viewBox: ViewBoxState;
-  } | null>(null);
 
-  function zoom(multiplier: number) {
-    setViewBox((current) => {
-      const nextWidth = current.width * multiplier;
-      const nextHeight = current.height * multiplier;
-      return {
-        x: current.x - (nextWidth - current.width) / 2,
-        y: current.y - (nextHeight - current.height) / 2,
-        width: nextWidth,
-        height: nextHeight,
-      };
-    });
-  }
+  useEffect(() => {
+    viewport.syncBounds();
+  }, [viewModel.height, viewModel.width]);
 
   function setHovered(itemId: string | null) {
     setHoveredItemId(itemId);
@@ -63,24 +44,13 @@ export function SessionFlowDiagram({
           Session Flow
         </p>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => zoom(0.9)}>
+          <Button size="sm" variant="ghost" onClick={() => viewport.zoom(0.9)}>
             Zoom in
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => zoom(1.1)}>
+          <Button size="sm" variant="ghost" onClick={() => viewport.zoom(1.1)}>
             Zoom out
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              setViewBox({
-                x: 0,
-                y: 0,
-                width: viewModel.width,
-                height: viewModel.height,
-              })
-            }
-          >
+          <Button size="sm" variant="ghost" onClick={() => viewport.reset()}>
             Reset
           </Button>
         </div>
@@ -88,42 +58,32 @@ export function SessionFlowDiagram({
 
       <div className="overflow-hidden rounded-2xl border border-[hsl(var(--line))] bg-[hsl(var(--panel-2)/0.72)]">
         <svg
+          ref={svgRef}
           aria-label="Session flow diagram"
           className="h-[420px] w-full cursor-grab touch-none"
-          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+          viewBox={`${viewport.viewBox.x} ${viewport.viewBox.y} ${viewport.viewBox.width} ${viewport.viewBox.height}`}
           onWheel={(event) => {
             event.preventDefault();
-            zoom(event.deltaY < 0 ? 0.92 : 1.08);
+            viewport.zoom(event.deltaY < 0 ? 0.92 : 1.08);
           }}
           onPointerDown={(event) => {
-            dragState.current = {
-              pointerX: event.clientX,
-              pointerY: event.clientY,
-              viewBox,
-            };
+            viewport.onPointerDown(event.clientX, event.clientY);
           }}
           onPointerMove={(event) => {
-            if (!dragState.current) {
+            if (!svgRef.current) {
               return;
             }
-
-            const deltaX =
-              ((dragState.current.pointerX - event.clientX) / 900) *
-              dragState.current.viewBox.width;
-            const deltaY =
-              ((dragState.current.pointerY - event.clientY) / 420) *
-              dragState.current.viewBox.height;
-            setViewBox({
-              ...dragState.current.viewBox,
-              x: dragState.current.viewBox.x + deltaX,
-              y: dragState.current.viewBox.y + deltaY,
-            });
+            viewport.onPointerMove(
+              event.clientX,
+              event.clientY,
+              svgRef.current.getBoundingClientRect(),
+            );
           }}
           onPointerUp={() => {
-            dragState.current = null;
+            viewport.clearDrag();
           }}
           onPointerLeave={() => {
-            dragState.current = null;
+            viewport.clearDrag();
             setHovered(null);
           }}
         >
@@ -159,7 +119,7 @@ export function SessionFlowDiagram({
 
           {viewModel.lanes.map((lane) => (
             <text
-              key={lane.lane_id}
+              key={lane.lane_key}
               x={lane.x}
               y={56}
               fontSize={11}

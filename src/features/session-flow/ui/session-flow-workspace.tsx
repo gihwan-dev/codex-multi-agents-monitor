@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
+import { getSessionLaneKey } from "@/features/session-flow/lib/build-session-flow-view-model";
 import { SessionFlowDiagram } from "@/features/session-flow/ui/session-flow-diagram";
 import { SessionFlowInspector } from "@/features/session-flow/ui/session-flow-inspector";
 import {
   getSessionFlow,
-  getThreadDrilldown,
+  getSessionLaneInspector,
 } from "@/shared/lib/tauri/commands";
 
 type SessionFlowWorkspaceProps = {
@@ -43,14 +44,22 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
     () => flow?.items.find((item) => item.item_id === selectedItemId) ?? null,
     [flow, selectedItemId],
   );
-  const selectedLaneId =
-    selectedItem?.lane_id ??
-    flow?.lanes.find((lane) => lane.column === "main")?.lane_id ??
+  const selectedLaneRef =
+    selectedItem?.lane ??
+    flow?.lanes.find((lane) => lane.column === "main")?.lane_ref ??
     null;
-  const drilldownQuery = useQuery({
-    queryKey: ["monitor", "thread_drilldown", sessionId, selectedLaneId],
-    queryFn: () => getThreadDrilldown(sessionId, selectedLaneId ?? ""),
-    enabled: Boolean(sessionId && selectedLaneId),
+  const inspectorQuery = useQuery({
+    queryKey: [
+      "monitor",
+      "session_lane_inspector",
+      sessionId,
+      selectedLaneRef ? getSessionLaneKey(selectedLaneRef) : null,
+    ],
+    queryFn: () =>
+      selectedLaneRef
+        ? getSessionLaneInspector(sessionId, selectedLaneRef)
+        : Promise.resolve(null),
+    enabled: Boolean(sessionId && selectedLaneRef),
     refetchInterval: flow && !flow.session.archived ? 2_000 : false,
   });
 
@@ -87,7 +96,7 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
           </div>
         </div>
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
-          <MetaCard label="workspace" value={flow.session.cwd} />
+          <MetaCard label="workspace" value={flow.session.workspace} />
           <MetaCard label="status" value={flow.session.status} />
           <MetaCard label="lanes" value={`${flow.lanes.length}`} />
         </dl>
@@ -102,8 +111,8 @@ export function SessionFlowWorkspace({ sessionId }: SessionFlowWorkspaceProps) {
         <SessionFlowInspector
           flow={flow}
           selectedItemId={selectedItemId}
-          drilldown={drilldownQuery.data ?? null}
-          isDrilldownLoading={drilldownQuery.isLoading}
+          inspector={inspectorQuery.data ?? null}
+          isDrilldownLoading={inspectorQuery.isLoading}
         />
       </div>
     </section>

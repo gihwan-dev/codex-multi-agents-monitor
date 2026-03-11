@@ -1,6 +1,6 @@
 import type {
   BottleneckLevel,
-  LiveOverviewThread,
+  SessionListItem,
 } from "@/shared/types/contracts";
 
 export const severityPillClassMap: Record<BottleneckLevel, string> = {
@@ -26,7 +26,7 @@ export function formatDuration(durationMs: number) {
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
-export function renderPrimaryBottleneck(thread: LiveOverviewThread) {
+export function renderPrimaryBottleneck(thread: SessionListItem) {
   if (thread.longest_wait_ms !== null) {
     return `wait ${formatDuration(thread.longest_wait_ms)}`;
   }

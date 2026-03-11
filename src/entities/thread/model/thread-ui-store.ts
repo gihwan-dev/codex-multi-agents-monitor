@@ -1,11 +1,11 @@
 import { create } from "zustand";
 
 type ThreadUiState = {
-  selectedThreadId: string | null;
-  setSelectedThreadId: (threadId: string | null) => void;
+  selectedSessionId: string | null;
+  setSelectedSessionId: (sessionId: string | null) => void;
 };
 
 export const useThreadUiStore = create<ThreadUiState>((set) => ({
-  selectedThreadId: null,
-  setSelectedThreadId: (threadId) => set({ selectedThreadId: threadId }),
+  selectedSessionId: null,
+  setSelectedSessionId: (sessionId) => set({ selectedSessionId: sessionId }),
 }));

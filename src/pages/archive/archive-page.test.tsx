@@ -7,39 +7,47 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArchivePage } from "@/pages/archive/archive-page";
 import {
   getSessionFlow,
-  getThreadDrilldown,
-  listArchivedSessions,
+  getSessionLaneInspector,
+  listSessions,
 } from "@/shared/lib/tauri/commands";
 import type {
-  ArchivedSessionListPayload,
   SessionFlowPayload,
-  ThreadDrilldown,
+  SessionLaneInspectorPayload,
+  SessionListPayload,
 } from "@/shared/types/contracts";
 
 vi.mock("@/shared/lib/tauri/commands", () => ({
-  listArchivedSessions: vi.fn(),
+  listSessions: vi.fn(),
   getSessionFlow: vi.fn(),
-  getThreadDrilldown: vi.fn(),
+  getSessionLaneInspector: vi.fn(),
 }));
 
-function buildArchivePayload(): ArchivedSessionListPayload {
+function buildArchivePayload(): SessionListPayload {
   return {
+    scope: "archive",
     filters: {
       workspace: "/workspace/archive-alpha",
     },
     workspaces: ["/workspace/archive-alpha", "/workspace/archive-beta"],
     sessions: [
       {
-        thread_id: "archived-1",
+        session_id: "archived-1",
         title: "Archived alpha",
-        cwd: "/workspace/archive-alpha",
+        workspace: "/workspace/archive-alpha",
         archived: true,
         status: "completed",
         started_at: "2026-03-09T09:00:00Z",
         updated_at: "2026-03-09T10:00:00Z",
         latest_activity_summary: "archive final answer",
         agent_roles: ["reviewer"],
-        rollout_path: "/tmp/archive-alpha.jsonl",
+        rollout_path: "/tmp/archived-1.jsonl",
+        bottleneck_level: null,
+        longest_wait_ms: null,
+        active_tool_name: null,
+        active_tool_ms: null,
+        mini_timeline_window_started_at: null,
+        mini_timeline_window_ended_at: null,
+        mini_timeline: [],
       },
     ],
   };
@@ -48,30 +56,30 @@ function buildArchivePayload(): ArchivedSessionListPayload {
 function buildFlow(): SessionFlowPayload {
   return {
     session: {
-      thread_id: "archived-1",
+      session_id: "archived-1",
       title: "Archived alpha",
-      cwd: "/workspace/archive-alpha",
+      workspace: "/workspace/archive-alpha",
       archived: true,
       status: "completed",
       started_at: "2026-03-09T09:00:00Z",
       updated_at: "2026-03-09T10:00:00Z",
       latest_activity_summary: "archive final answer",
+      agent_roles: ["reviewer"],
+      rollout_path: "/tmp/archived-1.jsonl",
     },
     lanes: [
       {
-        lane_id: "user",
+        lane_ref: { kind: "user" },
         column: "user",
         label: "User",
-        agent_session_id: null,
         depth: 0,
         started_at: "2026-03-09T09:00:00Z",
         updated_at: null,
       },
       {
-        lane_id: "archived-1",
+        lane_ref: { kind: "main", session_id: "archived-1" },
         column: "main",
         label: "Main",
-        agent_session_id: null,
         depth: 0,
         started_at: "2026-03-09T09:00:00Z",
         updated_at: "2026-03-09T10:00:00Z",
@@ -80,25 +88,31 @@ function buildFlow(): SessionFlowPayload {
     items: [
       {
         item_id: "item-final",
-        lane_id: "archived-1",
+        lane: { kind: "main", session_id: "archived-1" },
         kind: "final_answer",
         started_at: "2026-03-09T09:59:00Z",
         ended_at: null,
         summary: "archive final answer",
-        agent_session_id: null,
-        target_lane_id: null,
+        target_lane: null,
       },
     ],
   };
 }
 
-function buildDrilldown(): ThreadDrilldown {
+function buildInspector(): SessionLaneInspectorPayload {
   return {
-    lane_id: "archived-1",
+    lane: {
+      lane_ref: { kind: "main", session_id: "archived-1" },
+      column: "main",
+      label: "Main",
+      depth: 0,
+      started_at: "2026-03-09T09:00:00Z",
+      updated_at: "2026-03-09T10:00:00Z",
+    },
     latest_commentary_summary: "archived lane commentary",
     latest_commentary_at: "2026-03-09T09:59:00Z",
-    recent_tool_spans: [],
-    related_wait_spans: [],
+    recent_tool_calls: [],
+    related_waits: [],
     raw_snippet: {
       source_label: "archived-1.jsonl",
       truncated: false,
@@ -109,6 +123,7 @@ function buildDrilldown(): ThreadDrilldown {
         },
       ],
     },
+    degraded_reason: null,
   };
 }
 
@@ -137,17 +152,17 @@ function renderArchivePage(
 
 describe("ArchivePage", () => {
   beforeEach(() => {
-    vi.mocked(listArchivedSessions).mockReset();
+    vi.mocked(listSessions).mockReset();
     vi.mocked(getSessionFlow).mockReset();
-    vi.mocked(getThreadDrilldown).mockReset();
+    vi.mocked(getSessionLaneInspector).mockReset();
   });
 
-  it("renders archived browser rows and reuses the embedded flow workspace", async () => {
+  it("archive scope에서도 동일한 flow workspace를 재사용한다", async () => {
     const user = userEvent.setup();
 
-    vi.mocked(listArchivedSessions).mockResolvedValue(buildArchivePayload());
+    vi.mocked(listSessions).mockResolvedValue(buildArchivePayload());
     vi.mocked(getSessionFlow).mockResolvedValue(buildFlow());
-    vi.mocked(getThreadDrilldown).mockResolvedValue(buildDrilldown());
+    vi.mocked(getSessionLaneInspector).mockResolvedValue(buildInspector());
 
     renderArchivePage();
 
@@ -155,17 +170,18 @@ describe("ArchivePage", () => {
     expect(await screen.findByText("archive final answer")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(listArchivedSessions).toHaveBeenCalledWith({
+      expect(listSessions).toHaveBeenCalledWith("archive", {
         workspace: "/workspace/archive-alpha",
       });
       expect(getSessionFlow).toHaveBeenCalledWith("archived-1");
-      expect(getThreadDrilldown).toHaveBeenCalledWith(
-        "archived-1",
-        "archived-1",
-      );
+      expect(getSessionLaneInspector).toHaveBeenCalledWith("archived-1", {
+        kind: "main",
+        session_id: "archived-1",
+      });
     });
 
     expect(screen.getByText("Session workspace")).toBeInTheDocument();
+    expect(screen.getByText("archived lane commentary")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "원문 보기" }));
     expect(screen.getByTestId("session-flow-raw-snippet")).toHaveTextContent(

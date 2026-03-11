@@ -7,71 +7,79 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LivePage } from "@/pages/live/live-page";
 import {
   getSessionFlow,
-  getThreadDrilldown,
-  listLiveThreads,
+  getSessionLaneInspector,
+  listSessions,
 } from "@/shared/lib/tauri/commands";
 import type {
-  LiveOverviewThread,
   SessionFlowPayload,
-  ThreadDrilldown,
+  SessionLaneInspectorPayload,
+  SessionListPayload,
 } from "@/shared/types/contracts";
 
 vi.mock("@/shared/lib/tauri/commands", () => ({
-  listLiveThreads: vi.fn(),
+  listSessions: vi.fn(),
   getSessionFlow: vi.fn(),
-  getThreadDrilldown: vi.fn(),
+  getSessionLaneInspector: vi.fn(),
 }));
 
-function buildThread(
-  overrides?: Partial<LiveOverviewThread>,
-): LiveOverviewThread {
+function buildSessionListPayload(): SessionListPayload {
   return {
-    thread_id: "thread-1",
-    title: "Session alpha",
-    cwd: "/workspace/alpha",
-    status: "inflight",
-    started_at: "2026-03-10T09:30:00Z",
-    updated_at: "2026-03-10T10:00:00Z",
-    latest_activity_summary: "alpha commentary",
-    agent_roles: ["implementer"],
-    bottleneck_level: "warning",
-    longest_wait_ms: 45_000,
-    active_tool_name: null,
-    active_tool_ms: null,
-    mini_timeline_window_started_at: "2026-03-10T09:50:00Z",
-    mini_timeline_window_ended_at: "2026-03-10T10:00:00Z",
-    mini_timeline: [],
-    ...overrides,
+    scope: "live",
+    filters: {
+      workspace: "/workspace/alpha",
+    },
+    workspaces: ["/workspace/alpha", "/workspace/beta"],
+    sessions: [
+      {
+        session_id: "thread-1",
+        title: "Session alpha",
+        workspace: "/workspace/alpha",
+        archived: false,
+        status: "inflight",
+        started_at: "2026-03-10T09:30:00Z",
+        updated_at: "2026-03-10T10:00:00Z",
+        latest_activity_summary: "alpha commentary",
+        agent_roles: ["implementer"],
+        rollout_path: "/tmp/thread-1.jsonl",
+        bottleneck_level: "warning",
+        longest_wait_ms: 45_000,
+        active_tool_name: null,
+        active_tool_ms: null,
+        mini_timeline_window_started_at: "2026-03-10T09:50:00Z",
+        mini_timeline_window_ended_at: "2026-03-10T10:00:00Z",
+        mini_timeline: [],
+      },
+    ],
   };
 }
 
 function buildFlow(): SessionFlowPayload {
   return {
     session: {
-      thread_id: "thread-1",
+      session_id: "thread-1",
       title: "Session alpha",
-      cwd: "/workspace/alpha",
+      workspace: "/workspace/alpha",
       archived: false,
       status: "inflight",
       started_at: "2026-03-10T09:30:00Z",
       updated_at: "2026-03-10T10:00:00Z",
       latest_activity_summary: "final answer delivered",
+      agent_roles: ["implementer"],
+      rollout_path: "/tmp/thread-1.jsonl",
     },
     lanes: [
       {
-        lane_id: "user",
+        lane_ref: { kind: "user" },
         column: "user",
         label: "User",
-        agent_session_id: null,
         depth: 0,
         started_at: "2026-03-10T09:30:00Z",
         updated_at: null,
       },
       {
-        lane_id: "thread-1",
+        lane_ref: { kind: "main", session_id: "thread-1" },
         column: "main",
         label: "Main",
-        agent_session_id: null,
         depth: 0,
         started_at: "2026-03-10T09:30:00Z",
         updated_at: "2026-03-10T10:00:00Z",
@@ -80,35 +88,40 @@ function buildFlow(): SessionFlowPayload {
     items: [
       {
         item_id: "item-commentary",
-        lane_id: "thread-1",
+        lane: { kind: "main", session_id: "thread-1" },
         kind: "commentary",
         started_at: "2026-03-10T09:45:00Z",
         ended_at: null,
         summary: "working through slice 8",
-        agent_session_id: null,
-        target_lane_id: null,
+        target_lane: null,
       },
       {
         item_id: "item-final",
-        lane_id: "thread-1",
+        lane: { kind: "main", session_id: "thread-1" },
         kind: "final_answer",
         started_at: "2026-03-10T09:59:00Z",
         ended_at: null,
         summary: "final answer delivered",
-        agent_session_id: null,
-        target_lane_id: null,
+        target_lane: null,
       },
     ],
   };
 }
 
-function buildDrilldown(): ThreadDrilldown {
+function buildInspector(): SessionLaneInspectorPayload {
   return {
-    lane_id: "thread-1",
+    lane: {
+      lane_ref: { kind: "main", session_id: "thread-1" },
+      column: "main",
+      label: "Main",
+      depth: 0,
+      started_at: "2026-03-10T09:30:00Z",
+      updated_at: "2026-03-10T10:00:00Z",
+    },
     latest_commentary_summary: "main commentary",
     latest_commentary_at: "2026-03-10T09:59:00Z",
-    recent_tool_spans: [],
-    related_wait_spans: [],
+    recent_tool_calls: [],
+    related_waits: [],
     raw_snippet: {
       source_label: "thread-1.jsonl",
       truncated: false,
@@ -119,6 +132,7 @@ function buildDrilldown(): ThreadDrilldown {
         },
       ],
     },
+    degraded_reason: null,
   };
 }
 
@@ -147,34 +161,32 @@ function renderLivePage(
 
 describe("LivePage", () => {
   beforeEach(() => {
-    vi.mocked(listLiveThreads).mockReset();
+    vi.mocked(listSessions).mockReset();
     vi.mocked(getSessionFlow).mockReset();
-    vi.mocked(getThreadDrilldown).mockReset();
+    vi.mocked(getSessionLaneInspector).mockReset();
   });
 
-  it("renders workspace-filtered sessions and embeds the flow workspace", async () => {
+  it("workspace 필터와 session flow workspace를 함께 렌더한다", async () => {
     const user = userEvent.setup();
 
-    vi.mocked(listLiveThreads).mockResolvedValue([
-      buildThread(),
-      buildThread({
-        thread_id: "thread-2",
-        title: "Session beta",
-        cwd: "/workspace/beta",
-      }),
-    ]);
+    vi.mocked(listSessions).mockResolvedValue(buildSessionListPayload());
     vi.mocked(getSessionFlow).mockResolvedValue(buildFlow());
-    vi.mocked(getThreadDrilldown).mockResolvedValue(buildDrilldown());
+    vi.mocked(getSessionLaneInspector).mockResolvedValue(buildInspector());
 
     renderLivePage();
 
     expect(await screen.findByText("실시간 챗 세션")).toBeInTheDocument();
     expect(await screen.findByText("alpha commentary")).toBeInTheDocument();
-    expect(screen.queryByText("Session beta")).not.toBeInTheDocument();
 
     await waitFor(() => {
+      expect(listSessions).toHaveBeenCalledWith("live", {
+        workspace: "/workspace/alpha",
+      });
       expect(getSessionFlow).toHaveBeenCalledWith("thread-1");
-      expect(getThreadDrilldown).toHaveBeenCalledWith("thread-1", "thread-1");
+      expect(getSessionLaneInspector).toHaveBeenCalledWith("thread-1", {
+        kind: "main",
+        session_id: "thread-1",
+      });
     });
 
     expect(screen.getByText("Session workspace")).toBeInTheDocument();

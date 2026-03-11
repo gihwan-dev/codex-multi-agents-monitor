@@ -1,15 +1,16 @@
 use rusqlite::{params, Connection};
 use serde_json::json;
 
+use crate::domain::models::{SessionFlowItemKind, SessionLaneRef, SessionScope};
 use crate::index_db::init_monitor_db;
 use crate::ingest::run_incremental_ingest;
 
-use super::super::live_overview::list_live_threads_from_db;
-use super::super::thread_detail::get_thread_detail_from_db;
+use super::super::session_flow::get_session_flow_from_db;
+use super::super::session_list::list_sessions_from_db;
 use super::support::{build_test_state, seed_live_session, seed_state_db, StateSeedRow};
 
 #[test]
-fn ingest_creates_live_only_root_visible_in_overview_and_detail() {
+fn ingest_creates_live_only_root_visible_in_session_list_and_flow() {
     let state = build_test_state("live-only-root");
     init_monitor_db(&state).expect("failed to initialize monitor db");
     seed_state_db(&state.source_paths.state_db_path, &[]);
@@ -64,43 +65,45 @@ fn ingest_creates_live_only_root_visible_in_overview_and_detail() {
     assert_eq!(metadata.1, "live_session");
     assert_eq!(metadata.2, 0);
 
-    let live_threads = list_live_threads_from_db(&state).expect("list live threads");
+    let live_threads =
+        list_sessions_from_db(&state, SessionScope::Live, None).expect("list live sessions");
     assert_eq!(
         live_threads
+            .sessions
             .iter()
-            .map(|thread| thread.thread_id.as_str())
+            .map(|thread| thread.session_id.as_str())
             .collect::<Vec<_>>(),
         vec!["thread-live-only"]
     );
+    assert_eq!(live_threads.sessions[0].workspace, "/workspace/live-only");
 
-    let detail = get_thread_detail_from_db(&state, "thread-live-only")
-        .expect("detail query should succeed")
-        .expect("live-only detail should exist");
-    assert!(detail.agents.is_empty());
+    let flow = get_session_flow_from_db(&state, "thread-live-only")
+        .expect("flow query should succeed")
+        .expect("live-only flow should exist");
+    assert_eq!(flow.lanes.len(), 2);
     assert_eq!(
-        detail
-            .timeline_events
+        flow.items
             .iter()
-            .map(|event| {
+            .map(|item| {
                 (
-                    event.kind.as_str(),
-                    event.summary.as_deref(),
-                    event.started_at.to_rfc3339(),
+                    item.kind.clone(),
+                    item.lane.clone(),
+                    item.summary.clone(),
+                    item.started_at.to_rfc3339(),
                 )
             })
             .collect::<Vec<_>>(),
         vec![(
-            "user_message",
-            Some("Live Only Root Title"),
+            SessionFlowItemKind::UserMessage,
+            SessionLaneRef::User,
+            Some("Live Only Root Title".to_string()),
             "2026-03-10T06:00:01+00:00".to_string(),
         )]
     );
-    assert!(detail.wait_spans.is_empty());
-    assert!(detail.tool_spans.is_empty());
 }
 
 #[test]
-fn ingest_unarchives_archived_snapshot_root_for_live_overview_and_detail() {
+fn ingest_unarchives_archived_snapshot_root_for_live_session_views() {
     let state = build_test_state("live-unarchive");
     init_monitor_db(&state).expect("failed to initialize monitor db");
     seed_state_db(
@@ -157,38 +160,40 @@ fn ingest_unarchives_archived_snapshot_root_for_live_overview_and_detail() {
         .expect("thread should exist");
     assert_eq!(archived_flag, 0);
 
-    let live_threads = list_live_threads_from_db(&state).expect("list live threads");
+    let live_threads =
+        list_sessions_from_db(&state, SessionScope::Live, None).expect("list live sessions");
     assert_eq!(
         live_threads
+            .sessions
             .iter()
-            .map(|thread| thread.thread_id.as_str())
+            .map(|thread| thread.session_id.as_str())
             .collect::<Vec<_>>(),
         vec!["thread-archived-live"]
     );
+    assert_eq!(live_threads.sessions[0].workspace, "/workspace/from-live");
 
-    let detail = get_thread_detail_from_db(&state, "thread-archived-live")
-        .expect("detail query should succeed")
-        .expect("archived-live detail should exist");
-    assert!(!detail.thread.archived);
-    assert!(detail.agents.is_empty());
+    let flow = get_session_flow_from_db(&state, "thread-archived-live")
+        .expect("flow query should succeed")
+        .expect("archived-live flow should exist");
+    assert!(!flow.session.archived);
+    assert_eq!(flow.lanes.len(), 2);
     assert_eq!(
-        detail
-            .timeline_events
+        flow.items
             .iter()
-            .map(|event| {
+            .map(|item| {
                 (
-                    event.kind.as_str(),
-                    event.summary.as_deref(),
-                    event.started_at.to_rfc3339(),
+                    item.kind.clone(),
+                    item.lane.clone(),
+                    item.summary.clone(),
+                    item.started_at.to_rfc3339(),
                 )
             })
             .collect::<Vec<_>>(),
         vec![(
-            "user_message",
-            Some("Live Title"),
+            SessionFlowItemKind::UserMessage,
+            SessionLaneRef::User,
+            Some("Live Title".to_string()),
             "2026-03-10T07:00:01+00:00".to_string(),
         )]
     );
-    assert!(detail.wait_spans.is_empty());
-    assert!(detail.tool_spans.is_empty());
 }

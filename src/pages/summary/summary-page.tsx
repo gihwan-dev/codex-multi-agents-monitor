@@ -44,7 +44,7 @@ export function SummaryPage() {
   const sessionOptions = useMemo(
     () =>
       summaryQuery.data?.session_compare.map((item) => ({
-        thread_id: item.thread_id,
+        session_id: item.session_id,
         title: item.title,
       })) ?? [],
     [summaryQuery.data],
@@ -104,7 +104,7 @@ export function SummaryPage() {
             >
               <option value="">All sessions</option>
               {sessionOptions.map((session) => (
-                <option key={session.thread_id} value={session.thread_id}>
+                <option key={session.session_id} value={session.session_id}>
                   {session.title}
                 </option>
               ))}
@@ -280,14 +280,14 @@ export function SummaryPage() {
                 {summaryQuery.data?.session_compare.length ? (
                   summaryQuery.data.session_compare.map((session) => (
                     <article
-                      key={session.thread_id}
+                      key={session.session_id}
                       className="rounded-xl border border-[hsl(var(--line))] bg-[hsl(var(--panel)/0.7)] px-3 py-3 text-sm"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-medium">{session.title}</p>
                           <p className="mt-1 text-xs text-[hsl(var(--muted))]">
-                            {session.cwd}
+                            {session.workspace}
                           </p>
                         </div>
                         <span className="rounded-full border border-[hsl(var(--line))] px-2 py-1 text-[11px] text-[hsl(var(--muted))]">

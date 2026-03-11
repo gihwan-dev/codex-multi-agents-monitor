@@ -1,3 +1,6 @@
+mod orchestrator;
+pub mod rollout_decoder;
+
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -10,6 +13,8 @@ use serde_json::Value;
 
 use crate::index_db::open_monitor_db;
 use crate::state::AppState;
+
+pub use orchestrator::refresh_monitor_snapshot_if_stale;
 
 const STATUS_COMPLETED: &str = "completed";
 const STATUS_INFLIGHT: &str = "inflight";
@@ -427,28 +432,11 @@ impl SessionAccumulator {
 }
 
 fn normalize_text(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    rollout_decoder::normalize_text(value)
 }
 
 fn parse_embedded_json(value: Option<&Value>) -> Option<Value> {
-    let value = value?;
-    match value {
-        Value::String(raw) => {
-            let raw = raw.trim();
-            if raw.is_empty() {
-                None
-            } else {
-                serde_json::from_str(raw).ok()
-            }
-        }
-        Value::Null => None,
-        other => Some(other.clone()),
-    }
+    rollout_decoder::parse_embedded_json(value)
 }
 
 fn build_message_timeline_rows(
@@ -560,55 +548,11 @@ fn build_function_call_rows(
 }
 
 fn spawn_summary(arguments: Option<&Value>, output: Option<&Value>) -> Option<String> {
-    output
-        .and_then(|value| value.get("nickname"))
-        .and_then(Value::as_str)
-        .and_then(normalize_text)
-        .or_else(|| {
-            arguments
-                .and_then(|value| value.get("agent_type"))
-                .and_then(Value::as_str)
-                .and_then(normalize_text)
-        })
+    rollout_decoder::spawn_summary(arguments, output)
 }
 
 fn resolve_wait_child_session_id(arguments: Option<&Value>, output: Option<&Value>) -> Option<String> {
-    let argument_ids = arguments
-        .and_then(|value| value.get("ids"))
-        .and_then(Value::as_array)
-        .map(|ids| {
-            ids.iter()
-                .filter_map(Value::as_str)
-                .filter_map(normalize_text)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    if argument_ids.len() == 1 {
-        return argument_ids.into_iter().next();
-    }
-
-    let completed_ids = output
-        .and_then(|value| value.get("status"))
-        .and_then(Value::as_object)
-        .map(|status| {
-            status
-                .iter()
-                .filter_map(|(session_id, value)| {
-                    if value.get("completed").is_some() {
-                        normalize_text(session_id)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    if completed_ids.len() == 1 {
-        completed_ids.into_iter().next()
-    } else {
-        None
-    }
+    rollout_decoder::resolve_wait_child_session_id(arguments, output)
 }
 
 fn duration_ms_between(started_at: &str, ended_at: &str) -> Option<u64> {
@@ -673,7 +617,7 @@ fn parse_live_session_file(path: &Path) -> Result<Option<LiveRootThreadRow>> {
     Ok(accumulator.finish())
 }
 
-pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
+pub(crate) fn run_incremental_ingest(state: &AppState) -> Result<()> {
     let StateSnapshot {
         roots: state_roots,
         agent_sessions: state_agent_sessions,
@@ -1133,6 +1077,7 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 mod tests {
     use std::fs;
     use std::path::Path;
+    use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use rusqlite::{params, Connection};
@@ -1848,17 +1793,15 @@ mod tests {
         ));
         let live_sessions_dir = root_dir.join("sessions");
         fs::create_dir_all(&live_sessions_dir).expect("create live sessions dir");
-        let archived_sessions_dir = root_dir.join("archived_sessions");
-        fs::create_dir_all(&archived_sessions_dir).expect("create archived sessions dir");
         fs::File::create(root_dir.join("state_5.sqlite")).expect("create state db file");
 
         AppState {
             monitor_db_path: root_dir.join("monitor.db"),
             source_paths: SourcePaths {
                 live_sessions_dir,
-                archived_sessions_dir,
                 state_db_path: root_dir.join("state_5.sqlite"),
             },
+            last_snapshot_refresh_at: Arc::new(Mutex::new(None)),
         }
     }
 

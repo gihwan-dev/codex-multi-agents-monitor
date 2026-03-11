@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection};
 
+use crate::domain::models::{SessionFlowItemKind, SessionLaneRef};
 use crate::index_db::init_monitor_db;
 
 use super::super::session_flow::get_session_flow_from_db;
@@ -45,7 +46,7 @@ fn insert_timeline_event_with_lane(
 }
 
 #[test]
-fn get_session_flow_maps_lanes_and_items_from_legacy_detail_model() {
+fn get_session_flow_maps_lanes_and_items_from_session_read_model() {
     let state = build_test_state("session-flow-main");
     init_monitor_db(&state).expect("failed to initialize monitor db");
     let connection = Connection::open(&state.monitor_db_path).expect("open monitor db");
@@ -143,17 +144,28 @@ fn get_session_flow_maps_lanes_and_items_from_legacy_detail_model() {
         .expect("get_session_flow should work")
         .expect("session flow should exist");
 
-    assert_eq!(payload.session.thread_id, "thread-main");
+    assert_eq!(payload.session.session_id, "thread-main");
+    assert_eq!(payload.session.workspace, "/workspace");
     assert_eq!(
         payload
             .lanes
             .iter()
-            .map(|lane| (lane.lane_id.as_str(), lane.label.as_str()))
+            .map(|lane| (lane.lane_ref.clone(), lane.label.clone()))
             .collect::<Vec<_>>(),
         vec![
-            ("user", "User"),
-            ("thread-main", "Main"),
-            ("session-child-1", "reviewer"),
+            (SessionLaneRef::User, "User".to_string()),
+            (
+                SessionLaneRef::Main {
+                    session_id: "thread-main".to_string(),
+                },
+                "Main".to_string(),
+            ),
+            (
+                SessionLaneRef::Subagent {
+                    agent_session_id: "session-child-1".to_string(),
+                },
+                "reviewer".to_string(),
+            ),
         ]
     );
     assert_eq!(
@@ -162,61 +174,75 @@ fn get_session_flow_maps_lanes_and_items_from_legacy_detail_model() {
             .iter()
             .map(|item| {
                 (
-                    item.item_id.as_str(),
-                    item.lane_id.as_str(),
-                    format!("{:?}", item.kind),
+                    item.item_id.clone(),
+                    item.lane.clone(),
+                    item.kind.clone(),
                     item.summary.clone(),
-                    item.target_lane_id.clone(),
+                    item.target_lane.clone(),
                 )
             })
             .collect::<Vec<_>>(),
         vec![
             (
-                "event-user",
-                "user",
-                "UserMessage".to_string(),
+                "event-user".to_string(),
+                SessionLaneRef::User,
+                SessionFlowItemKind::UserMessage,
                 Some("root ask".to_string()),
                 None,
             ),
             (
-                "event-commentary-main",
-                "thread-main",
-                "Commentary".to_string(),
+                "event-commentary-main".to_string(),
+                SessionLaneRef::Main {
+                    session_id: "thread-main".to_string(),
+                },
+                SessionFlowItemKind::Commentary,
                 Some("main note".to_string()),
                 None,
             ),
             (
-                "event-commentary-child",
-                "session-child-1",
-                "Commentary".to_string(),
+                "event-commentary-child".to_string(),
+                SessionLaneRef::Subagent {
+                    agent_session_id: "session-child-1".to_string(),
+                },
+                SessionFlowItemKind::Commentary,
                 Some("child note".to_string()),
                 None,
             ),
             (
-                "event-spawn",
-                "thread-main",
-                "Spawn".to_string(),
+                "event-spawn".to_string(),
+                SessionLaneRef::Main {
+                    session_id: "thread-main".to_string(),
+                },
+                SessionFlowItemKind::Spawn,
                 Some("spawn reviewer".to_string()),
                 None,
             ),
             (
-                "call-wait",
-                "thread-main",
-                "Wait".to_string(),
+                "call-wait".to_string(),
+                SessionLaneRef::Main {
+                    session_id: "thread-main".to_string(),
+                },
+                SessionFlowItemKind::Wait,
                 Some("session-child-1".to_string()),
-                Some("session-child-1".to_string()),
+                Some(SessionLaneRef::Subagent {
+                    agent_session_id: "session-child-1".to_string(),
+                }),
             ),
             (
-                "call-tool",
-                "session-child-1",
-                "ToolCall".to_string(),
+                "call-tool".to_string(),
+                SessionLaneRef::Subagent {
+                    agent_session_id: "session-child-1".to_string(),
+                },
+                SessionFlowItemKind::ToolCall,
                 Some("exec_command".to_string()),
                 None,
             ),
             (
-                "event-final",
-                "thread-main",
-                "FinalAnswer".to_string(),
+                "event-final".to_string(),
+                SessionLaneRef::Main {
+                    session_id: "thread-main".to_string(),
+                },
+                SessionFlowItemKind::FinalAnswer,
                 Some("done".to_string()),
                 None,
             ),

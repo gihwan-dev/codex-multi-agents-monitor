@@ -24,7 +24,9 @@ const navItems = [
 ];
 
 export function RootLayout() {
-  const selectedThreadId = useThreadUiStore((state) => state.selectedThreadId);
+  const selectedSessionId = useThreadUiStore(
+    (state) => state.selectedSessionId,
+  );
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,hsl(var(--accent))_0%,hsl(var(--bg))_45%)] text-[hsl(var(--fg))]">
@@ -64,10 +66,10 @@ export function RootLayout() {
             <span>Session-first shell active</span>
           </div>
           <span
-            className={cn("font-mono", selectedThreadId ? "" : "opacity-70")}
+            className={cn("font-mono", selectedSessionId ? "" : "opacity-70")}
           >
-            {selectedThreadId
-              ? `selected_session=${selectedThreadId}`
+            {selectedSessionId
+              ? `selected_session=${selectedSessionId}`
               : "selected_session=none"}
           </span>
         </footer>
