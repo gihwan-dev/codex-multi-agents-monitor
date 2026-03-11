@@ -253,7 +253,8 @@ impl SessionAccumulator {
                 }
 
                 if let Some(message) = normalize_text(message) {
-                    self.last_user_message = Some(message);
+                    self.last_user_message = Some(message.clone());
+                    self.push_message_event(timestamp, "user_message", Some(message));
                 }
             }
             Some("agent_message") => {
@@ -1587,6 +1588,12 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 (
+                    "thread-main-detail:2026-03-10T09:00:01Z:0000",
+                    "user_message",
+                    Some("Thread Detail Title"),
+                    None,
+                ),
+                (
                     "thread-main-detail:2026-03-10T09:00:02Z:0000",
                     "commentary",
                     Some("working through the plan"),
@@ -1724,6 +1731,10 @@ mod tests {
         assert_eq!(
             persisted_kinds,
             vec![
+                (
+                    "user_message".to_string(),
+                    "thread-main-detail:2026-03-10T09:00:01Z:0000".to_string(),
+                ),
                 (
                     "commentary".to_string(),
                     "thread-main-detail:2026-03-10T09:00:02Z:0000".to_string(),

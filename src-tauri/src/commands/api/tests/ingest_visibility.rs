@@ -77,7 +77,24 @@ fn ingest_creates_live_only_root_visible_in_overview_and_detail() {
         .expect("detail query should succeed")
         .expect("live-only detail should exist");
     assert!(detail.agents.is_empty());
-    assert!(detail.timeline_events.is_empty());
+    assert_eq!(
+        detail
+            .timeline_events
+            .iter()
+            .map(|event| {
+                (
+                    event.kind.as_str(),
+                    event.summary.as_deref(),
+                    event.started_at.to_rfc3339(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![(
+            "user_message",
+            Some("Live Only Root Title"),
+            "2026-03-10T06:00:01+00:00".to_string(),
+        )]
+    );
     assert!(detail.wait_spans.is_empty());
     assert!(detail.tool_spans.is_empty());
 }
@@ -154,7 +171,24 @@ fn ingest_unarchives_archived_snapshot_root_for_live_overview_and_detail() {
         .expect("archived-live detail should exist");
     assert!(!detail.thread.archived);
     assert!(detail.agents.is_empty());
-    assert!(detail.timeline_events.is_empty());
+    assert_eq!(
+        detail
+            .timeline_events
+            .iter()
+            .map(|event| {
+                (
+                    event.kind.as_str(),
+                    event.summary.as_deref(),
+                    event.started_at.to_rfc3339(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![(
+            "user_message",
+            Some("Live Title"),
+            "2026-03-10T07:00:01+00:00".to_string(),
+        )]
+    );
     assert!(detail.wait_spans.is_empty());
     assert!(detail.tool_spans.is_empty());
 }
