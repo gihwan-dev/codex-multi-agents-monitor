@@ -1,56 +1,95 @@
 # Current slice
-Slice 5. Architecture wording과 잔여 expectation 정리
+Slice 10. Summary 페이지를 filter-driven dashboard로 전환한다
 - 상태: 완료
 - 커밋:
-  - `73bb02f fix(thread-detail): archived 가시성 계약 추가`
-  - `1b433b6 fix(live-overview): unarchived root를 live 기준으로 전환`
-  - `07d239a fix(thread-detail): 미아카이브 thread polling 유지`
-  - `b4f1b84 fix(overview): live copy를 현재 대화 기준으로 정렬`
-  - `9d4ea0c docs(architecture): live semantics 문서 동기화`
+  - `1763ca2 docs(architecture): session naming baseline 고정`
+  - `8437f36 feat(ingest): user_message를 session item에 편입`
+  - `9dfd606 feat(session-flow): session flow public contract 추가`
+  - `9526cca feat(archive): archived session list API 추가`
+  - `7eb762b feat(summary): summary dashboard API 추가`
+  - `5d1edb0 feat(app-shell): live archive summary IA skeleton 추가`
+  - `13bbd5a feat(session-flow): SVG sequence diagram workspace 추가`
+  - `c85165e feat(live): session browser로 live 페이지 전환`
+  - `6520410 feat(archive): archived chat browser 추가`
+  - `88ed3be feat(summary): filter-driven summary 페이지 추가`
+  - `f2f13aa chore(closeout): lint-safe UI 정리`
 
 # Done
-- `ThreadDetail.thread.archived` contract를 Rust/TypeScript shared boundary에 추가하고, detail API가 `threads.archived`를 source-of-truth로 직렬화하도록 고정했다.
-- Live Overview backend query와 파생 집계가 `status = 'inflight'` 대신 `archived = 0` root thread 집합을 live membership으로 사용하도록 전환했다.
-- Thread Detail page와 drilldown polling이 `status`가 아니라 `!thread.archived` 기준으로 움직이도록 바꿔 completed-but-unarchived thread도 archive 전까지 자동 갱신되게 했다.
-- Overview header/empty/filter-empty copy와 architecture 문서 wording을 현재 대화 semantics에 맞춰 정렬했다.
-- 기존 STATUS 문서가 이전 Slice 7 기준선에 머물러 있었고 실행 중 삭제 상태가 되었기 때문에, 이번 실행 종료 시점의 사실 기준으로 `STATUS.md`를 재생성했다.
+- `README.md`, `docs/architecture.md`, `src/shared/types/contracts.ts`에서 user-facing hierarchy를 `Workspace > Chat(Session) > Agent Session > Item(Event)`로 고정했다.
+- ingest가 `user_message`를 title/latest summary 보강에만 쓰지 않고 `timeline_events.kind = "user_message"`로도 기록하도록 확장했다.
+- `get_session_flow`, `list_archived_sessions(filters)`, `get_summary_dashboard(filters)` public/shared contract를 추가하고 frontend Tauri wrapper까지 연결했다.
+- app shell이 `Live / Archive / Summary` IA로 전환되고 `/`, `/live`, `/archive`, `/summary`, legacy `/threads/:threadId` routing compatibility가 정리됐다.
+- SVG 기반 `SessionFlowDiagram`과 inspector/workspace가 추가되어 `user_message/commentary/tool_call/wait/spawn/final_answer` 흐름을 session workspace 안에서 볼 수 있게 됐다.
+- live page가 workspace sidebar + root session list + embedded flow workspace 구조를 실제로 사용하도록 전환됐다.
+- archive page가 archived session list와 reusable flow workspace를 결합한 archived chat browser로 전환됐다.
+- summary page가 workspace/session/date filter bar, KPI 카드, workspace distribution, role mix, session compare view를 갖춘 filter-driven dashboard로 전환됐다.
+- closeout 단계에서 session-flow/summary 관련 UI를 Biome 기준으로 다시 정리해 새 lint 이슈를 제거했다.
 
 # Decisions made during implementation
-- live visibility rule은 끝까지 `archived = 0`으로 유지하고, `status`는 execution state 의미만 유지했다.
-- shared contract 확장은 `MonitorThread`/`ThreadDetail.thread`의 `archived: boolean`에 한정했고, `LiveOverviewThread`에는 별도 `archived` field를 추가하지 않았다.
-- Thread Detail/drilldown polling rule은 page query와 shell query 모두 `!thread.archived`로 맞췄다.
-- Slice 4 wording은 기본 표현을 `현재 대화 thread`로 두고, empty state에서만 보조 설명으로 archive semantics를 풀어썼다.
-- advisory reviewer(`architecture-reviewer`, `type-specialist`, `code-quality-reviewer`, `module-structure-gatekeeper`, `test-engineer`, `frontend-structure-gatekeeper`)는 응답을 받지 못해 advisory 미응답으로 처리했다.
+- storage identifier는 계속 `thread_id`를 유지하고, DB schema/legacy command rename은 하지 않기로 고정했다.
+- MVP workspace key는 계속 `cwd`를 사용하고, 별도 workspace entity는 후속 slice에서 도입하지 않기로 유지했다.
+- canonical message/event kind 세트는 `user_message`, `commentary`, `final`, `spawn`, `wait`, `tool` 기준을 유지하고, `task_complete`는 final fallback marker source로만 취급한다.
+- flow payload는 기존 storage identifier `thread_id`를 그대로 운반하고, 새 route/UI에서만 `sessionId` 의미로 감싼다.
+- wait item의 `target_lane_id`는 `child_session_id`를 그대로 사용하고, spawn item은 현재 데이터 모델상 안정적으로 child lane을 특정할 수 없어 `target_lane_id = null`로 유지한다.
+- summary dashboard는 raw rollout parsing 없이 DB-derived metric만 사용하도록 범위를 축소했고, KPI는 `session_count / active / completed / average_duration / workspace_count`로 고정했다.
+- raw snippet은 새 flow payload에 넣지 않고, live/archive workspace inspector가 기존 `get_thread_drilldown` surface를 통해 lane별로 불러오도록 유지한다.
+- archive browser는 KPI/retrospective 성격의 summary UI를 넣지 않고 session list + flow workspace에만 집중한다.
+- full `pnpm lint` 실패 원인은 최종 시점 기준 기존 레포의 formatter/import 정렬 이슈([`src/features/history/ui/history-shell.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/history/ui/history-shell.tsx), [`src/features/overview/ui/live-overview-shell.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/overview/ui/live-overview-shell.tsx), [`src/features/overview/ui/live-overview-shell.test.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/overview/ui/live-overview-shell.test.tsx), [`src/features/thread-detail/ui/thread-timeline-shell.test.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/thread-detail/ui/thread-timeline-shell.test.tsx), [`src/pages/thread-detail/thread-detail-page.test.tsx`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/pages/thread-detail/thread-detail-page.test.tsx), [`src/shared/lib/tauri/commands.ts`](/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/lib/tauri/commands.ts))로 한정됐다.
 
 # Verification results
 - Slice 1:
-  - `pnpm cargo:test -- thread_detail ingest_visibility` 통과
   - `pnpm typecheck` 통과
+  - `rg -n "Thread Detail|Overview|History|thread_id|ThreadDetail|MonitorThread" docs README.md src/shared/types/contracts.ts` 실행 후 compatibility naming만 남았음을 수동 확인
+  - 커밋: 기본 `git commit -m "docs(architecture): session naming baseline 고정"` 1회 통과
 - Slice 2:
-  - `pnpm cargo:test -- live_overview ingest_visibility` 통과
-  - `rg -n "status = 'inflight'" src-tauri/src/commands/api/live_overview.rs` 미매치 확인
+  - `pnpm cargo:test -- thread_detail ingest` 통과
+  - `rg -n "user_message|commentary|final|spawn|wait|tool" src-tauri/src/ingest/mod.rs` 확인 완료
+  - 커밋: 기본 `git commit -m "feat(ingest): user_message를 session item에 편입"` 1회 통과
 - Slice 3:
-  - `pnpm test -- --run src/pages/thread-detail/thread-detail-page.test.tsx` 통과
-  - `pnpm test -- --run src/features/thread-detail/ui/thread-timeline-shell.test.tsx` 통과
+  - `pnpm cargo:test -- session_flow thread_detail` 통과
   - `pnpm typecheck` 통과
-  - 초안 검증에서 shell test timeout이 있었지만 fake-timer flush helper 보강 후 동일 명령 재통과
+  - 커밋: 기본 `git commit -m "feat(session-flow): session flow public contract 추가"` 1회 통과
 - Slice 4:
-  - `pnpm test -- --run src/features/overview/ui/live-overview-shell.test.tsx` 통과
-  - `rg -n "inflight thread|inflight thread timeline shell" src/features/overview/ui` 미매치 확인
-- Slice 5:
-  - `rg -n "inflight summary|inflight thread|read inflight summary" docs src/features/overview src-tauri/src/commands/api/live_overview.rs` 미매치 확인
-  - manual diff review 완료
-- Final closeout:
-  - `pnpm cargo:test -- thread_detail live_overview ingest_visibility` 통과
-  - `pnpm test -- --run src/pages/thread-detail/thread-detail-page.test.tsx` 통과
-  - `pnpm test -- --run src/features/thread-detail/ui/thread-timeline-shell.test.tsx` 통과
-  - `pnpm test -- --run src/features/overview/ui/live-overview-shell.test.tsx` 통과
+  - `pnpm cargo:test -- archive_list history_summary` 통과
   - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(archive): archived session list API 추가"` 1회 통과
+- Slice 5:
+  - `pnpm cargo:test -- summary_dashboard history_summary` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(summary): summary dashboard API 추가"` 1회 통과
+- Slice 6:
+  - `pnpm test -- --run src/app/App.test.tsx` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(app-shell): live archive summary IA skeleton 추가"` 1회 통과
+- Slice 7:
+  - `pnpm test -- --run src/features/session-flow/ui/session-flow-diagram.test.tsx` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(session-flow): SVG sequence diagram workspace 추가"` 1회 통과
+- Slice 8:
+  - `pnpm test -- --run src/pages/live/live-page.test.tsx` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(live): session browser로 live 페이지 전환"` 1회 통과
+- Slice 9:
+  - `pnpm test -- --run src/pages/archive/archive-page.test.tsx` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(archive): archived chat browser 추가"` 1회 통과
+- Slice 10:
+  - `pnpm test -- --run src/pages/summary/summary-page.test.tsx` 통과
+  - `pnpm typecheck` 통과
+  - 커밋: 기본 `git commit -m "feat(summary): filter-driven summary 페이지 추가"` 1회 통과
+- Final closeout:
+  - `pnpm test` 통과
+  - `pnpm cargo:test` 통과
+  - `pnpm tauri:build` 통과
+  - `pnpm lint` 실패
+  - lint 실패는 기존 레포의 formatter/import 정렬 이슈 6건으로 한정되며, 이번 구현 범위 파일에 대한 `pnpm exec biome check ...`는 통과
+  - closeout cleanup 커밋: 기본 `git commit -m "chore(closeout): lint-safe UI 정리"` 1회 통과
 
 # Known issues / residual risk
-- 실제 로컬 데이터에서 completed-but-unarchived root volume이 더 커지면 overview noise를 줄이기 위한 secondary filter/section 전략이 후속 bugfix로 필요할 수 있다.
-- 이번 체인은 focused validation만 수행했고 `pnpm lint`, `pnpm test` 전체, `pnpm tauri:build`는 돌리지 않았다.
-- `STATUS.md`는 manager-facing 메타 산출물로만 재생성했고, slice code commit들과는 분리돼 있다.
+- `pnpm lint`는 여전히 레포 기존 파일 6건 때문에 실패한다. 이번 plan 구현 파일 기준 lint는 통과했지만 repo-wide green은 아니다.
+- Rust `src-tauri/src/domain/mod.rs`에는 `SessionFlowColumn`, `SessionFlowItem`, `SessionFlowItemKind`, `SessionLane` re-export unused warning이 남는다.
+- session flow diagram의 pan/zoom은 기본 `viewBox` 조작이라 대규모 세션에서 사용성 튜닝이 더 필요할 수 있다.
+- live session A에서 B로 전환될 때 embedded workspace가 새 session 기준으로 즉시 갱신되는 주 동선은 전용 회귀 테스트가 아직 없다.
 
 # Next slice
-없음. 현재 live visibility bugfix chain 완료. 이후 수동 acceptance 실패 또는 overview noise 발견 시 새 bugfix plan 필요.
+없음. 10-slice plan 구현 완료. 이후 진행은 repo-wide lint debt 정리 또는 UX polish 별도 plan으로 분리한다.
