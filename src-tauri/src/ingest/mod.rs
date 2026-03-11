@@ -888,7 +888,14 @@ pub fn run_incremental_ingest(state: &AppState) -> Result<()> {
 fn load_state_snapshot(
     state: &AppState,
 ) -> Result<(Vec<StateRootThreadRow>, Vec<AgentSessionRow>)> {
-    let state_connection = match Connection::open(&state.source_paths.state_db_path) {
+    if !state.source_paths.state_db_path.is_file() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let state_connection = match Connection::open_with_flags(
+        &state.source_paths.state_db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
         Ok(connection) => connection,
         Err(rusqlite::Error::SqliteFailure(error, _))
             if error.code == rusqlite::ErrorCode::CannotOpen =>

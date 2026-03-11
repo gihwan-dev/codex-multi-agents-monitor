@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use serde_json::json;
 
 use crate::domain::HistorySourceKey;
+use crate::ingest::run_incremental_ingest;
 use crate::index_db::init_monitor_db;
 
 use super::super::history_summary::build_history_summary_at;
@@ -229,6 +230,24 @@ fn build_history_summary_reports_missing_sources() {
         ]
     );
     assert_eq!(summary.health.degraded_rollout_threads, 0);
+    assert_eq!(summary.history.thread_count, 0);
+}
+
+#[test]
+fn run_incremental_ingest_degrades_when_state_db_is_missing() {
+    let state = build_test_state("history-missing-state-db");
+    init_monitor_db(&state).expect("failed to initialize monitor db");
+    fs::remove_file(&state.source_paths.state_db_path).expect("remove state db file");
+
+    run_incremental_ingest(&state).expect("ingest should tolerate missing state db");
+
+    let now = Utc
+        .with_ymd_and_hms(2026, 3, 10, 12, 0, 0)
+        .single()
+        .expect("fixed timestamp should exist");
+    let summary = build_history_summary_at(&state, now).expect("history summary should build");
+
+    assert_eq!(summary.health.missing_sources, vec![HistorySourceKey::StateDb]);
     assert_eq!(summary.history.thread_count, 0);
 }
 

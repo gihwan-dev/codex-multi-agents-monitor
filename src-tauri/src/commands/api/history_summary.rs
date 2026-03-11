@@ -492,13 +492,13 @@ fn collect_metrics_from_rollout(
 fn detect_missing_sources(state: &AppState) -> Vec<HistorySourceKey> {
     let mut missing_sources = Vec::new();
 
-    if !state.source_paths.live_sessions_dir.exists() {
+    if !state.source_paths.live_sessions_dir.is_dir() {
         missing_sources.push(HistorySourceKey::LiveSessions);
     }
-    if !state.source_paths.archived_sessions_dir.exists() {
+    if !state.source_paths.archived_sessions_dir.is_dir() {
         missing_sources.push(HistorySourceKey::ArchivedSessions);
     }
-    if !state.source_paths.state_db_path.exists() {
+    if !state.source_paths.state_db_path.is_file() {
         missing_sources.push(HistorySourceKey::StateDb);
     }
 
