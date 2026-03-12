@@ -59,7 +59,7 @@ export function DetailDrawer({
       className="flex h-full min-h-[520px] flex-col overflow-hidden"
     >
       <Card className="flex h-full flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
-        <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-5 pb-4 pt-5">
+        <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
@@ -90,7 +90,7 @@ export function DetailDrawer({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(2,6,23,0.14),transparent_38%)] p-0">
+        <CardContent className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.14)_15%,transparent_44%)] p-0">
           <Tabs defaultValue="summary" className="flex h-full w-full flex-col">
             <div className="px-4 py-3">
               <GlassSurface className="inline-flex rounded-[1.3rem]" refraction="none" variant="toolbar">

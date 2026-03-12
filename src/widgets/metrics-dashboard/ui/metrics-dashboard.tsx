@@ -88,7 +88,7 @@ export function MetricsDashboard() {
       <div className="grid flex-1 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <GlassSurface refraction="none" variant="panel" className="flex flex-col">
           <Card className="flex flex-1 flex-col border-0 bg-transparent shadow-none ring-0">
-            <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5">
+            <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
@@ -107,7 +107,7 @@ export function MetricsDashboard() {
                 </GlassSurface>
               </div>
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-5 bg-[linear-gradient(180deg,rgba(2,6,23,0.14),transparent_48%)] p-6">
+            <CardContent className="flex flex-1 flex-col gap-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.14)_15%,transparent_52%)] p-6">
               {UTILIZATION_BARS.map((bar) => (
                 <div key={bar.label} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -135,7 +135,7 @@ export function MetricsDashboard() {
 
         <GlassSurface refraction="none" variant="panel" className="flex flex-col">
           <Card className="flex flex-1 flex-col border-0 bg-transparent shadow-none ring-0">
-            <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5">
+            <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
               <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-amber-200">
                 <Gauge className="h-3.5 w-3.5" />
                 Latency and pacing
@@ -144,7 +144,7 @@ export function MetricsDashboard() {
                 Glass-heavy UI, but motion and density stay controlled
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-5 bg-[linear-gradient(180deg,rgba(2,6,23,0.14),transparent_48%)] p-6">
+            <CardContent className="flex flex-1 flex-col gap-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.14)_15%,transparent_52%)] p-6">
               <div className="flex h-48 items-end gap-2 rounded-[1.5rem] border border-white/7 bg-white/[0.04] px-4 pb-4 pt-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                 {LATENCY_POINTS.map((point, index) => (
                   <div

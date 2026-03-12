@@ -127,7 +127,7 @@ export function ArchiveMonitor() {
 
       <GlassSurface refraction="none" variant="panel" className="flex flex-1 flex-col overflow-hidden">
         <Card className="flex flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
-          <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5">
+          <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="mb-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
@@ -147,7 +147,7 @@ export function ArchiveMonitor() {
           </CardHeader>
           <CardContent className="flex-1 overflow-auto p-0">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-[#07111d]/88 backdrop-blur-xl">
+              <TableHeader className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(7,17,29,0.76),rgba(7,17,29,0.42))] backdrop-blur-xl">
                 <TableRow className="border-white/5 hover:bg-transparent">
                   <TableHead className="w-[340px] text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                     Session

@@ -48,7 +48,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
       className="flex h-full min-h-[520px] flex-col"
     >
       <Card className="flex flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
-        <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5">
+        <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-emerald-300">
@@ -76,7 +76,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-1 overflow-hidden bg-[linear-gradient(180deg,rgba(2,6,23,0.14),transparent_48%)] p-0">
+        <CardContent className="flex flex-1 overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.14)_15%,transparent_52%)] p-0">
           <div className="flex w-[126px] shrink-0 flex-col gap-6 px-4 py-6">
             {[
               { icon: User, label: "User", accent: "text-amber-300" },

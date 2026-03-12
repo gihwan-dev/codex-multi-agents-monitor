@@ -18,7 +18,7 @@ interface LiveSessionOverviewProps {
 }
 
 const PANEL_HEADER_CLASS =
-  "border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5";
+  "bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5";
 const METRIC_BLOCK_CLASS =
   "rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 
@@ -84,7 +84,7 @@ export function LiveSessionOverview({
                 </GlassSurface>
               </div>
             </CardHeader>
-            <CardContent className="bg-[linear-gradient(180deg,rgba(2,6,23,0.12),transparent_48%)] p-6 text-slate-300">
+            <CardContent className="bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.12)_16%,transparent_52%)] p-6 text-slate-300">
               {selectedSession ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div className={METRIC_BLOCK_CLASS}>
@@ -142,7 +142,7 @@ export function LiveSessionOverview({
                 {loading ? "Scanning runtime edges..." : "Live shell in phase."}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 bg-[linear-gradient(180deg,rgba(2,6,23,0.12),transparent_48%)] p-6">
+            <CardContent className="space-y-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.12)_16%,transparent_52%)] p-6">
               <div className="rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                 <p className="text-sm leading-relaxed text-slate-300/82">
                   Shared chrome is active across live, archive, and metrics. The
