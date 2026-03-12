@@ -1,4 +1,4 @@
-export type MonitorTab = "live" | "archive" | "dashboard";
+export type MonitorTab = "live" | "archive" | "metrics";
 
 export type DeferredMonitorTab = Exclude<MonitorTab, "live">;
 
@@ -12,7 +12,7 @@ export const TAB_COPY: Record<
     body:
       "Filter rails, dense results, and detail replay stay deferred until the archive slice lands.",
   },
-  dashboard: {
+  metrics: {
     eyebrow: "SLICE-7",
     title: "Dashboard metrics are not wired yet.",
     body:

@@ -31,22 +31,10 @@ export function MonitorPage({ degradedMessage }: MonitorPageProps) {
         snapshot={snapshot}
       />
 
-      <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-[#05070D]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#05070D_0%,#0B0E14_44%,#111827_100%)]" />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.18) 0%, transparent 32%), radial-gradient(circle at 82% 14%, rgba(16, 185, 129, 0.14) 0%, transparent 28%), radial-gradient(circle at 50% 100%, rgba(245, 158, 11, 0.1) 0%, transparent 36%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            backgroundImage:
-              "linear-gradient(135deg, rgba(148, 163, 184, 0.08) 0%, transparent 40%), radial-gradient(circle at center, transparent 0%, rgba(5, 7, 13, 0.38) 68%, rgba(5, 7, 13, 0.76) 100%)",
-          }}
-        />
+      <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.6] dark:opacity-[0.4] mix-blend-plus-lighter dark:mix-blend-color-dodge" 
+             style={{ backgroundImage: 'radial-gradient(circle at 100% 0, var(--color-primary) 0, transparent 40%), radial-gradient(circle at 0 100%, var(--color-emerald-500) 0, transparent 40%)' }} />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:32px_32px] mask-[radial-gradient(ellipse_80%_80%_at_50%_0%,#000_80%,transparent_100%)] opacity-30 dark:opacity-20" />
 
         <MonitorHeader
           activeTab={activeTab}
