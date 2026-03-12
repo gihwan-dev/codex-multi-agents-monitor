@@ -1,16 +1,53 @@
 # Codex Multi-Agent Monitor
 
-기존 구현을 정리하고 다시 시작하기 위한 최소 Tauri + React hello world 상태다.
+Codex 세션 로그를 로컬에서 읽어 멀티 에이전트 진행 상황을 관찰하는 Tauri + React 데스크톱 앱이다.
 
-## 시작
+현재 frontend는 Live shell 기준으로 동작한다. workspace-grouped sidebar, selected session summary, live bridge bootstrap, timeline/detail placeholder가 연결되어 있고, Archive/Dashboard는 다음 slice를 위한 placeholder 경계만 유지한다.
+
+## 실행
 
 ```bash
 pnpm install
 pnpm tauri:dev
 ```
 
-## 포함 내용
+## 검증
 
-- React 엔트리 하나
-- 간단한 hello world UI
-- Tauri 기본 런타임
+```bash
+pnpm typecheck
+pnpm build
+```
+
+## 현재 기능
+
+- `query_workspace_sessions`로 workspace/session snapshot bootstrap
+- `start_live_bridge` + `codex://live-session-updated`로 live sidebar 갱신
+- Live / Archive / Dashboard 탭 셸
+- selected session summary 카드
+- timeline canvas / detail drawer placeholder
+
+## Frontend 구조
+
+```text
+src/
+  app-shell.tsx
+  app/ui/
+  pages/monitor/
+  widgets/
+    monitor-header/
+    workspace-sidebar/
+    live-session-overview/
+    timeline-placeholder/
+    detail-drawer-placeholder/
+    tab-placeholder-panel/
+  features/
+    live-session-feed/
+    session-selection/
+  entities/session/
+  shared/
+    api/
+    model/
+    queries.ts
+```
+
+Live shell 데이터 흐름은 `shared/api -> features -> entities -> widgets -> page -> app-shell` 순서를 따른다. Rust/Tauri IPC 계약은 그대로 유지하고, frontend만 Live 중심으로 FSD 경계에 맞춰 분리했다.

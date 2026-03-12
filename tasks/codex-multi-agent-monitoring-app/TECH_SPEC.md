@@ -1,9 +1,9 @@
 # Current state
 
 - Repository state:
-  - Vite + React + Tauri 최소 스켈레톤
-  - frontend entry 1개, static hello world
-  - Rust backend는 default builder만 존재
+  - Rust backend가 SQLite-backed session snapshot/detail query와 live bridge command를 노출한다.
+  - frontend는 Live shell, workspace sidebar, session summary, deferred timeline/detail surface를 렌더링한다.
+  - Archive/Dashboard는 navigation skeleton만 열어 두고 후속 slice에서 채운다.
 - Observed local data sources:
   - `~/.codex/sessions/**/*.jsonl`
   - `~/.codex/archived_sessions/**/*.jsonl`
@@ -134,6 +134,46 @@ Codex local files
 - svg timeline projection
 - filter state and drill-down UX
 - metric visualization
+
+## Frontend module structure
+
+- `app`
+  - `app-shell.tsx`는 thin facade만 담당한다.
+  - global decorative UI와 top-level composition만 가진다.
+- `pages/monitor`
+  - `activeTab` 상태와 화면 조립만 가진다.
+  - Live surface와 deferred placeholder surface를 스위칭한다.
+- `widgets`
+  - `workspace-sidebar`, `monitor-header`, `live-session-overview`, `timeline-placeholder`, `detail-drawer-placeholder`, `tab-placeholder-panel`
+  - 모두 prop-driven dumb component로 유지한다.
+- `features`
+  - `live-session-feed`: bootstrap query, live subscription, degraded/error/loading state
+  - `session-selection`: selected session id, auto-select, selection fallback
+- `entities/session`
+  - snapshot sort/upsert/find 규칙
+  - workspace/timestamp/badge formatting
+  - `SessionBadges` UI
+- `shared`
+  - `api/tauri-monitor`: Tauri invoke/listen runtime bridge
+  - `model/monitor`: tab contract과 deferred placeholder copy
+  - `queries.ts`: Rust와 공유하는 query contract
+
+## Live shell data flow
+
+```text
+shared/api/tauri-monitor
+  -> features/live-session-feed
+  -> entities/session
+  -> features/session-selection
+  -> widgets/*
+  -> pages/monitor
+  -> app-shell
+```
+
+- `query_workspace_sessions`는 bootstrap snapshot을 가져온다.
+- `start_live_bridge`와 `codex://live-session-updated`는 live summary upsert를 만든다.
+- `entities/session`는 backend contract와 동일한 정렬 규칙을 frontend merge path에도 적용한다.
+- `pages/monitor`는 tab state만 가지며, data orchestration은 feature hook 안에 머문다.
 
 # Timeline renderer choice
 
