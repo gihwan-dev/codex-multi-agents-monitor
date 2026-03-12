@@ -11,7 +11,8 @@ const glassSurfaceVariants = cva(
     variants: {
       variant: {
         panel: "rounded-[1.25rem]",
-        chrome: "rounded-[1.25rem]",
+        toolbar: "rounded-[1.25rem]",
+        sidebar: "rounded-[1.25rem]",
         warning: "rounded-[1.25rem]",
         danger: "rounded-[1.25rem]",
       },
@@ -31,7 +32,7 @@ interface GlassSurfaceProps {
   className?: string;
   interactive?: boolean;
   refraction: "none" | "soft";
-  variant: "panel" | "chrome" | "warning" | "danger";
+  variant: "panel" | "toolbar" | "sidebar" | "warning" | "danger";
 }
 
 export function GlassSurface({
@@ -42,11 +43,15 @@ export function GlassSurface({
   variant,
 }: GlassSurfaceProps) {
   const mode = useLiquidGlassMode();
+  const refractionActive =
+    mode === "enhanced" &&
+    refraction === "soft" &&
+    interactive &&
+    variant === "panel";
   const fxStyle = {
-    "--glass-refraction-filter":
-      mode === "enhanced" && refraction === "soft"
-        ? "url(#liquidGlassFilterSoft)"
-        : "none",
+    "--glass-refraction-filter": refractionActive
+      ? "url(#liquidGlassFilterSoft)"
+      : "none",
   } as React.CSSProperties;
 
   return (
@@ -56,6 +61,7 @@ export function GlassSurface({
       data-interactive={interactive ? "true" : "false"}
       data-mode={mode}
       data-refraction={refraction}
+      data-refraction-active={refractionActive ? "true" : "false"}
       data-variant={variant}
     >
       <div

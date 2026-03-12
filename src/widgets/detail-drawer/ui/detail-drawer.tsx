@@ -7,80 +7,103 @@ import { Eye, Code, FileText, Activity } from "lucide-react";
 
 export function DetailDrawer() {
   return (
-    <GlassSurface refraction="none" variant="panel" className="flex-1 flex flex-col mt-4 border border-white/5 rounded-xl shadow-2xl relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none" />
-      <Card className="flex-1 flex flex-col border-0 bg-transparent shadow-none ring-0 w-full rounded-none">
-        <CardHeader className="pb-4 shrink-0 border-b border-white/5 bg-slate-900/40">
+    <GlassSurface refraction="none" variant="panel" className="flex h-full min-h-[460px] flex-col overflow-hidden">
+      <Card className="flex h-full flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
+        <CardHeader className="shrink-0 border-b border-white/8 bg-white/[0.045] pb-4">
           <div className="flex items-start justify-between">
             <div>
               <p className="mb-1 flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-slate-500">
-                <Eye className="w-3 h-3" /> Event Details
+                <Eye className="h-3 w-3" /> Event Details
               </p>
-              <CardTitle className="text-lg text-slate-200 font-sans tracking-tight">
+              <CardTitle className="text-lg tracking-tight text-slate-50">
                 Planning Phase
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-mono text-[10px] bg-emerald-500/10">
+              <Badge
+                variant="outline"
+                className="border-emerald-500/25 bg-emerald-500/10 font-mono text-[10px] text-emerald-300"
+              >
                 Main Agent
               </Badge>
-              <Badge variant="secondary" className="font-mono text-[10px] bg-white/5 text-slate-400 border-white/10">
+              <Badge
+                variant="secondary"
+                className="border border-white/10 bg-white/[0.06] font-mono text-[10px] text-slate-200"
+              >
                 2.1s
               </Badge>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 p-0">
-          <Tabs defaultValue="summary" className="w-full h-full flex flex-col">
-            <TabsList className="w-full justify-start rounded-none border-b border-white/5 bg-transparent p-0 h-10 px-4 space-x-6 shrink-0">
-              <TabsTrigger 
-                value="summary" 
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-0 font-mono text-xs uppercase tracking-wider"
-              >
-                Summary
-              </TabsTrigger>
-              <TabsTrigger 
-                value="io" 
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-0 font-mono text-xs uppercase tracking-wider"
-              >
-                Input / Output
-              </TabsTrigger>
-              <TabsTrigger 
-                value="raw" 
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-0 font-mono text-xs uppercase tracking-wider"
-              >
-                Raw Event
-              </TabsTrigger>
-              <TabsTrigger 
-                value="tokens" 
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-500 rounded-none px-0 font-mono text-xs uppercase tracking-wider text-amber-500/80 data-[state=active]:border-amber-500"
-              >
-                Tokens
-              </TabsTrigger>
-            </TabsList>
-            
-            <div className="flex-1 relative bg-slate-950/20">
-              <ScrollArea className="absolute inset-0 p-6">
+        <CardContent className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(2,6,23,0.08),transparent_36%)] p-0">
+          <Tabs defaultValue="summary" className="flex h-full w-full flex-col">
+            <div className="shrink-0 border-b border-white/6 px-4 py-3">
+              <TabsList className="h-10 rounded-full border border-white/10 bg-white/[0.05] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                <TabsTrigger
+                  value="summary"
+                  className="rounded-full px-3 font-mono text-[11px] uppercase tracking-wider text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
+                >
+                  Summary
+                </TabsTrigger>
+                <TabsTrigger
+                  value="io"
+                  className="rounded-full px-3 font-mono text-[11px] uppercase tracking-wider text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
+                >
+                  Input / Output
+                </TabsTrigger>
+                <TabsTrigger
+                  value="raw"
+                  className="rounded-full px-3 font-mono text-[11px] uppercase tracking-wider text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
+                >
+                  Raw Event
+                </TabsTrigger>
+                <TabsTrigger
+                  value="tokens"
+                  className="rounded-full px-3 font-mono text-[11px] uppercase tracking-wider text-slate-300 data-[active]:border-amber-500/30 data-[active]:bg-amber-500/[0.12] data-[active]:text-amber-100"
+                >
+                  Tokens
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full px-4 py-5">
                 <TabsContent value="summary" className="m-0 space-y-4 outline-none">
-                  <div className="space-y-2">
-                    <h3 className="font-mono text-xs text-slate-500 uppercase flex items-center gap-2"><FileText className="w-3 h-3"/> Description</h3>
-                    <p className="text-sm text-slate-300 leading-relaxed font-sans">
-                      The main agent analyzed the user's request and decided to spawn a secondary sub-agent dedicated to searching the codebase using `rg` command line tool.
+                  <div className="rounded-2xl border border-white/6 bg-slate-950/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <h3 className="mb-2 flex items-center gap-2 font-mono text-xs uppercase text-slate-500">
+                      <FileText className="h-3 w-3" /> Description
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-300/90">
+                      The main agent analyzed the user&apos;s request and spun up a
+                      sub-agent to inspect the codebase with the `rg` tool before
+                      deciding on the next implementation step.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/6 bg-slate-950/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <h3 className="mb-2 flex items-center gap-2 font-mono text-xs uppercase text-slate-500">
+                      <Activity className="h-3 w-3" /> Execution Summary
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-300/80">
+                      Planning stayed on the main lane, tool work moved into the
+                      spawned worker lane, and the drawer keeps the summary-first
+                      diagnostic boundary visible.
                     </p>
                   </div>
                 </TabsContent>
-                
+
                 <TabsContent value="io" className="m-0 space-y-4 outline-none">
-                  <div className="space-y-2">
-                    <h3 className="font-mono text-xs text-slate-500 uppercase flex items-center gap-2"><Code className="w-3 h-3"/> System Prompt Preview</h3>
-                    <pre className="bg-black/40 p-3 rounded-md border border-white/10 text-xs font-mono text-emerald-300 overflow-x-auto">
+                  <div className="rounded-2xl border border-white/6 bg-slate-950/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                    <h3 className="mb-2 flex items-center gap-2 font-mono text-xs uppercase text-slate-500">
+                      <Code className="h-3 w-3" /> System Prompt Preview
+                    </h3>
+                    <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-emerald-300">
                       "You are a coding assistant. Plan out the specific steps..."
                     </pre>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="raw" className="m-0 outline-none">
-                  <pre className="bg-black/60 p-4 rounded-md border border-white/5 text-[11px] font-mono text-slate-400 overflow-x-auto w-full">
+                  <pre className="w-full overflow-x-auto rounded-2xl border border-white/6 bg-black/40 p-4 text-[11px] text-slate-300/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
 {`{
   "id": "evt-0041-x32",
   "type": "agent_action",
@@ -92,16 +115,20 @@ export function DetailDrawer() {
 }`}
                   </pre>
                 </TabsContent>
-                
-                <TabsContent value="tokens" className="m-0 outline-none space-y-4">
+
+                <TabsContent value="tokens" className="m-0 space-y-4 outline-none">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-black/20 p-4 rounded-xl border border-white/5 space-y-1">
-                      <p className="font-mono text-[10px] text-slate-500 uppercase">Prompt Tokens</p>
-                      <p className="font-mono text-xl text-slate-200">2,408</p>
+                    <div className="rounded-2xl border border-white/6 bg-slate-950/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                      <p className="font-mono text-[10px] uppercase text-slate-500">
+                        Prompt Tokens
+                      </p>
+                      <p className="mt-1 font-mono text-xl text-slate-100">2,408</p>
                     </div>
-                    <div className="bg-black/20 p-4 rounded-xl border border-white/5 space-y-1">
-                      <p className="font-mono text-[10px] text-slate-500 uppercase">Completion Tokens</p>
-                      <p className="font-mono text-xl text-slate-200">142</p>
+                    <div className="rounded-2xl border border-white/6 bg-slate-950/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                      <p className="font-mono text-[10px] uppercase text-slate-500">
+                        Completion Tokens
+                      </p>
+                      <p className="mt-1 font-mono text-xl text-slate-100">142</p>
                     </div>
                   </div>
                 </TabsContent>

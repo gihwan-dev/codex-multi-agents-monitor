@@ -23,57 +23,68 @@ export function MonitorPage({ degradedMessage }: MonitorPageProps) {
     useSessionSelection(snapshot);
 
   return (
-    <SidebarProvider>
-      <WorkspaceSidebar
-        loading={loading}
-        onSelectSession={selectSession}
-        selectedSessionId={selectedSessionId}
-        snapshot={snapshot}
+    <div className="relative min-h-screen overflow-hidden bg-[#04060D] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#04060D_0%,#09101A_46%,#101827_100%)]" />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 12% 14%, rgba(56, 189, 248, 0.18) 0%, transparent 26%), radial-gradient(circle at 82% 10%, rgba(34, 197, 94, 0.14) 0%, transparent 22%), radial-gradient(circle at 50% 100%, rgba(245, 158, 11, 0.1) 0%, transparent 32%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-55"
+        style={{
+          backgroundImage:
+            "linear-gradient(135deg, rgba(148, 163, 184, 0.08) 0%, transparent 40%), radial-gradient(circle at center, transparent 0%, rgba(4, 6, 13, 0.34) 70%, rgba(4, 6, 13, 0.82) 100%), linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px)",
+          backgroundSize: "auto, auto, 80px 80px, 80px 80px",
+        }}
       />
 
-      <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.6] dark:opacity-[0.4] mix-blend-plus-lighter dark:mix-blend-color-dodge" 
-             style={{ backgroundImage: 'radial-gradient(circle at 100% 0, var(--color-primary) 0, transparent 40%), radial-gradient(circle at 0 100%, var(--color-emerald-500) 0, transparent 40%)' }} />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:32px_32px] mask-[radial-gradient(ellipse_80%_80%_at_50%_0%,#000_80%,transparent_100%)] opacity-30 dark:opacity-20" />
-
-        <MonitorHeader
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          refreshedAt={snapshot?.refreshed_at ?? null}
+      <SidebarProvider className="relative z-10">
+        <WorkspaceSidebar
+          loading={loading}
+          onSelectSession={selectSession}
+          selectedSessionId={selectedSessionId}
+          snapshot={snapshot}
         />
 
-        <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 flex flex-col">
-          <div className="mx-auto w-full max-w-[1600px] flex-1 flex flex-col space-y-4 h-[calc(100vh-8rem)]">
-            {activeTab === "live" && (
-              <>
-                <LiveSessionOverview
-                  degradedMessage={degradedMessage}
-                  errorMessage={errorMessage}
-                  loading={loading}
-                  selectedSession={selectedSession}
-                  snapshot={snapshot}
-                />
-                <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0">
-                  {/* Timeline takes up remaining space */}
-                  <div className="flex-[2] min-w-0 flex flex-col">
-                    <TimelineCanvas />
+        <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-transparent">
+          <MonitorHeader
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            refreshedAt={snapshot?.refreshed_at ?? null}
+          />
+
+          <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+            <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-4">
+              {activeTab === "live" ? (
+                <>
+                  <LiveSessionOverview
+                    degradedMessage={degradedMessage}
+                    errorMessage={errorMessage}
+                    loading={loading}
+                    selectedSession={selectedSession}
+                    snapshot={snapshot}
+                  />
+                  <div className="flex flex-1 min-h-[520px] flex-col gap-4 xl:flex-row">
+                    <div className="min-w-0 flex-[2]">
+                      <TimelineCanvas />
+                    </div>
+                    <div className="min-w-0 xl:min-w-[340px] xl:max-w-[520px] xl:flex-1">
+                      <DetailDrawer />
+                    </div>
                   </div>
-                  {/* Detail drawer sits on the right as a split pane */}
-                  <div className="flex-1 min-w-[320px] max-w-[500px] flex flex-col">
-                    <DetailDrawer />
-                  </div>
-                </div>
-              </>
-            )}
-            {activeTab === "archive" && (
-              <ArchiveMonitor />
-            )}
-            {activeTab === "metrics" && (
-              <MetricsDashboard />
-            )}
+                </>
+              ) : activeTab === "archive" ? (
+                <ArchiveMonitor />
+              ) : (
+                <MetricsDashboard />
+              )}
+            </div>
           </div>
-        </div>
-      </main>
-    </SidebarProvider>
+        </main>
+      </SidebarProvider>
+    </div>
   );
 }
