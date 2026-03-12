@@ -150,4 +150,18 @@ describe("useWorkspaceSessionsQuery", () => {
     expect(queryWorkspaceSessions).not.toHaveBeenCalled();
     expect(result.current.errorMessage).toContain("Tauri runtime unavailable");
   });
+
+  it("stays idle when explicitly disabled for ui-qa mode", async () => {
+    isTauriRuntimeAvailable.mockReturnValue(false);
+
+    const { result } = renderHook(() => useWorkspaceSessionsQuery(false), {
+      wrapper: createQueryClientWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(queryWorkspaceSessions).not.toHaveBeenCalled();
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.snapshot).toBeNull();
+  });
 });

@@ -111,4 +111,27 @@ describe("GlassSurface 컴포넌트", () => {
       "none",
     );
   });
+
+  it("Chromium의 interactive control에서도 soft refraction을 활성화한다", () => {
+    mockUserAgent(
+      "Mozilla/5.0 AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    );
+
+    const { container } = render(
+      <LiquidGlassProvider>
+        <GlassSurface interactive refraction="soft" variant="control">
+          <span>Control</span>
+        </GlassSurface>
+      </LiquidGlassProvider>,
+    );
+
+    const surface = container.querySelector("[data-glass-surface]");
+    const fxLayer = container.querySelector(".glass-surface__fx") as HTMLElement | null;
+
+    expect(surface).toHaveAttribute("data-variant", "control");
+    expect(surface).toHaveAttribute("data-refraction-active", "true");
+    expect(fxLayer?.style.getPropertyValue("--glass-refraction-filter")).toContain(
+      "url(#liquidGlassFilterSoft)",
+    );
+  });
 });

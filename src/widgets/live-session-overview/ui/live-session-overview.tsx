@@ -1,9 +1,5 @@
 import { GlassSurface } from "@/app/ui";
-import {
-  Activity,
-  AlertCircle,
-  Terminal,
-} from "lucide-react";
+import { Activity, AlertCircle, Sparkles, Terminal } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,9 +18,9 @@ interface LiveSessionOverviewProps {
 }
 
 const PANEL_HEADER_CLASS =
-  "border-b border-white/8 bg-white/[0.045] pb-4 backdrop-blur-[2px]";
+  "border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5";
 const METRIC_BLOCK_CLASS =
-  "rounded-2xl border border-white/6 bg-slate-950/20 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]";
+  "rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 
 export function LiveSessionOverview({
   degradedMessage,
@@ -34,22 +30,22 @@ export function LiveSessionOverview({
   snapshot,
 }: LiveSessionOverviewProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {errorMessage && !snapshot ? (
-        <GlassSurface className="rounded-xl" refraction="none" variant="danger">
-          <Alert variant="destructive" className="border-0 bg-transparent shadow-none">
+        <GlassSurface className="rounded-[1.6rem]" refraction="none" variant="danger">
+          <Alert variant="destructive" className="border-0 bg-transparent px-5 py-4 shadow-none">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Shell Fallback</AlertTitle>
+            <AlertTitle>Shell fallback</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         </GlassSurface>
       ) : null}
 
       {degradedMessage ? (
-        <GlassSurface className="rounded-xl" refraction="none" variant="warning">
-          <Alert className="border-0 bg-transparent text-amber-100 shadow-none">
+        <GlassSurface className="rounded-[1.6rem]" refraction="none" variant="warning">
+          <Alert className="border-0 bg-transparent px-5 py-4 text-amber-100 shadow-none">
             <AlertCircle className="h-4 w-4 stroke-amber-400" />
-            <AlertTitle className="text-amber-300">Live Updates Degraded</AlertTitle>
+            <AlertTitle className="text-amber-200">Live updates degraded</AlertTitle>
             <AlertDescription className="text-amber-100/80">
               {degradedMessage}
             </AlertDescription>
@@ -57,58 +53,77 @@ export function LiveSessionOverview({
         </GlassSurface>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <GlassSurface refraction="none" variant="panel">
           <Card className="overflow-hidden border-0 bg-transparent shadow-none ring-0">
             <CardHeader className={PANEL_HEADER_CLASS}>
-              <div className="mb-1 flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-widest text-emerald-400">
-                <Activity className="h-3.5 w-3.5" />
-                Selected Session
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-emerald-300">
+                    <Activity className="h-3.5 w-3.5" />
+                    Selected session
+                  </div>
+                  <CardTitle className="text-[1.85rem] font-normal tracking-tight text-white">
+                    {selectedSession
+                      ? (selectedSession.title ?? "Untitled session")
+                      : "Awaiting session selection"}
+                  </CardTitle>
+                </div>
+                <GlassSurface
+                  className="rounded-full"
+                  interactive
+                  refraction="soft"
+                  variant="control"
+                >
+                  <div className="flex items-center gap-2 px-3.5 py-2">
+                    <Sparkles className="h-3.5 w-3.5 text-sky-300" />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-100">
+                      {loading ? "syncing" : "ready"}
+                    </span>
+                  </div>
+                </GlassSurface>
               </div>
-              <CardTitle className="text-2xl font-normal text-slate-50">
-                {selectedSession
-                  ? (selectedSession.title ?? "Untitled session")
-                  : "No session selected"}
-              </CardTitle>
             </CardHeader>
-            <CardContent className="bg-[linear-gradient(180deg,rgba(2,6,23,0.08),transparent_42%)] p-6 pt-6 text-slate-300">
+            <CardContent className="bg-[linear-gradient(180deg,rgba(2,6,23,0.12),transparent_48%)] p-6 text-slate-300">
               {selectedSession ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+                <div className="grid grid-cols-2 gap-4">
                   <div className={METRIC_BLOCK_CLASS}>
-                    <p className="mb-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                    <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                       Status
                     </p>
-                    <p className="text-sm font-medium capitalize text-slate-200">
+                    <p className="text-sm font-medium capitalize text-slate-100">
                       {selectedSession.status}
                     </p>
                   </div>
                   <div className={METRIC_BLOCK_CLASS}>
-                    <p className="mb-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
-                      Last Event
+                    <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                      Last event
                     </p>
-                    <p className="text-sm font-medium text-slate-200">
+                    <p className="text-sm font-medium text-slate-100">
                       {formatTimestamp(selectedSession.last_event_at)}
                     </p>
                   </div>
                   <div className={METRIC_BLOCK_CLASS}>
-                    <p className="mb-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                    <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                       Events
                     </p>
-                    <p className="text-sm font-medium text-slate-200">
+                    <p className="text-sm font-medium text-slate-100">
                       {selectedSession.event_count}
                     </p>
                   </div>
                   <div className={METRIC_BLOCK_CLASS}>
-                    <p className="mb-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                    <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                       Source
                     </p>
-                    <p className="text-sm font-medium text-slate-200">
-                      {selectedSession.source_kind}
+                    <p className="text-sm font-medium text-slate-100">
+                      {selectedSession.source_kind === "archive_log"
+                        ? "archive replay"
+                        : "session log"}
                     </p>
                   </div>
                 </div>
               ) : (
-                <p className="rounded-2xl border border-white/6 bg-slate-950/20 px-4 py-4 text-sm text-slate-300/80">
+                <p className="rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 text-sm text-slate-300/78">
                   Choose a session from the sidebar once discovery returns data.
                 </p>
               )}
@@ -119,21 +134,38 @@ export function LiveSessionOverview({
         <GlassSurface refraction="none" variant="panel">
           <Card className="overflow-hidden border-0 bg-transparent shadow-none ring-0">
             <CardHeader className={PANEL_HEADER_CLASS}>
-              <div className="mb-1 flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-widest text-blue-400">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
                 <Terminal className="h-3.5 w-3.5" />
-                Shell Status
+                Shell state
               </div>
-              <CardTitle className="text-2xl font-normal text-slate-50">
-                {loading ? "Scanning logs..." : "Live shell ready."}
+              <CardTitle className="text-[1.65rem] font-normal tracking-tight text-white">
+                {loading ? "Scanning runtime edges..." : "Live shell in phase."}
               </CardTitle>
             </CardHeader>
-            <CardContent className="bg-[linear-gradient(180deg,rgba(2,6,23,0.08),transparent_42%)] p-6 pt-6">
-              <div className="rounded-2xl border border-white/6 bg-slate-950/20 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                <p className="text-sm leading-relaxed text-slate-300/85">
-                  Sidebar grouping, timeline split view, and glass hierarchy are
-                  active. Archive filtering and metrics drill-down can now build on
-                  the same chrome without reworking the shell.
+            <CardContent className="space-y-4 bg-[linear-gradient(180deg,rgba(2,6,23,0.12),transparent_48%)] p-6">
+              <div className="rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <p className="text-sm leading-relaxed text-slate-300/82">
+                  Shared chrome is active across live, archive, and metrics. The
+                  layout now favors floating controls over hard panel splits.
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Unified backdrop", tone: "text-sky-200" },
+                  { label: "Depth-first chrome", tone: "text-emerald-200" },
+                  { label: "Desktop tuned", tone: "text-amber-200" },
+                ].map((item) => (
+                  <GlassSurface
+                    key={item.label}
+                    className="rounded-full"
+                    refraction="none"
+                    variant="control"
+                  >
+                    <div className={`px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] ${item.tone}`}>
+                      {item.label}
+                    </div>
+                  </GlassSurface>
+                ))}
               </div>
             </CardContent>
           </Card>

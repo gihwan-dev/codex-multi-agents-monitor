@@ -13,6 +13,7 @@ const glassSurfaceVariants = cva(
         panel: "rounded-[1.25rem]",
         toolbar: "rounded-[1.25rem]",
         sidebar: "rounded-[1.25rem]",
+        control: "rounded-[1.25rem]",
         warning: "rounded-[1.25rem]",
         danger: "rounded-[1.25rem]",
       },
@@ -32,7 +33,7 @@ interface GlassSurfaceProps {
   className?: string;
   interactive?: boolean;
   refraction: "none" | "soft";
-  variant: "panel" | "toolbar" | "sidebar" | "warning" | "danger";
+  variant: "panel" | "toolbar" | "sidebar" | "control" | "warning" | "danger";
 }
 
 export function GlassSurface({
@@ -47,7 +48,7 @@ export function GlassSurface({
     mode === "enhanced" &&
     refraction === "soft" &&
     interactive &&
-    variant === "panel";
+    (variant === "panel" || variant === "control");
   const fxStyle = {
     "--glass-refraction-filter": refractionActive
       ? "url(#liquidGlassFilterSoft)"

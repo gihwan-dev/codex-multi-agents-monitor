@@ -6,10 +6,25 @@ import { AppQueryProvider } from "@/shared/query";
 import { AppShell } from "./app-shell";
 import "./styles.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <AppQueryProvider>
-      <AppShell />
-    </AppQueryProvider>
-  </React.StrictMode>,
-);
+async function resolveShell() {
+  if (
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("demo") === "ui-qa"
+  ) {
+    const { AppShellDemo } = await import("./app-shell-demo");
+    return AppShellDemo;
+  }
+
+  return AppShell;
+}
+
+void resolveShell().then((Shell) => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <AppQueryProvider>
+        <Shell />
+      </AppQueryProvider>
+    </React.StrictMode>,
+  );
+});

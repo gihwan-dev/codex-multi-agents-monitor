@@ -9,6 +9,7 @@ export default defineConfig({
   clearScreen: false,
   test: {
     environment: "jsdom",
+    exclude: ["playwright/**", "node_modules/**"],
     setupFiles: "./src/test/setup.ts",
   },
   resolve: {

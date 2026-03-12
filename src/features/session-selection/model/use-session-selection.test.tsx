@@ -74,4 +74,15 @@ describe("useSessionSelection", () => {
 
     expect(result.current.selectedSessionId).toBe("session-1");
   });
+
+  it("honors a preferred session id when ui-qa mode seeds the selection", () => {
+    const { result } = renderHook(() =>
+      useSessionSelection(
+        createSnapshot(["session-1", "session-2"]),
+        "session-2",
+      ),
+    );
+
+    expect(result.current.selectedSessionId).toBe("session-2");
+  });
 });

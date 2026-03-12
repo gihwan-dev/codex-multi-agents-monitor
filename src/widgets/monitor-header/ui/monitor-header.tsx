@@ -1,5 +1,5 @@
 import { GlassSurface } from "@/app/ui";
-import { Clock } from "lucide-react";
+import { Clock, Sparkles } from "lucide-react";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,50 +18,63 @@ export function MonitorHeader({
   refreshedAt,
 }: MonitorHeaderProps) {
   return (
-    <GlassSurface
-      className="sticky top-0 z-20 rounded-none"
-      refraction="none"
-      variant="toolbar"
-    >
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 px-4 md:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
-          <SidebarTrigger className="rounded-full border border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.1] hover:text-white" />
-          <div className="h-4 w-px bg-white/10" />
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => onTabChange(value as MonitorTab)}
-            className="h-full items-center"
-          >
-            <TabsList className="h-10 rounded-full border border-white/14 bg-white/[0.06] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-              <TabsTrigger
-                value="live"
-                className="rounded-full px-3 text-xs text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
-              >
-                Live Shell
-              </TabsTrigger>
-              <TabsTrigger
-                value="archive"
-                className="rounded-full px-3 text-xs text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
-              >
-                Archive
-              </TabsTrigger>
-              <TabsTrigger
-                value="metrics"
-                className="rounded-full px-3 text-xs text-slate-300 data-[active]:border-white/16 data-[active]:bg-white/[0.14] data-[active]:text-slate-50"
-              >
-                Metrics
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+    <header className="sticky top-0 z-20 px-4 pb-1 pt-4 md:px-6 lg:px-8">
+      <div className="flex w-full items-center justify-between gap-4">
+        <GlassSurface
+          className="inline-flex rounded-[1.75rem]"
+          interactive
+          refraction="none"
+          variant="toolbar"
+        >
+          <div className="flex min-h-14 items-center gap-2 px-2 py-2">
+            <SidebarTrigger className="size-10 rounded-[1.2rem] border-0 bg-white/[0.06] text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] hover:bg-white/[0.12] hover:text-white [&_svg]:size-[1.05rem]" />
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => onTabChange(value as MonitorTab)}
+              className="h-full items-center"
+            >
+              <TabsList className="h-10 gap-1 rounded-[1.2rem] border-0 bg-transparent p-0 shadow-none">
+                <TabsTrigger
+                  value="live"
+                  className="rounded-[1rem] px-4 text-[11px] font-mono uppercase tracking-[0.22em] text-slate-300 data-[active]:border-white/10 data-[active]:bg-white/[0.14] data-[active]:text-white"
+                >
+                  Live
+                </TabsTrigger>
+                <TabsTrigger
+                  value="archive"
+                  className="rounded-[1rem] px-4 text-[11px] font-mono uppercase tracking-[0.22em] text-slate-300 data-[active]:border-white/10 data-[active]:bg-white/[0.14] data-[active]:text-white"
+                >
+                  Archive
+                </TabsTrigger>
+                <TabsTrigger
+                  value="metrics"
+                  className="rounded-[1rem] px-4 text-[11px] font-mono uppercase tracking-[0.22em] text-slate-300 data-[active]:border-white/10 data-[active]:bg-white/[0.14] data-[active]:text-white"
+                >
+                  Metrics
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </GlassSurface>
 
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-mono text-slate-300/80">
-            <Clock className="h-3.5 w-3.5" />
-            {refreshedAt ? formatTimestamp(refreshedAt) : "Awaiting"}
-          </span>
-        </div>
-      </header>
-    </GlassSurface>
+        <GlassSurface
+          className="rounded-full"
+          interactive
+          refraction="soft"
+          variant="control"
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-slate-200">
+            <Sparkles className="h-3.5 w-3.5 text-sky-300" />
+            <span className="font-mono uppercase tracking-[0.22em] text-slate-400">
+              Refreshed
+            </span>
+            <span className="flex items-center gap-1.5 font-mono text-slate-100">
+              <Clock className="h-3.5 w-3.5 text-emerald-300" />
+              {refreshedAt ? formatTimestamp(refreshedAt) : "Awaiting signal"}
+            </span>
+          </div>
+        </GlassSurface>
+      </div>
+    </header>
   );
 }

@@ -1,110 +1,211 @@
 import { GlassSurface } from "@/app/ui";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Archive, Calendar, Folder, Clock, Search, ListFilter, SlidersHorizontal } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Archive,
+  Calendar,
+  Clock3,
+  Filter,
+  Folder,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
+
+const FILTERS = [
+  { icon: Folder, label: "Workspace", accent: "text-emerald-200" },
+  { icon: Calendar, label: "Date range", accent: "text-sky-200" },
+  { icon: Clock3, label: "Duration", accent: "text-amber-200" },
+  { icon: Filter, label: "Status", accent: "text-rose-200" },
+];
+
+const ARCHIVE_ROWS = [
+  {
+    title: "Refactor authentication flow",
+    date: "2026-03-12 14:20",
+    workspace: "codex-monitor",
+    duration: "4m 12s",
+    agents: 3,
+    flag: "Visual QA",
+  },
+  {
+    title: "Debug PostgreSQL connection",
+    date: "2026-03-11 09:15",
+    workspace: "backend-api",
+    duration: "18m 45s",
+    agents: 5,
+    flag: "Replay",
+  },
+  {
+    title: "Setup Tailwind config",
+    date: "2026-03-10 16:30",
+    workspace: "landing-page",
+    duration: "1m 05s",
+    agents: 0,
+    flag: null,
+  },
+  {
+    title: "Investigate memory leak",
+    date: "2026-03-09 11:10",
+    workspace: "core-daemon",
+    duration: "2h 15m",
+    agents: 12,
+    flag: "Flagged",
+  },
+];
 
 export function ArchiveMonitor() {
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Filter Rail */}
+    <div className="flex h-full flex-col gap-5">
       <GlassSurface refraction="none" variant="panel" className="shrink-0">
         <Card className="border-0 bg-transparent shadow-none ring-0">
-          <CardContent className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-wrap items-center gap-2 flex-1 w-full">
-              <div className="relative w-64 max-w-full">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                <Input 
-                  type="text" 
-                  placeholder="Search sessions..." 
-                  className="pl-9 bg-black/20 border-white/10 text-slate-200 placeholder:text-slate-600 focus-visible:ring-emerald-500/50"
-                />
+          <CardContent className="flex flex-col gap-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-slate-500">
+                  Replay search
+                </p>
+                <p className="mt-1 text-sm text-slate-300/78">
+                  Archive uses the same control language as live, just colder and denser.
+                </p>
               </div>
-
-              <Button variant="outline" size="sm" className="bg-black/20 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white group gap-2">
-                <Folder className="h-4 w-4 text-slate-400 group-hover:text-emerald-400" />
-                Workspace
-              </Button>
-              <Button variant="outline" size="sm" className="bg-black/20 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white group gap-2">
-                <Calendar className="h-4 w-4 text-slate-400 group-hover:text-blue-400" />
-                Date Range
-              </Button>
-              <Button variant="outline" size="sm" className="bg-black/20 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white group gap-2">
-                <Clock className="h-4 w-4 text-slate-400 group-hover:text-amber-400" />
-                Duration
-              </Button>
-              <Button variant="outline" size="sm" className="bg-black/20 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white group gap-2">
-                <ListFilter className="h-4 w-4 text-slate-400 group-hover:text-red-400" />
-                Status
-              </Button>
+              <GlassSurface className="rounded-full" refraction="none" variant="control">
+                <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-100">
+                  <Archive className="h-3.5 w-3.5 text-sky-300" />
+                  4 replays staged
+                </div>
+              </GlassSurface>
             </div>
-            
-            <Button variant="secondary" size="sm" className="bg-slate-800 text-slate-200 hover:bg-slate-700 gap-2 font-mono text-xs">
-              <SlidersHorizontal className="h-3 w-3" />
-              All Filters
-            </Button>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <GlassSurface className="min-w-[18rem] rounded-[1.4rem]" refraction="none" variant="control">
+                <div className="relative flex items-center px-3 py-2.5">
+                  <Search className="mr-2 h-4 w-4 text-slate-500" />
+                  <Input
+                    type="text"
+                    placeholder="Search archived sessions"
+                    className="h-auto border-0 bg-transparent px-0 py-0 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:ring-0"
+                  />
+                </div>
+              </GlassSurface>
+
+              {FILTERS.map((filter) => (
+                <GlassSurface
+                  key={filter.label}
+                  className="rounded-full"
+                  interactive
+                  refraction="soft"
+                  variant="control"
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 rounded-[inherit] border-0 bg-transparent px-3 text-slate-200 hover:bg-transparent hover:text-white"
+                  >
+                    <filter.icon className={`h-4 w-4 ${filter.accent}`} />
+                    {filter.label}
+                  </Button>
+                </GlassSurface>
+              ))}
+
+              <GlassSurface className="ml-auto rounded-full" interactive refraction="soft" variant="control">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 rounded-[inherit] border-0 bg-transparent px-3 text-slate-100 hover:bg-transparent hover:text-white"
+                >
+                  <SlidersHorizontal className="h-4 w-4 text-amber-200" />
+                  All filters
+                </Button>
+              </GlassSurface>
+            </div>
           </CardContent>
         </Card>
       </GlassSurface>
 
-      {/* Main Content: List + Detail Split View (Detail reused from Timeline, here we just show the list for now) */}
-      <div className="flex-1 min-h-0 flex gap-4">
-        <GlassSurface refraction="none" variant="panel" className="flex-1 overflow-hidden flex flex-col">
-          <Card className="border-0 bg-transparent flex-1 flex flex-col shadow-none ring-0 overflow-hidden rounded-none">
-            <CardHeader className="pb-3 pt-4 px-6 border-b border-white/5 shrink-0 bg-slate-900/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Archive className="h-5 w-5 text-slate-400" />
-                  <CardTitle className="text-lg font-sans">Archived Sessions</CardTitle>
-                </div>
-                <Badge variant="outline" className="font-mono text-[10px] border-white/10 bg-black/20 text-slate-400">
-                  4 Items Found
-                </Badge>
+      <GlassSurface refraction="none" variant="panel" className="flex flex-1 flex-col overflow-hidden">
+        <Card className="flex flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
+          <CardHeader className="border-b border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-6 pb-4 pt-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="mb-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
+                  Archived sessions
+                </p>
+                <CardTitle className="text-[1.55rem] font-normal tracking-tight text-white">
+                  Replay-ready history
+                </CardTitle>
               </div>
-            </CardHeader>
-            <CardContent className="p-0 overflow-auto flex-1">
-              <Table>
-                <TableHeader className="bg-slate-950/50 sticky top-0 z-10 backdrop-blur-md">
-                  <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableHead className="w-[300px] text-xs font-mono text-slate-500 font-medium">Session Title</TableHead>
-                    <TableHead className="text-xs font-mono text-slate-500 font-medium">Date</TableHead>
-                    <TableHead className="text-xs font-mono text-slate-500 font-medium hidden md:table-cell">Workspace</TableHead>
-                    <TableHead className="text-right text-xs font-mono text-slate-500 font-medium">Duration</TableHead>
-                    <TableHead className="text-right text-xs font-mono text-slate-500 font-medium">Sub-agents</TableHead>
+              <Badge
+                variant="outline"
+                className="border-white/10 bg-white/[0.04] font-mono text-[10px] uppercase tracking-[0.18em] text-slate-200"
+              >
+                Dense diagnostic list
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-auto p-0">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-[#07111d]/88 backdrop-blur-xl">
+                <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableHead className="w-[340px] text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                    Session
+                  </TableHead>
+                  <TableHead className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                    Date
+                  </TableHead>
+                  <TableHead className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                    Workspace
+                  </TableHead>
+                  <TableHead className="text-right text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                    Duration
+                  </TableHead>
+                  <TableHead className="text-right text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                    Agents
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-sm">
+                {ARCHIVE_ROWS.map((row) => (
+                  <TableRow
+                    key={row.title}
+                    className="border-white/5 transition-colors hover:bg-white/[0.04]"
+                  >
+                    <TableCell className="py-4 text-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{row.title}</span>
+                        {row.flag ? (
+                          <Badge
+                            variant="outline"
+                            className="h-5 border-white/10 bg-white/[0.04] px-2 text-[9px] uppercase tracking-[0.18em] text-slate-300"
+                          >
+                            {row.flag}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-slate-400">
+                      {row.date}
+                    </TableCell>
+                    <TableCell className="text-slate-300/82">{row.workspace}</TableCell>
+                    <TableCell className="text-right font-mono text-[11px] text-slate-400">
+                      {row.duration}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <GlassSurface className="ml-auto inline-flex rounded-full" refraction="none" variant="control">
+                        <div className="px-2.5 py-1.5 font-mono text-[10px] text-slate-100">
+                          {row.agents}
+                        </div>
+                      </GlassSurface>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody className="text-sm">
-                  {[
-                    { title: "Refactor Authentication Flow", date: "2026-03-12 14:20", ws: "exem-ui", dur: "4m 12s", agents: 3, flag: false },
-                    { title: "Debug PostgreSQL Connection", date: "2026-03-11 09:15", ws: "backend-api", dur: "18m 45s", agents: 5, flag: true },
-                    { title: "Setup Tailwind Config", date: "2026-03-10 16:30", ws: "landing-page", dur: "1m 05s", agents: 0, flag: false },
-                    { title: "Investigate Memory Leak", date: "2026-03-09 11:10", ws: "core-daemon", dur: "2h 15m", agents: 12, flag: true },
-                  ].map((s, i) => (
-                    <TableRow key={i} className="border-white/5 hover:bg-white/5 group cursor-pointer transition-colors">
-                      <TableCell className="font-medium text-slate-300">
-                         <div className="flex items-center gap-2">
-                           <span className="truncate max-w-[200px]">{s.title}</span>
-                           {s.flag && <Badge variant="outline" className="h-4 px-1 text-[8px] border-amber-500/30 text-amber-500/70 uppercase">Flagged</Badge>}
-                         </div>
-                      </TableCell>
-                      <TableCell className="text-slate-400 font-mono text-xs">{s.date}</TableCell>
-                      <TableCell className="text-slate-400 hidden md:table-cell">{s.ws}</TableCell>
-                      <TableCell className="text-right text-slate-400 font-mono text-xs">{s.dur}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className="border-white/10 text-slate-400 font-mono text-xs bg-black/20">
-                          {s.agents}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </GlassSurface>
-      </div>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </GlassSurface>
     </div>
   );
 }

@@ -8,8 +8,17 @@ import {
 
 export function useSessionSelection(
   snapshot: WorkspaceSessionsSnapshot | null,
+  preferredSessionId?: string | null,
 ) {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!preferredSessionId) {
+      return;
+    }
+
+    setSelectedSessionId(preferredSessionId);
+  }, [preferredSessionId]);
 
   useEffect(() => {
     if (!snapshot) {
