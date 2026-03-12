@@ -17,6 +17,9 @@ test-results
 target
 gen
 *.local
+review-shots/
+review-shots-pass2/
+review-shots-pass3/
 
 # Editor directories and files
 .vscode/*

@@ -12,6 +12,9 @@ interface MonitorHeaderProps {
   refreshedAt: string | null;
 }
 
+const HEADER_TAB_TRIGGER_CLASS =
+  "rounded-[0.95rem] px-4 text-[12.5px] font-medium tracking-[-0.01em] text-slate-400/78 transition-[background-color,color,box-shadow] duration-200 hover:text-slate-200 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] focus-visible:border-white/18 focus-visible:bg-white/[0.16] focus-visible:text-white focus-visible:ring-[3px] focus-visible:ring-sky-200/26 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_28px_rgba(125,211,252,0.18)] focus-visible:outline-none";
+
 export function MonitorHeader({
   activeTab,
   onTabChange,
@@ -43,19 +46,19 @@ export function MonitorHeader({
               <TabsList className="h-10 gap-1 rounded-[1.15rem] border-0 bg-transparent p-0 shadow-none">
                 <TabsTrigger
                   value="live"
-                  className="rounded-[0.95rem] px-4 text-[12.5px] font-medium tracking-[-0.01em] text-slate-400/78 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
+                  className={HEADER_TAB_TRIGGER_CLASS}
                 >
                   Live
                 </TabsTrigger>
                 <TabsTrigger
                   value="archive"
-                  className="rounded-[0.95rem] px-4 text-[12.5px] font-medium tracking-[-0.01em] text-slate-400/78 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
+                  className={HEADER_TAB_TRIGGER_CLASS}
                 >
                   Archive
                 </TabsTrigger>
                 <TabsTrigger
                   value="metrics"
-                  className="rounded-[0.95rem] px-4 text-[12.5px] font-medium tracking-[-0.01em] text-slate-400/78 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
+                  className={HEADER_TAB_TRIGGER_CLASS}
                 >
                   Metrics
                 </TabsTrigger>

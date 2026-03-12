@@ -14,6 +14,8 @@ interface DetailDrawerProps {
 
 const PANEL_CARD_CLASS =
   "gap-0 flex h-full flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0";
+const DETAIL_TAB_TRIGGER_CLASS =
+  "rounded-[0.85rem] px-3 text-[12px] font-medium tracking-[0.01em] text-slate-300/70 transition-[background-color,color,box-shadow] duration-200 data-[active]:border-white/8 data-[active]:bg-white/[0.1] data-[active]:text-white focus-visible:border-white/18 focus-visible:bg-white/[0.14] focus-visible:text-white focus-visible:ring-[3px] focus-visible:ring-sky-200/26 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_24px_rgba(125,211,252,0.16)] focus-visible:outline-none";
 
 function describeStatus(status: SessionSummary["status"] | undefined) {
   switch (status) {
@@ -51,17 +53,17 @@ export function DetailDrawer({
     <GlassSurface
       refraction="none"
       variant="panel"
-      className="flex h-full min-h-[520px] flex-col overflow-hidden"
+      className="panel-subtle flex h-full min-h-[520px] flex-col overflow-hidden"
     >
       <Card className={PANEL_CARD_CLASS}>
-        <CardHeader className="bg-transparent px-5 pb-4 pt-5">
+        <CardHeader className="bg-transparent px-5 pb-3.5 pt-5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 max-w-[30rem]">
               <p className="mb-2 text-[11px] font-medium text-slate-400">Session detail</p>
-              <CardTitle className="max-w-[24ch] text-[1.55rem] font-normal leading-[1.02] tracking-[-0.03em] text-white break-words">
+              <CardTitle className="max-w-[24ch] text-[1.4rem] font-normal leading-[1.04] tracking-[-0.03em] text-white break-words">
                 {sessionTitle}
               </CardTitle>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/72">
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/64">
                 {describeStatus(selectedSession?.status)}
               </p>
             </div>
@@ -72,13 +74,13 @@ export function DetailDrawer({
                 refraction="soft"
                 variant="control"
               >
-                <div className="px-3 py-2">
+                <div className="px-2.5 py-1.5">
                   <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
                     {selectedSession?.status ?? "Idle"}
                   </span>
                 </div>
               </GlassSurface>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500/88">
                 {selectedSession ? `${selectedSession.event_count} events` : "No session"}
               </p>
             </div>
@@ -86,35 +88,23 @@ export function DetailDrawer({
         </CardHeader>
         <CardContent className="flex flex-1 flex-col overflow-hidden bg-transparent p-0">
           <Tabs defaultValue="summary" className="flex h-full w-full flex-col">
-            <div className="px-4 py-3">
+            <div className="px-4 py-2.5">
               <GlassSurface
                 className="inline-flex max-w-full overflow-x-auto rounded-[1.3rem] no-scrollbar"
                 refraction="none"
                 variant="toolbar"
               >
-                <TabsList className="h-10 w-max gap-1 rounded-[1.1rem] border-0 bg-transparent p-1 shadow-none">
-                  <TabsTrigger
-                    value="summary"
-                    className="rounded-[0.9rem] px-3.5 text-[12px] font-medium tracking-[0.01em] text-slate-300/74 data-[active]:border-white/8 data-[active]:bg-white/[0.12] data-[active]:text-white"
-                  >
+                <TabsList className="h-9 w-max gap-1 rounded-[1.1rem] border-0 bg-transparent p-1 shadow-none">
+                  <TabsTrigger value="summary" className={DETAIL_TAB_TRIGGER_CLASS}>
                     Summary
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="io"
-                    className="rounded-[0.9rem] px-3.5 text-[12px] font-medium tracking-[0.01em] text-slate-300/74 data-[active]:border-white/8 data-[active]:bg-white/[0.12] data-[active]:text-white"
-                  >
+                  <TabsTrigger value="io" className={DETAIL_TAB_TRIGGER_CLASS}>
                     I/O
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="raw"
-                    className="rounded-[0.9rem] px-3.5 text-[12px] font-medium tracking-[0.01em] text-slate-300/74 data-[active]:border-white/8 data-[active]:bg-white/[0.12] data-[active]:text-white"
-                  >
+                  <TabsTrigger value="raw" className={DETAIL_TAB_TRIGGER_CLASS}>
                     Raw
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="metrics"
-                    className="rounded-[0.9rem] px-3.5 text-[12px] font-medium tracking-[0.01em] text-slate-300/74 data-[active]:border-white/8 data-[active]:bg-white/[0.12] data-[active]:text-white"
-                  >
+                  <TabsTrigger value="metrics" className={DETAIL_TAB_TRIGGER_CLASS}>
                     Metrics
                   </TabsTrigger>
                 </TabsList>
@@ -124,7 +114,7 @@ export function DetailDrawer({
             <div className="flex-1 overflow-hidden">
               <ScrollArea className="h-full px-4 pb-5 md:px-5 no-scrollbar">
                 <TabsContent value="summary" className="m-0 space-y-4 outline-none">
-                  <section className="rounded-[1.45rem] border border-white/6 bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <h3 className="mb-2 text-[12px] font-medium text-slate-400">Summary</h3>
                     <p className="text-sm leading-relaxed text-slate-200/88">
                       {summaryEvent?.summary ??
@@ -137,7 +127,7 @@ export function DetailDrawer({
                     ) : null}
                   </section>
 
-                  <section className="rounded-[1.45rem] border border-white/6 bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <h3 className="mb-2 text-[12px] font-medium text-slate-400">Latest</h3>
                     <div className="space-y-2 text-sm text-slate-300/78">
                       <p>{latestEvent?.summary ?? "No latest event payload available yet."}</p>
@@ -151,7 +141,7 @@ export function DetailDrawer({
                 </TabsContent>
 
                 <TabsContent value="io" className="m-0 space-y-4 outline-none">
-                  <section className="rounded-[1.45rem] border border-white/6 bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <h3 className="mb-2 text-[12px] font-medium text-slate-400">Payload preview</h3>
                     <pre className="overflow-x-auto rounded-[1.15rem] border border-white/8 bg-[#0a1018]/60 p-3 text-[11px] text-slate-300 no-scrollbar">
 {summaryEvent?.payload_preview ??
@@ -161,7 +151,7 @@ export function DetailDrawer({
                 </TabsContent>
 
                 <TabsContent value="raw" className="m-0 outline-none">
-                  <pre className="w-full overflow-x-auto rounded-[1.45rem] border border-white/6 bg-[#0a1018]/68 p-4 text-[11px] text-slate-300/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] no-scrollbar">
+                  <pre className="w-full overflow-x-auto rounded-[1.45rem] border border-white/5 bg-[#0a1018]/64 p-4 text-[11px] text-slate-300/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] no-scrollbar">
 {JSON.stringify(
   {
     session: activeDetail?.bundle.session ?? null,
@@ -179,7 +169,7 @@ export function DetailDrawer({
                       metrics.map((metric) => (
                         <section
                           key={metric.metric_id}
-                          className="rounded-[1.4rem] border border-white/6 bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                          className="rounded-[1.4rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                         >
                           <p className="text-[11px] font-medium text-slate-500 capitalize">
                             {metric.name.split("_").join(" ")}
@@ -191,7 +181,7 @@ export function DetailDrawer({
                         </section>
                       ))
                     ) : (
-                      <section className="rounded-[1.4rem] border border-white/6 bg-white/[0.03] p-5 text-sm text-slate-300/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:col-span-2">
+                      <section className="rounded-[1.4rem] border border-white/5 bg-white/[0.024] p-5 text-sm text-slate-300/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:col-span-2">
                         No metrics available for the selected session.
                       </section>
                     )}

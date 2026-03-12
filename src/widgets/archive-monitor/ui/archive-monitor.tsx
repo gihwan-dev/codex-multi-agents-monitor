@@ -61,9 +61,9 @@ const PANEL_CARD_CLASS =
 export function ArchiveMonitor() {
   return (
     <div className="flex h-full flex-col gap-5">
-      <GlassSurface refraction="none" variant="panel" className="shrink-0">
+      <GlassSurface refraction="none" variant="panel" className="panel-subtle shrink-0">
         <Card className={PANEL_CARD_CLASS}>
-          <CardContent className="flex flex-col gap-4 bg-transparent p-5 md:p-6">
+          <CardContent className="flex flex-col gap-3.5 bg-transparent p-4 md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-medium text-slate-400">
@@ -82,17 +82,17 @@ export function ArchiveMonitor() {
 
             <div className="flex flex-col gap-3">
               <GlassSurface
-                className="group/search w-full rounded-[1.4rem]"
+                className="group/search w-full rounded-[1.3rem]"
                 interactive
                 refraction="soft"
                 variant="control"
               >
-                <div className="relative flex items-center rounded-[inherit] bg-transparent px-3 py-2.5 ring-1 ring-transparent transition-all duration-200 group-focus-within/search:bg-white/[0.065] group-focus-within/search:ring-sky-100/80 group-focus-within/search:shadow-[0_0_0_10px_rgba(191,219,254,0.18),0_18px_36px_rgba(8,47,73,0.22),inset_0_1px_0_rgba(255,255,255,0.18)]">
-                  <Search className="mr-2 h-4 w-4 text-slate-500 transition-all duration-200 group-focus-within/search:scale-105 group-focus-within/search:text-slate-100" />
+                <div className="relative flex items-center rounded-[inherit] bg-transparent px-3 py-2 ring-1 ring-white/4 transition-all duration-200 group-focus-within/search:bg-white/[0.1] group-focus-within/search:ring-sky-100 group-focus-within/search:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_0_8px_rgba(125,211,252,0.24),0_0_34px_rgba(56,189,248,0.18),0_20px_38px_rgba(8,47,73,0.28),inset_0_1px_0_rgba(255,255,255,0.22)]">
+                  <Search className="mr-2 h-4 w-4 text-slate-500 transition-all duration-200 group-focus-within/search:scale-110 group-focus-within/search:text-sky-50" />
                   <Input
                     type="text"
                     placeholder="Search sessions"
-                    className="h-auto border-0 bg-transparent px-0 py-0 text-sm text-slate-100 placeholder:text-slate-500 group-focus-within/search:placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-0"
+                    className="h-auto border-0 bg-transparent px-0 py-0 text-sm text-slate-100 placeholder:text-slate-500 group-focus-within/search:placeholder:text-slate-300 focus-visible:outline-none focus-visible:ring-0"
                   />
                 </div>
               </GlassSurface>
@@ -110,7 +110,7 @@ export function ArchiveMonitor() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-10 rounded-[inherit] border-0 bg-transparent px-3 text-[12px] font-medium text-slate-300/82 transition-colors duration-200 hover:bg-transparent hover:text-white"
+                        className="h-9 rounded-[inherit] border-0 bg-transparent px-3 text-[12px] font-medium text-slate-300/82 transition-colors duration-200 hover:bg-transparent hover:text-white"
                       >
                         <filter.icon className="h-4 w-4 text-slate-400" />
                         {filter.label}
@@ -127,7 +127,7 @@ export function ArchiveMonitor() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-10 rounded-[inherit] border-0 bg-transparent px-3 text-[12px] font-medium text-slate-300/82 transition-colors duration-200 hover:bg-transparent hover:text-white"
+                      className="h-9 rounded-[inherit] border-0 bg-transparent px-3 text-[12px] font-medium text-slate-300/82 transition-colors duration-200 hover:bg-transparent hover:text-white"
                     >
                       <SlidersHorizontal className="h-4 w-4 text-slate-400" />
                       All filters
@@ -142,7 +142,7 @@ export function ArchiveMonitor() {
 
       <GlassSurface refraction="none" variant="panel" className="flex flex-1 flex-col overflow-hidden">
         <Card className={`flex flex-1 flex-col ${PANEL_CARD_CLASS}`}>
-          <CardHeader className="bg-transparent px-6 pb-4 pt-5">
+          <CardHeader className="bg-transparent px-6 pb-3 pt-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="mb-2 text-[11px] font-medium text-slate-400">Archive</p>
@@ -159,21 +159,21 @@ export function ArchiveMonitor() {
           </CardHeader>
           <CardContent className="flex-1 overflow-auto bg-transparent p-0 no-scrollbar">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(7,17,29,0.44),rgba(7,17,29,0.18))] backdrop-blur-xl">
-                <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-[38%] min-w-[18rem] text-[12px] font-medium text-slate-400/82">
+              <TableHeader className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(12,18,30,0.86),rgba(7,11,20,0.72))] shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+                <TableRow className="border-white/7 hover:bg-transparent">
+                  <TableHead className="w-[38%] min-w-[18rem] text-[12px] font-medium tracking-[0.01em] text-slate-300/92">
                     Session
                   </TableHead>
-                  <TableHead className="text-[12px] font-medium text-slate-400/82">
+                  <TableHead className="text-[12px] font-medium tracking-[0.01em] text-slate-300/92">
                     Date
                   </TableHead>
-                  <TableHead className="text-[12px] font-medium text-slate-400/82">
+                  <TableHead className="text-[12px] font-medium tracking-[0.01em] text-slate-300/92">
                     Workspace
                   </TableHead>
-                  <TableHead className="text-right text-[12px] font-medium text-slate-400/82">
+                  <TableHead className="text-right text-[12px] font-medium tracking-[0.01em] text-slate-300/92">
                     Duration
                   </TableHead>
-                  <TableHead className="text-right text-[12px] font-medium text-slate-400/82">
+                  <TableHead className="text-right text-[12px] font-medium tracking-[0.01em] text-slate-300/92">
                     Agents
                   </TableHead>
                 </TableRow>

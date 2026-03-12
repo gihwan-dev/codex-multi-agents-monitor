@@ -50,13 +50,12 @@ const UTILIZATION_BARS = [
   { label: "Review", value: 42, tone: "from-slate-300/70 to-slate-500/16" },
 ];
 
-const LATENCY_POINTS = [
-  38, 56, 44, 68, 62, 74, 58, 70,
-];
+const LATENCY_POINTS = [612, 684, 640, 736, 708, 762, 692, 742];
 
 const LATENCY_CHART_WIDTH = 360;
 const LATENCY_CHART_HEIGHT = 176;
 const LATENCY_CHART = buildLatencyChart(LATENCY_POINTS);
+const LATENCY_SUMMARY = summarizeLatency(LATENCY_POINTS);
 
 const PANEL_CARD_CLASS =
   "gap-0 border-0 bg-transparent shadow-none ring-0";
@@ -138,7 +137,7 @@ export function MetricsDashboard() {
           </Card>
         </GlassSurface>
 
-        <GlassSurface refraction="none" variant="panel" className="flex flex-col">
+        <GlassSurface refraction="none" variant="panel" className="panel-subtle flex flex-col">
           <Card className={`flex flex-1 flex-col ${PANEL_CARD_CLASS}`}>
             <CardHeader className="bg-transparent px-6 pb-4 pt-5">
               <div className="flex items-center gap-2 text-[11px] font-medium text-slate-400">
@@ -146,10 +145,31 @@ export function MetricsDashboard() {
                 Latency
               </div>
               <CardTitle className="max-w-[24ch] text-[1.55rem] font-normal tracking-tight text-white">
-                Latency
+                Latency watch
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col gap-5 bg-transparent p-6">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <SignalBlock
+                  label="Anomaly"
+                  tone="text-amber-200"
+                  value={LATENCY_SUMMARY.anomalyValue}
+                  detail={`Peak ${LATENCY_SUMMARY.peak} ms`}
+                />
+                <SignalBlock
+                  label="Trend"
+                  tone="text-sky-200"
+                  value={LATENCY_SUMMARY.trendValue}
+                  detail={LATENCY_SUMMARY.trendDetail}
+                />
+                <SignalBlock
+                  label="Stability"
+                  tone="text-slate-100"
+                  value={LATENCY_SUMMARY.stabilityValue}
+                  detail={`Spread ${LATENCY_SUMMARY.spread} ms`}
+                />
+              </div>
+
               <div className="rounded-[1.5rem] border border-white/6 bg-white/[0.03] px-4 pb-4 pt-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -157,10 +177,13 @@ export function MetricsDashboard() {
                     <p className="mt-2 text-[1.7rem] font-normal tracking-tight text-white">
                       740 ms
                     </p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {LATENCY_SUMMARY.statusCopy}
+                    </p>
                   </div>
                   <div className="text-right text-[11px] text-slate-500">
                     <p>Last 8 samples</p>
-                    <p className="mt-1 text-slate-300">Stable</p>
+                    <p className="mt-1 text-slate-300">{LATENCY_SUMMARY.stabilityValue}</p>
                   </div>
                 </div>
                 <div className="mt-4 h-44 overflow-hidden rounded-[1.2rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] px-2 py-3">
@@ -175,10 +198,7 @@ export function MetricsDashboard() {
                         <stop offset="100%" stopColor="rgba(191,219,254,0.02)" />
                       </linearGradient>
                     </defs>
-                    <path
-                      d={LATENCY_CHART.areaPath}
-                      fill="url(#latencyArea)"
-                    />
+                    <path d={LATENCY_CHART.areaPath} fill="url(#latencyArea)" />
                     <polyline
                       fill="none"
                       points={LATENCY_CHART.linePoints}
@@ -187,15 +207,43 @@ export function MetricsDashboard() {
                       strokeLinejoin="round"
                       strokeWidth="3"
                     />
+                    {LATENCY_CHART.peakPoint ? (
+                      <>
+                        <line
+                          x1={LATENCY_CHART.peakPoint.x}
+                          x2={LATENCY_CHART.peakPoint.x}
+                          y1="14"
+                          y2={LATENCY_CHART_HEIGHT - 22}
+                          stroke="rgba(251,191,36,0.28)"
+                          strokeDasharray="4 4"
+                        />
+                        <text
+                          fill="rgba(253,230,138,0.92)"
+                          fontSize="10"
+                          x={Math.min(LATENCY_CHART.peakPoint.x + 8, LATENCY_CHART_WIDTH - 44)}
+                          y={Math.max(LATENCY_CHART.peakPoint.y - 10, 18)}
+                        >
+                          Peak
+                        </text>
+                      </>
+                    ) : null}
                     {LATENCY_CHART.points.map((point) => (
                       <circle
                         key={point.x}
                         cx={point.x}
                         cy={point.y}
-                        fill="rgba(7, 11, 20, 0.92)"
-                        r="4"
-                        stroke="rgba(219, 234, 254, 0.78)"
-                        strokeWidth="1.5"
+                        fill={
+                          point.isPeak
+                            ? "rgba(120, 53, 15, 0.58)"
+                            : "rgba(7, 11, 20, 0.92)"
+                        }
+                        r={point.isPeak ? "5.5" : "4"}
+                        stroke={
+                          point.isPeak
+                            ? "rgba(251, 191, 36, 0.95)"
+                            : "rgba(219, 234, 254, 0.78)"
+                        }
+                        strokeWidth={point.isPeak ? "2" : "1.5"}
                       />
                     ))}
                   </svg>
@@ -203,8 +251,16 @@ export function MetricsDashboard() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <MetricBlock label="Frame budget" value="Stable" tone="text-slate-100" />
-                <MetricBlock label="Variance" value="Low" tone="text-sky-200" />
+                <MetricBlock
+                  label="Current sample"
+                  value={`${LATENCY_SUMMARY.current} ms`}
+                  tone="text-slate-100"
+                />
+                <MetricBlock
+                  label="Baseline"
+                  value={`${LATENCY_SUMMARY.baseline} ms`}
+                  tone="text-sky-200"
+                />
               </div>
             </CardContent>
           </Card>
@@ -235,10 +291,33 @@ function MetricBlock({
   );
 }
 
+function SignalBlock({
+  detail,
+  label,
+  tone,
+  value,
+}: {
+  detail: string;
+  label: string;
+  tone: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-[1.25rem] border border-white/6 bg-white/[0.03] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <p className="text-[11px] font-medium tracking-[0.01em] text-slate-500">
+        {label}
+      </p>
+      <p className={`mt-2 text-base font-medium ${tone}`}>{value}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{detail}</p>
+    </div>
+  );
+}
+
 function buildLatencyChart(points: number[]) {
   const max = Math.max(...points);
   const min = Math.min(...points);
   const range = Math.max(max - min, 1);
+  const peakIndex = points.indexOf(max);
   const xStep = (LATENCY_CHART_WIDTH - 28) / Math.max(points.length - 1, 1);
 
   const normalizedPoints = points.map((point, index) => {
@@ -248,6 +327,7 @@ function buildLatencyChart(points: number[]) {
       (24 + ((point - min) / range) * (LATENCY_CHART_HEIGHT - 52));
 
     return {
+      isPeak: index === peakIndex,
       x: Number(x.toFixed(2)),
       y: Number(y.toFixed(2)),
     };
@@ -266,6 +346,34 @@ function buildLatencyChart(points: number[]) {
   return {
     areaPath,
     linePoints,
+    peakPoint: normalizedPoints[peakIndex] ?? null,
     points: normalizedPoints,
+  };
+}
+
+function summarizeLatency(points: number[]) {
+  const peak = Math.max(...points);
+  const lowest = Math.min(...points);
+  const current = points[points.length - 1] ?? peak;
+  const previous = points[points.length - 2] ?? current;
+  const baseline = Math.round(points.reduce((total, point) => total + point, 0) / points.length);
+  const spread = peak - lowest;
+  const delta = current - previous;
+  const anomalyThreshold = baseline + 55;
+  const anomalies = points.filter((point) => point >= anomalyThreshold).length;
+
+  return {
+    anomalyValue: anomalies > 0 ? `${anomalies} spike` : "No spikes",
+    baseline,
+    current,
+    peak,
+    spread,
+    stabilityValue: spread <= 160 ? "Stable window" : "Watch variance",
+    statusCopy:
+      anomalies > 0
+        ? `${anomalies} latency spike rose above baseline, but the window recovered.`
+        : "No outliers detected in the current sample window.",
+    trendDetail: `${delta >= 0 ? "+" : ""}${delta} ms vs previous`,
+    trendValue: delta >= 0 ? "Rising" : "Cooling",
   };
 }

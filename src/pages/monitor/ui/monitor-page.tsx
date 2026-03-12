@@ -58,8 +58,8 @@ type PanelLayout = {
 
 const DESKTOP_LAYOUT_STORAGE_KEY = "monitor-shell-desktop-layout";
 const DEFAULT_DESKTOP_LAYOUT: LayoutMap = {
-  main: 83.5,
-  sidebar: 16.5,
+  main: 85,
+  sidebar: 15,
 };
 const COLLAPSED_DESKTOP_LAYOUT: LayoutMap = {
   main: 100,
@@ -81,26 +81,26 @@ function getDesktopSidebarSizing(viewportWidth: number): SidebarSizing {
   if (viewportWidth <= 1180) {
     return {
       breakpoint: "compact",
-      defaultSize: 22,
-      maxSize: 24,
-      minSize: 20.5,
+      defaultSize: 20.5,
+      maxSize: 22.5,
+      minSize: 19,
     };
   }
 
   if (viewportWidth <= 1280) {
     return {
       breakpoint: "medium",
-      defaultSize: 19,
-      maxSize: 21,
-      minSize: 17.5,
+      defaultSize: 17.5,
+      maxSize: 19.5,
+      minSize: 16.25,
     };
   }
 
   return {
     breakpoint: "wide",
     defaultSize: DEFAULT_DESKTOP_LAYOUT.sidebar,
-    maxSize: 22,
-    minSize: 12.5,
+    maxSize: 20.5,
+    minSize: 11.5,
   };
 }
 
@@ -376,10 +376,10 @@ function MonitorWorkspaceLayout({
                 snapshot={snapshot}
               />
               <div className="flex min-h-[560px] flex-1 flex-col gap-5 xl:flex-row">
-                <div className="min-w-0 flex-[2]">
+                <div className="min-w-0 flex-[2.12]">
                   <TimelineCanvas selectedSession={selectedSession} />
                 </div>
-                <div className="min-w-0 xl:min-w-[300px] xl:max-w-[440px] xl:flex-[0.82]">
+                <div className="min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
                   <DetailDrawer
                     detail={activeDetail}
                     disableLiveQuery={uiQaMode}

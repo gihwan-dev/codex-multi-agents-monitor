@@ -22,7 +22,7 @@ import {
 } from "@/entities/session";
 
 const SESSION_TITLE_CLASS =
-  "block pr-1 text-[13px] font-medium leading-[1.28] [display:-webkit-box] break-words overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
+  "block pr-1 text-[12.5px] font-medium leading-[1.24] [display:-webkit-box] break-words overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
 const SIDEBAR_SURFACE_CLASS =
   "mx-1.5 my-2 h-[calc(100svh-1rem)] rounded-[1.6rem] xl:mx-2.5 xl:my-3 xl:h-[calc(100svh-1.5rem)] xl:rounded-[1.75rem]";
 
@@ -103,21 +103,21 @@ function WorkspaceSidebarBody({
       refraction="none"
       variant="sidebar"
     >
-      <SidebarHeader className="px-3 pb-1 pt-3">
+      <SidebarHeader className="px-2.5 pb-0.5 pt-2.5">
         <div className="space-y-1.5">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <p className="text-[13px] font-medium tracking-[-0.01em] text-slate-100/82">
+              <p className="text-[12.5px] font-medium tracking-[-0.01em] text-slate-100/78">
                 Sessions
               </p>
-              <p className="mt-1 text-[11px] text-slate-500">{sessionSummary}</p>
+              <p className="mt-1 text-[11px] text-slate-500/86">{sessionSummary}</p>
             </div>
-            <p className="text-[10px] text-slate-500/76">{workspaceCount} workspaces</p>
+            <p className="text-[10px] text-slate-500/70">{workspaceCount} workspaces</p>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="bg-transparent px-2 pb-2.5 pt-0 no-scrollbar">
+      <SidebarContent className="bg-transparent px-1.5 pb-2 pt-0 no-scrollbar">
         {loading ? (
           <div className="space-y-4 px-1 py-2">
             {[1, 2, 3].map((item) => (
@@ -138,12 +138,12 @@ function WorkspaceSidebarBody({
 
         {!loading && snapshot
           ? snapshot.workspaces.map((workspace) => (
-              <SidebarGroup key={workspace.workspace_path} className="px-0 py-2">
-                <SidebarGroupLabel className="px-1.5 text-[11px] font-medium text-slate-500/76">
+              <SidebarGroup key={workspace.workspace_path} className="px-0 py-1.5">
+                <SidebarGroupLabel className="px-1.5 text-[10.5px] font-medium text-slate-500/70">
                   {formatWorkspaceLabel(workspace.workspace_path)}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <SidebarMenu className="mt-1.5 gap-1.5 px-0">
+                  <SidebarMenu className="mt-1 gap-1 px-0">
                     {workspace.sessions.map((session) => {
                       const isSelected = session.session_id === selectedSessionId;
 
@@ -152,13 +152,13 @@ function WorkspaceSidebarBody({
                           <SidebarMenuButton
                             isActive={isSelected}
                             onClick={() => onSelectSession(session.session_id)}
-                            className={`h-auto cursor-pointer flex-col items-start rounded-[1.2rem] border px-3 py-2.5 transition-all duration-200 ${
+                            className={`h-auto cursor-pointer flex-col items-start rounded-[1.15rem] border px-2.5 py-2 transition-all duration-200 ${
                               isSelected
-                                ? "border-white/14 bg-white/[0.075] shadow-[0_12px_22px_rgba(2,6,23,0.14),inset_0_1px_0_rgba(255,255,255,0.14)]"
-                                : "border-white/4 bg-white/[0.016] hover:border-white/7 hover:bg-white/[0.032]"
+                                ? "border-white/12 bg-white/[0.06] shadow-[0_10px_18px_rgba(2,6,23,0.12),inset_0_1px_0_rgba(255,255,255,0.12)]"
+                                : "border-white/4 bg-white/[0.012] hover:border-white/7 hover:bg-white/[0.026]"
                             }`}
                           >
-                            <div className="mb-1.5 flex w-full items-start gap-2">
+                            <div className="mb-1 flex w-full items-start gap-2">
                               <div className="min-w-0">
                                 <span
                                   className={`${SESSION_TITLE_CLASS} ${
@@ -167,7 +167,7 @@ function WorkspaceSidebarBody({
                                 >
                                   {session.title ?? "Untitled session"}
                                 </span>
-                                <span className="mt-1 block text-[11px] text-slate-500/88">
+                                <span className="mt-0.5 block text-[10.5px] text-slate-500/84">
                                   {session.source_kind === "archive_log"
                                     ? "Archive replay"
                                     : "Live monitor"}{" "}
