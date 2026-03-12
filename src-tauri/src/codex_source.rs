@@ -41,17 +41,30 @@ pub struct SessionLogRef {
 pub enum SourceError {
     MissingHome,
     MissingPath(PathBuf),
-    Metadata { path: PathBuf, source: io::Error },
-    Walk { root: PathBuf, source: walkdir::Error },
+    Metadata {
+        path: PathBuf,
+        source: io::Error,
+    },
+    Walk {
+        root: PathBuf,
+        source: walkdir::Error,
+    },
 }
 
 impl fmt::Display for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingHome => write!(f, "HOME is not set"),
-            Self::MissingPath(path) => write!(f, "required Codex path is missing: {}", path.display()),
+            Self::MissingPath(path) => {
+                write!(f, "required Codex path is missing: {}", path.display())
+            }
             Self::Metadata { path, source } => {
-                write!(f, "failed to read metadata for {}: {}", path.display(), source)
+                write!(
+                    f,
+                    "failed to read metadata for {}: {}",
+                    path.display(),
+                    source
+                )
             }
             Self::Walk { root, source } => {
                 write!(f, "failed to walk {}: {}", root.display(), source)
@@ -105,7 +118,10 @@ pub fn discover_session_logs(roots: &CodexRoots) -> Result<Vec<SessionLogRef>, S
     Ok(logs)
 }
 
-fn discover_for_root(root: &Path, source_kind: SourceKind) -> Result<Vec<SessionLogRef>, SourceError> {
+fn discover_for_root(
+    root: &Path,
+    source_kind: SourceKind,
+) -> Result<Vec<SessionLogRef>, SourceError> {
     let mut logs = Vec::new();
 
     for entry in WalkDir::new(root) {
@@ -128,10 +144,12 @@ fn discover_for_root(root: &Path, source_kind: SourceKind) -> Result<Vec<Session
         logs.push(SessionLogRef {
             path,
             source_kind,
-            modified_at: metadata.modified().map_err(|source| SourceError::Metadata {
-                path: entry.path().to_path_buf(),
-                source,
-            })?,
+            modified_at: metadata
+                .modified()
+                .map_err(|source| SourceError::Metadata {
+                    path: entry.path().to_path_buf(),
+                    source,
+                })?,
         });
     }
 
@@ -147,7 +165,10 @@ mod tests {
         let roots = detect_roots().expect("expected local Codex roots to exist");
         assert!(roots.live_root.is_dir(), "missing live root");
         assert!(roots.archived_root.is_dir(), "missing archive root");
-        assert!(roots.global_state_path.is_file(), "missing global state file");
+        assert!(
+            roots.global_state_path.is_file(),
+            "missing global state file"
+        );
     }
 
     #[test]
@@ -155,15 +176,18 @@ mod tests {
         let roots = detect_roots().expect("expected local Codex roots to exist");
         let logs = discover_session_logs(&roots).expect("expected log discovery to succeed");
         assert!(
-            logs.iter().any(|log| log.source_kind == SourceKind::SessionLog),
+            logs.iter()
+                .any(|log| log.source_kind == SourceKind::SessionLog),
             "expected at least one live session log"
         );
         assert!(
-            logs.iter().any(|log| log.source_kind == SourceKind::ArchiveLog),
+            logs.iter()
+                .any(|log| log.source_kind == SourceKind::ArchiveLog),
             "expected at least one archived session log"
         );
         assert!(
-            logs.iter().all(|log| log.path.extension().and_then(OsStr::to_str) == Some("jsonl")),
+            logs.iter()
+                .all(|log| log.path.extension().and_then(OsStr::to_str) == Some("jsonl")),
             "expected only jsonl logs"
         );
     }

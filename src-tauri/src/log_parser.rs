@@ -349,12 +349,12 @@ mod tests {
             DetectedKind::TokenCount,
         ];
 
-        let supported_count = required
-            .iter()
-            .filter(|kind| seen.contains(kind))
-            .count();
+        let supported_count = required.iter().filter(|kind| seen.contains(kind)).count();
 
-        assert!(seen.contains(&DetectedKind::SessionMeta), "expected session_meta");
+        assert!(
+            seen.contains(&DetectedKind::SessionMeta),
+            "expected session_meta"
+        );
         assert!(
             supported_count >= 3,
             "expected at least three supported event families, saw {:?}",
@@ -381,6 +381,7 @@ mod tests {
             None => return false,
         };
 
-        hints.agent_role.is_some() && (hints.parent_thread_id.is_some() || hints.parent_session_id.is_some())
+        hints.agent_role.is_some()
+            && (hints.parent_thread_id.is_some() || hints.parent_session_id.is_some())
     }
 }
