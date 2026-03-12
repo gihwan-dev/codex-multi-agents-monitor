@@ -1,5 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/instrument-sans";
+import "@fontsource/ibm-plex-mono";
 import { AppQueryProvider } from "@/shared/query";
 import { AppShell } from "./app-shell";
 import "./styles.css";

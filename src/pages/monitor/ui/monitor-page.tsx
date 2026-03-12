@@ -4,11 +4,12 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWorkspaceSessionsQuery } from "@/features/live-session-feed";
 import { useSessionSelection } from "@/features/session-selection";
 import { type MonitorTab } from "@/shared/model";
-import { DetailDrawerPlaceholder } from "@/widgets/detail-drawer-placeholder";
+import { DetailDrawer } from "@/widgets/detail-drawer";
 import { LiveSessionOverview } from "@/widgets/live-session-overview";
 import { MonitorHeader } from "@/widgets/monitor-header";
-import { TabPlaceholderPanel } from "@/widgets/tab-placeholder-panel";
-import { TimelinePlaceholder } from "@/widgets/timeline-placeholder";
+import { ArchiveMonitor } from "@/widgets/archive-monitor";
+import { MetricsDashboard } from "@/widgets/metrics-dashboard";
+import { TimelineCanvas } from "@/widgets/timeline";
 import { WorkspaceSidebar } from "@/widgets/workspace-sidebar";
 
 interface MonitorPageProps {
@@ -53,9 +54,9 @@ export function MonitorPage({ degradedMessage }: MonitorPageProps) {
           refreshedAt={snapshot?.refreshed_at ?? null}
         />
 
-        <div className="flex-1 overflow-auto p-6 md:p-8">
-          <div className="mx-auto max-w-6xl space-y-6">
-            {activeTab === "live" ? (
+        <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 flex flex-col">
+          <div className="mx-auto w-full max-w-[1600px] flex-1 flex flex-col space-y-4 h-[calc(100vh-8rem)]">
+            {activeTab === "live" && (
               <>
                 <LiveSessionOverview
                   degradedMessage={degradedMessage}
@@ -64,11 +65,23 @@ export function MonitorPage({ degradedMessage }: MonitorPageProps) {
                   selectedSession={selectedSession}
                   snapshot={snapshot}
                 />
-                <TimelinePlaceholder />
-                <DetailDrawerPlaceholder />
+                <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0">
+                  {/* Timeline takes up remaining space */}
+                  <div className="flex-[2] min-w-0 flex flex-col">
+                    <TimelineCanvas />
+                  </div>
+                  {/* Detail drawer sits on the right as a split pane */}
+                  <div className="flex-1 min-w-[320px] max-w-[500px] flex flex-col">
+                    <DetailDrawer />
+                  </div>
+                </div>
               </>
-            ) : (
-              <TabPlaceholderPanel tab={activeTab} />
+            )}
+            {activeTab === "archive" && (
+              <ArchiveMonitor />
+            )}
+            {activeTab === "metrics" && (
+              <MetricsDashboard />
             )}
           </div>
         </div>
