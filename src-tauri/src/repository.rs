@@ -3,6 +3,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::normalize::{
@@ -14,7 +15,7 @@ pub struct Repository {
     conn: Connection,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionSummaryRecord {
     pub session_id: String,
     pub workspace_path: String,
@@ -28,12 +29,21 @@ pub struct SessionSummaryRecord {
     pub event_count: u64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PersistedSessionDetail {
     pub bundle: CanonicalSessionBundle,
     pub last_event_at: Option<String>,
     pub event_count: u64,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkspaceSessionGroup {
+    pub workspace_path: String,
+    pub sessions: Vec<SessionSummaryRecord>,
+}
+
+pub type SessionSummary = SessionSummaryRecord;
+pub type SessionDetailSnapshot = PersistedSessionDetail;
 
 #[derive(Debug)]
 pub enum RepositoryError {
@@ -264,6 +274,36 @@ impl Repository {
         Ok(summaries)
     }
 
+    pub fn list_workspace_sessions(&self) -> Result<Vec<WorkspaceSessionGroup>, RepositoryError> {
+        let summaries = self.list_session_summaries()?;
+        let mut groups: Vec<WorkspaceSessionGroup> = Vec::new();
+
+        for summary in summaries {
+            let workspace_path = summary.workspace_path.clone();
+            match groups.last_mut() {
+                Some(group) if group.workspace_path == workspace_path => {
+                    group.sessions.push(summary);
+                }
+                _ => groups.push(WorkspaceSessionGroup {
+                    workspace_path,
+                    sessions: vec![summary],
+                }),
+            }
+        }
+
+        Ok(groups)
+    }
+
+    pub fn load_session_summary(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionSummaryRecord>, RepositoryError> {
+        Ok(self
+            .list_session_summaries()?
+            .into_iter()
+            .find(|summary| summary.session_id == session_id))
+    }
+
     pub fn load_session_detail(
         &self,
         session_id: &str,
@@ -407,6 +447,14 @@ impl Repository {
                 params![session_id],
                 |row| row.get(0),
             )
+            .map_err(RepositoryError::Sql)
+    }
+
+    pub fn current_timestamp(&self) -> Result<String, RepositoryError> {
+        self.conn
+            .query_row("SELECT STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+                row.get(0)
+            })
             .map_err(RepositoryError::Sql)
     }
 }

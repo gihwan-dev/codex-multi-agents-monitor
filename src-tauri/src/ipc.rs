@@ -55,7 +55,6 @@ pub enum IpcError {
     Source(SourceError),
     Normalize(NormalizeError),
     Repository(RepositoryError),
-    MissingSession(String),
     Io {
         path: PathBuf,
         source: io::Error,
@@ -75,12 +74,16 @@ impl fmt::Display for IpcError {
             Self::Source(source) => write!(f, "source discovery failed: {}", source),
             Self::Normalize(source) => write!(f, "session normalization failed: {}", source),
             Self::Repository(source) => write!(f, "repository access failed: {}", source),
-            Self::MissingSession(session_id) => write!(f, "session not found: {}", session_id),
             Self::Io { path, source } => {
                 write!(f, "file access failed for {}: {}", path.display(), source)
             }
             Self::Walk { root, source } => {
-                write!(f, "live root walk failed for {}: {}", root.display(), source)
+                write!(
+                    f,
+                    "live root walk failed for {}: {}",
+                    root.display(),
+                    source
+                )
             }
             Self::ThreadSpawn(source) => write!(f, "live bridge thread spawn failed: {}", source),
             Self::LockPoisoned(name) => write!(f, "shared state lock poisoned: {}", name),
@@ -99,7 +102,7 @@ impl Error for IpcError {
             Self::Walk { source, .. } => Some(source),
             Self::ThreadSpawn(source) => Some(source),
             Self::Emit(source) => Some(source),
-            Self::MissingSession(_) | Self::LockPoisoned(_) => None,
+            Self::LockPoisoned(_) => None,
         }
     }
 }
@@ -120,11 +123,16 @@ impl MonitorState {
     }
 }
 
-pub fn initialize_state<R: Runtime>(app: &mut App<R>) -> Result<(), Box<dyn Error>> {
+pub fn build_app_state<R: Runtime>(app: &AppHandle<R>) -> Result<MonitorState, Box<dyn Error>> {
     let app_data_dir = app.path().app_data_dir()?;
     fs::create_dir_all(&app_data_dir)?;
-    let db_path = app_data_dir.join("codex-monitor.sqlite3");
-    app.manage(MonitorState::new(db_path));
+    Ok(MonitorState::new(
+        app_data_dir.join("codex-monitor.sqlite3"),
+    ))
+}
+
+pub fn initialize_state<R: Runtime>(app: &mut App<R>) -> Result<(), Box<dyn Error>> {
+    app.manage(build_app_state(app.handle())?);
     Ok(())
 }
 
@@ -158,7 +166,9 @@ pub fn query_workspace_sessions_service(
     let repository = Repository::open(state.db_path()).map_err(IpcError::Repository)?;
 
     Ok(WorkspaceSessionsSnapshot {
-        refreshed_at: repository.current_timestamp().map_err(IpcError::Repository)?,
+        refreshed_at: repository
+            .current_timestamp()
+            .map_err(IpcError::Repository)?,
         workspaces: repository
             .list_workspace_sessions()
             .map_err(IpcError::Repository)?,
@@ -169,11 +179,10 @@ pub fn query_session_detail_service(
     state: &MonitorState,
     query: SessionDetailQuery,
 ) -> Result<SessionDetailSnapshot, IpcError> {
-    let repository = Repository::open(state.db_path()).map_err(IpcError::Repository)?;
-    repository
-        .load_session_detail(&query.session_id)
+    Repository::open(state.db_path())
         .map_err(IpcError::Repository)?
-        .ok_or(IpcError::MissingSession(query.session_id))
+        .load_session_detail(&query.session_id)
+        .map_err(IpcError::Repository)
 }
 
 pub fn start_live_bridge_service<R: Runtime + 'static>(
@@ -292,7 +301,9 @@ fn poll_live_updates<R: Runtime>(
             .load_session_summary(&session_id)
             .map_err(IpcError::Repository)?
         {
-            let refreshed_at = repository.current_timestamp().map_err(IpcError::Repository)?;
+            let refreshed_at = repository
+                .current_timestamp()
+                .map_err(IpcError::Repository)?;
             app.emit(
                 LIVE_SESSION_UPDATED_EVENT,
                 LiveSessionUpdate {
@@ -331,7 +342,7 @@ fn discover_live_file_stamps(live_root: &Path) -> Result<Vec<LiveFileStamp>, Ipc
         let path = entry.path().to_path_buf();
         let metadata = entry.metadata().map_err(|source| IpcError::Io {
             path: path.clone(),
-            source,
+            source: source.into(),
         })?;
         let modified_at = metadata.modified().map_err(|source| IpcError::Io {
             path: path.clone(),
@@ -398,17 +409,11 @@ mod tests {
         };
         let mut cache = HashMap::from([
             (unchanged.path.clone(), unchanged.modified_at),
-            (
-                modified.path.clone(),
-                UNIX_EPOCH + Duration::from_secs(11),
-            ),
+            (modified.path.clone(), UNIX_EPOCH + Duration::from_secs(11)),
         ]);
 
-        let changed = reconcile_live_file_stamps(
-            &mut cache,
-            &[unchanged.clone(), modified.clone()],
-            false,
-        );
+        let changed =
+            reconcile_live_file_stamps(&mut cache, &[unchanged.clone(), modified.clone()], false);
 
         assert_eq!(changed, vec![modified]);
         assert_eq!(cache.len(), 2);
