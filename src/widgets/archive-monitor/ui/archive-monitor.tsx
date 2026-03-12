@@ -1,7 +1,7 @@
 import { GlassSurface } from "@/app/ui";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Archive, Filter, Calendar, Folder, Clock, Search, ListFilter, SlidersHorizontal } from "lucide-react";
+import { Archive, Calendar, Folder, Clock, Search, ListFilter, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
