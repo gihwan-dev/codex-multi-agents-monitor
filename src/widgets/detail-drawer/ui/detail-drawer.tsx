@@ -55,7 +55,7 @@ export function DetailDrawer({
     >
       <Card className={PANEL_CARD_CLASS}>
         <CardHeader className="bg-transparent px-5 pb-4 pt-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 max-w-[30rem]">
               <p className="mb-2 text-[11px] font-medium text-slate-400">Session detail</p>
               <CardTitle className="max-w-[24ch] text-[1.55rem] font-normal leading-[1.02] tracking-[-0.03em] text-white break-words">
@@ -65,7 +65,7 @@ export function DetailDrawer({
                 {describeStatus(selectedSession?.status)}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2 md:justify-end">
+            <div className="flex flex-wrap items-center gap-2 xl:max-w-[10rem] xl:justify-end">
               <GlassSurface
                 className="rounded-full"
                 interactive
