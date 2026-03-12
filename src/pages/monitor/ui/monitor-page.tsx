@@ -30,12 +30,20 @@ export function MonitorPage({ degradedMessage }: MonitorPageProps) {
         snapshot={snapshot}
       />
 
-      <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-[#0B0E14]">
+      <main className="relative flex min-h-screen flex-1 flex-col overflow-hidden bg-[#05070D]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#05070D_0%,#0B0E14_44%,#111827_100%)]" />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             backgroundImage:
-              "radial-gradient(circle at center, rgba(16, 185, 129, 0.03) 0%, transparent 60%)",
+              "radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.18) 0%, transparent 32%), radial-gradient(circle at 82% 14%, rgba(16, 185, 129, 0.14) 0%, transparent 28%), radial-gradient(circle at 50% 100%, rgba(245, 158, 11, 0.1) 0%, transparent 36%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              "linear-gradient(135deg, rgba(148, 163, 184, 0.08) 0%, transparent 40%), radial-gradient(circle at center, transparent 0%, rgba(5, 7, 13, 0.38) 68%, rgba(5, 7, 13, 0.76) 100%)",
           }}
         />
 

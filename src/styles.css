@@ -42,17 +42,111 @@
   --font-mono: "IBM Plex Mono", monospace;
 }
 
-@layer utilities {
-  .glass-surface {
-    @apply border border-white/10 bg-white/5 shadow-2xl;
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+@layer components {
+  [data-glass-surface] {
+    --glass-blur: 24px;
+    --glass-fill: rgba(12, 18, 32, 0.5);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 18px 48px rgba(2, 6, 23, 0.34);
+    --glass-highlight:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 1px 1px 14px rgba(186, 230, 253, 0.08),
+      inset -14px -18px 30px rgba(248, 250, 252, 0.05);
+    --glass-glow:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 52%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 40%);
   }
 
-  .liquid-glass-element {
-    filter: url(#liquidGlassFilter);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+  [data-glass-surface][data-variant="panel"] {
+    --glass-fill: rgba(12, 18, 32, 0.52);
+    --glass-border: rgba(255, 255, 255, 0.11);
+  }
+
+  [data-glass-surface][data-variant="chrome"] {
+    --glass-blur: 28px;
+    --glass-fill: rgba(7, 11, 19, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 12px 36px rgba(2, 6, 23, 0.3);
+  }
+
+  [data-glass-surface][data-variant="warning"] {
+    --glass-fill: rgba(120, 53, 15, 0.3);
+    --glass-border: rgba(251, 191, 36, 0.28);
+    --glass-highlight:
+      inset 0 1px 0 rgba(255, 251, 235, 0.18),
+      inset 1px 1px 14px rgba(253, 224, 71, 0.1),
+      inset -14px -18px 30px rgba(120, 53, 15, 0.08);
+  }
+
+  [data-glass-surface][data-variant="danger"] {
+    --glass-fill: rgba(127, 29, 29, 0.28);
+    --glass-border: rgba(248, 113, 113, 0.24);
+    --glass-highlight:
+      inset 0 1px 0 rgba(254, 242, 242, 0.18),
+      inset 1px 1px 14px rgba(252, 165, 165, 0.1),
+      inset -14px -18px 30px rgba(127, 29, 29, 0.08);
+  }
+
+  [data-glass-surface] > .glass-surface__fx {
+    background:
+      var(--glass-glow),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 38%),
+      var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  }
+
+  [data-glass-surface] > .glass-surface__fx::before,
+  [data-glass-surface] > .glass-surface__fx::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  [data-glass-surface] > .glass-surface__fx::before {
+    background:
+      radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.16), transparent 28%),
+      radial-gradient(circle at 80% 0%, rgba(125, 211, 252, 0.09), transparent 32%);
+    opacity: 0.9;
+  }
+
+  [data-glass-surface] > .glass-surface__fx::after {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  [data-glass-surface][data-refraction="soft"][data-mode="enhanced"] > .glass-surface__fx {
+    filter: var(--glass-refraction-filter, none);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-glass-surface][data-interactive="true"] {
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    [data-glass-surface][data-interactive="true"]:hover {
+      transform: translateY(-2px);
+    }
+
+    [data-glass-surface][data-interactive="true"]:hover > .glass-surface__fx {
+      box-shadow:
+        0 22px 56px rgba(2, 6, 23, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 1px 1px 14px rgba(186, 230, 253, 0.1),
+        inset -14px -18px 30px rgba(248, 250, 252, 0.06);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-glass-surface][data-interactive="true"] {
+      transform: none;
+      transition: none;
+    }
   }
 }
 @layer base {
@@ -88,7 +182,7 @@
     --sidebar-accent: oklch(0.97 0 0);
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0)
+    --sidebar-ring: oklch(0.708 0 0);
   }
   .dark {
     --background: oklch(0.145 0 0);
@@ -121,7 +215,7 @@
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0)
+    --sidebar-ring: oklch(0.556 0 0);
   }
   .theme {
   }
@@ -133,5 +227,11 @@
   }
   html {
     @apply font-sans;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-glass-surface] {
+      transition: none;
+    }
   }
 }
