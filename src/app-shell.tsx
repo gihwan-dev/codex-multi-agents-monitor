@@ -8,6 +8,26 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarRail,
+} from "@/components/ui/sidebar";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Activity, Clock, Terminal, AlertCircle, HardDrive, Archive } from "lucide-react";
+
 import type {
   LiveSessionUpdate,
   SessionSummary,
@@ -193,45 +213,33 @@ function formatRuntimeError(prefix: string, error: unknown) {
   return prefix;
 }
 
-function statusTone(status: SessionSummary["status"]) {
+function statusBadgeVariant(status: SessionSummary["status"]): "default" | "secondary" | "destructive" | "outline" {
   switch (status) {
     case "live":
-      return "status-live";
+      return "default";
     case "stalled":
-      return "status-stalled";
     case "aborted":
-      return "status-aborted";
+      return "destructive";
     case "completed":
-      return "status-completed";
     case "archived":
-      return "status-archived";
+      return "secondary";
     default:
-      return "status-default";
+      return "outline";
   }
 }
 
 function SessionBadges({ session }: { session: SessionSummary }) {
   return (
-    <div className="session-badges" aria-label="session badges">
-      <span className={`status-pill ${statusTone(session.status)}`}>
+    <div className="flex flex-wrap gap-1 mt-1" aria-label="session badges">
+      <Badge variant={statusBadgeVariant(session.status)} className="px-1.5 py-0 text-[10px] font-mono leading-tight">
         {session.status}
-      </span>
-      <span className="status-pill status-muted">
+      </Badge>
+      <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-mono leading-tight text-muted-foreground border-white/10">
         {session.is_archived ? "archived" : "active"}
-      </span>
-      <span className="status-pill status-muted">{session.event_count} events</span>
-    </div>
-  );
-}
-
-function WorkspaceSkeleton() {
-  return (
-    <div className="sidebar-skeleton" aria-hidden="true">
-      <div className="skeleton-row" />
-      <div className="skeleton-card" />
-      <div className="skeleton-card" />
-      <div className="skeleton-row" />
-      <div className="skeleton-card" />
+      </Badge>
+      <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-mono leading-tight">
+        {session.event_count} evts
+      </Badge>
     </div>
   );
 }
@@ -240,11 +248,46 @@ function PlaceholderPanel({ tab }: { tab: Exclude<ActiveTab, "live"> }) {
   const copy = TAB_COPY[tab];
 
   return (
-    <section className="placeholder-panel surface">
-      <p className="panel-eyebrow">{copy.eyebrow}</p>
-      <h2>{copy.title}</h2>
-      <p>{copy.body}</p>
-    </section>
+    <div className="flex items-center justify-center p-8 h-full">
+      <Card className="max-w-md w-full glass-surface">
+        <CardHeader>
+          <div className="flex items-center space-x-2 text-sm text-emerald-400 font-mono font-medium mb-2">
+            <Archive className="w-4 h-4" />
+            <span>{copy.eyebrow}</span>
+          </div>
+          <CardTitle className="text-xl">{copy.title}</CardTitle>
+          <CardDescription className="text-base text-slate-400">
+            {copy.body}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
+  );
+}
+
+function LiquidGlassFilter() {
+  return (
+    <svg width={0} height={0} xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" version="2" style={{ display: 'none' }}>
+      <defs>
+        <filter id="liquidGlassFilter" filterUnits="userSpaceOnUse">
+          <feTurbulence type="turbulence" baseFrequency="0.005" numOctaves="2" result="fractal" stitchTiles="stitch" />
+          <feDisplacementMap in2="fractal" in="SourceGraphic" scale="25" result="turbDisplaced" />
+          
+          <feColorMatrix in="SourceGraphic" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red" />
+          <feOffset dx="3" dy="0" in="red" result="shiftedRed" />
+          
+          <feColorMatrix in="SourceGraphic" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green" />
+          <feOffset dx="0" dy="2" in="green" result="shiftedGreen" />
+          
+          <feColorMatrix in="SourceGraphic" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue" />
+          <feOffset dx="-3" dy="0" in="blue" result="shiftedBlue" />
+          
+          <feBlend in="shiftedRed" in2="shiftedGreen" result="comp1" mode="screen" />
+          <feBlend in="shiftedBlue" in2="comp1" result="comp2" mode="screen" />
+          <feBlend in="SourceGraphic" in2="comp2" result="out" mode="lighten" />
+        </filter>
+      </defs>
+    </svg>
   );
 }
 
@@ -350,229 +393,256 @@ export function AppShell() {
   }, [handleLiveUpdate]);
 
   return (
-    <main className="monitor-shell">
-      <header className="topbar surface">
-        <div>
-          <p className="eyebrow">Codex Multi-Agent Monitor</p>
-          <h1>Observe live workspaces before the renderer lands.</h1>
-        </div>
-        <div className="topbar-meta">
-          <span className="status-pill status-muted">
-            {snapshot?.refreshed_at
-              ? `Refreshed ${formatTimestamp(snapshot.refreshed_at)}`
-              : "Snapshot pending"}
-          </span>
-          {degradedMessage ? (
-            <span className="status-pill status-warning">Degraded</span>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="tab-strip" role="tablist" aria-label="monitor views">
-        {(["live", "archive", "dashboard"] as const).map((tab) => (
-          <button
-            key={tab}
-            className={`tab-button ${activeTab === tab ? "is-active" : ""}`}
-            role="tab"
-            aria-selected={activeTab === tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {degradedMessage ? (
-        <div className="banner banner-warning" role="status">
-          <strong>Live updates degraded.</strong> {degradedMessage}
-        </div>
-      ) : null}
-
-      {errorMessage && !snapshot ? (
-        <div className="banner banner-danger" role="alert">
-          <strong>Shell fallback.</strong> {errorMessage}
-        </div>
-      ) : null}
-
-      <div className="workspace-layout">
-        <aside className="workspace-sidebar surface">
-          <div className="sidebar-header">
-            <div>
-              <p className="panel-eyebrow">Workspace sidebar</p>
-              <h2>Grouped live sessions</h2>
+    <>
+      <LiquidGlassFilter />
+      <SidebarProvider>
+        <Sidebar className="border-r border-white/5 bg-[#0B0E14]/80 backdrop-blur-2xl">
+          <SidebarHeader className="p-4 border-b border-white/5 bg-transparent">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-mono text-emerald-400 font-semibold tracking-widest uppercase">
+                Codex Monitor
+              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-200">Live Sessions</span>
+                <Badge variant="secondary" className="text-[10px] font-mono">
+                  {snapshot ? snapshot.workspaces.length : 0} WS
+                </Badge>
+              </div>
             </div>
-            <span className="status-pill status-muted">
-              {snapshot
-                ? `${snapshot.workspaces.length} workspace${
-                    snapshot.workspaces.length === 1 ? "" : "s"
-                  }`
-                : "Awaiting snapshot"}
-            </span>
-          </div>
-
-          {loading ? <WorkspaceSkeleton /> : null}
-
-          {!loading && snapshot && snapshot.workspaces.length === 0 ? (
-            <div className="sidebar-empty">
-              <p className="panel-eyebrow">Empty state</p>
-              <h3>No Codex sessions discovered.</h3>
-              <p>Start a live session or archive a sample log to populate this sidebar.</p>
-            </div>
-          ) : null}
-
-          {!loading && snapshot
-            ? snapshot.workspaces.map((workspace) => (
-                <section
-                  key={workspace.workspace_path}
-                  className="workspace-group"
-                  aria-labelledby={`workspace-${workspace.workspace_path}`}
-                >
-                  <div className="workspace-group-header">
-                    <div>
-                      <h3 id={`workspace-${workspace.workspace_path}`}>
-                        {formatWorkspaceLabel(workspace.workspace_path)}
-                      </h3>
-                      <p>{workspace.workspace_path}</p>
-                    </div>
-                    <span className="status-pill status-muted">
-                      {workspace.sessions.length}
-                    </span>
+          </SidebarHeader>
+          <SidebarContent className="bg-transparent/0">
+            {loading && (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse flex flex-col gap-2">
+                    <div className="h-4 bg-white/5 rounded w-1/3" />
+                    <div className="h-16 bg-white/5 rounded-xl w-full" />
                   </div>
+                ))}
+              </div>
+            )}
+            
+            {!loading && snapshot && snapshot.workspaces.length === 0 && (
+              <div className="p-6 text-center text-slate-500">
+                <HardDrive className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No Codex sessions discovered.</p>
+              </div>
+            )}
 
-                  <div className="session-list">
+            {!loading && snapshot && snapshot.workspaces.map((workspace) => (
+              <SidebarGroup key={workspace.workspace_path}>
+                <SidebarGroupLabel className="text-xs font-mono text-slate-400 tracking-wider">
+                  {formatWorkspaceLabel(workspace.workspace_path)}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="px-2 mt-1">
                     {workspace.sessions.map((session) => {
                       const isSelected = session.session_id === selectedSessionId;
                       return (
-                        <button
-                          key={session.session_id}
-                          type="button"
-                          className={`session-card ${isSelected ? "is-selected" : ""}`}
-                          onClick={() => setSelectedSessionId(session.session_id)}
-                        >
-                          <div className="session-card-header">
-                            <strong>{session.title ?? "Untitled session"}</strong>
-                            <span className="session-time">
-                              {formatTimestamp(session.last_event_at)}
-                            </span>
-                          </div>
-                          <SessionBadges session={session} />
-                          <p className="session-meta">
-                            Started {formatTimestamp(session.started_at)}
-                          </p>
-                        </button>
+                        <SidebarMenuItem key={session.session_id} className="mb-1.5">
+                          <SidebarMenuButton 
+                            isActive={isSelected}
+                            onClick={() => setSelectedSessionId(session.session_id)}
+                            className={`h-auto flex flex-col items-start p-3 rounded-lg border transition-all duration-200 ${
+                              isSelected 
+                                ? "bg-emerald-500/10 border-emerald-500/20 shadow-[inset_2px_0_0_0_rgb(16,185,129)]" 
+                                : "bg-white/5 border-transparent hover:bg-white/10"
+                            }`}
+                          >
+                            <div className="flex w-full items-start justify-between mb-1">
+                              <span className={`font-medium text-sm truncate pr-2 ${isSelected ? "text-emerald-100" : "text-slate-200"}`}>
+                                {session.title ?? "Untitled session"}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500 shrink-0 mt-0.5">
+                                {new Date(session.last_event_at ?? "").toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </span>
+                            </div>
+                            <SessionBadges session={session} />
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                       );
                     })}
-                  </div>
-                </section>
-              ))
-            : null}
-        </aside>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
+          </SidebarContent>
+          <SidebarRail />
+        </Sidebar>
 
-        <section className="workspace-main">
-          {activeTab === "live" ? (
-            <>
-              <section className="summary-grid">
-                <article className="surface summary-card">
-                  <p className="panel-eyebrow">Selected session</p>
-                  {selectedSession ? (
-                    <>
-                      <h2>{selectedSession.title ?? "Untitled session"}</h2>
-                      <p className="summary-copy">
-                        Workspace {formatWorkspaceLabel(selectedSession.workspace_path)} is
-                        staged for timeline wiring. The shell keeps summary-level
-                        selection only until `SLICE-5`.
-                      </p>
-                      <dl className="session-facts">
-                        <div>
-                          <dt>Status</dt>
-                          <dd>{selectedSession.status}</dd>
-                        </div>
-                        <div>
-                          <dt>Last event</dt>
-                          <dd>{formatTimestamp(selectedSession.last_event_at)}</dd>
-                        </div>
-                        <div>
-                          <dt>Events</dt>
-                          <dd>{selectedSession.event_count}</dd>
-                        </div>
-                        <div>
-                          <dt>Source</dt>
-                          <dd>{selectedSession.source_kind}</dd>
-                        </div>
-                      </dl>
-                    </>
-                  ) : (
-                    <>
-                      <h2>No session selected.</h2>
-                      <p className="summary-copy">
-                        Choose a session from the sidebar once discovery returns data.
-                      </p>
-                    </>
-                  )}
-                </article>
+        <main className="flex-1 min-h-screen flex flex-col bg-[#0B0E14] relative overflow-hidden">
+          {/* Main App Background Pattern */}
+          <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.03) 0%, transparent 60%)' }} />
 
-                <article className="surface summary-card">
-                  <p className="panel-eyebrow">Shell status</p>
-                  <h2>{loading ? "Scanning local Codex logs" : "Live shell is ready"}</h2>
-                  <p className="summary-copy">
-                    Sidebar grouping and summary selection are active. Timeline detail,
-                    archive filters, and dashboard metrics remain deferred to later
-                    slices.
-                  </p>
-                </article>
-              </section>
+          {/* Header */}
+          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-white/5 bg-[#0B0E14]/80 px-4 backdrop-blur-2xl">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger className="text-slate-400 hover:text-white" />
+              <div className="h-4 w-px bg-white/10" />
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActiveTab)} className="h-full items-center">
+                <TabsList className="h-9 bg-white/5">
+                  <TabsTrigger value="live" className="text-xs">Live Shell</TabsTrigger>
+                  <TabsTrigger value="archive" className="text-xs">Archive</TabsTrigger>
+                  <TabsTrigger value="dashboard" className="text-xs">Metrics</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                {snapshot?.refreshed_at ? formatTimestamp(snapshot.refreshed_at) : "Awaiting"}
+              </span>
+            </div>
+          </header>
 
-              <section className="canvas-placeholder surface">
-                <div className="placeholder-heading">
-                  <div>
-                    <p className="panel-eyebrow">Timeline canvas</p>
-                    <h2>Renderer placeholder</h2>
-                  </div>
-                  <span className="status-pill status-muted">SLICE-5</span>
-                </div>
-                <div className="lane-preview" aria-hidden="true">
-                  <div className="lane-row">
-                    <span>User</span>
-                    <div className="lane-bar lane-bar-user" />
-                  </div>
-                  <div className="lane-row">
-                    <span>Main</span>
-                    <div className="lane-bar lane-bar-main" />
-                  </div>
-                  <div className="lane-row">
-                    <span>Sub-agent</span>
-                    <div className="lane-bar lane-bar-agent" />
-                  </div>
-                </div>
-              </section>
+          <div className="flex-1 overflow-auto p-6 md:p-8">
+            <div className="max-w-6xl mx-auto space-y-6">
+              
+              {errorMessage && !snapshot && (
+                <Alert variant="destructive" className="glass-surface bg-red-500/10 border-red-500/20">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Shell Fallback</AlertTitle>
+                  <AlertDescription>{errorMessage}</AlertDescription>
+                </Alert>
+              )}
+              
+              {degradedMessage && (
+                <Alert className="glass-surface bg-amber-500/10 border-amber-500/20 text-amber-200">
+                  <AlertCircle className="h-4 w-4 stroke-amber-500" />
+                  <AlertTitle className="text-amber-500">Live Updates Degraded</AlertTitle>
+                  <AlertDescription>{degradedMessage}</AlertDescription>
+                </Alert>
+              )}
 
-              <section className="drawer-placeholder surface">
-                <div className="placeholder-heading">
-                  <div>
-                    <p className="panel-eyebrow">Detail drawer</p>
-                    <h2>Summary-first shell boundary</h2>
+              {activeTab === "live" ? (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card className="glass-surface bg-white/5 border-white/10 overflow-hidden">
+                      <CardHeader className="bg-white/5 border-b border-white/5 pb-4">
+                        <div className="flex items-center gap-2 text-emerald-400 font-mono text-xs font-semibold uppercase tracking-widest mb-1">
+                          <Activity className="w-3.5 h-3.5" />
+                          Selected Session
+                        </div>
+                        <CardTitle className="text-2xl font-normal text-slate-100">
+                          {selectedSession ? (selectedSession.title ?? "Untitled session") : "No session selected"}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6 text-slate-400 p-6">
+                        {selectedSession ? (
+                          <>
+                            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                              <div>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Status</p>
+                                <p className="text-sm font-medium text-slate-200 capitalize">{selectedSession.status}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Last Event</p>
+                                <p className="text-sm font-medium text-slate-200">{formatTimestamp(selectedSession.last_event_at)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Events</p>
+                                <p className="text-sm font-medium text-slate-200">{selectedSession.event_count}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">Source</p>
+                                <p className="text-sm font-medium text-slate-200">{selectedSession.source_kind}</p>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-sm">Choose a session from the sidebar once discovery returns data.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="glass-surface bg-white/5 border-white/10 overflow-hidden">
+                      <CardHeader className="bg-white/5 border-b border-white/5 pb-4">
+                        <div className="flex items-center gap-2 text-blue-400 font-mono text-xs font-semibold uppercase tracking-widest mb-1">
+                          <Terminal className="w-3.5 h-3.5" />
+                          Shell Status
+                        </div>
+                        <CardTitle className="text-2xl font-normal text-slate-100">
+                          {loading ? "Scanning logs..." : "Live shell ready."}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-6 p-6">
+                        <p className="text-sm text-slate-400 leading-relaxed">
+                          Sidebar grouping and summary selection are active. Timeline detail,
+                          archive filters, and dashboard metrics remain deferred to later
+                          slices.
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
-                  <span className="status-pill status-muted">Deferred</span>
-                </div>
-                <p>
-                  Tabs for raw payloads, tokens, and related metrics are intentionally
-                  stubbed here so the shell layout stays stable when detail queries are
-                  wired in the next slice.
-                </p>
-                <div className="drawer-chip-row" aria-hidden="true">
-                  <span className="drawer-chip">Summary</span>
-                  <span className="drawer-chip">Input / Output</span>
-                  <span className="drawer-chip">Raw event</span>
-                  <span className="drawer-chip">Tokens</span>
-                </div>
-              </section>
-            </>
-          ) : (
-            <PlaceholderPanel tab={activeTab} />
-          )}
-        </section>
-      </div>
-    </main>
+
+                  <Card className="glass-surface bg-transparent border-white/10 mt-6 relative overflow-hidden group">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Timeline Canvas</p>
+                          <CardTitle className="text-xl">Renderer Placeholder</CardTitle>
+                        </div>
+                        <Badge variant="outline" className="font-mono text-[10px] border-white/10">SLICE-5</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 bg-white/5 border border-white/10 rounded-xl p-6 liquid-glass-element relative mix-blend-screen transition-all">
+                        {/* Fake Lanes */}
+                        <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                          <span className="text-xs font-mono text-slate-400 text-right">User</span>
+                          <div className="h-4 rounded-full bg-slate-800/50 shadow-inner relative overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-amber-500 to-amber-500/20 blur-[1px]" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                          <span className="text-xs font-mono text-slate-400 text-right">Main</span>
+                          <div className="h-4 rounded-full bg-slate-800/50 shadow-inner relative overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 w-3/5 bg-gradient-to-r from-emerald-500 to-emerald-500/20 blur-[1px]" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] items-center gap-4">
+                          <span className="text-xs font-mono text-slate-400 text-right">Sub-agent</span>
+                          <div className="h-4 rounded-full bg-slate-800/50 shadow-inner relative overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 w-[45%] bg-gradient-to-r from-blue-500 to-blue-500/20 blur-[1px]" />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="glass-surface bg-white/[0.02] border-white/10 border-dashed mt-6">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Detail Drawer</p>
+                          <CardTitle className="text-xl text-slate-300">Summary-first boundary</CardTitle>
+                        </div>
+                        <Badge variant="secondary" className="font-mono text-[10px]">Deferred</Badge>
+                      </div>
+                      <CardDescription className="text-slate-500 mt-2">
+                        Tabs for raw payloads, tokens, and metrics are intentionally stubbed here.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex gap-2">
+                        {["Summary", "Input / Output", "Raw Event", "Tokens"].map(tab => (
+                          <Badge key={tab} variant="outline" className="text-slate-400 border-white/10 hover:bg-white/5 cursor-pointer">
+                            {tab}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <PlaceholderPanel tab={activeTab} />
+              )}
+            </div>
+          </div>
+        </main>
+      </SidebarProvider>
+    </>
   );
 }
+
