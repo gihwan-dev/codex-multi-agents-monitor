@@ -1,5 +1,5 @@
 import { GlassSurface } from "@/app/ui";
-import { HardDrive, Layers3 } from "lucide-react";
+import { HardDrive } from "lucide-react";
 
 import {
   Sidebar,
@@ -12,6 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   formatTime,
@@ -21,7 +22,9 @@ import {
 } from "@/entities/session";
 
 const SESSION_TITLE_CLASS =
-  "block pr-2 text-sm font-medium leading-snug [display:-webkit-box] [overflow-wrap:anywhere] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
+  "block pr-1 text-[13px] font-medium leading-[1.28] [display:-webkit-box] break-words overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
+const SIDEBAR_SURFACE_CLASS =
+  "mx-1.5 my-2 h-[calc(100svh-1rem)] rounded-[1.6rem] xl:mx-2.5 xl:my-3 xl:h-[calc(100svh-1.5rem)] xl:rounded-[1.75rem]";
 
 interface WorkspaceSidebarProps {
   loading: boolean;
@@ -36,120 +39,155 @@ export function WorkspaceSidebar({
   selectedSessionId,
   snapshot,
 }: WorkspaceSidebarProps) {
+  const { isMobile } = useSidebar();
+
+  if (isMobile) {
+    return (
+      <Sidebar className="bg-transparent">
+        <WorkspaceSidebarBody
+          loading={loading}
+          onSelectSession={onSelectSession}
+          selectedSessionId={selectedSessionId}
+          snapshot={snapshot}
+        />
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
+
   return (
-    <Sidebar className="bg-transparent">
-      <GlassSurface
-        className="mx-3 my-4 h-[calc(100svh-2rem)] rounded-[2rem]"
-        refraction="none"
-        variant="sidebar"
-      >
-        <SidebarHeader className="px-4 pb-3 pt-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-emerald-300/90">
-                  Codex Monitor
-                </p>
-                <p className="mt-1 text-sm text-slate-100">Live Sessions</p>
-              </div>
-              <GlassSurface className="rounded-full" refraction="none" variant="control">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <Layers3 className="h-3.5 w-3.5 text-sky-300" />
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-100">
-                    {snapshot ? snapshot.workspaces.length : 0} workspaces
-                  </span>
-                </div>
-              </GlassSurface>
-            </div>
+    <WorkspaceSidebarBody
+      loading={loading}
+      onSelectSession={onSelectSession}
+      selectedSessionId={selectedSessionId}
+      snapshot={snapshot}
+    />
+  );
+}
 
-            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <p className="text-[11px] leading-relaxed text-slate-300/78">
-                One shared backdrop, no shell split. Sessions, timeline, and detail
-                all float on the same diagnostic field.
+function WorkspaceSidebarBody({
+  loading,
+  onSelectSession,
+  selectedSessionId,
+  snapshot,
+}: WorkspaceSidebarProps) {
+  const workspaceCount = snapshot?.workspaces.length ?? 0;
+  const sessionCount =
+    snapshot?.workspaces.reduce((total, workspace) => total + workspace.sessions.length, 0) ?? 0;
+  const liveCount =
+    snapshot?.workspaces.reduce(
+      (total, workspace) =>
+        total + workspace.sessions.filter((session) => session.status === "live").length,
+      0,
+    ) ?? 0;
+  const stalledCount =
+    snapshot?.workspaces.reduce(
+      (total, workspace) =>
+        total + workspace.sessions.filter((session) => session.status === "stalled").length,
+      0,
+    ) ?? 0;
+  const summaryParts = [
+    liveCount > 0 ? `${liveCount} live` : null,
+    stalledCount > 0 ? `${stalledCount} stalled` : null,
+  ].filter(Boolean);
+  const sessionSummary =
+    summaryParts.length > 0
+      ? summaryParts.join(", ")
+      : sessionCount > 0
+        ? "No live sessions"
+        : "No sessions";
+
+  return (
+    <GlassSurface
+      className={SIDEBAR_SURFACE_CLASS}
+      refraction="none"
+      variant="sidebar"
+    >
+      <SidebarHeader className="px-3 pb-1 pt-3">
+        <div className="space-y-1.5">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-medium tracking-[-0.01em] text-slate-100/82">
+                Sessions
               </p>
+              <p className="mt-1 text-[11px] text-slate-500">{sessionSummary}</p>
             </div>
+            <p className="text-[10px] text-slate-500/76">{workspaceCount} workspaces</p>
           </div>
-        </SidebarHeader>
+        </div>
+      </SidebarHeader>
 
-        <SidebarContent className="bg-transparent px-3 pb-4 pt-1">
-          {loading ? (
-            <div className="space-y-4 px-1 py-2">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="flex animate-pulse flex-col gap-2.5">
-                  <div className="h-3 w-1/3 rounded-full bg-white/8" />
-                  <div className="h-20 rounded-[1.3rem] border border-white/8 bg-white/[0.05]" />
-                </div>
-              ))}
-            </div>
-          ) : null}
+      <SidebarContent className="bg-transparent px-2 pb-2.5 pt-0 no-scrollbar">
+        {loading ? (
+          <div className="space-y-4 px-1 py-2">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="flex animate-pulse flex-col gap-2.5">
+                <div className="h-3 w-1/3 rounded-full bg-white/8" />
+                <div className="h-20 rounded-[1.3rem] border border-white/8 bg-white/[0.05]" />
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-          {!loading && snapshot && snapshot.workspaces.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] px-6 py-8 text-center text-slate-300/70">
-              <HardDrive className="mx-auto mb-3 h-8 w-8 opacity-40" />
-              <p className="text-sm">No Codex sessions discovered.</p>
-            </div>
-          ) : null}
+        {!loading && snapshot && snapshot.workspaces.length === 0 ? (
+          <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] px-6 py-8 text-center text-slate-300/70">
+            <HardDrive className="mx-auto mb-3 h-8 w-8 opacity-40" />
+            <p className="text-sm">No Codex sessions discovered.</p>
+          </div>
+        ) : null}
 
-          {!loading && snapshot
-            ? snapshot.workspaces.map((workspace) => (
-                <SidebarGroup key={workspace.workspace_path} className="px-0 py-2">
-                  <SidebarGroupLabel className="px-2 text-[10px] font-mono uppercase tracking-[0.24em] text-slate-400/80">
-                    {formatWorkspaceLabel(workspace.workspace_path)}
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <SidebarMenu className="mt-2 gap-2 px-0">
-                      {workspace.sessions.map((session) => {
-                        const isSelected = session.session_id === selectedSessionId;
+        {!loading && snapshot
+          ? snapshot.workspaces.map((workspace) => (
+              <SidebarGroup key={workspace.workspace_path} className="px-0 py-2">
+                <SidebarGroupLabel className="px-1.5 text-[11px] font-medium text-slate-500/76">
+                  {formatWorkspaceLabel(workspace.workspace_path)}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="mt-1.5 gap-1.5 px-0">
+                    {workspace.sessions.map((session) => {
+                      const isSelected = session.session_id === selectedSessionId;
 
-                        return (
-                          <SidebarMenuItem key={session.session_id}>
-                            <SidebarMenuButton
-                              isActive={isSelected}
-                              onClick={() => onSelectSession(session.session_id)}
-                              className={`h-auto cursor-pointer flex-col items-start rounded-[1.4rem] border px-4 py-3.5 transition-all duration-200 ${
-                                isSelected
-                                  ? "border-white/14 bg-white/[0.11] shadow-[0_18px_36px_rgba(2,6,23,0.2),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_0_0_1px_rgba(16,185,129,0.22)]"
-                                  : "border-white/6 bg-white/[0.04] hover:border-white/12 hover:bg-white/[0.08]"
-                              }`}
-                            >
-                              <div className="mb-2 flex w-full items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <span
-                                    className={`${SESSION_TITLE_CLASS} ${
-                                      isSelected ? "text-white" : "text-slate-200"
-                                    }`}
-                                  >
-                                    {session.title ?? "Untitled session"}
-                                  </span>
-                                  <span className="mt-1 block text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500">
-                                    {session.source_kind === "archive_log"
-                                      ? "archive replay"
-                                      : "live monitor"}
-                                  </span>
-                                </div>
-                                <GlassSurface
-                                  className="shrink-0 rounded-full self-start"
-                                  refraction="none"
-                                  variant="control"
+                      return (
+                        <SidebarMenuItem key={session.session_id}>
+                          <SidebarMenuButton
+                            isActive={isSelected}
+                            onClick={() => onSelectSession(session.session_id)}
+                            className={`h-auto cursor-pointer flex-col items-start rounded-[1.2rem] border px-3 py-2.5 transition-all duration-200 ${
+                              isSelected
+                                ? "border-white/14 bg-white/[0.075] shadow-[0_12px_22px_rgba(2,6,23,0.14),inset_0_1px_0_rgba(255,255,255,0.14)]"
+                                : "border-white/4 bg-white/[0.016] hover:border-white/7 hover:bg-white/[0.032]"
+                            }`}
+                          >
+                            <div className="mb-1.5 flex w-full items-start gap-2">
+                              <div className="min-w-0">
+                                <span
+                                  className={`${SESSION_TITLE_CLASS} ${
+                                    isSelected ? "text-white" : "text-slate-200"
+                                  }`}
                                 >
-                                  <div className="px-2.5 py-1 font-mono text-[10px] text-slate-100">
-                                    {formatTime(session.last_event_at)}
-                                  </div>
-                                </GlassSurface>
+                                  {session.title ?? "Untitled session"}
+                                </span>
+                                <span className="mt-1 block text-[11px] text-slate-500/88">
+                                  {session.source_kind === "archive_log"
+                                    ? "Archive replay"
+                                    : "Live monitor"}{" "}
+                                  {session.last_event_at
+                                    ? `· ${formatTime(session.last_event_at)}`
+                                    : ""}
+                                </span>
                               </div>
-                              <SessionBadges session={session} />
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        );
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              ))
-            : null}
-        </SidebarContent>
-      </GlassSurface>
-      <SidebarRail />
-    </Sidebar>
+                            </div>
+                            <SessionBadges session={session} />
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))
+          : null}
+      </SidebarContent>
+    </GlassSurface>
   );
 }

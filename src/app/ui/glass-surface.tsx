@@ -10,12 +10,12 @@ const glassSurfaceVariants = cva(
   {
     variants: {
       variant: {
-        panel: "rounded-[1.25rem]",
-        toolbar: "rounded-[1.25rem]",
-        sidebar: "rounded-[1.25rem]",
-        control: "rounded-[1.25rem]",
-        warning: "rounded-[1.25rem]",
-        danger: "rounded-[1.25rem]",
+        panel: "rounded-[1.6rem]",
+        toolbar: "rounded-[1.9rem]",
+        sidebar: "rounded-[1.4rem]",
+        control: "rounded-[1.2rem]",
+        warning: "rounded-[1.5rem]",
+        danger: "rounded-[1.5rem]",
       },
       interactive: {
         true: "motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none",

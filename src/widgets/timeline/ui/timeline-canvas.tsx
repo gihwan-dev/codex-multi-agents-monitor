@@ -9,6 +9,11 @@ interface TimelineCanvasProps {
   selectedSession: SessionSummary | null;
 }
 
+const PANEL_CARD_CLASS =
+  "relative flex h-full flex-1 flex-col gap-0 overflow-hidden border-0 bg-transparent shadow-none ring-0";
+const PANEL_AMBIENCE_CLASS =
+  "pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(148,163,184,0.14),transparent_24%),radial-gradient(circle_at_82%_16%,rgba(56,189,248,0.12),transparent_24%),radial-gradient(circle_at_58%_58%,rgba(2,132,199,0.08),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.016)_34%,transparent_72%)] opacity-90";
+
 const TIMELINE_EVENTS = [
   {
     accent: "text-amber-100",
@@ -45,13 +50,14 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
     <GlassSurface
       refraction="none"
       variant="panel"
-      className="flex h-full min-h-[520px] flex-col"
+      className="flex h-full min-h-[520px] flex-col overflow-hidden"
     >
-      <Card className="flex flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
-        <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
+      <Card className={PANEL_CARD_CLASS}>
+        <div aria-hidden="true" className={PANEL_AMBIENCE_CLASS} />
+        <CardHeader className="relative z-10 bg-transparent px-6 pb-5 pt-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-emerald-300">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-medium tracking-[0.08em] text-emerald-300/92">
                 <Activity className="h-3.5 w-3.5" />
                 Timeline canvas
               </div>
@@ -61,12 +67,12 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <GlassSurface className="rounded-full" refraction="none" variant="control">
-                <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-200">
+                <div className="px-3 py-2 text-[11px] font-medium tracking-[0.01em] text-emerald-200">
                   Live flow
                 </div>
               </GlassSurface>
               <GlassSurface className="rounded-full" refraction="none" variant="control">
-                <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-100">
+                <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono tracking-[0.12em] text-slate-100">
                   <Clock3 className="h-3.5 w-3.5 text-sky-300" />
                   {selectedSession
                     ? formatTimestamp(selectedSession.last_event_at)
@@ -76,8 +82,8 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-1 overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.14)_15%,transparent_52%)] p-0">
-          <div className="flex w-[126px] shrink-0 flex-col gap-6 px-4 py-6">
+        <CardContent className="relative z-10 flex flex-1 overflow-hidden bg-transparent p-0">
+          <div className="flex w-[110px] shrink-0 flex-col gap-5 px-3.5 py-6">
             {[
               { icon: User, label: "User", accent: "text-amber-300" },
               { icon: Server, label: "Main", accent: "text-emerald-300" },
@@ -89,7 +95,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
                 refraction="none"
                 variant="control"
               >
-                <div className="flex h-12 items-center gap-2 px-3 text-[11px] font-mono uppercase tracking-[0.18em] text-slate-300">
+                <div className="flex h-11 items-center gap-2 px-3 text-[11px] font-medium tracking-[0.04em] text-slate-300">
                   <Icon className={`h-3.5 w-3.5 ${accent}`} />
                   {label}
                 </div>
@@ -97,20 +103,20 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
             ))}
           </div>
 
-          <ScrollArea className="flex-1 max-w-full">
-            <div className="relative h-full min-h-[360px] min-w-[920px] px-6 py-6 pr-10">
+          <ScrollArea className="flex-1 max-w-full no-scrollbar">
+            <div className="relative h-full min-h-[360px] min-w-[760px] px-5 py-6 pr-8">
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 opacity-50"
                 style={{
                   backgroundImage:
-                    "radial-gradient(circle at 12% 16%, rgba(56, 189, 248, 0.08), transparent 26%), radial-gradient(circle at 78% 18%, rgba(16, 185, 129, 0.07), transparent 28%), linear-gradient(180deg, rgba(255,255,255,0.03), transparent 28%)",
+                    "radial-gradient(circle at 12% 16%, rgba(56, 189, 248, 0.08), transparent 26%), radial-gradient(circle at 78% 18%, rgba(16, 185, 129, 0.07), transparent 28%), radial-gradient(circle at 48% 54%, rgba(15, 23, 42, 0.14), transparent 44%)",
                 }}
               />
 
               <div className="relative z-10 space-y-8">
-                <div className="grid grid-cols-[96px_1fr] gap-4">
-                  <div className="pt-2 text-right text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                <div className="grid grid-cols-[80px_1fr] gap-4">
+                  <div className="pt-2 text-right text-[10px] font-medium tracking-[0.08em] text-slate-500">
                     lanes
                   </div>
                   <div className="space-y-5">
@@ -120,7 +126,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
                       { accent: "bg-sky-400/60", label: "Sub-agent" },
                     ].map((lane) => (
                       <div key={lane.label} className="flex items-center gap-4">
-                        <span className="w-24 text-[11px] font-mono uppercase tracking-[0.16em] text-slate-400">
+                        <span className="w-20 text-[10px] font-medium tracking-[0.04em] text-slate-400">
                           {lane.label}
                         </span>
                         <div className="relative h-px flex-1 bg-white/[0.06]">
@@ -131,7 +137,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
                   </div>
                 </div>
 
-                <div className="pl-[116px]">
+                <div className="pl-[96px]">
                   <div className="space-y-4">
                     {TIMELINE_EVENTS.map((event, index) => (
                       <div
@@ -162,7 +168,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
                             <span className={`text-xs font-medium ${event.accent}`}>
                               {event.label}
                             </span>
-                            <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">
+                            <span className="flex items-center gap-1 text-[10px] font-medium tracking-[0.06em] text-slate-400">
                               <Dot className="h-3.5 w-3.5 text-slate-500" />
                               {event.actor}
                             </span>
@@ -182,7 +188,7 @@ export function TimelineCanvas({ selectedSession }: TimelineCanvasProps) {
                 <GlassSurface className="rounded-[1.5rem]" refraction="none" variant="control">
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div>
-                      <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                      <p className="text-[11px] font-medium tracking-[0.04em] text-slate-500">
                         Current focus
                       </p>
                       <p className="mt-1 text-sm text-slate-100">
