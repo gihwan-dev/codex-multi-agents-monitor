@@ -20,6 +20,9 @@ import {
   type WorkspaceSessionsSnapshot,
 } from "@/entities/session";
 
+const SESSION_TITLE_CLASS =
+  "block pr-2 text-sm font-medium leading-snug [display:-webkit-box] [overflow-wrap:anywhere] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]";
+
 interface WorkspaceSidebarProps {
   loading: boolean;
   onSelectSession: (sessionId: string) => void;
@@ -103,7 +106,7 @@ export function WorkspaceSidebar({
                             <SidebarMenuButton
                               isActive={isSelected}
                               onClick={() => onSelectSession(session.session_id)}
-                              className={`h-auto cursor-pointer flex-col items-start rounded-[1.4rem] border px-3.5 py-3.5 transition-all duration-200 ${
+                              className={`h-auto cursor-pointer flex-col items-start rounded-[1.4rem] border px-4 py-3.5 transition-all duration-200 ${
                                 isSelected
                                   ? "border-white/14 bg-white/[0.11] shadow-[0_18px_36px_rgba(2,6,23,0.2),inset_0_1px_0_rgba(255,255,255,0.18),inset_0_0_0_1px_rgba(16,185,129,0.22)]"
                                   : "border-white/6 bg-white/[0.04] hover:border-white/12 hover:bg-white/[0.08]"
@@ -112,7 +115,7 @@ export function WorkspaceSidebar({
                               <div className="mb-2 flex w-full items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <span
-                                    className={`block truncate text-sm font-medium ${
+                                    className={`${SESSION_TITLE_CLASS} ${
                                       isSelected ? "text-white" : "text-slate-200"
                                     }`}
                                   >
@@ -125,7 +128,7 @@ export function WorkspaceSidebar({
                                   </span>
                                 </div>
                                 <GlassSurface
-                                  className="rounded-full"
+                                  className="shrink-0 rounded-full self-start"
                                   refraction="none"
                                   variant="control"
                                 >

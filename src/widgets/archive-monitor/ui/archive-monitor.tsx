@@ -56,14 +56,17 @@ const ARCHIVE_ROWS = [
   },
 ];
 
+const PANEL_CARD_CLASS =
+  "gap-0 overflow-hidden border-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.078),rgba(255,255,255,0.03)_18%,rgba(12,21,37,0.16)_44%,rgba(2,6,23,0.14)_100%)] shadow-none ring-0";
+
 export function ArchiveMonitor() {
   return (
     <div className="flex h-full flex-col gap-5">
       <GlassSurface refraction="none" variant="panel" className="shrink-0">
-        <Card className="border-0 bg-transparent shadow-none ring-0">
-          <CardContent className="flex flex-col gap-4 p-4">
+        <Card className={PANEL_CARD_CLASS}>
+          <CardContent className="flex flex-col gap-4 bg-transparent p-5 md:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="max-w-[44ch]">
                 <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-slate-500">
                   Replay search
                 </p>
@@ -79,8 +82,8 @@ export function ArchiveMonitor() {
               </GlassSurface>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <GlassSurface className="min-w-[18rem] rounded-[1.4rem]" refraction="none" variant="control">
+            <div className="flex flex-wrap items-center gap-3 xl:flex-nowrap">
+              <GlassSurface className="min-w-[16rem] flex-1 rounded-[1.4rem] xl:max-w-[28rem]" refraction="none" variant="control">
                 <div className="relative flex items-center px-3 py-2.5">
                   <Search className="mr-2 h-4 w-4 text-slate-500" />
                   <Input
@@ -110,7 +113,7 @@ export function ArchiveMonitor() {
                 </GlassSurface>
               ))}
 
-              <GlassSurface className="ml-auto rounded-full" interactive refraction="soft" variant="control">
+              <GlassSurface className="rounded-full md:ml-auto" interactive refraction="soft" variant="control">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -126,10 +129,10 @@ export function ArchiveMonitor() {
       </GlassSurface>
 
       <GlassSurface refraction="none" variant="panel" className="flex flex-1 flex-col overflow-hidden">
-        <Card className="flex flex-1 flex-col overflow-hidden border-0 bg-transparent shadow-none ring-0">
-          <CardHeader className="bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
+        <Card className={`flex flex-1 flex-col ${PANEL_CARD_CLASS}`}>
+          <CardHeader className="bg-transparent px-6 pb-4 pt-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-[30rem]">
                 <p className="mb-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
                   Archived sessions
                 </p>
@@ -145,11 +148,11 @@ export function ArchiveMonitor() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 overflow-auto p-0">
+          <CardContent className="flex-1 overflow-auto bg-transparent p-0">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-[linear-gradient(180deg,rgba(7,17,29,0.76),rgba(7,17,29,0.42))] backdrop-blur-xl">
                 <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-[340px] text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
+                  <TableHead className="w-[38%] min-w-[18rem] text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                     Session
                   </TableHead>
                   <TableHead className="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
@@ -173,8 +176,10 @@ export function ArchiveMonitor() {
                     className="border-white/5 transition-colors hover:bg-white/[0.04]"
                   >
                     <TableCell className="py-4 text-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate">{row.title}</span>
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span className="min-w-0 max-w-[34ch] leading-snug [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                          {row.title}
+                        </span>
                         {row.flag ? (
                           <Badge
                             variant="outline"

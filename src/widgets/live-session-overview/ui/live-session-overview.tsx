@@ -18,9 +18,11 @@ interface LiveSessionOverviewProps {
 }
 
 const PANEL_HEADER_CLASS =
-  "bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.024)_72%,transparent)] px-6 pb-4 pt-5";
+  "bg-transparent px-6 pb-4 pt-5";
+const PANEL_CARD_CLASS =
+  "gap-0 overflow-hidden border-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.078),rgba(255,255,255,0.032)_18%,rgba(12,21,37,0.16)_44%,rgba(2,6,23,0.12)_100%)] shadow-none ring-0";
 const METRIC_BLOCK_CLASS =
-  "rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+  "min-h-[5.25rem] rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
 
 export function LiveSessionOverview({
   degradedMessage,
@@ -55,22 +57,22 @@ export function LiveSessionOverview({
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <GlassSurface refraction="none" variant="panel">
-          <Card className="overflow-hidden border-0 bg-transparent shadow-none ring-0">
+          <Card className={PANEL_CARD_CLASS}>
             <CardHeader className={PANEL_HEADER_CLASS}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 max-w-[58rem]">
                   <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-emerald-300">
                     <Activity className="h-3.5 w-3.5" />
                     Selected session
                   </div>
-                  <CardTitle className="text-[1.85rem] font-normal tracking-tight text-white">
+                  <CardTitle className="max-w-[34ch] text-[clamp(2rem,3.2vw,3rem)] font-normal leading-[0.98] tracking-[-0.04em] text-white [overflow-wrap:anywhere]">
                     {selectedSession
                       ? (selectedSession.title ?? "Untitled session")
                       : "Awaiting session selection"}
                   </CardTitle>
                 </div>
                 <GlassSurface
-                  className="rounded-full"
+                  className="shrink-0 rounded-full self-start"
                   interactive
                   refraction="soft"
                   variant="control"
@@ -84,9 +86,9 @@ export function LiveSessionOverview({
                 </GlassSurface>
               </div>
             </CardHeader>
-            <CardContent className="bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.12)_16%,transparent_52%)] p-6 text-slate-300">
+            <CardContent className="bg-transparent p-6 text-slate-300">
               {selectedSession ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className={METRIC_BLOCK_CLASS}>
                     <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.18em] text-slate-500">
                       Status
@@ -132,7 +134,7 @@ export function LiveSessionOverview({
         </GlassSurface>
 
         <GlassSurface refraction="none" variant="panel">
-          <Card className="overflow-hidden border-0 bg-transparent shadow-none ring-0">
+          <Card className={PANEL_CARD_CLASS}>
             <CardHeader className={PANEL_HEADER_CLASS}>
               <div className="mb-2 flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.22em] text-sky-300">
                 <Terminal className="h-3.5 w-3.5" />
@@ -142,9 +144,9 @@ export function LiveSessionOverview({
                 {loading ? "Scanning runtime edges..." : "Live shell in phase."}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(2,6,23,0.12)_16%,transparent_52%)] p-6">
+            <CardContent className="space-y-4 bg-transparent p-6">
               <div className="rounded-[1.4rem] border border-white/7 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                <p className="text-sm leading-relaxed text-slate-300/82">
+                <p className="max-w-[54ch] text-sm leading-relaxed text-slate-300/82">
                   Shared chrome is active across live, archive, and metrics. The
                   layout now favors floating controls over hard panel splits.
                 </p>
