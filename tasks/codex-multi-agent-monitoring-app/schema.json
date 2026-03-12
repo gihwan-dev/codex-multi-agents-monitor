@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-multi-agent-monitor.local/schema/canonical-session.json",
+  "title": "Canonical Codex Monitoring Schema",
+  "type": "object",
+  "required": ["session", "events"],
+  "properties": {
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/metric"
+      }
+    }
+  },
+  "$defs": {
+    "session": {
+      "type": "object",
+      "required": [
+        "session_id",
+        "workspace_path",
+        "status",
+        "started_at",
+        "is_archived"
+      ],
+      "properties": {
+        "session_id": { "type": "string" },
+        "parent_session_id": { "type": ["string", "null"] },
+        "workspace_path": { "type": "string" },
+        "title": { "type": ["string", "null"] },
+        "status": {
+          "type": "string",
+          "enum": ["live", "archived", "stalled", "aborted", "completed"]
+        },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": ["string", "null"], "format": "date-time" },
+        "is_archived": { "type": "boolean" },
+        "source_kind": {
+          "type": "string",
+          "enum": ["session_log", "archive_log"]
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "session_id",
+        "kind",
+        "occurred_at",
+        "lane_id",
+        "detail_level"
+      ],
+      "properties": {
+        "event_id": { "type": "string" },
+        "session_id": { "type": "string" },
+        "parent_event_id": { "type": ["string", "null"] },
+        "agent_instance_id": { "type": ["string", "null"] },
+        "lane_id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "session_start",
+            "user_message",
+            "agent_message",
+            "reasoning",
+            "tool_call",
+            "tool_output",
+            "tool_span",
+            "spawn",
+            "agent_complete",
+            "token_delta",
+            "error",
+            "turn_aborted"
+          ]
+        },
+        "detail_level": {
+          "type": "string",
+          "enum": ["operational", "diagnostic", "raw"]
+        },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "summary": { "type": ["string", "null"] },
+        "payload_preview": { "type": ["string", "null"] },
+        "payload_ref": { "type": ["string", "null"] },
+        "token_input": { "type": ["integer", "null"], "minimum": 0 },
+        "token_output": { "type": ["integer", "null"], "minimum": 0 },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": ["metric_id", "scope", "name", "value"],
+      "properties": {
+        "metric_id": { "type": "string" },
+        "scope": {
+          "type": "string",
+          "enum": ["session", "workspace", "global"]
+        },
+        "session_id": { "type": ["string", "null"] },
+        "workspace_path": { "type": ["string", "null"] },
+        "name": { "type": "string" },
+        "value": {
+          "type": ["number", "integer", "string", "boolean"]
+        },
+        "unit": { "type": ["string", "null"] },
+        "captured_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}
