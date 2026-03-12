@@ -38,13 +38,17 @@ Codex 멀티 에이전트 세션을 로컬에서 추적하고, "적절한 에이
 - Privacy:
   - 세션 원문, 파생 지표, 검색 인덱스는 모두 로컬 장치 안에서만 유지한다.
   - reasoning raw는 기본 화면에 노출하지 않고 selection된 item의 detail drawer에서만 연다.
+- Frontend data access:
+  - Tauri IPC 기반 server state는 TanStack Query가 소유한다.
+  - `start_live_bridge` + live event는 query cache updater로만 동작한다.
+  - `selectedSessionId`, tab, filter draft 같은 UI state는 feature-local state로 유지한다.
 
 # Validation gate status
 
 - Verdict: `blocking`
 - 이유:
   - UI, workflow, architecture, data contract, operability가 모두 바뀐다.
-  - 실제 Codex 로그 필드 coverage는 `SLICE-1`에서 고정해야 하고, renderer 10k budget은 `SLICE-5` stop/replan gate로만 남겨둔다.
+  - 실제 Codex 로그 필드 coverage는 `SLICE-1`에서 고정해야 하고, renderer 10k budget은 `SLICE-6` stop/replan gate로만 남겨둔다.
 - 구현 착수 기준:
   - `SPEC_VALIDATION.md`의 pre-`SLICE-1` blocking issue가 해소된 뒤 `SLICE-1` spike부터 시작한다.
 
@@ -54,7 +58,8 @@ Codex 멀티 에이전트 세션을 로컬에서 추적하고, "적절한 에이
 2. `SLICE-2` canonical schema + persistence
 3. `SLICE-3` query API + live stream bridge
 4. `SLICE-4` app shell + workspace/navigation
-5. `SLICE-5` sequence timeline renderer MVP
-6. `SLICE-6` archive filters + parity
-7. `SLICE-7` dashboard metrics + heuristics
-8. `SLICE-8` performance hardening + glass-inspired theme polish
+5. `SLICE-5` frontend query foundation
+6. `SLICE-6` sequence timeline renderer MVP
+7. `SLICE-7` archive filters + parity
+8. `SLICE-8` dashboard metrics + heuristics
+9. `SLICE-9` performance hardening + glass-inspired theme polish

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { useLiveSessionFeed } from "@/features/live-session-feed";
+import { useWorkspaceSessionsQuery } from "@/features/live-session-feed";
 import { useSessionSelection } from "@/features/session-selection";
 import { type MonitorTab } from "@/shared/model";
 import { DetailDrawerPlaceholder } from "@/widgets/detail-drawer-placeholder";
@@ -11,9 +11,13 @@ import { TabPlaceholderPanel } from "@/widgets/tab-placeholder-panel";
 import { TimelinePlaceholder } from "@/widgets/timeline-placeholder";
 import { WorkspaceSidebar } from "@/widgets/workspace-sidebar";
 
-export function MonitorPage() {
+interface MonitorPageProps {
+  degradedMessage: string | null;
+}
+
+export function MonitorPage({ degradedMessage }: MonitorPageProps) {
   const [activeTab, setActiveTab] = useState<MonitorTab>("live");
-  const { degradedMessage, errorMessage, loading, snapshot } = useLiveSessionFeed();
+  const { errorMessage, loading, snapshot } = useWorkspaceSessionsQuery();
   const { selectSession, selectedSession, selectedSessionId } =
     useSessionSelection(snapshot);
 

@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import type { LiveSessionUpdate, WorkspaceSessionsSnapshot } from "@/shared/queries";
+import type {
+  LiveSessionUpdate,
+  SessionDetailQuery,
+  SessionDetailSnapshot,
+  WorkspaceSessionsSnapshot,
+} from "@/shared/queries";
 
 export const LIVE_SESSION_UPDATED_EVENT = "codex://live-session-updated";
 
@@ -16,6 +21,10 @@ export function isTauriRuntimeAvailable() {
 
 export function queryWorkspaceSessions() {
   return invoke<WorkspaceSessionsSnapshot>("query_workspace_sessions");
+}
+
+export function querySessionDetail(query: SessionDetailQuery) {
+  return invoke<SessionDetailSnapshot>("query_session_detail", { query });
 }
 
 export function startLiveBridge() {

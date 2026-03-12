@@ -48,3 +48,11 @@ Feature: Codex multi-agent monitoring desktop app
     Given a session contains at least 10,000 normalized events
     When the user opens the detail view and zooms or pans
     Then the timeline remains interactive without blocking the UI thread for a visibly long time
+
+  # AC-008
+  Scenario: Query foundation preserves live shell state
+    Given the workspace snapshot bootstrap query is pending
+    And a live summary update arrives before the bootstrap query resolves
+    When the app finishes loading the Live Monitor
+    Then the workspace sessions query cache contains both the bootstrap snapshot and the live summary
+    And the current selection state remains feature-local instead of moving into the query cache

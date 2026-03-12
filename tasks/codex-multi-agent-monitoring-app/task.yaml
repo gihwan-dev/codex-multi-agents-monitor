@@ -12,6 +12,7 @@ success_criteria:
 major_boundaries:
   - Rust backend ingestion, file watching, persistence
   - shared canonical event schema between Rust and React
+  - frontend query/cache layer for Tauri server state
   - React app shell, workspace navigation, live/archive/dashboard surfaces
   - vector timeline renderer with zoom, pan, level-of-detail filtering
   - analytics and heuristic layer for orchestration quality metrics
@@ -38,6 +39,9 @@ source_of_truth:
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/README.md
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/package.json
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/main.tsx
+  - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/shared/query/index.ts
+  - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/live-session-feed/model/use-live-session-bridge.ts
+  - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/features/session-detail/model/use-session-detail-query.ts
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/styles.css
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/src/lib.rs
   - /Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src-tauri/Cargo.toml
@@ -61,7 +65,7 @@ validation_gate:
     - workflow_changed
     - data_contract_changed
     - operability_changed
-current_phase: design_ready
+current_phase: implementation_in_progress
 quality_preflight:
   verdict: orchestrated-task
   reasons:

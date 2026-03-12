@@ -48,7 +48,7 @@
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
   }
-  
+
   .liquid-glass-element {
     filter: url(#liquidGlassFilter);
     backdrop-filter: blur(12px);

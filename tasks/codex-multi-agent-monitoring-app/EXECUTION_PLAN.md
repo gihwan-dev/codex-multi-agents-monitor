@@ -65,7 +65,30 @@
 - Stop / Replan trigger:
   - shell state와 session detail state가 과도하게 결합되면 store 구조 재설계
 
-## `SLICE-5` Sequence timeline renderer MVP
+## `SLICE-5` Frontend query foundation
+
+- Change boundary:
+  - frontend server-state ownership
+  - Query provider, query keys/options, app-level live bridge bootstrap
+  - session detail query contract
+  - focused test infrastructure and task/docs sync
+- Expected files:
+  - `src/main.tsx`
+  - `src/shared/query/*`
+  - `src/features/live-session-feed/*`
+  - `src/features/session-detail/*`
+  - `tasks/codex-multi-agent-monitoring-app/*`
+- Validation owner:
+  - `implementer`
+- Focused validation plan:
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build` (Node baseline warning은 advisory로 기록)
+  - workspace bootstrap + live-before-bootstrap race + detail disabled/key split 자동 검증
+- Stop / Replan trigger:
+  - StrictMode/remount에서 중복 subscription이 반복되거나, detail invalidate 정책이 selection 안정성을 깨면 explicit bridge manager를 먼저 분리
+
+## `SLICE-6` Sequence timeline renderer MVP
 
 - Change boundary:
   - SVG renderer, zoom/pan, lane projection, detail drawer
@@ -81,7 +104,7 @@
 - Stop / Replan trigger:
   - SVG primitive 수가 budget을 넘겨 frame drop이 심하면 WebGL/canvas hybrid 검토
 
-## `SLICE-6` Archive filters and parity
+## `SLICE-7` Archive filters and parity
 
 - Change boundary:
   - archive query UI + dense results + detail reuse
@@ -97,7 +120,7 @@
 - Stop / Replan trigger:
   - archive query latency가 300ms budget을 반복적으로 초과하면 index/materialized snapshot 추가
 
-## `SLICE-7` Dashboard metrics and heuristics
+## `SLICE-8` Dashboard metrics and heuristics
 
 - Change boundary:
   - metric aggregation + dashboard cards/charts
@@ -113,7 +136,7 @@
 - Stop / Replan trigger:
   - heuristic false positive가 과도하면 dashboard labeling을 "suspected" 중심으로 조정
 
-## `SLICE-8` Performance hardening and theme polish
+## `SLICE-9` Performance hardening and theme polish
 
 - Change boundary:
   - profiling, memoization/culling, glass-inspired visual system
@@ -139,6 +162,8 @@
   - canonical event serialization vs `schema.json`
 - UI validation:
   - live sidebar state
+  - query cache bootstrap race
+  - detail query disabled/key split
   - timeline zoom/pan
   - detail drawer
   - archive filters
@@ -156,6 +181,7 @@
 
 - `RISK-001` Codex 로그 필드가 버전별로 크게 다르면 parser adapter layer를 먼저 분리해야 한다.
 - `RISK-002` session file watch만으로 live completeness를 보장하지 못하면 polling + checkpoint hybrid로 전환한다.
-- `RISK-003` time-axis SVG renderer가 성능 한계를 보이면 canvas overlay 또는 hybrid renderer로 전환한다.
-- `RISK-004` repeated-work heuristic이 설명 가능하지 않으면 v1 dashboard에서 score보다 evidence list 중심으로 축소한다.
-- `RISK-005` local data volume이 커서 startup indexing 비용이 높으면 background indexing과 recent-first lazy hydration이 필요하다.
+- `RISK-003` query foundation이 future slice에서 우회되면 summary/detail/archive cache 정책이 분기될 수 있으니 shared query layer를 source of truth로 유지한다.
+- `RISK-004` time-axis SVG renderer가 성능 한계를 보이면 canvas overlay 또는 hybrid renderer로 전환한다.
+- `RISK-005` repeated-work heuristic이 설명 가능하지 않으면 v1 dashboard에서 score보다 evidence list 중심으로 축소한다.
+- `RISK-006` local data volume이 커서 startup indexing 비용이 높으면 background indexing과 recent-first lazy hydration이 필요하다.

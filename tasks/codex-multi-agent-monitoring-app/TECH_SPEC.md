@@ -2,7 +2,7 @@
 
 - Repository state:
   - Rust backend가 SQLite-backed session snapshot/detail query와 live bridge command를 노출한다.
-  - frontend는 Live shell, workspace sidebar, session summary, deferred timeline/detail surface를 렌더링한다.
+  - frontend는 TanStack Query 기반 workspace snapshot/detail query, app-level live bridge bootstrap, Live shell, deferred timeline/detail surface를 렌더링한다.
   - Archive/Dashboard는 navigation skeleton만 열어 두고 후속 slice에서 채운다.
 - Observed local data sources:
   - `~/.codex/sessions/**/*.jsonl`
@@ -129,6 +129,7 @@ Codex local files
 
 # Frontend responsibilities
 
+- query cache ownership for Tauri server state
 - workspace/session navigation
 - list virtualization
 - svg timeline projection
@@ -147,7 +148,8 @@ Codex local files
   - `workspace-sidebar`, `monitor-header`, `live-session-overview`, `timeline-placeholder`, `detail-drawer-placeholder`, `tab-placeholder-panel`
   - 모두 prop-driven dumb component로 유지한다.
 - `features`
-  - `live-session-feed`: bootstrap query, live subscription, degraded/error/loading state
+  - `live-session-feed`: workspace sessions query + app-level live bridge bootstrap/cache update
+  - `session-detail`: `query_session_detail` fetch lifecycle, disabled/detail state contract
   - `session-selection`: selected session id, auto-select, selection fallback
 - `entities/session`
   - snapshot sort/upsert/find 규칙
@@ -155,14 +157,31 @@ Codex local files
   - `SessionBadges` UI
 - `shared`
   - `api/tauri-monitor`: Tauri invoke/listen runtime bridge
+  - `query/*`: stable query client, query provider, query key/options factory
   - `model/monitor`: tab contract과 deferred placeholder copy
   - `queries.ts`: Rust와 공유하는 query contract
+
+## Frontend query layer
+
+- server state ownership:
+  - `query_workspace_sessions`, `query_session_detail`, future archive/dashboard query는 TanStack Query가 소유한다.
+- app bootstrap:
+  - `start_live_bridge`와 `codex://live-session-updated` listen은 query function 안이 아니라 app-level hook에서 1회 등록한다.
+- cache policy:
+  - workspace snapshot bootstrap은 첫 fetch가 pending일 때 cache에 들어온 live summary만 `mergeBootstrapSnapshot`으로 병합한다.
+  - 이후 refetch는 backend snapshot을 source of truth로 사용하고 기존 cache를 다시 병합하지 않는다.
+  - live summary event는 workspace sessions cache만 `setQueryData`로 갱신한다.
+  - summary payload만으로 안전 merge가 불가능한 detail cache는 session key 기준으로 invalidate 하고, remount 시 fresh fetch가 일어나도록 유지한다.
+- local UI state:
+  - `activeTab`, `selectedSessionId`, future filter draft는 Query cache에 올리지 않고 feature-local state로 유지한다.
 
 ## Live shell data flow
 
 ```text
 shared/api/tauri-monitor
+  -> shared/query
   -> features/live-session-feed
+  -> features/session-detail
   -> entities/session
   -> features/session-selection
   -> widgets/*
@@ -170,10 +189,11 @@ shared/api/tauri-monitor
   -> app-shell
 ```
 
-- `query_workspace_sessions`는 bootstrap snapshot을 가져온다.
-- `start_live_bridge`와 `codex://live-session-updated`는 live summary upsert를 만든다.
-- `entities/session`는 backend contract와 동일한 정렬 규칙을 frontend merge path에도 적용한다.
-- `pages/monitor`는 tab state만 가지며, data orchestration은 feature hook 안에 머문다.
+- `query_workspace_sessions`는 TanStack Query bootstrap snapshot을 가져오고 pending 중 도착한 live summary를 병합한다.
+- `start_live_bridge`와 `codex://live-session-updated`는 workspace sessions query cache를 갱신한다.
+- `query_session_detail`는 session별 key를 갖고 disabled/detail fetch lifecycle을 분리한다.
+- `entities/session`는 backend contract와 동일한 정렬 규칙을 query cache merge path에도 적용한다.
+- `pages/monitor`는 tab state와 selection state만 가지며, server-state orchestration은 query layer와 feature hook 안에 머문다.
 
 # Timeline renderer choice
 
@@ -210,7 +230,9 @@ shared/api/tauri-monitor
   - SQLite repository layer
 - React:
   - React 19
-  - `@tanstack/react-virtual` for large lists/tables
+  - `@tanstack/react-query` for server-state ownership
+  - `@tanstack/react-query-devtools` in dev-only environments
+  - `@tanstack/react-virtual` for archive/dashboard dense lists in later slices
   - SVG + `d3-zoom` or equivalent for canvas transform
 - Tauri:
   - commands/events for bridge
@@ -236,6 +258,9 @@ shared/api/tauri-monitor
 
 - Fact: React Flow 공식 문서는 viewport customization과 panning/zooming 개념을 제공한다. [React Flow - Panning and Zooming](https://reactflow.dev/learn/concepts/the-viewport)
 - Fact: React Flow 공식 문서는 큰 그래프에서 성능 최적화 전략을 따로 다룬다. [React Flow - Performance](https://reactflow.dev/learn/advanced-use/performance)
+- Fact: TanStack Query는 `QueryClientProvider`와 query key/options factory 패턴을 공식 문서로 제공한다. [TanStack Query - Quick Start](https://tanstack.com/query/latest/docs/framework/react/quick-start)
+- Fact: TanStack Query는 cache lifecycle과 refetch 기본 정책을 `Important Defaults`로 문서화한다. [TanStack Query - Important Defaults](https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults)
+- Fact: TanStack Query는 reusable query factory 패턴으로 `queryOptions`를 제공한다. [TanStack Query - queryOptions](https://tanstack.com/query/latest/docs/framework/react/guides/query-options)
 - Fact: TanStack Virtual은 headless virtualization utility이며 long list rendering 제어권을 앱 쪽에 남긴다. [TanStack Virtual - Introduction](https://tanstack.com/virtual/latest/docs/introduction)
 - Fact: Tauri Store plugin은 persistent key-value storage를 제공한다. [Tauri Store Plugin](https://v2.tauri.app/plugin/store/)
 - Fact: Tauri SQL plugin은 sqlx 기반 frontend-to-database bridge를 제공한다. [Tauri SQL Plugin](https://v2.tauri.app/plugin/sql/)
@@ -243,5 +268,6 @@ shared/api/tauri-monitor
 # Design inference from references
 
 - React Flow는 benchmark로 참고할 가치는 있지만 v1 요구는 time-axis sequence diagram이라 custom SVG가 더 적합하다.
+- TanStack Query는 Tauri IPC로 읽는 server state를 query cache와 local UI state로 분리하는 foundation에 적합하다.
 - TanStack Virtual은 archived list와 dashboard dense table에 바로 맞는다.
 - Tauri Store plugin은 preference 저장에 적합하고, event store는 backend-owned SQLite가 더 일관적이다.
