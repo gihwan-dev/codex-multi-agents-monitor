@@ -11,10 +11,12 @@ import {
 import {
   formatSessionDisplayTitle,
   formatTimestamp,
-  selectLiveWorkspaceSnapshot,
   type SessionSummary,
   type WorkspaceSessionsSnapshot,
 } from "@/entities/session";
+import type { TimelineProjection } from "@/features/timeline";
+
+import { deriveCoordinationSnapshot } from "../lib/coordination-summary";
 
 interface LiveSessionOverviewProps {
   collapsed: boolean;
@@ -22,29 +24,51 @@ interface LiveSessionOverviewProps {
   errorMessage: string | null;
   loading: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  projection: TimelineProjection | null;
   selectedSession: SessionSummary | null;
   snapshot: WorkspaceSessionsSnapshot | null;
 }
 
 const PANEL_CARD_CLASS =
   "flex h-full flex-col gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0";
-const SUMMARY_SECTION_CLASS =
-  "rounded-[1.15rem] border border-white/6 bg-white/[0.024] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
-const SUMMARY_CHIP_CLASS =
-  "rounded-[0.95rem] border border-white/6 bg-[#09111d]/62 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
-const SUMMARY_LABEL_CLASS =
+const SUMMARY_META_LABEL_CLASS = "text-[10px] font-medium tracking-[0.03em] text-slate-500";
+const SUMMARY_META_VALUE_CLASS =
+  "truncate text-[12.5px] font-semibold tracking-[-0.015em] text-slate-100";
+const SUMMARY_FACT_LABEL_CLASS =
   "text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500";
 
-function sourceLabel(selectedSession: SessionSummary | null) {
-  return selectedSession?.source_kind === "archive_log" ? "Archive replay" : "Session log";
+function SummaryMeta({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5">
+      <span className={SUMMARY_META_LABEL_CLASS}>{label}</span>
+      <span className={SUMMARY_META_VALUE_CLASS}>{value}</span>
+    </div>
+  );
 }
 
-function metaChip(label: string, value: string | number) {
+function CoordinationFact({
+  detail,
+  label,
+  value,
+}: {
+  detail: string;
+  label: string;
+  value: string;
+}) {
   return (
-    <div className={SUMMARY_CHIP_CLASS}>
-      <p className={SUMMARY_LABEL_CLASS}>{label}</p>
-      <p className="mt-1 text-[13px] font-medium text-slate-100">{value}</p>
-    </div>
+    <section className="min-w-0 flex-1">
+      <p className={SUMMARY_FACT_LABEL_CLASS}>{label}</p>
+      <p className="mt-1 truncate text-[13px] font-semibold tracking-[-0.02em] text-white">
+        {value}
+      </p>
+      <p className="mt-1 line-clamp-2 text-[11.5px] leading-5 text-slate-300/74">{detail}</p>
+    </section>
   );
 }
 
@@ -54,13 +78,10 @@ export function LiveSessionOverview({
   errorMessage,
   loading,
   onCollapsedChange,
+  projection,
   selectedSession,
   snapshot,
 }: LiveSessionOverviewProps) {
-  const liveSnapshot = selectLiveWorkspaceSnapshot(snapshot);
-  const sessions = liveSnapshot?.workspaces.flatMap((workspace) => workspace.sessions) ?? [];
-  const liveCount = sessions.filter((session) => session.status === "live").length;
-  const stalledCount = sessions.filter((session) => session.status === "stalled").length;
   const shellHealth = errorMessage
     ? "Degraded"
     : degradedMessage
@@ -81,6 +102,10 @@ export function LiveSessionOverview({
     : loading
       ? "Syncing"
       : "Pending";
+  const coordinationSnapshot = deriveCoordinationSnapshot(projection);
+  const coordinationFallback = selectedSession
+    ? "Agent-to-agent orchestration will appear here as the session emits multi-agent activity."
+    : "Select a live session to inspect current orchestration.";
 
   return (
     <div className="space-y-3">
@@ -113,24 +138,22 @@ export function LiveSessionOverview({
         >
           <Card className={PANEL_CARD_CLASS}>
             <CardContent
-              className="bg-transparent px-1 py-0 md:px-1.5 md:py-0"
+              className="bg-transparent px-2 py-1 md:px-2.5 md:py-1.5"
               data-state={collapsed ? "collapsed" : "expanded"}
               data-testid="live-session-summary"
             >
               <div
-                className="flex min-h-[1.35rem] min-w-0 items-center gap-1"
+                className="flex min-h-[2.1rem] min-w-0 items-center gap-2"
                 data-testid="live-session-summary-bar"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-0.5">
-                    <div className="flex shrink-0 min-w-0 items-center gap-0.5">
-                      <Activity className="h-2 w-2 shrink-0 text-emerald-300/86" />
-                      <p className="text-[8px] font-medium uppercase tracking-[0.07em] text-slate-500">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <Activity className="h-3 w-3 shrink-0 text-emerald-300/86" />
+                  <div className="flex min-w-0 items-baseline gap-1.5">
+                    <p className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
                         Live summary
-                      </p>
-                    </div>
+                    </p>
                     <p
-                      className="min-w-0 flex-1 truncate text-[9px] font-medium tracking-[-0.02em] text-white"
+                      className="min-w-0 max-w-[clamp(7rem,14vw,13rem)] truncate text-[13px] font-semibold tracking-[-0.02em] text-white"
                       title={sessionTitle?.tooltip}
                     >
                       {compactSessionTitle}
@@ -138,27 +161,21 @@ export function LiveSessionOverview({
                   </div>
                 </div>
 
-                <div className="hidden min-w-0 flex-1 items-center justify-end gap-1.5 text-[10px] font-medium text-slate-300/82 lg:flex">
-                  <span className="truncate">
-                    Status, <span className="font-medium text-slate-100">{sessionStateLabel}</span>
-                  </span>
-                  <span className="truncate">
-                    LastEvent, <span className="font-medium text-slate-100">{compactLastEvent}</span>
-                  </span>
-                  <span className="truncate">
-                    HEALTH, <span className="font-medium text-slate-100">{shellHealth}</span>
-                  </span>
+                <div className="hidden min-w-0 flex-1 items-center justify-end gap-3 lg:flex">
+                  <SummaryMeta label="Status" value={sessionStateLabel} />
+                  <SummaryMeta label="Updated" value={compactLastEvent} />
+                  <SummaryMeta label="Health" value={shellHealth} />
                 </div>
 
                 <CollapsibleTrigger
                   aria-label={collapsed ? "Expand live summary" : "Collapse live summary"}
-                  className="shrink-0 text-[10px] font-medium text-slate-100 transition-colors hover:text-white focus-visible:outline-none"
+                  className="shrink-0 text-[12px] font-medium text-slate-100 transition-colors hover:text-white focus-visible:outline-none"
                   data-testid="live-session-summary-trigger"
                 >
-                  <span className="inline-flex items-center gap-0.5">
+                  <span className="inline-flex items-center gap-1">
                     <span>{collapsed ? "Expand" : "Collapse"}</span>
                     <ChevronDown
-                      className={`h-3 w-3 transition-transform duration-200 ${
+                      className={`h-3.5 w-3.5 transition-transform duration-200 ${
                         collapsed ? "" : "rotate-180"
                       }`}
                     />
@@ -168,74 +185,35 @@ export function LiveSessionOverview({
 
               <CollapsibleContent>
                 <div className="mt-2 border-t border-white/6 pt-2.5">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.04fr)]">
-                    <section className={SUMMARY_SECTION_CLASS}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                            <Activity className="h-3.5 w-3.5 text-slate-400" />
-                            Live session
-                          </div>
-                          <p
-                            className="mt-1.5 truncate text-[1.02rem] font-medium tracking-[-0.02em] text-white"
-                            title={sessionTitle?.tooltip}
-                          >
-                            {compactSessionTitle}
-                          </p>
-                          <p className="mt-1 text-[11px] text-slate-400/78">
-                            {sessionTitle?.workspaceLabel ?? "Select a session from the sidebar"}
-                          </p>
-                        </div>
-                        <GlassSurface
-                          className="shrink-0 rounded-full"
-                          interactive
-                          refraction="soft"
-                          variant="control"
-                        >
-                          <div className="px-2.5 py-1.5">
-                            <span className="text-[10.5px] font-medium tracking-[0.01em] text-slate-100 capitalize">
-                              {sessionStateLabel}
-                            </span>
-                          </div>
-                        </GlassSurface>
-                      </div>
-                      <p className="mt-3 text-[12px] leading-relaxed text-slate-300/70">
-                        {selectedSession
-                          ? `${sourceLabel(selectedSession)} selected for live inspection.`
-                          : "Choose a session to bring the latest runtime activity into focus."}
-                      </p>
-                    </section>
-
-                    <section className={SUMMARY_SECTION_CLASS}>
-                      <p className={SUMMARY_LABEL_CLASS}>Selected session</p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-                        {metaChip("Events", selectedSession?.event_count ?? "No session")}
-                        {metaChip(
-                          "Last event",
-                          selectedSession ? compactLastEvent : "Awaiting selection",
-                        )}
-                        {metaChip(
-                          "Source",
-                          selectedSession ? sourceLabel(selectedSession) : "Pending",
-                        )}
-                      </div>
-                    </section>
-
-                    <section className={SUMMARY_SECTION_CLASS}>
-                      <p className={SUMMARY_LABEL_CLASS}>Runtime</p>
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        {metaChip("Live", liveCount)}
-                        {metaChip("Stalled", stalledCount)}
-                        {metaChip(
-                          "Refresh",
-                          liveSnapshot
-                            ? formatTimestamp(liveSnapshot.refreshed_at)
-                            : "Awaiting feed",
-                        )}
-                        {metaChip("Health", shellHealth)}
-                      </div>
-                    </section>
-                  </div>
+                  {coordinationSnapshot ? (
+                    <div
+                      className="flex flex-col gap-3 xl:flex-row xl:items-start xl:gap-4"
+                      data-testid="live-session-coordination"
+                    >
+                      <CoordinationFact
+                        detail={coordinationSnapshot.currentTurn.detail}
+                        label="Current turn"
+                        value={coordinationSnapshot.currentTurn.label}
+                      />
+                      <CoordinationFact
+                        detail={coordinationSnapshot.participants.detail}
+                        label="Participants"
+                        value={coordinationSnapshot.participants.label}
+                      />
+                      <CoordinationFact
+                        detail={coordinationSnapshot.latestCoordination.detail}
+                        label="Latest coordination"
+                        value={coordinationSnapshot.latestCoordination.label}
+                      />
+                    </div>
+                  ) : (
+                    <p
+                      className="text-[12px] leading-relaxed text-slate-300/72"
+                      data-testid="live-session-coordination-empty"
+                    >
+                      {coordinationFallback}
+                    </p>
+                  )}
                 </div>
               </CollapsibleContent>
             </CardContent>

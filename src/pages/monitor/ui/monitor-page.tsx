@@ -471,6 +471,7 @@ function MonitorWorkspaceLayout({
                 errorMessage={errorMessage}
                 loading={loading}
                 onCollapsedChange={onSummaryCollapsedChange}
+                projection={projection}
                 selectedSession={selectedSession}
                 snapshot={snapshot}
               />

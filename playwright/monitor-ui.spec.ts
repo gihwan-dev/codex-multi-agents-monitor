@@ -29,7 +29,7 @@ const SHOTS = [
     name: "live-long-title",
     sidebar: "expanded",
     path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-live-noisy-title&summary=expanded&drawer=open",
-    text: "제목이 이상하게 캡쳐됨.",
+    text: "Sequence timeline",
   },
   {
     name: "live-sidebar-collapsed",
@@ -103,6 +103,8 @@ for (const shot of SHOTS) {
         "open",
       );
       await expect(page.getByTestId("timeline-detail-drawer")).toBeVisible();
+      await expect(page.getByText("Current turn")).toBeVisible();
+      await expect(page.getByText("Selected session")).toBeHidden();
     }
 
     if (shot.name === "live-summary-collapsed") {
@@ -113,8 +115,10 @@ for (const shot of SHOTS) {
       const summaryHeight = await page
         .getByTestId("live-session-summary")
         .evaluate((node) => node.getBoundingClientRect().height);
+      expect(summaryHeight).toBeGreaterThan(30);
       expect(summaryHeight).toBeLessThan(80);
-      await expect(page.getByText("Selected session")).toBeHidden();
+      await expect(page.getByText("Current turn")).toBeHidden();
+      await expect(page.getByText("Updated")).toBeVisible();
     }
 
     if (shot.name === "live-drawer-closed") {
@@ -143,6 +147,12 @@ for (const shot of SHOTS) {
       shot.name === "live-sidebar-collapsed"
     ) {
       await expect(page.getByTestId("timeline-detail-drawer")).toBeVisible();
+    }
+
+    if (shot.name === "live-long-title") {
+      const summaryBar = page.getByTestId("live-session-summary-bar");
+      await expect(summaryBar.getByText("Updated", { exact: true })).toBeVisible();
+      await expect(summaryBar.getByText("Health", { exact: true })).toBeVisible();
     }
 
     await page.screenshot({
