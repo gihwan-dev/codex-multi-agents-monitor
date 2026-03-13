@@ -1,1 +1,1 @@
-export { TimelineCanvas } from "./ui/timeline-canvas";
+export { TimelineCanvas } from "@/features/timeline";

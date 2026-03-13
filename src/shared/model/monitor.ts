@@ -7,13 +7,13 @@ export const TAB_COPY: Record<
   { eyebrow: string; title: string; body: string }
 > = {
   archive: {
-    eyebrow: "SLICE-6",
-    title: "Archive Monitor is staged next.",
+    eyebrow: "SLICE-7",
+    title: "Archive replay is staged next.",
     body:
-      "Filter rails, dense results, and detail replay stay deferred until the archive slice lands.",
+      "Filter rails, dense results, and timeline replay consume the archive preset in the next slice.",
   },
   metrics: {
-    eyebrow: "SLICE-7",
+    eyebrow: "SLICE-8",
     title: "Dashboard metrics are not wired yet.",
     body:
       "The shell reserves the KPI and anomaly surface, but metric aggregation and drill-down remain future work.",

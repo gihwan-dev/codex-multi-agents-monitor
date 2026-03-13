@@ -2,7 +2,7 @@
 
 - Repository state:
   - Rust backend가 SQLite-backed session snapshot/detail query와 live bridge command를 노출한다.
-  - frontend는 TanStack Query 기반 workspace snapshot/detail query, app-level live bridge bootstrap, Live shell, deferred timeline/detail surface를 렌더링한다.
+  - frontend는 TanStack Query 기반 workspace snapshot/detail query, app-level live bridge bootstrap, Live shell, session-local vertical timeline/detail surface를 렌더링한다.
   - Archive/Dashboard는 navigation skeleton만 열어 두고 후속 slice에서 채운다.
 - Observed local data sources:
   - `~/.codex/sessions/**/*.jsonl`
@@ -142,15 +142,16 @@ Codex local files
   - `app-shell.tsx`는 thin facade만 담당한다.
   - global decorative UI와 top-level composition만 가진다.
 - `pages/monitor`
-  - `activeTab` 상태와 화면 조립만 가진다.
-  - Live surface와 deferred placeholder surface를 스위칭한다.
+  - `activeTab`, selected session, timeline selection을 소유한다.
+  - selected session detail query owner로 동작하고 Live surface와 deferred placeholder surface를 스위칭한다.
 - `widgets`
-  - `workspace-sidebar`, `monitor-header`, `live-session-overview`, `timeline-placeholder`, `detail-drawer-placeholder`, `tab-placeholder-panel`
+  - `workspace-sidebar`, `monitor-header`, `live-session-overview`, `timeline`, `detail-drawer`, `tab-placeholder-panel`
   - 모두 prop-driven dumb component로 유지한다.
 - `features`
   - `live-session-feed`: workspace sessions query + app-level live bridge bootstrap/cache update
   - `session-detail`: `query_session_detail` fetch lifecycle, disabled/detail state contract
   - `session-selection`: selected session id, auto-select, selection fallback
+  - `timeline`: detail snapshot -> lane/item projection, live/archive viewport preset, SVG canvas, drawer binding
 - `entities/session`
   - snapshot sort/upsert/find 규칙
   - workspace/timestamp/badge formatting
@@ -184,6 +185,7 @@ shared/api/tauri-monitor
   -> features/session-detail
   -> entities/session
   -> features/session-selection
+  -> features/timeline
   -> widgets/*
   -> pages/monitor
   -> app-shell
@@ -193,24 +195,38 @@ shared/api/tauri-monitor
 - `start_live_bridge`와 `codex://live-session-updated`는 workspace sessions query cache를 갱신한다.
 - `query_session_detail`는 session별 key를 갖고 disabled/detail fetch lifecycle을 분리한다.
 - `entities/session`는 backend contract와 동일한 정렬 규칙을 query cache merge path에도 적용한다.
-- `pages/monitor`는 tab state와 selection state만 가지며, server-state orchestration은 query layer와 feature hook 안에 머문다.
+- `pages/monitor`는 tab state, selected session, timeline selection을 소유하고 timeline/drawer는 같은 detail snapshot과 selection state를 props로 공유한다.
+- `features/timeline`는 `User -> Main -> others` lane order, `tool_call + tool_output` merge, reasoning summary projection, token collapse, live/archive viewport preset을 고정한다.
 
 # Timeline renderer choice
 
-결정: custom SVG timeline renderer + zoom/pan 전용 interaction layer.
+결정: custom SVG vertical timeline renderer + session-local viewport interaction layer.
 
 ## Why not full graph editor first
 
 - 요구사항은 time-axis sequence diagram이지 자유 배치 node editor가 아니다.
 - lane alignment, duration scaling, level-of-detail culling이 핵심이라 graph abstraction보다 time-series abstraction이 맞다.
 - draw.io처럼 복잡한 편집 기능은 범위 밖이다.
+- 현재 v1 time axis는 top -> bottom vertical flow로 고정하고 최신 이벤트를 하단에 배치한다.
+
+## Viewport state machine
+
+- `mode=live`
+  - recent-zoom preset으로 시작한다.
+  - `followLatest=true`로 시작하고 새 live detail이 들어오면 최신 하단 구간으로 유지한다.
+- `mode=archive`
+  - fit-all preset으로 시작한다.
+  - `followLatest=false`로 유지한다.
+- manual interaction:
+  - scroll scrub, drag pan, Ctrl+wheel zoom은 모두 `followLatest=false`로 전환한다.
+  - live에서만 `Eye` control로 latest follow를 복구한다.
 
 ## Renderer layers
 
 - grid + time axis
 - lane headers
 - session/turn/tool/sub-agent spans
-- connectors
+- follow state chrome
 - hover/selection overlay
 - minimap or overview strip (optional later)
 
@@ -233,7 +249,7 @@ shared/api/tauri-monitor
   - `@tanstack/react-query` for server-state ownership
   - `@tanstack/react-query-devtools` in dev-only environments
   - `@tanstack/react-virtual` for archive/dashboard dense lists in later slices
-  - SVG + `d3-zoom` or equivalent for canvas transform
+  - SVG + custom viewport state machine (no extra zoom dependency in `SLICE-6`)
 - Tauri:
   - commands/events for bridge
   - optional store plugin for UI preference persistence

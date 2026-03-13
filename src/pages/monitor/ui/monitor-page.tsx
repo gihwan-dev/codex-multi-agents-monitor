@@ -1,9 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import {
+  buildTimelineProjection,
+  resolveTimelineSelection,
+  type TimelineItemView,
+  type TimelineProjection,
+  type TimelineMode,
+  type TimelineSelection,
+} from "@/features/timeline";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useWorkspaceSessionsQuery } from "@/features/live-session-feed";
+import { useSessionDetailQuery } from "@/features/session-detail";
 import { useSessionSelection } from "@/features/session-selection";
 import type { SessionDetailSnapshot, WorkspaceSessionsSnapshot } from "@/shared/queries";
 import { type MonitorTab } from "@/shared/model";
@@ -33,18 +42,23 @@ interface MonitorPageShellProps {
 }
 
 interface MonitorWorkspaceLayoutProps {
-  activeDetail: SessionDetailSnapshot | null;
   activeTab: MonitorTab;
+  detailErrorMessage: string | null;
+  detailLoading: boolean;
   degradedMessage: string | null;
   errorMessage: string | null;
   loading: boolean;
   onSelectSession: (sessionId: string) => void;
   onTabChange: (tab: MonitorTab) => void;
+  onTimelineSelectionChange: (selection: TimelineSelection) => void;
+  projection: TimelineProjection | null;
   refreshedAt: string | null;
   selectedSession: ReturnType<typeof useSessionSelection>["selectedSession"];
   selectedSessionId: string | null;
+  selectedTimelineItem: TimelineItemView | null;
+  timelineMode: TimelineMode;
+  timelineSelection: TimelineSelection;
   snapshot: WorkspaceSessionsSnapshot | null;
-  uiQaMode: boolean;
 }
 
 type LayoutMap = {
@@ -218,12 +232,42 @@ export function MonitorPageShell({
 }: MonitorPageShellProps) {
   const [activeTab, setActiveTab] = useState<MonitorTab>(initialActiveTab);
   const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+  const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({
+    kind: "session",
+  });
   const { selectSession, selectedSession, selectedSessionId } =
     useSessionSelection(snapshot, preferredSessionId);
   const activeDetail =
     detailBySessionId && selectedSessionId
       ? detailBySessionId[selectedSessionId] ?? null
       : null;
+  const detailQuery = useSessionDetailQuery(
+    detailBySessionId || uiQaMode ? null : selectedSessionId,
+  );
+  const resolvedDetail = activeDetail ?? detailQuery.detail;
+  const deferredDetail = useDeferredValue(resolvedDetail);
+  const timelineProjection = useMemo(
+    () => buildTimelineProjection(deferredDetail),
+    [deferredDetail],
+  );
+  const selectedTimelineItem = useMemo(
+    () => resolveTimelineSelection(timelineProjection, timelineSelection),
+    [timelineProjection, timelineSelection],
+  );
+
+  useEffect(() => {
+    setTimelineSelection({ kind: "session" });
+  }, [selectedSessionId]);
+
+  useEffect(() => {
+    if (
+      timelineSelection.kind === "item" &&
+      timelineProjection &&
+      !timelineProjection.itemsById[timelineSelection.itemId]
+    ) {
+      setTimelineSelection({ kind: "session" });
+    }
+  }, [timelineProjection, timelineSelection]);
 
   return (
     <div
@@ -254,18 +298,23 @@ export function MonitorPageShell({
         onOpenChange={uiQaMode ? setSidebarOpen : undefined}
       >
         <MonitorWorkspaceLayout
-          activeDetail={activeDetail}
           activeTab={activeTab}
+          detailErrorMessage={activeDetail ? null : detailQuery.errorMessage}
+          detailLoading={detailQuery.loading && !activeDetail}
           degradedMessage={degradedMessage}
           errorMessage={errorMessage}
           loading={loading}
           onSelectSession={selectSession}
           onTabChange={setActiveTab}
+          onTimelineSelectionChange={setTimelineSelection}
+          projection={timelineProjection}
           refreshedAt={snapshot?.refreshed_at ?? null}
           selectedSession={selectedSession}
           selectedSessionId={selectedSessionId}
+          selectedTimelineItem={selectedTimelineItem}
           snapshot={snapshot}
-          uiQaMode={uiQaMode}
+          timelineMode="live"
+          timelineSelection={timelineSelection}
         />
       </SidebarProvider>
     </div>
@@ -273,18 +322,23 @@ export function MonitorPageShell({
 }
 
 function MonitorWorkspaceLayout({
-  activeDetail,
   activeTab,
+  detailErrorMessage,
+  detailLoading,
   degradedMessage,
   errorMessage,
   loading,
   onSelectSession,
   onTabChange,
+  onTimelineSelectionChange,
+  projection,
   refreshedAt,
   selectedSession,
   selectedSessionId,
+  selectedTimelineItem,
   snapshot,
-  uiQaMode,
+  timelineMode,
+  timelineSelection,
 }: MonitorWorkspaceLayoutProps) {
   const { isMobile, open } = useSidebar();
   const [viewportWidth, setViewportWidth] = useState(getViewportWidth);
@@ -377,13 +431,26 @@ function MonitorWorkspaceLayout({
               />
               <div className="flex min-h-[560px] flex-1 flex-col gap-5 xl:flex-row">
                 <div className="min-w-0 flex-[2.12]">
-                  <TimelineCanvas selectedSession={selectedSession} />
+                  <TimelineCanvas
+                    errorMessage={detailErrorMessage}
+                    loading={detailLoading}
+                    mode={timelineMode}
+                    onSelectionChange={onTimelineSelectionChange}
+                    projection={projection}
+                    selectedItem={selectedTimelineItem}
+                    selectedSession={selectedSession}
+                    selection={timelineSelection}
+                  />
                 </div>
                 <div className="min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
                   <DetailDrawer
-                    detail={activeDetail}
-                    disableLiveQuery={uiQaMode}
+                    errorMessage={detailErrorMessage}
+                    loading={detailLoading}
+                    onSelectionChange={onTimelineSelectionChange}
+                    projection={projection}
+                    selectedItem={selectedTimelineItem}
                     selectedSession={selectedSession}
+                    selection={timelineSelection}
                   />
                 </div>
               </div>

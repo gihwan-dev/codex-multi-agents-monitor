@@ -23,8 +23,8 @@
 
 - Layout:
   - 좌측 280-360px sidebar에 workspace group과 세션 목록을 둔다.
-  - 메인 영역은 전체 폭을 timeline canvas에 우선 할당한다.
-  - 우측 detail drawer는 selection 시 overlay 또는 split pane으로 연다.
+  - 메인 영역은 vertical timeline canvas에 우선 할당한다.
+  - 우측 detail drawer는 selection source-of-truth를 공유하는 split pane으로 연다.
 - Session list item:
   - session title fallback: 첫 user message 요약
   - badges: live, archived, stalled, sub-agent count, error, repeated-work suspected
@@ -32,7 +32,11 @@
 - Timeline lanes:
   - lane 1: `User`
   - lane 2: `Main`
-  - lane 3+: spawned sub-agents in spawn order
+  - lane 3+: 기타 session-local lane
+- Time axis:
+  - 시간은 top -> bottom으로 흐른다.
+  - 가장 최신 이벤트는 항상 가장 아래에 위치한다.
+  - lane header는 상단에 고정한다.
 - Default event visibility:
   - user messages
   - agent spawn/join/complete
@@ -40,17 +44,24 @@
   - reasoning spans summary
   - error/aborted markers
   - token annotations are collapsed into badges by default
-- Zoom behavior:
-  - zoom out: span bars + counts + anomalies only
-  - medium: tool name, agent role, duration label
-  - zoom in: reasoning summary, input/output preview, token deltas
-- Pan behavior:
-  - horizontal drag or trackpad scroll
-  - vertical pan stays within canvas only when lane count exceeds viewport
+- View presets:
+  - `live`: 첫 진입 시 전체 fit 대신 최근 하단 시퀀스를 읽기 좋은 밀도로 확대한다.
+  - `archive`: 첫 진입 시 전체 세션 높이를 fit-all로 보여준다.
+  - archive preset 소비는 `SLICE-7`에서 화면에 연결한다.
+- Latest follow:
+  - live에서는 기본적으로 최신 하단 구간을 따라간다.
+  - 사용자가 scroll scrub, drag pan, Ctrl+wheel zoom으로 viewport에 개입하면 follow를 끈다.
+  - timeline chrome의 `Eye` 버튼으로 latest follow를 다시 켤 수 있다.
+- Pan / zoom behavior:
+  - 기본 scrub은 세로 시간축을 따라 이동한다.
+  - lane overflow가 있을 때만 가로 pan이 추가된다.
+  - Ctrl+wheel 또는 pinch 성격 입력은 세로 시간축 zoom으로 동작한다.
 
 ## `SCR-002` Archive Monitor
 
-- Live Monitor의 detail canvas를 재사용한다.
+- Live Monitor의 timeline module을 재사용한다.
+- archive 화면은 fit-all preset으로 전체 세션을 먼저 보여준다.
+- full archive timeline wiring은 `SLICE-7`에서 마무리한다.
 - 추가 필터:
   - workspace
   - date range
@@ -120,16 +131,17 @@
 
 - Tabs:
   - Summary
-  - Input / Output
-  - Raw event
+  - Input-Output
+  - Raw
   - Tokens
   - Related metrics
 - Selection targets:
   - session
-  - turn span
-  - tool span
-  - reasoning span
-  - sub-agent span
+  - projected item
+- 기본 규칙:
+  - session selection이면 session summary/metrics를 보여준다.
+  - item selection이면 해당 item의 preview, raw, tokens를 보여준다.
+  - 최신 item이 선택되지 않아도 manual mode에서는 viewport를 강제로 이동시키지 않는다.
 
 # Visual direction
 

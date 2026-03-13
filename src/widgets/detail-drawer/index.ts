@@ -1,1 +1,1 @@
-export { DetailDrawer } from "./ui/detail-drawer";
+export { DetailDrawer } from "@/features/timeline";

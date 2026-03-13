@@ -11,7 +11,7 @@ const SHOTS = [
     name: "live-collapsed",
     sidebar: "collapsed",
     path: "/?demo=ui-qa&tab=live&sidebar=collapsed&session=sess-ui-shell",
-    text: "Timeline canvas",
+    text: "Vertical sequence timeline",
   },
   {
     name: "live-detail-selected",

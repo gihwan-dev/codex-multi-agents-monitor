@@ -1,41 +1,41 @@
 # Current slice
 
-SLICE-5
+SLICE-6
 
 # Done
 
-- frontend server state를 TanStack Query 기준으로 재정리했다. `QueryClientProvider`, shared query options/key layer, app-level live bridge bootstrap, `useWorkspaceSessionsQuery`, `useSessionDetailQuery`가 연결됐다.
-- live summary event는 workspace sessions cache를 immutable update 하고 해당 session detail cache를 invalidate 하도록 고정했다. bootstrap query는 pending 중 들어온 live summary를 merge 해 race를 흡수한다.
-- Live shell page는 query cache 결과와 local selection state만 조합하도록 정리했고, timeline/detail placeholder는 그대로 유지한 채 다음 slice가 바로 detail surface로 진입할 수 있는 경계를 만들었다.
-- `Vitest + jsdom + @testing-library/react` 기반 테스트 인프라를 추가하고 snapshot helper, live bridge, session selection, session detail query lifecycle을 자동 검증하게 했다.
-- root README와 task bundle 문서를 새 query foundation 구조와 slice 순서에 맞게 갱신했다.
+- `src/features/timeline` 모듈을 추가해 selected session detail을 vertical sequence timeline과 detail drawer로 투영했다. projection, viewport preset, SVG canvas, drawer binding을 모듈 내부로 분리했다.
+- Live Monitor는 selected session detail query를 page에서 소유하고, timeline/drawer가 같은 selection state를 공유하도록 재배선했다.
+- 타임라인은 `User -> Main -> 기타 lane` 순서, top -> bottom 시간축, latest-at-bottom, merged tool span, reasoning summary, token collapse 규칙으로 실제 canonical detail을 렌더링한다.
+- live는 recent-zoom + latest follow on으로 시작하고, archive는 fit-all preset을 지원하도록 모델을 열어 두었다. 사용자가 scrub/drag/zoom으로 개입하면 follow를 끄고 `Eye` control로 다시 최신 추적을 복구할 수 있다.
+- Detail drawer는 `Summary`, `Input / Output`, `Raw`, `Tokens`, `Related metrics` 탭으로 selection source-of-truth를 공유한다.
+- root README와 task bundle 문서를 vertical timeline, live/archive preset, latest follow state machine 기준으로 갱신했다.
 
 # Decisions made during implementation
 
-- Tauri IPC로 읽는 server state만 TanStack Query가 소유하고, `activeTab`/`selectedSessionId` 같은 UI state는 계속 feature-local state로 유지한다.
-- `start_live_bridge`와 event listen은 query function 바깥의 app-level bootstrap으로 분리했다. live summary payload만으로 detail merge는 불가능하므로 summary cache update + detail invalidate 정책으로 고정했다.
-- Query 기본 정책은 desktop/Tauri 환경 기준으로 `staleTime`을 길게 두고 focus/mount/reconnect 자동 refetch를 끄는 방향으로 잡았다.
-- 현재 로컬 Node가 `20.11.1`이라 Vite 7 baseline(`20.19+`)과 어긋난다. 앱은 빌드되지만 경고가 계속 나오므로 README와 `package.json.engines`에 최소 버전을 명시했다.
-- 최신 `jsdom`이 현재 로컬 Node와 맞지 않아 테스트 환경은 `jsdom@26.1.0`으로 고정했다.
+- `SLICE-6` 범위는 session-local MVP로 고정하고 Rust/Tauri detail contract는 변경하지 않았다.
+- lane label은 `meta.agent_nickname` 우선, 없으면 `agent_role`, 그것도 없으면 정제된 `lane_id`를 사용한다.
+- `tool_call` + `tool_output`는 `call_id` 기준 merged item으로 렌더하고, `token_delta`는 timeline noise 대신 drawer totals로 접었다.
+- archive 화면의 실제 timeline 소비는 `SLICE-7`로 넘기고, 이번 slice는 archive preset과 테스트만 먼저 고정했다.
+- 문서 영향 범위는 root `README.md`, `UX_SPEC.md`, `TECH_SPEC.md`, `PRD.md`, `ADR-002`, `STATUS.md`로 판정했다.
 
 # Verification results
 
-- `pnpm install`: pass
 - `pnpm typecheck`: pass
-- `pnpm test`: pass (`5` files, `18` tests)
-- `pnpm build`: pass, but Node `20.11.1` 경고 지속
+- `pnpm test -- src/features/timeline/model/projection.test.ts src/features/timeline/model/viewport.test.ts src/features/timeline/ui/timeline-detail-sync.test.tsx src/pages/monitor/lib/ui-qa-fixtures.test.ts`: pass (`4` files, `15` tests)
+- `pnpm exec playwright test playwright/monitor-ui.spec.ts`: pass (`12` tests)
+- commit: pending
 
 # Known issues / residual risk
 
-- Raw Codex log schema drift risk remains.
-- live bridge는 metadata poll 기반이라 deleted/renamed live file cleanup과 byte-offset incremental append는 아직 없다.
-- 실제 live append가 들어왔을 때 sidebar reorder와 degraded banner UX를 사람이 클릭하면서 본 상호작용 smoke는 아직 못 했다.
-- archive/dashboard query surface와 TanStack Virtual 도입은 아직 열리지 않았고, 이후 slice가 shared query layer를 우회하지 않도록 주의가 필요하다.
-- timeline renderer, raw/tokens drawer 탭은 아직 placeholder 상태라 session summary 이상 drill-down은 다음 slice가 필요하다.
+- true cross-session sub-agent replay parity는 아직 없다. 현재 detail renderer는 선택된 session의 query contract만 사용한다.
+- archive 화면은 아직 placeholder shell이므로 fit-all preset이 실제 archive replay surface까지 연결되지는 않았다.
+- 10k-event 성능 예산은 unit/component 테스트로 규칙만 고정했고, 실제 브라우저 상호작용 성능 smoke는 후속 slice에서 더 봐야 한다.
+- live append가 매우 빠르게 들어오는 동안 latest follow와 manual mode 전환을 사람이 눌러 보는 상호작용 smoke는 아직 못 했다.
 
 # Next slice
 
-SLICE-6
-- 목표: selected session을 실제 timeline/detail surface에 연결하고, `useSessionDetailQuery` 기반 sequence timeline MVP와 drawer drill-down을 연다.
-- 선행조건: `src/features/session-selection`의 selected session state와 `src/features/session-detail` query 결과를 timeline boundary로 넘기고, lane/time-axis projection 규칙을 `src/features/timeline/*` 쪽으로 고정한다.
-- 먼저 볼 경계: timeline canvas projection, session detail fetch lifecycle, 현재 widget placeholder를 실제 canonical detail 데이터로 치환하는 흐름.
+SLICE-7
+- 목표: archive 화면이 `features/timeline`의 fit-all preset을 실제로 소비하도록 연결하고, archive filter/result rail과 live/detail parity를 연다.
+- 선행조건: 현재 `pages/monitor`의 archive placeholder 경계를 archive result selection + detail feed로 치환하고, session-local MVP를 archive result list UX와 충돌 없이 재사용해야 한다.
+- 먼저 볼 경계: archive monitor shell, archive result selection, timeline module의 `mode="archive"` 소비 지점, dense result/filter surface.

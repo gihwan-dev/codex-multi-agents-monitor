@@ -17,6 +17,7 @@ describe("resolveMonitorUiQaState", () => {
     expect(state?.sidebarOpen).toBe(false);
     expect(state?.selectedSessionId).toBe("sess-archive-flow");
     expect(state?.detailBySessionId["sess-archive-flow"]?.event_count).toBe(18);
+    expect(state?.detailBySessionId["sess-archive-flow"]?.bundle.events).toHaveLength(4);
   });
 
   it("falls back to the first fixture session for unknown session ids", () => {
@@ -41,4 +42,14 @@ describe("resolveMonitorUiQaState", () => {
       sessionIds.every((sessionId) => state?.detailBySessionId[sessionId] != null),
     ).toBe(true);
   });
+
+  it("exposes richer live fixtures for vertical timeline captures", () => {
+    const state = resolveMonitorUiQaState("?demo=ui-qa&tab=live&session=sess-ui-shell");
+    const liveEvents = state?.detailBySessionId["sess-ui-shell"]?.bundle.events ?? [];
+
+    expect(liveEvents.some((event) => event.lane_id === "user")).toBe(true);
+    expect(liveEvents.some((event) => event.lane_id === "agent:worker")).toBe(true);
+    expect(liveEvents.some((event) => event.kind === "token_delta")).toBe(true);
+  });
+
 });

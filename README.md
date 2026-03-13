@@ -2,7 +2,7 @@
 
 Codex 세션 로그를 로컬에서 읽어 멀티 에이전트 진행 상황을 관찰하는 Tauri + React 데스크톱 앱이다.
 
-현재 frontend는 TanStack Query 기반 data-access foundation까지 반영된 Live shell 기준으로 동작한다. workspace-grouped sidebar, selected session summary, app-level live bridge bootstrap, query-backed workspace/session data flow가 연결되어 있고, Archive/Dashboard는 다음 slice를 위한 placeholder 경계만 유지한다.
+현재 frontend는 TanStack Query 기반 Live shell과 session-local vertical timeline MVP까지 연결된 상태다. workspace-grouped sidebar, selected session summary, app-level live bridge bootstrap, selected session detail query, vertical sequence timeline, shared detail drawer가 동작하고 Archive/Dashboard는 후속 slice를 위한 경계만 유지한다.
 
 ## 환경
 
@@ -29,10 +29,13 @@ pnpm build
 - `QueryClientProvider` + dev-only React Query Devtools
 - `query_workspace_sessions` bootstrap query와 live-before-bootstrap merge
 - `start_live_bridge` + `codex://live-session-updated` 기반 app-level live cache update
-- `query_session_detail` hook 준비
+- `query_session_detail` 기반 selected session detail fetch
 - Live / Archive / Dashboard 탭 셸
 - selected session summary 카드
-- timeline canvas / detail drawer placeholder
+- `User -> Main -> 기타 lane` 순서의 vertical sequence timeline
+- live recent-zoom preset + latest follow / resume control
+- Summary / Input-Output / Raw / Tokens / Related metrics detail drawer
+- archive fit-all preset 지원 준비 (`SLICE-7` 화면 연결 예정)
 - snapshot merge, live bridge, selection fallback, detail query lifecycle 자동 테스트
 
 ## Frontend Data Access Rules
@@ -54,13 +57,14 @@ src/
     monitor-header/
     workspace-sidebar/
     live-session-overview/
-    timeline-placeholder/
-    detail-drawer-placeholder/
+    timeline/
+    detail-drawer/
     tab-placeholder-panel/
   features/
     live-session-feed/
     session-detail/
     session-selection/
+    timeline/
   entities/session/
   shared/
     api/
@@ -69,4 +73,4 @@ src/
     queries.ts
 ```
 
-Live shell 데이터 흐름은 `shared/api -> shared/query -> features -> entities -> widgets -> page -> app-shell` 순서를 따른다. Rust/Tauri IPC 계약은 그대로 유지하고, frontend는 Query cache와 local UI state를 분리한 채 Live 중심으로 FSD 경계에 맞춰 분리했다.
+Live shell 데이터 흐름은 `shared/api -> shared/query -> features -> entities -> widgets -> page -> app-shell` 순서를 따른다. Rust/Tauri IPC 계약은 그대로 유지하고, frontend는 Query cache와 local UI state를 분리한 채 `pages/monitor`가 selected session detail을 소유하고 `features/timeline`이 projection, viewport, latest-follow, drawer selection을 담당하도록 경계를 분리했다. Archive preset은 feature/module 수준까지만 연결되어 있으며 실제 archive timeline surface는 `SLICE-7`로 미룬다.
