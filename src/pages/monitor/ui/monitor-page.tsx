@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
-import { ChevronLeft, X } from "lucide-react";
+import { ChevronUp, X } from "lucide-react";
 
 import { GlassSurface } from "@/app/ui";
 import { Button } from "@/components/ui/button";
@@ -460,7 +460,10 @@ function MonitorWorkspaceLayout({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-6 pt-2 md:px-5 lg:px-6">
         {activeTab === "live" ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <div
+            className="relative flex min-h-0 flex-1 flex-col gap-4"
+            data-testid="live-workspace-content"
+          >
             <div className="shrink-0">
               <LiveSessionOverview
                 collapsed={summaryCollapsed}
@@ -510,20 +513,20 @@ function MonitorWorkspaceLayout({
                   </div>
                 ) : null}
               </div>
-              {isFloatingDrawerViewport ? (
-                <FloatingDetailDrawer
-                  errorMessage={detailErrorMessage}
-                  loading={detailLoading}
-                  onOpenChange={onDetailDrawerOpenChange}
-                  onSelectionChange={handleTimelineSelectionChange}
-                  open={detailDrawerOpen}
-                  projection={projection}
-                  selectedSession={selectedSession}
-                  selection={timelineSelection}
-                  selectionContext={timelineSelectionContext}
-                />
-              ) : null}
             </div>
+            {isFloatingDrawerViewport ? (
+              <FloatingDetailDrawer
+                errorMessage={detailErrorMessage}
+                loading={detailLoading}
+                onOpenChange={onDetailDrawerOpenChange}
+                onSelectionChange={handleTimelineSelectionChange}
+                open={detailDrawerOpen}
+                projection={projection}
+                selectedSession={selectedSession}
+                selection={timelineSelection}
+                selectionContext={timelineSelectionContext}
+              />
+            ) : null}
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto">
@@ -635,7 +638,7 @@ function FloatingDetailDrawer({
       data-state={open ? "open" : "closed"}
       data-testid="timeline-detail-floating-shell"
     >
-      <div className="relative flex h-full items-center">
+      <div className="relative flex h-full items-stretch">
         <GlassSurface
           className={cn(
             "absolute right-0 top-1/2 -translate-y-1/2 rounded-[1.4rem] border-white/10 shadow-[0_18px_60px_rgba(2,6,23,0.42)] transition-[opacity,transform] duration-200",
@@ -656,7 +659,7 @@ function FloatingDetailDrawer({
             variant="ghost"
           >
             <span className="flex -rotate-90 items-center gap-2 whitespace-nowrap text-[11px] font-medium tracking-[0.08em] text-slate-200/86">
-              <ChevronLeft className="h-4 w-4 rotate-180" />
+              <ChevronUp className="h-4 w-4" />
               Detail
             </span>
           </Button>
@@ -671,7 +674,7 @@ function FloatingDetailDrawer({
           )}
           style={{ width: "clamp(20rem, 31vw, 28rem)" }}
         >
-          <div className="pointer-events-auto h-full pl-3 pt-1.5">
+          <div className="pointer-events-auto h-full pl-3">
             <div className="relative h-full">
               <GlassSurface
                 className="absolute right-3 top-3 z-10 rounded-full shadow-[0_14px_42px_rgba(2,6,23,0.38)]"

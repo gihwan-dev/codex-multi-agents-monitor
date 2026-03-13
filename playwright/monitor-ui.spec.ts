@@ -82,13 +82,20 @@ for (const shot of SHOTS) {
       const layout = await page.evaluate(() => {
         const stage = document.querySelector('[data-testid="live-timeline-stage"]');
         const scrollArea = document.querySelector('[data-testid="timeline-scroll-area"]');
+        const drawerShell = document.querySelector('[data-testid="timeline-detail-floating-shell"]');
+        const liveContent = document.querySelector('[data-testid="live-workspace-content"]');
 
         return {
+          drawerHeight: drawerShell?.getBoundingClientRect().height ?? 0,
+          liveContentHeight: liveContent?.getBoundingClientRect().height ?? 0,
+          stageHeight: stage?.getBoundingClientRect().height ?? 0,
           stageWidth: stage?.getBoundingClientRect().width ?? 0,
           scrollWidth: scrollArea?.getBoundingClientRect().width ?? 0,
         };
       });
 
+      expect(layout.liveContentHeight).toBeGreaterThan(0);
+      expect(layout.drawerHeight / layout.liveContentHeight).toBeGreaterThan(0.98);
       expect(layout.stageWidth).toBeGreaterThan(0);
       expect(layout.scrollWidth / layout.stageWidth).toBeGreaterThan(0.9);
       await expect(page.getByTestId("timeline-detail-floating-shell")).toHaveAttribute(
@@ -103,6 +110,10 @@ for (const shot of SHOTS) {
         "data-state",
         "collapsed",
       );
+      const summaryHeight = await page
+        .getByTestId("live-session-summary")
+        .evaluate((node) => node.getBoundingClientRect().height);
+      expect(summaryHeight).toBeLessThan(80);
       await expect(page.getByText("Selected session")).toBeHidden();
     }
 

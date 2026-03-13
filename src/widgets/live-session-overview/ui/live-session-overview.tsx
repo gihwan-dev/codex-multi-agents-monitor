@@ -1,5 +1,5 @@
 import { GlassSurface } from "@/app/ui";
-import { Activity, AlertCircle, ChevronDown, Clock3, Shield } from "lucide-react";
+import { Activity, AlertCircle, ChevronDown } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import {
 import {
   formatSessionDisplayTitle,
   formatTimestamp,
+  selectLiveWorkspaceSnapshot,
   type SessionSummary,
   type WorkspaceSessionsSnapshot,
 } from "@/entities/session";
@@ -26,9 +27,7 @@ interface LiveSessionOverviewProps {
 }
 
 const PANEL_CARD_CLASS =
-  "flex h-full flex-col gap-0 overflow-hidden border-0 bg-transparent shadow-none ring-0";
-const SUMMARY_BAR_CLASS =
-  "flex flex-wrap items-center gap-2 rounded-[1.15rem] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]";
+  "flex h-full flex-col gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0";
 const SUMMARY_SECTION_CLASS =
   "rounded-[1.15rem] border border-white/6 bg-white/[0.024] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 const SUMMARY_CHIP_CLASS =
@@ -49,33 +48,6 @@ function metaChip(label: string, value: string | number) {
   );
 }
 
-function compactInfoChip(
-  icon: typeof Activity,
-  label: string,
-  value: string,
-  emphasized = false,
-) {
-  const Icon = icon;
-
-  return (
-    <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/6 bg-[#09111d]/54 px-2.5 py-1.5">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-      <div className="min-w-0">
-        <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-slate-500">
-          {label}
-        </p>
-        <p
-          className={`truncate text-[11px] ${
-            emphasized ? "font-medium text-white" : "text-slate-200/82"
-          }`}
-        >
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function LiveSessionOverview({
   collapsed,
   degradedMessage,
@@ -85,7 +57,8 @@ export function LiveSessionOverview({
   selectedSession,
   snapshot,
 }: LiveSessionOverviewProps) {
-  const sessions = snapshot?.workspaces.flatMap((workspace) => workspace.sessions) ?? [];
+  const liveSnapshot = selectLiveWorkspaceSnapshot(snapshot);
+  const sessions = liveSnapshot?.workspaces.flatMap((workspace) => workspace.sessions) ?? [];
   const liveCount = sessions.filter((session) => session.status === "live").length;
   const stalledCount = sessions.filter((session) => session.status === "stalled").length;
   const shellHealth = errorMessage
@@ -140,114 +113,129 @@ export function LiveSessionOverview({
         >
           <Card className={PANEL_CARD_CLASS}>
             <CardContent
-              className="bg-transparent px-4 py-4 md:px-5"
+              className="bg-transparent px-1 py-0 md:px-1.5 md:py-0"
               data-state={collapsed ? "collapsed" : "expanded"}
               data-testid="live-session-summary"
             >
-              <div className={SUMMARY_BAR_CLASS} data-testid="live-session-summary-bar">
+              <div
+                className="flex min-h-[1.35rem] min-w-0 items-center gap-1"
+                data-testid="live-session-summary-bar"
+              >
                 <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Activity className="h-3.5 w-3.5 shrink-0 text-emerald-300/86" />
-                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                  <div className="flex min-w-0 items-center gap-0.5">
+                    <div className="flex shrink-0 min-w-0 items-center gap-0.5">
+                      <Activity className="h-2 w-2 shrink-0 text-emerald-300/86" />
+                      <p className="text-[8px] font-medium uppercase tracking-[0.07em] text-slate-500">
                         Live summary
                       </p>
                     </div>
                     <p
-                      className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.015em] text-white"
+                      className="min-w-0 flex-1 truncate text-[9px] font-medium tracking-[-0.02em] text-white"
                       title={sessionTitle?.tooltip}
                     >
                       {compactSessionTitle}
                     </p>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {compactInfoChip(Activity, "Status", sessionStateLabel, true)}
-                    {compactInfoChip(Clock3, "Last event", compactLastEvent)}
-                    {compactInfoChip(Shield, "Health", shellHealth)}
-                  </div>
                 </div>
 
-                <GlassSurface
-                  className="shrink-0 rounded-full"
-                  interactive
-                  refraction="soft"
-                  variant="control"
+                <div className="hidden min-w-0 flex-1 items-center justify-end gap-1.5 text-[10px] font-medium text-slate-300/82 lg:flex">
+                  <span className="truncate">
+                    Status, <span className="font-medium text-slate-100">{sessionStateLabel}</span>
+                  </span>
+                  <span className="truncate">
+                    LastEvent, <span className="font-medium text-slate-100">{compactLastEvent}</span>
+                  </span>
+                  <span className="truncate">
+                    HEALTH, <span className="font-medium text-slate-100">{shellHealth}</span>
+                  </span>
+                </div>
+
+                <CollapsibleTrigger
+                  aria-label={collapsed ? "Expand live summary" : "Collapse live summary"}
+                  className="shrink-0 text-[10px] font-medium text-slate-100 transition-colors hover:text-white focus-visible:outline-none"
+                  data-testid="live-session-summary-trigger"
                 >
-                  <CollapsibleTrigger
-                    aria-label={collapsed ? "Expand live summary" : "Collapse live summary"}
-                    className="flex h-9 items-center gap-2 rounded-[inherit] px-3 text-[11px] font-medium text-slate-100 transition-colors hover:text-white focus-visible:outline-none"
-                    data-testid="live-session-summary-trigger"
-                  >
+                  <span className="inline-flex items-center gap-0.5">
                     <span>{collapsed ? "Expand" : "Collapse"}</span>
                     <ChevronDown
-                      className={`h-4 w-4 transition-transform duration-200 ${
+                      className={`h-3 w-3 transition-transform duration-200 ${
                         collapsed ? "" : "rotate-180"
                       }`}
                     />
-                  </CollapsibleTrigger>
-                </GlassSurface>
+                  </span>
+                </CollapsibleTrigger>
               </div>
 
               <CollapsibleContent>
-                <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.04fr)]">
-                  <section className={SUMMARY_SECTION_CLASS}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                          <Activity className="h-3.5 w-3.5 text-slate-400" />
-                          Live session
+                <div className="mt-2 border-t border-white/6 pt-2.5">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.04fr)]">
+                    <section className={SUMMARY_SECTION_CLASS}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                            <Activity className="h-3.5 w-3.5 text-slate-400" />
+                            Live session
+                          </div>
+                          <p
+                            className="mt-1.5 truncate text-[1.02rem] font-medium tracking-[-0.02em] text-white"
+                            title={sessionTitle?.tooltip}
+                          >
+                            {compactSessionTitle}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-400/78">
+                            {sessionTitle?.workspaceLabel ?? "Select a session from the sidebar"}
+                          </p>
                         </div>
-                        <p
-                          className="mt-1.5 truncate text-[1.02rem] font-medium tracking-[-0.02em] text-white"
-                          title={sessionTitle?.tooltip}
+                        <GlassSurface
+                          className="shrink-0 rounded-full"
+                          interactive
+                          refraction="soft"
+                          variant="control"
                         >
-                          {compactSessionTitle}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-400/78">
-                          {sessionTitle?.workspaceLabel ?? "Select a session from the sidebar"}
-                        </p>
+                          <div className="px-2.5 py-1.5">
+                            <span className="text-[10.5px] font-medium tracking-[0.01em] text-slate-100 capitalize">
+                              {sessionStateLabel}
+                            </span>
+                          </div>
+                        </GlassSurface>
                       </div>
-                      <GlassSurface
-                        className="shrink-0 rounded-full"
-                        interactive
-                        refraction="soft"
-                        variant="control"
-                      >
-                        <div className="px-2.5 py-1.5">
-                          <span className="text-[10.5px] font-medium tracking-[0.01em] text-slate-100 capitalize">
-                            {sessionStateLabel}
-                          </span>
-                        </div>
-                      </GlassSurface>
-                    </div>
-                    <p className="mt-3 text-[12px] leading-relaxed text-slate-300/70">
-                      {selectedSession
-                        ? `${sourceLabel(selectedSession)} selected for live inspection.`
-                        : "Choose a session to bring the latest runtime activity into focus."}
-                    </p>
-                  </section>
+                      <p className="mt-3 text-[12px] leading-relaxed text-slate-300/70">
+                        {selectedSession
+                          ? `${sourceLabel(selectedSession)} selected for live inspection.`
+                          : "Choose a session to bring the latest runtime activity into focus."}
+                      </p>
+                    </section>
 
-                  <section className={SUMMARY_SECTION_CLASS}>
-                    <p className={SUMMARY_LABEL_CLASS}>Selected session</p>
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-                      {metaChip("Events", selectedSession?.event_count ?? "No session")}
-                      {metaChip("Last event", selectedSession ? compactLastEvent : "Awaiting selection")}
-                      {metaChip("Source", selectedSession ? sourceLabel(selectedSession) : "Pending")}
-                    </div>
-                  </section>
+                    <section className={SUMMARY_SECTION_CLASS}>
+                      <p className={SUMMARY_LABEL_CLASS}>Selected session</p>
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                        {metaChip("Events", selectedSession?.event_count ?? "No session")}
+                        {metaChip(
+                          "Last event",
+                          selectedSession ? compactLastEvent : "Awaiting selection",
+                        )}
+                        {metaChip(
+                          "Source",
+                          selectedSession ? sourceLabel(selectedSession) : "Pending",
+                        )}
+                      </div>
+                    </section>
 
-                  <section className={SUMMARY_SECTION_CLASS}>
-                    <p className={SUMMARY_LABEL_CLASS}>Runtime</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {metaChip("Live", liveCount)}
-                      {metaChip("Stalled", stalledCount)}
-                      {metaChip(
-                        "Refresh",
-                        snapshot ? formatTimestamp(snapshot.refreshed_at) : "Awaiting feed",
-                      )}
-                      {metaChip("Health", shellHealth)}
-                    </div>
-                  </section>
+                    <section className={SUMMARY_SECTION_CLASS}>
+                      <p className={SUMMARY_LABEL_CLASS}>Runtime</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        {metaChip("Live", liveCount)}
+                        {metaChip("Stalled", stalledCount)}
+                        {metaChip(
+                          "Refresh",
+                          liveSnapshot
+                            ? formatTimestamp(liveSnapshot.refreshed_at)
+                            : "Awaiting feed",
+                        )}
+                        {metaChip("Health", shellHealth)}
+                      </div>
+                    </section>
+                  </div>
                 </div>
               </CollapsibleContent>
             </CardContent>
