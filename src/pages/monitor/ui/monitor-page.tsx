@@ -426,10 +426,10 @@ function MonitorWorkspaceLayout({
         refreshedAt={refreshedAt}
       />
 
-      <div className="flex-1 overflow-auto px-4 pb-8 pt-3 md:px-6 lg:px-8">
-        <div className="flex min-h-full w-full flex-col gap-5">
-          {activeTab === "live" ? (
-            <>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-8 pt-3 md:px-6 lg:px-8">
+        {activeTab === "live" ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-5">
+            <div className="shrink-0">
               <LiveSessionOverview
                 degradedMessage={degradedMessage}
                 errorMessage={errorMessage}
@@ -437,38 +437,40 @@ function MonitorWorkspaceLayout({
                 selectedSession={selectedSession}
                 snapshot={snapshot}
               />
-              <div className="flex min-h-[560px] flex-1 flex-col gap-5 xl:flex-row">
-                <div className="min-w-0 flex-[2.12]">
-                  <TimelineCanvas
-                    errorMessage={detailErrorMessage}
-                    loading={detailLoading}
-                    mode={timelineMode}
-                    onSelectionChange={onTimelineSelectionChange}
-                    projection={projection}
-                    selectedSession={selectedSession}
-                    selection={timelineSelection}
-                    selectionContext={timelineSelectionContext}
-                  />
-                </div>
-                <div className="min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
-                  <DetailDrawer
-                    errorMessage={detailErrorMessage}
-                    loading={detailLoading}
-                    onSelectionChange={onTimelineSelectionChange}
-                    projection={projection}
-                    selectedSession={selectedSession}
-                    selection={timelineSelection}
-                    selectionContext={timelineSelectionContext}
-                  />
-                </div>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-5 xl:flex-row">
+              <div className="min-h-0 min-w-0 flex-[2.12]">
+                <TimelineCanvas
+                  errorMessage={detailErrorMessage}
+                  loading={detailLoading}
+                  mode={timelineMode}
+                  onSelectionChange={onTimelineSelectionChange}
+                  projection={projection}
+                  selectedSession={selectedSession}
+                  selection={timelineSelection}
+                  selectionContext={timelineSelectionContext}
+                />
               </div>
-            </>
-          ) : activeTab === "archive" ? (
-            <ArchiveMonitor />
-          ) : (
-            <MetricsDashboard />
-          )}
-        </div>
+              <div className="min-h-0 min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
+                <DetailDrawer
+                  errorMessage={detailErrorMessage}
+                  loading={detailLoading}
+                  onSelectionChange={onTimelineSelectionChange}
+                  projection={projection}
+                  selectedSession={selectedSession}
+                  selection={timelineSelection}
+                  selectionContext={timelineSelectionContext}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="flex min-h-full w-full flex-col gap-5">
+              {activeTab === "archive" ? <ArchiveMonitor /> : <MetricsDashboard />}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

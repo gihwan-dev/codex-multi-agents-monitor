@@ -15,6 +15,7 @@ import { GlassSurface } from "@/app/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatTimestamp, type SessionSummary } from "@/entities/session";
+import { buildTimelineLiveLayout } from "../model/live-layout";
 import { resolveTimelineSelection } from "../model/projection";
 import {
   createInitialTimelineViewport,
@@ -30,6 +31,7 @@ import type {
   TimelineActivationSegment,
   TimelineConnector,
   TimelineItemView,
+  TimelineLiveLayout,
   TimelineMode,
   TimelineProjection,
   TimelineSelection,
@@ -50,14 +52,14 @@ interface TimelineCanvasProps {
 }
 
 const PANEL_CARD_CLASS =
-  "relative flex h-full flex-1 flex-col gap-0 overflow-hidden border-0 bg-transparent shadow-none ring-0";
+  "relative flex h-full min-w-0 flex-1 flex-col gap-0 overflow-hidden border-0 bg-transparent shadow-none ring-0";
 const PANEL_AMBIENCE_CLASS =
   "pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(148,163,184,0.14),transparent_24%),radial-gradient(circle_at_82%_16%,rgba(56,189,248,0.12),transparent_24%),radial-gradient(circle_at_58%_58%,rgba(2,132,199,0.08),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.016)_34%,transparent_72%)] opacity-90";
-const AXIS_WIDTH = 96;
-const HEADER_HEIGHT = 64;
-const LANE_WIDTH = 208;
-const TURN_INSET = 16;
-const ACTIVATION_WIDTH = 18;
+const DEFAULT_AXIS_WIDTH = 96;
+const DEFAULT_HEADER_HEIGHT = 64;
+const DEFAULT_LANE_WIDTH = 208;
+const DEFAULT_TURN_INSET = 16;
+const DEFAULT_ACTIVATION_WIDTH = 18;
 const MIN_VIEWPORT_HEIGHT = 520;
 
 type DragState = {
@@ -78,6 +80,20 @@ type StageTone = {
   connector: string;
   glow: string;
   marker: string;
+};
+
+type StageMetrics = {
+  activationWidth: number;
+  axisWidth: number;
+  contentInset: number;
+  headerHeight: number;
+  isCompact: boolean;
+  isNarrow: boolean;
+  laneCardInset: number;
+  laneWidth: number;
+  turnInset: number;
+  turnHeaderPaddingLeft: number;
+  turnHeaderPaddingRight: number;
 };
 
 const COLUMN_TONES: Record<"user" | "main" | "other", StageTone> = {
@@ -112,6 +128,57 @@ const COLUMN_TONES: Record<"user" | "main" | "other", StageTone> = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function resolveStageMetrics(options: {
+  laneCount: number;
+  mode: TimelineMode;
+  viewportWidth: number;
+}): StageMetrics {
+  const { laneCount, mode, viewportWidth } = options;
+  if (mode !== "live") {
+    return {
+      activationWidth: DEFAULT_ACTIVATION_WIDTH,
+      axisWidth: DEFAULT_AXIS_WIDTH,
+      contentInset: 40,
+      headerHeight: DEFAULT_HEADER_HEIGHT,
+      isCompact: false,
+      isNarrow: false,
+      laneCardInset: 17,
+      laneWidth: DEFAULT_LANE_WIDTH,
+      turnInset: DEFAULT_TURN_INSET,
+      turnHeaderPaddingLeft: DEFAULT_AXIS_WIDTH + 20,
+      turnHeaderPaddingRight: 24,
+    };
+  }
+
+  const isNarrow = viewportWidth < 520;
+  const isCompact = viewportWidth < 960;
+  const axisWidth = isNarrow ? 42 : isCompact ? 72 : DEFAULT_AXIS_WIDTH;
+  const contentInset = isNarrow ? 12 : isCompact ? 24 : 40;
+  const minLaneWidth = isNarrow ? 70 : isCompact ? 120 : DEFAULT_LANE_WIDTH;
+  const laneWidth =
+    laneCount > 0
+      ? clamp(
+          Math.floor((viewportWidth - axisWidth - contentInset) / Math.max(laneCount, 1)),
+          minLaneWidth,
+          DEFAULT_LANE_WIDTH,
+        )
+      : DEFAULT_LANE_WIDTH;
+
+  return {
+    activationWidth: isNarrow ? 12 : DEFAULT_ACTIVATION_WIDTH,
+    axisWidth,
+    contentInset,
+    headerHeight: isNarrow ? 50 : DEFAULT_HEADER_HEIGHT,
+    isCompact,
+    isNarrow,
+    laneCardInset: isNarrow ? 6 : isCompact ? 14 : 17,
+    laneWidth,
+    turnInset: isNarrow ? 8 : isCompact ? 12 : DEFAULT_TURN_INSET,
+    turnHeaderPaddingLeft: axisWidth + (isNarrow ? 6 : 20),
+    turnHeaderPaddingRight: isNarrow ? 8 : 24,
+  };
 }
 
 function formatTick(ms: number) {
@@ -272,8 +339,8 @@ function timelineBodyCopy(options: {
   return null;
 }
 
-function laneCenter(index: number) {
-  return AXIS_WIDTH + index * LANE_WIDTH + LANE_WIDTH / 2;
+function laneCenter(index: number, stageMetrics: Pick<StageMetrics, "axisWidth" | "laneWidth">) {
+  return stageMetrics.axisWidth + index * stageMetrics.laneWidth + stageMetrics.laneWidth / 2;
 }
 
 function connectorPath(
@@ -281,15 +348,20 @@ function connectorPath(
   laneIndexById: Record<string, number>,
   projection: TimelineProjection,
   pixelsPerMs: number,
+  stageMetrics: Pick<StageMetrics, "axisWidth" | "headerHeight" | "laneWidth">,
 ) {
   const sourceIndex = laneIndexById[connector.sourceLaneId];
   const targetIndex = laneIndexById[connector.targetLaneId];
-  const sourceX = laneCenter(sourceIndex);
-  const targetX = laneCenter(targetIndex);
+  const sourceX = laneCenter(sourceIndex, stageMetrics);
+  const targetX = laneCenter(targetIndex, stageMetrics);
   const sourceY =
-    HEADER_HEIGHT + timelineItemPosition(projection, connector.startedAtMs, pixelsPerMs) + 6;
+    stageMetrics.headerHeight +
+    timelineItemPosition(projection, connector.startedAtMs, pixelsPerMs) +
+    6;
   const targetY =
-    HEADER_HEIGHT + timelineItemPosition(projection, connector.endedAtMs, pixelsPerMs) + 6;
+    stageMetrics.headerHeight +
+    timelineItemPosition(projection, connector.endedAtMs, pixelsPerMs) +
+    6;
   const controlY = sourceY + Math.max((targetY - sourceY) * 0.44, 28);
 
   return {
@@ -304,6 +376,37 @@ function connectorPath(
     targetX,
     targetY,
   };
+}
+
+function liveConnectorPath(
+  connector: TimelineConnector,
+  laneIndexById: Record<string, number>,
+  liveLayout: TimelineLiveLayout,
+  stageMetrics: Pick<StageMetrics, "axisWidth" | "headerHeight" | "laneWidth">,
+) {
+  const sourceIndex = laneIndexById[connector.sourceLaneId];
+  const targetIndex = laneIndexById[connector.targetLaneId];
+  const sourceX = laneCenter(sourceIndex, stageMetrics);
+  const targetX = laneCenter(targetIndex, stageMetrics);
+  const sourceY =
+    stageMetrics.headerHeight + (liveLayout.segmentExitYById[connector.sourceSegmentId] ?? 0);
+  const targetY =
+    stageMetrics.headerHeight + (liveLayout.segmentEntryYById[connector.targetSegmentId] ?? 0);
+  const controlY = sourceY + Math.max((targetY - sourceY) * 0.44, 28);
+
+  return {
+    path: `M ${sourceX} ${sourceY} C ${sourceX} ${controlY}, ${targetX} ${controlY}, ${targetX} ${targetY}`,
+  };
+}
+
+function visibleLiveRenderItemIds(liveLayout: TimelineLiveLayout | null) {
+  if (!liveLayout) {
+    return new Set<string>();
+  }
+
+  return new Set(
+    Object.values(liveLayout.renderItemIdsBySegmentId).flatMap((itemIds) => itemIds),
+  );
 }
 
 function selectionLabel(
@@ -367,6 +470,7 @@ export function TimelineCanvas({
   const deferredProjection = useDeferredValue(projection);
   const [hoverSelection, setHoverSelection] = useState<TimelineSelection | null>(null);
   const [viewportHeight, setViewportHeight] = useState(MIN_VIEWPORT_HEIGHT);
+  const [viewportWidth, setViewportWidth] = useState(960);
   const [viewport, setViewport] = useState<TimelineViewportState | null>(null);
   const [freshLatest, setFreshLatest] = useState<{ itemId: string | null; segmentId: string | null }>(
     {
@@ -386,6 +490,11 @@ export function TimelineCanvas({
     projection: deferredProjection,
     selectedSession,
   });
+  const liveLayout = useMemo(
+    () =>
+      mode === "live" && deferredProjection ? buildTimelineLiveLayout(deferredProjection) : null,
+    [deferredProjection, mode],
+  );
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -395,6 +504,7 @@ export function TimelineCanvas({
 
     const syncViewportHeight = () => {
       setViewportHeight(Math.max(node.clientHeight, MIN_VIEWPORT_HEIGHT));
+      setViewportWidth(Math.max(node.clientWidth, 320));
     };
 
     syncViewportHeight();
@@ -414,7 +524,7 @@ export function TimelineCanvas({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [deferredProjection != null, viewport != null]);
 
   useEffect(() => {
     if (!deferredProjection) {
@@ -426,17 +536,22 @@ export function TimelineCanvas({
     setViewport((current) => {
       const nextSessionId = deferredProjection.session.session_id;
       const nextContentHeight = current
-        ? timelineContentHeight(deferredProjection, current.pixelsPerMs)
+        ? timelineContentHeight(deferredProjection, current.pixelsPerMs, liveLayout)
         : 0;
       const isNewSession = previousSessionIdRef.current !== nextSessionId;
       previousSessionIdRef.current = nextSessionId;
 
       if (!current || current.mode !== mode || isNewSession) {
-        return createInitialTimelineViewport(deferredProjection, mode, viewportHeight);
+        return createInitialTimelineViewport(
+          deferredProjection,
+          mode,
+          viewportHeight,
+          liveLayout,
+        );
       }
 
       if (current.followLatest) {
-        return refollowLatest(deferredProjection, current, viewportHeight);
+        return refollowLatest(deferredProjection, current, viewportHeight, liveLayout);
       }
 
       return {
@@ -444,7 +559,7 @@ export function TimelineCanvas({
         scrollTop: clamp(current.scrollTop, 0, Math.max(nextContentHeight - viewportHeight, 0)),
       };
     });
-  }, [deferredProjection, mode, viewportHeight]);
+  }, [deferredProjection, liveLayout, mode, viewportHeight]);
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -507,7 +622,16 @@ export function TimelineCanvas({
   });
 
   const handleWheel = useEffectEvent((event: ReactWheelEvent<HTMLDivElement>) => {
-    if (!deferredProjection || !viewport || !(event.ctrlKey || event.metaKey)) {
+    if (!(event.ctrlKey || event.metaKey)) {
+      return;
+    }
+
+    if (mode === "live") {
+      event.preventDefault();
+      return;
+    }
+
+    if (!deferredProjection || !viewport) {
       return;
     }
 
@@ -592,7 +716,7 @@ export function TimelineCanvas({
       return;
     }
 
-    setViewport(refollowLatest(deferredProjection, viewport, viewportHeight));
+    setViewport(refollowLatest(deferredProjection, viewport, viewportHeight, liveLayout));
   });
 
   const hoverContext = useMemo(
@@ -603,15 +727,32 @@ export function TimelineCanvas({
   const interactionContext =
     hoverContext && hoverSelection?.kind !== "session" ? hoverContext : selectionContext;
   const latestCopy = viewportCopy(viewport, mode);
+  const isLiveCompact = mode === "live" && liveLayout != null;
   const laneCount = deferredProjection?.lanes.length ?? 0;
+  const stageMetrics = useMemo(
+    () => resolveStageMetrics({ laneCount, mode, viewportWidth }),
+    [laneCount, mode, viewportWidth],
+  );
   const contentHeight =
     deferredProjection && viewport
-      ? timelineContentHeight(deferredProjection, viewport.pixelsPerMs)
+      ? timelineContentHeight(deferredProjection, viewport.pixelsPerMs, liveLayout)
       : MIN_VIEWPORT_HEIGHT;
-  const contentWidth = AXIS_WIDTH + Math.max(laneCount, 1) * LANE_WIDTH + 40;
+  const contentWidth =
+    stageMetrics.axisWidth +
+    Math.max(laneCount, 1) * stageMetrics.laneWidth +
+    stageMetrics.contentInset;
   const ticks =
-    deferredProjection != null ? timelineTickLabels(deferredProjection, mode === "live" ? 5 : 7) : [];
-  const currentDensity = densityMode(viewport?.pixelsPerMs ?? 0);
+    deferredProjection != null && !isLiveCompact
+      ? timelineTickLabels(deferredProjection, mode === "live" ? 5 : 7)
+      : [];
+  const currentDensity = !isLiveCompact ? densityMode(viewport?.pixelsPerMs ?? 0) : null;
+  const liveFollowLabel = stageMetrics.isNarrow
+    ? viewport?.followLatest
+      ? "Following"
+      : "Resume follow"
+    : viewport?.followLatest
+      ? "Following latest"
+      : "Resume latest follow";
   const laneIndexById = useMemo(
     () =>
       Object.fromEntries(
@@ -619,6 +760,7 @@ export function TimelineCanvas({
       ) as Record<string, number>,
     [deferredProjection],
   );
+  const liveRenderItemIds = useMemo(() => visibleLiveRenderItemIds(liveLayout), [liveLayout]);
   const activeItemIds = new Set(interactionContext?.relatedItemIds ?? []);
   const activeSegmentIds = new Set(interactionContext?.relatedSegmentIds ?? []);
   const activeConnectorIds = new Set(interactionContext?.relatedConnectorIds ?? []);
@@ -630,7 +772,7 @@ export function TimelineCanvas({
     <GlassSurface
       refraction="none"
       variant="panel"
-      className="flex h-full min-h-[520px] flex-col overflow-hidden"
+      className="flex h-full min-h-[520px] min-w-0 w-full flex-col overflow-hidden"
     >
       <Card className={PANEL_CARD_CLASS}>
         <div aria-hidden="true" className={PANEL_AMBIENCE_CLASS} />
@@ -677,7 +819,7 @@ export function TimelineCanvas({
                       ) : (
                         <EyeOff className="h-3.5 w-3.5 text-amber-200" />
                       )}
-                      {viewport?.followLatest ? "Following latest" : "Resume latest follow"}
+                      {liveFollowLabel}
                     </Button>
                   </GlassSurface>
                 ) : null}
@@ -693,9 +835,11 @@ export function TimelineCanvas({
                 <GlassSurface className="rounded-full" refraction="none" variant="control">
                   <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono tracking-[0.12em] text-slate-100">
                     <Clock3 className="h-3.5 w-3.5 text-sky-300" />
-                    {selectedSession
+                    {!stageMetrics.isNarrow && selectedSession
                       ? formatTimestamp(selectedSession.last_event_at)
-                      : "Awaiting selection"}
+                      : !stageMetrics.isNarrow
+                        ? "Awaiting selection"
+                        : "Latest"}
                   </div>
                 </GlassSurface>
               </div>
@@ -706,14 +850,14 @@ export function TimelineCanvas({
               <span className="text-slate-500">/</span>
               <span>{selectionLabel(deferredProjection, selectionContext)}</span>
               <span className="text-slate-500">/</span>
-              <span>{currentDensity}</span>
+              <span>{isLiveCompact ? "idle gaps folded" : currentDensity}</span>
               <span className="text-slate-500">/</span>
               <span>spawn · handoff · reply · complete</span>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="relative z-10 flex flex-1 overflow-hidden bg-transparent p-0">
+        <CardContent className="relative z-10 flex min-w-0 flex-1 overflow-hidden bg-transparent p-0">
           {emptyState ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <GlassSurface
@@ -729,10 +873,10 @@ export function TimelineCanvas({
               </GlassSurface>
             </div>
           ) : deferredProjection && viewport ? (
-            <div className="flex min-h-0 flex-1">
+            <div className="flex min-h-0 min-w-0 flex-1">
               <div
                 ref={scrollRef}
-                className="min-h-0 flex-1 overflow-auto no-scrollbar"
+                className="min-h-0 min-w-0 flex-1 overflow-auto no-scrollbar"
                 data-follow-latest={viewport.followLatest ? "true" : "false"}
                 data-testid="timeline-scroll-area"
                 onPointerCancel={handlePointerEnd}
@@ -745,36 +889,52 @@ export function TimelineCanvas({
                 <div
                   className="relative"
                   style={{
-                    height: contentHeight + HEADER_HEIGHT + 20,
+                    height: contentHeight + stageMetrics.headerHeight + 20,
                     minWidth: contentWidth,
                   }}
                 >
                   <div
                     className="sticky top-0 z-20 grid border-b border-white/6 bg-[linear-gradient(180deg,rgba(8,12,22,0.94),rgba(8,12,22,0.78))] backdrop-blur-xl"
                     style={{
-                      gridTemplateColumns: `${AXIS_WIDTH}px repeat(${Math.max(laneCount, 1)}, ${LANE_WIDTH}px)`,
-                      height: HEADER_HEIGHT,
+                      gridTemplateColumns: `${stageMetrics.axisWidth}px repeat(${Math.max(laneCount, 1)}, ${stageMetrics.laneWidth}px)`,
+                      height: stageMetrics.headerHeight,
                     }}
                   >
-                    <div className="flex flex-col justify-center px-4 text-[10px] font-medium tracking-[0.08em] text-slate-500">
-                      Time
+                    <div
+                      className={`flex flex-col justify-center ${
+                        stageMetrics.isCompact ? "px-3 text-[9px]" : "px-4 text-[10px]"
+                      } font-medium tracking-[0.08em] text-slate-500`}
+                    >
+                      {isLiveCompact ? "Flow" : "Time"}
                     </div>
                     {deferredProjection.lanes.map((lane) => {
                       const tone = COLUMN_TONES[lane.column];
                       return (
                         <div
                           key={lane.laneId}
-                          className="flex items-center border-l border-white/5 px-4"
+                          className={`flex items-center border-l border-white/5 ${
+                            stageMetrics.isCompact ? "px-2.5" : "px-4"
+                          }`}
                         >
-                          <div className="flex w-full items-center justify-between rounded-[1rem] border border-white/6 bg-white/[0.03] px-3 py-2">
+                          <div
+                            className={`flex w-full items-center justify-between rounded-[1rem] border border-white/6 bg-white/[0.03] ${
+                              stageMetrics.isCompact ? "px-2.5 py-1.5" : "px-3 py-2"
+                            }`}
+                          >
                             <div>
-                              <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                                {lane.column}
+                              {!stageMetrics.isNarrow ? (
+                                <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                                  {lane.column}
+                                </p>
+                              ) : null}
+                              <p
+                                className={`${stageMetrics.isNarrow ? "text-[10px]" : stageMetrics.isCompact ? "mt-1 text-[12px]" : "mt-1 text-sm"} text-white`}
+                              >
+                                {lane.label}
                               </p>
-                              <p className="mt-1 text-sm text-white">{lane.label}</p>
                             </div>
                             <span
-                              className="h-2.5 w-2.5 rounded-full"
+                              className={`${stageMetrics.isCompact ? "h-2 w-2" : "h-2.5 w-2.5"} rounded-full`}
                               style={{ backgroundColor: tone.marker }}
                             />
                           </div>
@@ -786,11 +946,11 @@ export function TimelineCanvas({
                   <svg
                     aria-hidden="true"
                     className="absolute left-0 top-0"
-                    height={contentHeight + HEADER_HEIGHT + 20}
+                    height={contentHeight + stageMetrics.headerHeight + 20}
                     width={contentWidth}
                   >
                     <defs>
-                      {(["spawn", "handoff", "reply", "complete"] as const).map((kind) => {
+                    {(["spawn", "handoff", "reply", "complete"] as const).map((kind) => {
                         const strokeColor =
                           kind === "spawn"
                             ? COLUMN_TONES.main.connector
@@ -814,77 +974,109 @@ export function TimelineCanvas({
                       })}
                     </defs>
 
-                    {ticks.map((tickMs) => {
-                      const y =
-                        HEADER_HEIGHT +
-                        timelineItemPosition(deferredProjection, tickMs, viewport.pixelsPerMs);
-                      return (
-                        <g key={tickMs}>
-                          <line
-                            stroke="rgba(148,163,184,0.14)"
-                            strokeDasharray="4 8"
-                            strokeWidth="1"
-                            x1={AXIS_WIDTH - 8}
-                            x2={contentWidth - 24}
-                            y1={y}
-                            y2={y}
-                          />
-                          <text
-                            fill="rgba(148,163,184,0.7)"
-                            fontFamily="IBM Plex Mono, monospace"
-                            fontSize="10"
-                            x={18}
-                            y={y + 4}
-                          >
-                            {formatTick(tickMs)}
-                          </text>
-                        </g>
-                      );
-                    })}
+                    {!isLiveCompact &&
+                      ticks.map((tickMs) => {
+                        const y =
+                          stageMetrics.headerHeight +
+                          timelineItemPosition(deferredProjection, tickMs, viewport.pixelsPerMs);
+                        return (
+                          <g key={tickMs}>
+                            <line
+                              stroke="rgba(148,163,184,0.14)"
+                              strokeDasharray="4 8"
+                              strokeWidth="1"
+                              x1={stageMetrics.axisWidth - 8}
+                              x2={contentWidth - 24}
+                              y1={y}
+                              y2={y}
+                            />
+                            <text
+                              fill="rgba(148,163,184,0.7)"
+                              fontFamily="IBM Plex Mono, monospace"
+                              fontSize="10"
+                              x={18}
+                              y={y + 4}
+                            >
+                              {formatTick(tickMs)}
+                            </text>
+                          </g>
+                        );
+                      })}
 
-                    {deferredProjection.turnBands.map((turnBand) => {
-                      const top =
-                        HEADER_HEIGHT +
-                        timelineItemPosition(
-                          deferredProjection,
-                          turnBand.startedAtMs,
-                          viewport.pixelsPerMs,
-                        ) -
-                        10;
-                      const height = Math.max(
-                        timelineItemPosition(
-                          deferredProjection,
-                          turnBand.endedAtMs,
-                          viewport.pixelsPerMs,
-                        ) -
-                          timelineItemPosition(
-                            deferredProjection,
-                            turnBand.startedAtMs,
-                            viewport.pixelsPerMs,
-                          ) +
-                          24,
-                        46,
-                      );
-                      const isActiveBand = activeTurnBandId === turnBand.turnBandId;
+                    {isLiveCompact && liveLayout
+                      ? deferredProjection.turnBands.map((turnBand) => {
+                          const bounds = liveLayout.turnBoundsById[turnBand.turnBandId];
+                          if (!bounds) {
+                            return null;
+                          }
 
-                      return (
-                        <rect
-                          key={turnBand.turnBandId}
-                          fill={COLUMN_TONES.user.bandFill}
-                          height={height}
-                          opacity={hasInteractionFocus && !isActiveBand ? 0.34 : 1}
-                          rx={20}
-                          stroke={isActiveBand ? COLUMN_TONES.user.bandStroke : "rgba(255,255,255,0.06)"}
-                          strokeWidth={isActiveBand ? 1.2 : 1}
-                          width={contentWidth - AXIS_WIDTH - TURN_INSET * 2}
-                          x={AXIS_WIDTH + TURN_INSET}
-                          y={top}
-                        />
-                      );
-                    })}
+                          const isActiveBand = activeTurnBandId === turnBand.turnBandId;
+                          return (
+                            <rect
+                              key={turnBand.turnBandId}
+                              fill={COLUMN_TONES.user.bandFill}
+                              height={Math.max(bounds.height + 8, 46)}
+                              opacity={hasInteractionFocus && !isActiveBand ? 0.34 : 1}
+                              rx={20}
+                              stroke={
+                                isActiveBand
+                                  ? COLUMN_TONES.user.bandStroke
+                                  : "rgba(255,255,255,0.06)"
+                              }
+                              strokeWidth={isActiveBand ? 1.2 : 1}
+                              width={contentWidth - stageMetrics.axisWidth - stageMetrics.turnInset * 2}
+                              x={stageMetrics.axisWidth + stageMetrics.turnInset}
+                              y={stageMetrics.headerHeight + bounds.top - 4}
+                            />
+                          );
+                        })
+                      : deferredProjection.turnBands.map((turnBand) => {
+                          const top =
+                            stageMetrics.headerHeight +
+                            timelineItemPosition(
+                              deferredProjection,
+                              turnBand.startedAtMs,
+                              viewport.pixelsPerMs,
+                            ) -
+                            10;
+                          const height = Math.max(
+                            timelineItemPosition(
+                              deferredProjection,
+                              turnBand.endedAtMs,
+                              viewport.pixelsPerMs,
+                            ) -
+                              timelineItemPosition(
+                                deferredProjection,
+                                turnBand.startedAtMs,
+                                viewport.pixelsPerMs,
+                              ) +
+                              24,
+                            46,
+                          );
+                          const isActiveBand = activeTurnBandId === turnBand.turnBandId;
+
+                          return (
+                            <rect
+                              key={turnBand.turnBandId}
+                              fill={COLUMN_TONES.user.bandFill}
+                              height={height}
+                              opacity={hasInteractionFocus && !isActiveBand ? 0.34 : 1}
+                              rx={20}
+                              stroke={
+                                isActiveBand
+                                  ? COLUMN_TONES.user.bandStroke
+                                  : "rgba(255,255,255,0.06)"
+                              }
+                              strokeWidth={isActiveBand ? 1.2 : 1}
+                              width={contentWidth - stageMetrics.axisWidth - stageMetrics.turnInset * 2}
+                              x={stageMetrics.axisWidth + stageMetrics.turnInset}
+                              y={top}
+                            />
+                          );
+                        })}
 
                     {deferredProjection.lanes.map((lane, index) => {
-                      const center = laneCenter(index);
+                      const center = laneCenter(index, stageMetrics);
                       const tone = COLUMN_TONES[lane.column];
                       return (
                         <g key={lane.laneId}>
@@ -893,29 +1085,61 @@ export function TimelineCanvas({
                             strokeWidth="1.1"
                             x1={center}
                             x2={center}
-                            y1={HEADER_HEIGHT}
-                            y2={contentHeight + HEADER_HEIGHT}
+                            y1={stageMetrics.headerHeight}
+                            y2={contentHeight + stageMetrics.headerHeight}
                           />
                           <rect
                             fill={tone.bandFill}
                             height={contentHeight - 28}
                             rx={24}
                             stroke="rgba(255,255,255,0.03)"
-                            width={LANE_WIDTH - 34}
-                            x={center - (LANE_WIDTH - 34) / 2}
-                            y={HEADER_HEIGHT + 16}
+                            width={stageMetrics.laneWidth - stageMetrics.laneCardInset * 2}
+                            x={center - (stageMetrics.laneWidth - stageMetrics.laneCardInset * 2) / 2}
+                            y={stageMetrics.headerHeight + 16}
                           />
                         </g>
-                      );
-                    })}
+                        );
+                      })}
+
+                    {isLiveCompact &&
+                      liveLayout?.gapFolds.map((gapFold) => {
+                        const y = stageMetrics.headerHeight + gapFold.top + gapFold.height / 2;
+
+                        return (
+                          <g key={gapFold.gapId}>
+                            <line
+                              stroke="rgba(148,163,184,0.22)"
+                              strokeDasharray="4 8"
+                              strokeWidth="1"
+                              x1={stageMetrics.axisWidth - 8}
+                              x2={contentWidth - 24}
+                              y1={y}
+                              y2={y}
+                            />
+                            <text
+                              fill="rgba(148,163,184,0.76)"
+                              fontFamily="IBM Plex Mono, monospace"
+                              fontSize="10"
+                              x={18}
+                              y={y - 6}
+                            >
+                              {gapFold.label}
+                            </text>
+                          </g>
+                        );
+                      })}
 
                     {deferredProjection.connectors.map((connector) => {
-                      const pathMeta = connectorPath(
-                        connector,
-                        laneIndexById,
-                        deferredProjection,
-                        viewport.pixelsPerMs,
-                      );
+                      const pathMeta =
+                        isLiveCompact && liveLayout
+                          ? liveConnectorPath(connector, laneIndexById, liveLayout, stageMetrics)
+                          : connectorPath(
+                              connector,
+                              laneIndexById,
+                              deferredProjection,
+                              viewport.pixelsPerMs,
+                              stageMetrics,
+                            );
                       const sourceLane =
                         deferredProjection.lanes.find((lane) => lane.laneId === connector.sourceLaneId) ??
                         deferredProjection.lanes[0];
@@ -970,86 +1194,173 @@ export function TimelineCanvas({
                     })}
                   </svg>
 
-                  {deferredProjection.turnBands.map((turnBand) => {
-                    const top =
-                      HEADER_HEIGHT +
-                      timelineItemPosition(
-                        deferredProjection,
-                        turnBand.startedAtMs,
-                        viewport.pixelsPerMs,
-                      );
-                    const isActiveBand = activeTurnBandId === turnBand.turnBandId;
-                    const isDimmed = hasInteractionFocus && !isActiveBand;
+                  {isLiveCompact && liveLayout
+                    ? liveLayout.turnHeaders.map((header) => {
+                        const turnBand = deferredProjection.turnBandsById[header.turnBandId];
+                        const isActiveBand = activeTurnBandId === header.turnBandId;
+                        const isDimmed = hasInteractionFocus && !isActiveBand;
 
-                    return (
-                      <div
-                        key={`${turnBand.turnBandId}:label`}
-                        className="pointer-events-none absolute left-0 right-0 z-10"
-                        style={{
-                          top,
-                        }}
-                      >
-                        <div className="pl-[7.25rem] pr-6">
-                          {turnBand.userItemId ? (
-                            <button
-                              aria-label={turnBand.summary ?? turnBand.label}
-                              className={`pointer-events-auto max-w-[min(36rem,100%)] rounded-full border px-3 py-1.5 text-left text-[11px] font-medium tracking-[0.01em] text-amber-50 shadow-[0_8px_18px_rgba(8,12,22,0.24)] transition-opacity ${
-                                isActiveBand
-                                  ? "border-amber-200/30 bg-amber-300/18"
-                                  : "border-white/8 bg-[#0f1724]/78"
-                              }`}
-                              data-timeline-interactive=""
-                              onClick={() =>
-                                onSelectionChange({
-                                  itemId: turnBand.userItemId ?? turnBand.turnBandId,
-                                  kind: "item",
-                                })
-                              }
-                              onMouseEnter={() =>
-                                turnBand.userItemId
-                                  ? setHoverSelection({
-                                      itemId: turnBand.userItemId,
+                        return (
+                          <div
+                            key={header.headerId}
+                            className="pointer-events-none absolute left-0 right-0 z-10"
+                            data-testid={`timeline-turn-header-row-${header.turnBandId}`}
+                            style={{
+                              top: stageMetrics.headerHeight + header.top,
+                            }}
+                          >
+                            <div
+                              style={{
+                                paddingLeft: stageMetrics.turnHeaderPaddingLeft,
+                                paddingRight: stageMetrics.turnHeaderPaddingRight,
+                              }}
+                            >
+                              {header.userItemId ? (
+                                <button
+                                  aria-label={header.summary ?? turnBand?.label ?? "Turn summary"}
+                                  className={`pointer-events-auto flex ${
+                                    stageMetrics.isNarrow
+                                      ? "min-h-[2.4rem] max-w-full gap-2 px-2.5 py-2 text-[10px]"
+                                      : "min-h-[2.75rem] max-w-[min(38rem,100%)] gap-3 px-3 py-2 text-[11px]"
+                                  } items-center rounded-[1rem] border text-left font-medium tracking-[0.01em] text-amber-50 shadow-[0_10px_20px_rgba(8,12,22,0.24)] transition-opacity ${
+                                    isActiveBand
+                                      ? "border-amber-200/30 bg-amber-300/18"
+                                      : "border-white/8 bg-[#0f1724]/82"
+                                  }`}
+                                  data-testid={`timeline-turn-header-${header.turnBandId}`}
+                                  data-timeline-interactive=""
+                                  onClick={() =>
+                                    onSelectionChange({
+                                      itemId: header.userItemId ?? header.turnBandId,
                                       kind: "item",
                                     })
-                                  : undefined
-                              }
-                              onMouseLeave={() => setHoverSelection(null)}
+                                  }
+                                  onMouseEnter={() =>
+                                    header.userItemId
+                                      ? setHoverSelection({
+                                          itemId: header.userItemId,
+                                          kind: "item",
+                                        })
+                                      : undefined
+                                  }
+                                  onMouseLeave={() => setHoverSelection(null)}
+                                  style={{
+                                    opacity: isDimmed ? 0.38 : 1,
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="text-[10px] uppercase tracking-[0.08em] text-amber-200/72">
+                                    {turnBand?.label ?? "Turn"}
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate text-slate-100/92">
+                                    {header.summary}
+                                  </span>
+                                  {!stageMetrics.isNarrow ? (
+                                    <span className="text-[10px] font-mono tracking-[0.08em] text-slate-400">
+                                      {formatTimestamp(new Date(header.startedAtMs).toISOString())}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    : deferredProjection.turnBands.map((turnBand) => {
+                        const top =
+                          stageMetrics.headerHeight +
+                          timelineItemPosition(
+                            deferredProjection,
+                            turnBand.startedAtMs,
+                            viewport.pixelsPerMs,
+                          );
+                        const isActiveBand = activeTurnBandId === turnBand.turnBandId;
+                        const isDimmed = hasInteractionFocus && !isActiveBand;
+
+                        return (
+                          <div
+                            key={`${turnBand.turnBandId}:label`}
+                            className="pointer-events-none absolute left-0 right-0 z-10"
+                            style={{
+                              top,
+                            }}
+                          >
+                            <div
                               style={{
-                                opacity: isDimmed ? 0.38 : 1,
+                                paddingLeft: stageMetrics.turnHeaderPaddingLeft,
+                                paddingRight: stageMetrics.turnHeaderPaddingRight,
                               }}
-                              type="button"
                             >
-                              <span className="mr-2 text-[10px] uppercase tracking-[0.08em] text-amber-200/74">
-                                {turnBand.label}
-                              </span>
-                              <span className="text-slate-100/90">{turnBand.summary}</span>
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
+                              {turnBand.userItemId ? (
+                                <button
+                                  aria-label={turnBand.summary ?? turnBand.label}
+                                  className={`pointer-events-auto ${
+                                    stageMetrics.isNarrow
+                                      ? "max-w-full px-2.5 py-1.5 text-[10px]"
+                                      : "max-w-[min(36rem,100%)] px-3 py-1.5 text-[11px]"
+                                  } rounded-full border text-left font-medium tracking-[0.01em] text-amber-50 shadow-[0_8px_18px_rgba(8,12,22,0.24)] transition-opacity ${
+                                    isActiveBand
+                                      ? "border-amber-200/30 bg-amber-300/18"
+                                      : "border-white/8 bg-[#0f1724]/78"
+                                  }`}
+                                  data-timeline-interactive=""
+                                  onClick={() =>
+                                    onSelectionChange({
+                                      itemId: turnBand.userItemId ?? turnBand.turnBandId,
+                                      kind: "item",
+                                    })
+                                  }
+                                  onMouseEnter={() =>
+                                    turnBand.userItemId
+                                      ? setHoverSelection({
+                                          itemId: turnBand.userItemId,
+                                          kind: "item",
+                                        })
+                                      : undefined
+                                  }
+                                  onMouseLeave={() => setHoverSelection(null)}
+                                  style={{
+                                    opacity: isDimmed ? 0.38 : 1,
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="mr-2 text-[10px] uppercase tracking-[0.08em] text-amber-200/74">
+                                    {turnBand.label}
+                                  </span>
+                                  <span className="text-slate-100/90">{turnBand.summary}</span>
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
 
                   {deferredProjection.activationSegments.map((segment) => {
                     const laneIndex = laneIndexById[segment.laneId];
                     const lane = deferredProjection.lanes[laneIndex];
                     const tone = COLUMN_TONES[lane.column];
-                    const top =
-                      HEADER_HEIGHT +
-                      timelineItemPosition(
-                        deferredProjection,
-                        segment.startedAtMs,
-                        viewport.pixelsPerMs,
-                      );
-                    const bottom =
-                      HEADER_HEIGHT +
-                      timelineItemPosition(
-                        deferredProjection,
-                        segment.endedAtMs,
-                        viewport.pixelsPerMs,
-                      );
-                    const height = Math.max(bottom - top, currentDensity === "overview" ? 26 : 34);
-                    const left = laneCenter(laneIndex) - ACTIVATION_WIDTH / 2;
+                    const liveBounds = isLiveCompact ? liveLayout?.segmentBoundsById[segment.segmentId] : null;
+                    const top = liveBounds
+                      ? stageMetrics.headerHeight + liveBounds.top
+                      : stageMetrics.headerHeight +
+                        timelineItemPosition(
+                          deferredProjection,
+                          segment.startedAtMs,
+                          viewport.pixelsPerMs,
+                        );
+                    const bottom = liveBounds
+                      ? stageMetrics.headerHeight + liveBounds.bottom
+                      : stageMetrics.headerHeight +
+                        timelineItemPosition(
+                          deferredProjection,
+                          segment.endedAtMs,
+                          viewport.pixelsPerMs,
+                        );
+                    const height = liveBounds
+                      ? liveBounds.height
+                      : Math.max(bottom - top, currentDensity === "overview" ? 26 : 34);
+                    const left =
+                      laneCenter(laneIndex, stageMetrics) - stageMetrics.activationWidth / 2;
                     const isSelected =
                       selection.kind === "segment" && selection.segmentId === segment.segmentId;
                     const isActive = activeSegmentIds.has(segment.segmentId);
@@ -1092,7 +1403,7 @@ export function TimelineCanvas({
                           left,
                           opacity: isDimmed ? 0.28 : 1,
                           top,
-                          width: ACTIVATION_WIDTH,
+                          width: stageMetrics.activationWidth,
                         }}
                         type="button"
                       />
@@ -1103,13 +1414,14 @@ export function TimelineCanvas({
                     const laneIndex = laneIndexById[item.laneId];
                     const segmentId = deferredProjection.relationMap.items[item.itemId]?.segmentId ?? null;
                     const segment = segmentId ? deferredProjection.segmentsById[segmentId] ?? null : null;
-                    const top =
-                      HEADER_HEIGHT +
-                      timelineItemPosition(
-                        deferredProjection,
-                        item.startedAtMs,
-                        viewport.pixelsPerMs,
-                      );
+                    const top = isLiveCompact
+                      ? stageMetrics.headerHeight + (liveLayout?.itemYById[item.itemId] ?? 0)
+                      : stageMetrics.headerHeight +
+                        timelineItemPosition(
+                          deferredProjection,
+                          item.startedAtMs,
+                          viewport.pixelsPerMs,
+                        );
                     const isSelected = selection.kind === "item" && selection.itemId === item.itemId;
                     const isActive = activeItemIds.has(item.itemId);
                     const isDimmed = hasInteractionFocus && !isActive;
@@ -1119,6 +1431,62 @@ export function TimelineCanvas({
 
                     if (isPromptItem(item)) {
                       return null;
+                    }
+
+                    if (isLiveCompact) {
+                      if (!liveRenderItemIds.has(item.itemId)) {
+                        return null;
+                      }
+
+                      const tone = pointTone(item);
+                      const showLabel = item.kind === "message" || item.kind === "error";
+                      const width = showLabel ? (stageMetrics.isNarrow ? 96 : 192) : 52;
+                      const pointSize = stageMetrics.isNarrow ? 14 : 18;
+                      const terminalKind = segment?.terminalEventKind;
+
+                      return (
+                        <button
+                          key={item.itemId}
+                          aria-label={item.label}
+                          className={`absolute z-20 flex items-center gap-2 text-left transition-opacity ${
+                            isFresh ? "timeline-fresh-flash" : ""
+                          }`}
+                          data-kind={item.kind}
+                          data-testid={`timeline-item-${item.itemId}`}
+                          data-timeline-interactive=""
+                          onClick={() => onSelectionChange({ itemId: item.itemId, kind: "item" })}
+                          onMouseEnter={() => setHoverSelection({ itemId: item.itemId, kind: "item" })}
+                          onMouseLeave={() => setHoverSelection(null)}
+                          style={{
+                            left: laneCenter(laneIndex, stageMetrics) - pointSize / 2,
+                            opacity: isDimmed ? 0.24 : 1,
+                            top: top - pointSize / 2,
+                            width,
+                          }}
+                          type="button"
+                        >
+                          <span
+                            className={`block rounded-full ${stageMetrics.isNarrow ? "ring-2" : "ring-4"} ${tone.dot} ${tone.ring}`}
+                            style={{
+                              height: pointSize,
+                              boxShadow:
+                                isSelected || isActive
+                                  ? "0 0 0 1px rgba(255,255,255,0.18), 0 0 18px rgba(125,211,252,0.16)"
+                                  : undefined,
+                              width: pointSize,
+                            }}
+                          />
+                          {showLabel ? (
+                            <span className={`min-w-0 truncate text-[11px] ${tone.text}`}>
+                              {item.summary ?? item.label}
+                            </span>
+                          ) : terminalKind === "spawn" || terminalKind === "agent_complete" ? (
+                            <span className={`text-[10px] font-medium uppercase tracking-[0.08em] ${tone.text}`}>
+                              {terminalKind === "spawn" ? "Spawn" : "Done"}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
                     }
 
                     if (isCapsuleItem(item)) {
@@ -1151,7 +1519,7 @@ export function TimelineCanvas({
                               ? "0 0 0 1px rgba(191,219,254,0.24), 0 0 0 6px rgba(56,189,248,0.12), 0 14px 28px rgba(2,6,23,0.3)"
                               : undefined,
                             height,
-                            left: laneCenter(laneIndex) - width / 2,
+                            left: laneCenter(laneIndex, stageMetrics) - width / 2,
                             opacity: isDimmed ? 0.22 : 1,
                             top,
                             width,
@@ -1190,7 +1558,8 @@ export function TimelineCanvas({
                     const tone = pointTone(item);
                     const showLabel = currentDensity === "close";
                     const width = showLabel ? 168 : 18;
-                    const left = laneCenter(laneIndex) - 9 - (showLabel ? 0 : 0);
+                    const pointSize = 18;
+                    const left = laneCenter(laneIndex, stageMetrics) - pointSize / 2;
                     const terminalKind = segment?.terminalEventKind;
 
                     return (

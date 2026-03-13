@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { resolveMonitorUiQaState } from "@/pages/monitor/lib/ui-qa-fixtures";
 
+import { buildTimelineLiveLayout } from "./live-layout";
 import { buildTimelineProjection } from "./projection";
 import {
   createInitialTimelineViewport,
@@ -29,30 +30,40 @@ function timelineProjection() {
 }
 
 describe("timeline viewport helpers", () => {
-  it("uses recent-zoom and latest-follow in live mode", () => {
+  it("uses compact latest-follow in live mode", () => {
     const projection = timelineProjection();
-    const viewport = createInitialTimelineViewport(projection, "live", 600);
-    const contentHeight = timelineContentHeight(projection, viewport.pixelsPerMs);
+    const liveLayout = buildTimelineLiveLayout(projection);
+    const viewport = createInitialTimelineViewport(projection, "live", 600, liveLayout);
+    const contentHeight = timelineContentHeight(projection, viewport.pixelsPerMs, liveLayout);
 
     expect(viewport.followLatest).toBe(true);
+    expect(viewport.renderMode).toBe("live-compact");
     expect(viewport.scrollTop).toBe(contentHeight - 600);
   });
 
   it("uses fit-all and disabled follow in archive mode", () => {
     const projection = timelineProjection();
-    const liveViewport = createInitialTimelineViewport(projection, "live", 600);
+    const liveViewport = createInitialTimelineViewport(
+      projection,
+      "live",
+      600,
+      buildTimelineLiveLayout(projection),
+    );
     const archiveViewport = createInitialTimelineViewport(projection, "archive", 600);
 
     expect(archiveViewport.followLatest).toBe(false);
+    expect(archiveViewport.renderMode).toBe("archive-absolute");
     expect(archiveViewport.scrollTop).toBe(0);
-    expect(archiveViewport.pixelsPerMs).toBeLessThan(liveViewport.pixelsPerMs);
+    expect(liveViewport.renderMode).toBe("live-compact");
+    expect(archiveViewport.pixelsPerMs).toBeGreaterThan(0);
   });
 
   it("turns follow off on interaction and restores it with refollow", () => {
     const projection = timelineProjection();
-    const viewport = createInitialTimelineViewport(projection, "live", 600);
+    const liveLayout = buildTimelineLiveLayout(projection);
+    const viewport = createInitialTimelineViewport(projection, "live", 600, liveLayout);
     const manualViewport = disableTimelineFollow(viewport, 120);
-    const refollowed = refollowLatest(projection, manualViewport, 600);
+    const refollowed = refollowLatest(projection, manualViewport, 600, liveLayout);
 
     expect(manualViewport.followLatest).toBe(false);
     expect(manualViewport.scrollTop).toBe(120);
@@ -60,9 +71,9 @@ describe("timeline viewport helpers", () => {
     expect(refollowed.scrollTop).toBeGreaterThan(manualViewport.scrollTop);
   });
 
-  it("disables follow when wheel zoom begins", () => {
+  it("keeps zoom interaction on archive absolute mode only", () => {
     const projection = timelineProjection();
-    const viewport = createInitialTimelineViewport(projection, "live", 600);
+    const viewport = createInitialTimelineViewport(projection, "archive", 600);
     const next = zoomTimelineViewport({
       anchorY: 280,
       deltaY: -120,

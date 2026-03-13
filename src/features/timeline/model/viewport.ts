@@ -1,4 +1,9 @@
-import type { TimelineMode, TimelineProjection, TimelineViewportState } from "./types";
+import type {
+  TimelineLiveLayout,
+  TimelineMode,
+  TimelineProjection,
+  TimelineViewportState,
+} from "./types";
 
 const MAX_PIXELS_PER_MS = 0.2;
 const MIN_PIXELS_PER_MS = 0.0009;
@@ -20,7 +25,12 @@ function fitPixelsPerMs(projection: TimelineProjection, viewportHeight: number) 
 export function timelineContentHeight(
   projection: TimelineProjection,
   pixelsPerMs: number,
+  liveLayout?: TimelineLiveLayout | null,
 ) {
+  if (liveLayout) {
+    return liveLayout.contentHeight;
+  }
+
   return Math.max(
     viewportHeightFloor(),
     projection.timeRangeMs * pixelsPerMs + TIMELINE_PADDING * 2,
@@ -35,7 +45,18 @@ export function createInitialTimelineViewport(
   projection: TimelineProjection,
   mode: TimelineMode,
   viewportHeight = viewportHeightFloor(),
+  liveLayout?: TimelineLiveLayout | null,
 ): TimelineViewportState {
+  if (mode === "live" && liveLayout) {
+    return {
+      followLatest: true,
+      mode,
+      pixelsPerMs: 0,
+      renderMode: "live-compact",
+      scrollTop: Math.max(liveLayout.contentHeight - viewportHeight, 0),
+    };
+  }
+
   const fitScale = fitPixelsPerMs(projection, viewportHeight);
   const pixelsPerMs =
     mode === "live"
@@ -49,6 +70,7 @@ export function createInitialTimelineViewport(
     followLatest: mode === "live",
     mode,
     pixelsPerMs,
+    renderMode: "archive-absolute",
     scrollTop,
   };
 }
@@ -68,8 +90,13 @@ export function refollowLatest(
   projection: TimelineProjection,
   viewport: TimelineViewportState,
   viewportHeight = viewportHeightFloor(),
+  liveLayout?: TimelineLiveLayout | null,
 ) {
-  const contentHeight = timelineContentHeight(projection, viewport.pixelsPerMs);
+  const contentHeight = timelineContentHeight(
+    projection,
+    viewport.pixelsPerMs,
+    viewport.renderMode === "live-compact" ? liveLayout : null,
+  );
 
   return {
     ...viewport,
@@ -87,6 +114,10 @@ export function zoomTimelineViewport(options: {
 }) {
   const { anchorY, deltaY, projection, viewport, viewportHeight = viewportHeightFloor() } =
     options;
+  if (viewport.renderMode === "live-compact") {
+    return disableTimelineFollow(viewport);
+  }
+
   const currentScrollTop = viewport.scrollTop;
   const currentPixelsPerMs = viewport.pixelsPerMs;
   const nextPixelsPerMs = clamp(
@@ -104,6 +135,7 @@ export function zoomTimelineViewport(options: {
     followLatest: false,
     mode: viewport.mode,
     pixelsPerMs: nextPixelsPerMs,
+    renderMode: "archive-absolute",
     scrollTop: clamp(unclampedScrollTop, 0, Math.max(contentHeight - viewportHeight, 0)),
   } satisfies TimelineViewportState;
 }
@@ -140,4 +172,3 @@ export function timelineTickLabels(
     return projection.startedAtMs + projection.timeRangeMs * ratio;
   });
 }
-

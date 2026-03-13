@@ -2,6 +2,7 @@ import type { CanonicalEvent, CanonicalMetric, CanonicalSession } from "@/shared
 import type { SessionDetailSnapshot } from "@/shared/queries";
 
 export type TimelineMode = "live" | "archive";
+export type TimelineRenderMode = "live-compact" | "archive-absolute";
 
 export type TimelineSelection =
   | { kind: "session" }
@@ -56,6 +57,26 @@ export interface TimelineTurnBand {
   turnBandId: string;
   turnIndex: number;
   userItemId: string | null;
+}
+
+export interface TimelineTurnHeaderRow {
+  headerId: string;
+  height: number;
+  startedAtMs: number;
+  summary: string | null;
+  top: number;
+  turnBandId: string;
+  userItemId: string | null;
+}
+
+export interface TimelineGapFold {
+  gapId: string;
+  height: number;
+  hiddenDurationMs: number;
+  label: string;
+  sourceSegmentId: string;
+  targetSegmentId: string;
+  top: number;
 }
 
 export interface TimelineActivationSegment {
@@ -142,10 +163,38 @@ export interface TimelineProjection {
   turnBandsById: Record<string, TimelineTurnBand>;
 }
 
+export interface TimelineLiveLayout {
+  contentHeight: number;
+  gapFolds: TimelineGapFold[];
+  itemYById: Record<string, number>;
+  renderItemIdsBySegmentId: Record<string, string[]>;
+  renderMode: "live-compact";
+  segmentBoundsById: Record<
+    string,
+    {
+      bottom: number;
+      height: number;
+      top: number;
+    }
+  >;
+  segmentEntryYById: Record<string, number>;
+  segmentExitYById: Record<string, number>;
+  turnBoundsById: Record<
+    string,
+    {
+      bottom: number;
+      height: number;
+      top: number;
+    }
+  >;
+  turnHeaders: TimelineTurnHeaderRow[];
+}
+
 export interface TimelineViewportState {
   followLatest: boolean;
   mode: TimelineMode;
   pixelsPerMs: number;
+  renderMode: TimelineRenderMode;
   scrollTop: number;
 }
 

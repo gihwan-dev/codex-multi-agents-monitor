@@ -79,16 +79,6 @@ function mockScrollAreaBounds(element: HTMLElement) {
   });
 }
 
-function zoomIn(scrollArea: HTMLElement, count: number) {
-  for (let index = 0; index < count; index += 1) {
-    fireEvent.wheel(scrollArea, {
-      clientY: 240,
-      ctrlKey: true,
-      deltaY: -120,
-    });
-  }
-}
-
 describe("timeline + detail drawer", () => {
   it("renders safely when no detail payload is selected yet", () => {
     render(
@@ -115,36 +105,39 @@ describe("timeline + detail drawer", () => {
     expect(screen.getByText("Event detail")).toBeVisible();
   });
 
-  it("reveals tool capsules after diagnostic zoom and syncs item selection into the drawer", () => {
+  it("renders turn headers and syncs visible item selection into the drawer", () => {
     render(<TimelineHarness mode="live" />);
     const scrollArea = screen.getByTestId("timeline-scroll-area");
     mockScrollAreaBounds(scrollArea);
 
-    expect(
-      screen.queryByRole("button", {
-        name: "Apply the timeline and drawer wiring patch.",
+    expect(screen.getByTestId("timeline-turn-header-turn:2")).toHaveTextContent(
+      "Now make the relationships readable at a glance.",
+    );
+    expect(screen.getByText("+1m idle gap")).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Main integrated the worker patch into the live monitor shell.",
       }),
-    ).not.toBeInTheDocument();
-
-    zoomIn(scrollArea, 2);
-
-    fireEvent.click(screen.getByRole("button", { name: "Apply the timeline and drawer wiring patch." }));
+    );
 
     const drawer = within(screen.getByTestId("timeline-detail-drawer"));
 
-    expect(drawer.getByText("Apply the timeline and drawer wiring patch.")).toBeVisible();
+    expect(
+      drawer.getAllByText("Main integrated the worker patch into the live monitor shell."),
+    ).toHaveLength(2);
     expect(drawer.getByText("Selection chain")).toBeVisible();
     expect(drawer.getByText("Related items")).toBeVisible();
 
     fireEvent.click(drawer.getByRole("tab", { name: "Input-Output" }));
 
     expect(
-      drawer.getByText("update timeline selection source-of-truth in monitor page"),
+      drawer.getByText(
+        "Sequence stage and drawer selection state are back under the main lane before the next user turn.",
+      ),
     ).toBeVisible();
     expect(
-      drawer.getByText(
-        "features/timeline/ui/* plus page wiring now control selection and latest follow.",
-      ),
+      drawer.getByText("No output preview available for the current selection."),
     ).toBeVisible();
   });
 
@@ -175,52 +168,33 @@ describe("timeline + detail drawer", () => {
     expect(drawer.getByText("Complete connector from Newton to Main.")).toBeVisible();
   });
 
-  it("progressively reveals diagnostic and close density content as the user zooms in", () => {
+  it("keeps tool capsules off the live stage and reserves space for turn headers", () => {
     render(<TimelineHarness mode="live" />);
 
-    const scrollArea = screen.getByTestId("timeline-scroll-area");
-    mockScrollAreaBounds(scrollArea);
-
     expect(
-      screen.queryByRole("button", {
-        name: "Apply the timeline and drawer wiring patch.",
-      }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("update timeline selection source-of-truth in monitor page"),
+      screen.queryByRole("button", { name: "Apply the timeline and drawer wiring patch." }),
     ).not.toBeInTheDocument();
 
-    zoomIn(scrollArea, 2);
+    const headerRow = screen.getByTestId("timeline-turn-header-row-turn:1");
+    const firstVisibleItem = screen.getByTestId("timeline-item-evt-spawn");
 
-    expect(
-      screen.getByRole("button", {
-        name: "Apply the timeline and drawer wiring patch.",
-      }),
-    ).toBeVisible();
-    expect(
-      screen.queryByText("update timeline selection source-of-truth in monitor page"),
-    ).not.toBeInTheDocument();
-
-    zoomIn(scrollArea, 17);
-
-    expect(
-      screen.getByText(
-        "features/timeline/ui/* plus page wiring now control selection and latest follow.",
-      ),
-    ).toBeVisible();
+    expect(parseFloat(firstVisibleItem.style.top)).toBeGreaterThan(
+      parseFloat(headerRow.style.top) + 52,
+    );
   });
 
-  it("disables latest follow when the user scrubs and restores it with the eye button", () => {
+  it("disables latest follow when the user scrubs and restores it with the eye button", async () => {
     render(<TimelineHarness mode="live" />);
 
     const scrollArea = screen.getByTestId("timeline-scroll-area");
     mockScrollAreaBounds(scrollArea);
 
-    fireEvent.wheel(scrollArea, {
-      clientY: 240,
-      ctrlKey: true,
-      deltaY: -120,
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
     });
+
+    scrollArea.scrollTop = 120;
+    fireEvent.scroll(scrollArea);
 
     expect(screen.getByTestId("timeline-follow-state")).toHaveTextContent("Manual review");
     expect(screen.getByTestId("timeline-refollow-button")).toHaveAttribute(
@@ -237,6 +211,23 @@ describe("timeline + detail drawer", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("keeps live ctrl+wheel from switching into zoom mode", () => {
+    render(<TimelineHarness mode="live" />);
+
+    const scrollArea = screen.getByTestId("timeline-scroll-area");
+    mockScrollAreaBounds(scrollArea);
+    const beforeScrollTop = scrollArea.scrollTop;
+
+    fireEvent.wheel(scrollArea, {
+      clientY: 240,
+      ctrlKey: true,
+      deltaY: -120,
+    });
+
+    expect(screen.getByTestId("timeline-follow-state")).toHaveTextContent("Following latest");
+    expect(scrollArea.scrollTop).toBe(beforeScrollTop);
   });
 
   it("switches to manual review when the user scrolls the timeline", async () => {
@@ -259,6 +250,19 @@ describe("timeline + detail drawer", () => {
       "aria-pressed",
       "false",
     );
+  });
+
+  it("starts live mode pinned to the latest internal timeline position", async () => {
+    render(<TimelineHarness mode="live" />);
+
+    const scrollArea = screen.getByTestId("timeline-scroll-area");
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+    expect(scrollArea.scrollTop).toBeGreaterThan(0);
+    expect(scrollArea).toHaveAttribute("data-follow-latest", "true");
   });
 
   it("uses the archive preset without exposing the live follow control", () => {
