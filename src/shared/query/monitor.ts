@@ -1,19 +1,18 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 
-import {
-  mergeBootstrapSnapshot,
-  type WorkspaceSessionsSnapshot,
-} from "@/entities/session";
 import {
   isTauriRuntimeAvailable,
   querySessionDetail,
   queryWorkspaceSessions,
+  queryWorkspaceSessionsCached,
 } from "@/shared/api";
 
 export const TAURI_RUNTIME_UNAVAILABLE_MESSAGE =
   "Tauri runtime unavailable. Launch the app with `pnpm tauri:dev`.";
 
 export const monitorQueryKeys = {
+  workspaceSessionsCached: () => ["monitor", "workspace-sessions", "cached"] as const,
+  workspaceSessionsLive: () => ["monitor", "workspace-sessions", "live"] as const,
   workspaceSessions: () => ["monitor", "workspace-sessions"] as const,
   sessionDetail: (sessionId: string | null) =>
     ["monitor", "session-detail", sessionId] as const,
@@ -25,25 +24,24 @@ function assertTauriRuntimeAvailable() {
   }
 }
 
-export function workspaceSessionsQueryOptions(queryClient: QueryClient) {
-  const queryKey = monitorQueryKeys.workspaceSessions();
-
+export function workspaceSessionsQueryOptions() {
   return queryOptions({
-    queryKey,
+    queryKey: monitorQueryKeys.workspaceSessions(),
     queryFn: async () => {
       assertTauriRuntimeAvailable();
-      const cachedSnapshotAtStart =
-        queryClient.getQueryData<WorkspaceSessionsSnapshot>(queryKey) ?? null;
 
-      const bootstrapSnapshot = await queryWorkspaceSessions();
-      if (cachedSnapshotAtStart) {
-        return bootstrapSnapshot;
-      }
+      return queryWorkspaceSessions();
+    },
+  });
+}
 
-      const liveSnapshot =
-        queryClient.getQueryData<WorkspaceSessionsSnapshot>(queryKey) ?? null;
+export function workspaceSessionsCachedQueryOptions() {
+  return queryOptions({
+    queryKey: monitorQueryKeys.workspaceSessionsCached(),
+    queryFn: async () => {
+      assertTauriRuntimeAvailable();
 
-      return mergeBootstrapSnapshot(bootstrapSnapshot, liveSnapshot);
+      return queryWorkspaceSessionsCached();
     },
   });
 }

@@ -18,11 +18,47 @@ const SESSION_TITLE_NOISE_PATTERNS = [
   /Global Agent Policy/gi,
   /This file defines global defaults(?: for [^.]+)?/gi,
   /<INSTRUCTIONS>/gi,
+  /<environment_context>/gi,
+  /PLEASE IMPLEMENT THIS PLAN/gi,
 ];
 const ABSOLUTE_PATH_PATTERN = /\/(?:Users|home|workspace|tmp|var|opt)\/[^\s]+/g;
+const SESSION_TITLE_BLOCK_TAGS = new Set([
+  "instructions",
+  "environment_context",
+  "skill",
+]);
+const SESSION_TITLE_DISCARDED_LINES = [
+  /^(?:instructions?|global agent policy|environment context)$/i,
+  /^(?:summary|key changes|test plan|assumptions)$/i,
+  /^(?:workflow|hard rules|required references|required bundle content)$/i,
+  /^(?:how to use skills|available skills|core goal)$/i,
+  /^(?:please implement this plan\.?)$/i,
+  /^this file defines global defaults(?: for codex)?(?: across all repositories)?\.?$/i,
+];
 
 function collapseWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function stripLeadingPromptMarkers(value: string) {
+  let next = value.trim();
+
+  while (next) {
+    const stripped = next
+      .replace(/^#+\s*/g, "")
+      .replace(/^>\s*/g, "")
+      .replace(/^(?:[-*]|\d+\.)\s+/g, "")
+      .replace(/^(?:[.:;,-]+)\s*/g, "")
+      .trim();
+
+    if (stripped === next) {
+      return stripped;
+    }
+
+    next = stripped;
+  }
+
+  return next;
 }
 
 function stripSessionTitleNoise(line: string) {
@@ -31,15 +67,17 @@ function stripSessionTitleNoise(line: string) {
     return "";
   }
 
-  next = next.replace(/^#+\s*/g, "");
-  next = next.replace(/^(?:[-*]|\d+\.)\s+/g, "");
+  next = next.replace(/^\[\$([^\]]+)\]\s*/g, "$$$1 ");
+  next = stripLeadingPromptMarkers(next);
   next = next.replace(ABSOLUTE_PATH_PATTERN, " ");
+  next = next.replace(/<\/?[a-z_:-]+>/gi, " ");
 
   for (const pattern of SESSION_TITLE_NOISE_PATTERNS) {
     next = next.replace(pattern, " ");
   }
 
   next = collapseWhitespace(next);
+  next = stripLeadingPromptMarkers(next);
   next = next.replace(/^(?:for|in)\b[:\s-]*/i, "").trim();
 
   if (/^(?:instructions?|agent policy|global defaults?)$/i.test(next)) {
@@ -47,6 +85,44 @@ function stripSessionTitleNoise(line: string) {
   }
 
   return next;
+}
+
+function isSubstantiveSessionTitleLine(line: string) {
+  if (!line || !/[A-Za-z0-9가-힣$]/.test(line)) {
+    return false;
+  }
+
+  if (/^<\/?[a-z_:-]+>$/i.test(line)) {
+    return false;
+  }
+
+  return !SESSION_TITLE_DISCARDED_LINES.some((pattern) => pattern.test(line));
+}
+
+function findSubstantiveSessionTitle(rawTitle: string) {
+  const lines = rawTitle.split(/\r?\n+/);
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (
+      /^<\/?[a-z_:-]+>$/i.test(trimmed) &&
+      SESSION_TITLE_BLOCK_TAGS.has(trimmed.replace(/[</>]/g, "").toLowerCase())
+    ) {
+      continue;
+    }
+
+    const candidate = stripSessionTitleNoise(trimmed);
+    if (isSubstantiveSessionTitleLine(candidate)) {
+      return candidate;
+    }
+  }
+
+  const fallback = stripSessionTitleNoise(collapseWhitespace(rawTitle));
+  return isSubstantiveSessionTitleLine(fallback) ? fallback : null;
 }
 
 function clipSessionTitle(value: string, maxLength = 88) {
@@ -96,12 +172,7 @@ export function normalizeSessionTitle(rawTitle: string | null | undefined) {
     return null;
   }
 
-  const candidate =
-    rawTitle
-      .split(/\r?\n+/)
-      .map(stripSessionTitleNoise)
-      .find((line) => /[A-Za-z0-9가-힣]/.test(line)) ??
-    stripSessionTitleNoise(normalizedRaw);
+  const candidate = findSubstantiveSessionTitle(rawTitle);
 
   if (!candidate) {
     return null;

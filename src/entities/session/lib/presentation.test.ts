@@ -16,6 +16,22 @@ describe("session title presentation helpers", () => {
     expect(normalizeSessionTitle(rawTitle)).toBe("제목이 이상하게 캡쳐됨.");
   });
 
+  it("prefers the first substantive user question after scaffold blocks", () => {
+    const rawTitle = `# AGENTS.md instructions for /tmp/workspace
+<INSTRUCTIONS>
+Global Agent Policy
+This file defines global defaults for Codex across all repositories.
+</INSTRUCTIONS>
+<environment_context>
+  <cwd>/tmp/workspace</cwd>
+</environment_context>
+[$design-task] 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?`;
+
+    expect(normalizeSessionTitle(rawTitle)).toBe(
+      "$design-task 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?",
+    );
+  });
+
   it("leaves concise titles unchanged", () => {
     expect(normalizeSessionTitle("Liquid Glass shell redesign")).toBe(
       "Liquid Glass shell redesign",

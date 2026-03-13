@@ -7,14 +7,20 @@ import { monitorQueryKeys, workspaceSessionsQueryOptions } from "@/shared/query"
 
 import { useWorkspaceSessionsQuery } from "./use-workspace-sessions-query";
 
-const { isTauriRuntimeAvailable, queryWorkspaceSessions } = vi.hoisted(() => ({
+const {
+  isTauriRuntimeAvailable,
+  queryWorkspaceSessions,
+  queryWorkspaceSessionsCached,
+} = vi.hoisted(() => ({
   isTauriRuntimeAvailable: vi.fn(),
   queryWorkspaceSessions: vi.fn(),
+  queryWorkspaceSessionsCached: vi.fn(),
 }));
 
 vi.mock("@/shared/api/tauri-monitor", () => ({
   isTauriRuntimeAvailable,
   queryWorkspaceSessions,
+  queryWorkspaceSessionsCached,
 }));
 
 function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
@@ -27,6 +33,7 @@ function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
           event_count: index + 1,
           is_archived: false,
           last_event_at: `2026-03-12T06:0${index}:00.000Z`,
+          parent_session_id: null,
           session_id: sessionId,
           source_kind: "session_log",
           started_at: `2026-03-12T05:0${index}:00.000Z`,
@@ -40,38 +47,91 @@ function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
   };
 }
 
+function createSingleSessionSnapshot(
+  sessionId: string,
+  lastEventAt: string,
+): WorkspaceSessionsSnapshot {
+  return {
+    refreshed_at: lastEventAt,
+    workspaces: [
+      {
+        workspace_path: "/workspace/a",
+        sessions: [
+          {
+            ended_at: null,
+            event_count: 1,
+            is_archived: false,
+            last_event_at: lastEventAt,
+            parent_session_id: null,
+            session_id: sessionId,
+            source_kind: "session_log",
+            started_at: "2026-03-12T05:00:00.000Z",
+            status: "live",
+            title: null,
+            workspace_path: "/workspace/a",
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe("useWorkspaceSessionsQuery", () => {
   afterEach(() => {
     queryWorkspaceSessions.mockReset();
+    queryWorkspaceSessionsCached.mockReset();
     isTauriRuntimeAvailable.mockReset();
   });
 
-  it("loads workspace sessions successfully", async () => {
+  it("seeds cached sessions immediately and replaces them after refresh succeeds", async () => {
     isTauriRuntimeAvailable.mockReturnValue(true);
-    queryWorkspaceSessions.mockResolvedValue(createSnapshot(["session-1"]));
-
-    const { result } = renderHook(() => useWorkspaceSessionsQuery(), {
-      wrapper: createQueryClientWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    expect(result.current.errorMessage).toBeNull();
-    expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
-      "session-1",
-    );
-  });
-
-  it("preserves live summaries that arrive before bootstrap completes", async () => {
-    isTauriRuntimeAvailable.mockReturnValue(true);
-    const queryClient = createTestQueryClient();
-    let resolveBootstrap:
+    queryWorkspaceSessionsCached.mockResolvedValue(createSnapshot(["cached-session"]));
+    let resolveRefresh:
       | ((value: WorkspaceSessionsSnapshot) => void)
       | null = null;
 
     queryWorkspaceSessions.mockReturnValue(
       new Promise<WorkspaceSessionsSnapshot>((resolve) => {
-        resolveBootstrap = resolve;
+        resolveRefresh = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useWorkspaceSessionsQuery(), {
+      wrapper: createQueryClientWrapper(),
+    });
+
+    await waitFor(() =>
+      expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
+        "cached-session",
+      ),
+    );
+
+    if (!resolveRefresh) {
+      throw new Error("Expected pending refresh query");
+    }
+
+    const completeRefresh =
+      resolveRefresh as (value: WorkspaceSessionsSnapshot) => void;
+    completeRefresh(createSnapshot(["refresh-session"]));
+
+    await waitFor(() =>
+      expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
+        "refresh-session",
+      ),
+    );
+  });
+
+  it("preserves live summaries that arrive before refresh completes", async () => {
+    isTauriRuntimeAvailable.mockReturnValue(true);
+    queryWorkspaceSessionsCached.mockResolvedValue(createSnapshot(["cached-session"]));
+    const queryClient = createTestQueryClient();
+    let resolveRefresh:
+      | ((value: WorkspaceSessionsSnapshot) => void)
+      | null = null;
+
+    queryWorkspaceSessions.mockReturnValue(
+      new Promise<WorkspaceSessionsSnapshot>((resolve) => {
+        resolveRefresh = resolve;
       }),
     );
 
@@ -79,63 +139,56 @@ describe("useWorkspaceSessionsQuery", () => {
       wrapper: createQueryClientWrapper(queryClient),
     });
 
-    await waitFor(() => expect(queryWorkspaceSessions).toHaveBeenCalledTimes(1));
-
-    queryClient.setQueryData(
-      monitorQueryKeys.workspaceSessions(),
-      createSnapshot(["live-session"]),
+    await waitFor(() =>
+      expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
+        "cached-session",
+      ),
     );
 
-    if (!resolveBootstrap) {
-      throw new Error("Expected pending bootstrap query");
+    queryClient.setQueryData(
+      monitorQueryKeys.workspaceSessionsLive(),
+      createSingleSessionSnapshot("live-session", "2026-03-12T06:30:00.000Z"),
+    );
+
+    await waitFor(() =>
+      expect(
+        result.current.snapshot?.workspaces[0]?.sessions.map(
+          (session) => session.session_id,
+        ),
+      ).toEqual(["live-session", "cached-session"]),
+    );
+
+    if (!resolveRefresh) {
+      throw new Error("Expected pending refresh query");
     }
 
-    const completeBootstrap =
-      resolveBootstrap as (value: WorkspaceSessionsSnapshot) => void;
+    const completeRefresh =
+      resolveRefresh as (value: WorkspaceSessionsSnapshot) => void;
+    completeRefresh(createSnapshot(["refresh-session"]));
 
-    completeBootstrap(createSnapshot(["bootstrap-session"]));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    expect(
-      result.current.snapshot?.workspaces[0]?.sessions.map(
-        (session) => session.session_id,
-      ),
-    ).toEqual(["bootstrap-session", "live-session"]);
-  });
-
-  it("replaces stale cached sessions on a later refetch", async () => {
-    isTauriRuntimeAvailable.mockReturnValue(true);
-    const queryClient = createTestQueryClient();
-
-    queryClient.setQueryData(
-      monitorQueryKeys.workspaceSessions(),
-      createSnapshot(["stale-session"]),
+    await waitFor(() =>
+      expect(
+        result.current.snapshot?.workspaces[0]?.sessions.map(
+          (session) => session.session_id,
+        ),
+      ).toEqual(["live-session", "refresh-session"]),
     );
-    queryWorkspaceSessions.mockResolvedValue(createSnapshot(["bootstrap-session"]));
-
-    const snapshot = await queryClient.fetchQuery({
-      ...workspaceSessionsQueryOptions(queryClient),
-      staleTime: 0,
-    });
-
-    expect(snapshot.workspaces[0]?.sessions.map((session) => session.session_id)).toEqual([
-      "bootstrap-session",
-    ]);
   });
 
-  it("surfaces bootstrap query failures as error messages", async () => {
+  it("keeps cached sessions visible when the refresh fails", async () => {
     isTauriRuntimeAvailable.mockReturnValue(true);
+    queryWorkspaceSessionsCached.mockResolvedValue(createSnapshot(["cached-session"]));
     queryWorkspaceSessions.mockRejectedValue(new Error("query failed"));
 
     const { result } = renderHook(() => useWorkspaceSessionsQuery(), {
       wrapper: createQueryClientWrapper(),
     });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.errorMessage).toBe("query failed"));
 
-    expect(result.current.snapshot).toBeNull();
-    expect(result.current.errorMessage).toBe("query failed");
+    expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
+      "cached-session",
+    );
   });
 
   it("surfaces runtime unavailable without calling the transport", async () => {
@@ -147,6 +200,7 @@ describe("useWorkspaceSessionsQuery", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    expect(queryWorkspaceSessionsCached).not.toHaveBeenCalled();
     expect(queryWorkspaceSessions).not.toHaveBeenCalled();
     expect(result.current.errorMessage).toContain("Tauri runtime unavailable");
   });
@@ -160,8 +214,22 @@ describe("useWorkspaceSessionsQuery", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    expect(queryWorkspaceSessionsCached).not.toHaveBeenCalled();
     expect(queryWorkspaceSessions).not.toHaveBeenCalled();
     expect(result.current.errorMessage).toBeNull();
     expect(result.current.snapshot).toBeNull();
+  });
+
+  it("returns refreshed data through the shared query options", async () => {
+    isTauriRuntimeAvailable.mockReturnValue(true);
+    queryWorkspaceSessions.mockResolvedValue(createSnapshot(["refresh-session"]));
+
+    const queryClient = createTestQueryClient();
+    const snapshot = await queryClient.fetchQuery({
+      ...workspaceSessionsQueryOptions(),
+      staleTime: 0,
+    });
+
+    expect(snapshot.workspaces[0]?.sessions[0]?.session_id).toBe("refresh-session");
   });
 });

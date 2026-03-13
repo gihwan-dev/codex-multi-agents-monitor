@@ -23,6 +23,10 @@ export function queryWorkspaceSessions() {
   return invoke<WorkspaceSessionsSnapshot>("query_workspace_sessions");
 }
 
+export function queryWorkspaceSessionsCached() {
+  return invoke<WorkspaceSessionsSnapshot>("query_workspace_sessions_cached");
+}
+
 export function querySessionDetail(query: SessionDetailQuery) {
   return invoke<SessionDetailSnapshot>("query_session_detail", { query });
 }

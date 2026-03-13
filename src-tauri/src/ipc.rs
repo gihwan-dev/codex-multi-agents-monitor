@@ -144,6 +144,13 @@ pub fn query_workspace_sessions(
 }
 
 #[tauri::command]
+pub fn query_workspace_sessions_cached(
+    state: State<'_, MonitorState>,
+) -> Result<WorkspaceSessionsSnapshot, String> {
+    query_workspace_sessions_cached_service(state.inner()).map_err(|source| source.to_string())
+}
+
+#[tauri::command]
 pub fn query_session_detail(
     query: SessionDetailQuery,
     state: State<'_, MonitorState>,
@@ -163,6 +170,12 @@ pub fn query_workspace_sessions_service(
     state: &MonitorState,
 ) -> Result<WorkspaceSessionsSnapshot, IpcError> {
     refresh_repository_from_discovery(state.db_path())?;
+    query_workspace_sessions_cached_service(state)
+}
+
+pub fn query_workspace_sessions_cached_service(
+    state: &MonitorState,
+) -> Result<WorkspaceSessionsSnapshot, IpcError> {
     let repository = Repository::open(state.db_path()).map_err(IpcError::Repository)?;
 
     Ok(WorkspaceSessionsSnapshot {

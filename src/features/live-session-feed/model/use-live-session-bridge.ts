@@ -23,7 +23,7 @@ export function useLiveSessionBridge() {
   const handleLiveUpdate = useEffectEvent((update: LiveSessionUpdate) => {
     startTransition(() => {
       queryClient.setQueryData(
-        monitorQueryKeys.workspaceSessions(),
+        monitorQueryKeys.workspaceSessionsLive(),
         (current: WorkspaceSessionsSnapshot | undefined) =>
           upsertLiveSummary(current ?? null, update),
       );

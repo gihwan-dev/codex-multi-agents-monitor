@@ -19,6 +19,7 @@ import {
   formatTime,
   formatWorkspaceLabel,
   SessionBadges,
+  selectLiveWorkspaceSnapshot,
   type WorkspaceSessionsSnapshot,
 } from "@/entities/session";
 
@@ -72,17 +73,19 @@ function WorkspaceSidebarBody({
   selectedSessionId,
   snapshot,
 }: WorkspaceSidebarProps) {
-  const workspaceCount = snapshot?.workspaces.length ?? 0;
+  const liveSnapshot = selectLiveWorkspaceSnapshot(snapshot);
+  const workspaceCount = liveSnapshot?.workspaces.length ?? 0;
   const sessionCount =
-    snapshot?.workspaces.reduce((total, workspace) => total + workspace.sessions.length, 0) ?? 0;
+    liveSnapshot?.workspaces.reduce((total, workspace) => total + workspace.sessions.length, 0) ??
+    0;
   const liveCount =
-    snapshot?.workspaces.reduce(
+    liveSnapshot?.workspaces.reduce(
       (total, workspace) =>
         total + workspace.sessions.filter((session) => session.status === "live").length,
       0,
     ) ?? 0;
   const stalledCount =
-    snapshot?.workspaces.reduce(
+    liveSnapshot?.workspaces.reduce(
       (total, workspace) =>
         total + workspace.sessions.filter((session) => session.status === "stalled").length,
       0,
@@ -130,15 +133,15 @@ function WorkspaceSidebarBody({
           </div>
         ) : null}
 
-        {!loading && snapshot && snapshot.workspaces.length === 0 ? (
+        {!loading && liveSnapshot && liveSnapshot.workspaces.length === 0 ? (
           <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] px-6 py-8 text-center text-slate-300/70">
             <HardDrive className="mx-auto mb-3 h-8 w-8 opacity-40" />
             <p className="text-sm">No Codex sessions discovered.</p>
           </div>
         ) : null}
 
-        {!loading && snapshot
-          ? snapshot.workspaces.map((workspace) => (
+        {!loading && liveSnapshot
+          ? liveSnapshot.workspaces.map((workspace) => (
               <SidebarGroup key={workspace.workspace_path} className="px-0 py-1.5">
                 <SidebarGroupLabel className="px-1.5 text-[10.5px] font-medium text-slate-500/70">
                   {formatWorkspaceLabel(workspace.workspace_path)}

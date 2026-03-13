@@ -6,6 +6,7 @@ import type {
 
 export interface SessionSummary {
   session_id: string;
+  parent_session_id: string | null;
   workspace_path: string;
   title: string | null;
   status: SessionStatus;

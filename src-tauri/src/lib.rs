@@ -17,6 +17,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ipc::query_workspace_sessions,
+            ipc::query_workspace_sessions_cached,
             ipc::query_session_detail,
             ipc::start_live_bridge,
         ])

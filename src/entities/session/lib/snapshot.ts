@@ -5,9 +5,13 @@ import type {
   WorkspaceSessionsSnapshot,
 } from "@/shared/queries";
 
+function sessionActivityTimestamp(session: SessionSummary) {
+  return session.last_event_at ?? session.started_at;
+}
+
 export function compareSessionSummary(left: SessionSummary, right: SessionSummary) {
-  const leftTimestamp = left.last_event_at ?? "";
-  const rightTimestamp = right.last_event_at ?? "";
+  const leftTimestamp = sessionActivityTimestamp(left);
+  const rightTimestamp = sessionActivityTimestamp(right);
 
   if (leftTimestamp !== rightTimestamp) {
     return rightTimestamp.localeCompare(leftTimestamp);
@@ -98,19 +102,56 @@ export function mergeBootstrapSnapshot(
   return merged;
 }
 
+export function selectLiveWorkspaceSnapshot(
+  snapshot: WorkspaceSessionsSnapshot | null,
+) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const latestByWorkspace = new Map<string, SessionSummary>();
+
+  for (const workspace of snapshot.workspaces) {
+    for (const session of workspace.sessions) {
+      if (session.is_archived || session.parent_session_id) {
+        continue;
+      }
+
+      const existing = latestByWorkspace.get(session.workspace_path);
+      if (!existing || compareSessionSummary(session, existing) < 0) {
+        latestByWorkspace.set(session.workspace_path, session);
+      }
+    }
+  }
+
+  const workspaces = Array.from(latestByWorkspace.values())
+    .sort(compareSessionSummary)
+    .map((session) => ({
+      workspace_path: session.workspace_path,
+      sessions: [session],
+    }));
+
+  return {
+    refreshed_at: snapshot.refreshed_at,
+    workspaces,
+  };
+}
+
 export function firstSessionId(snapshot: WorkspaceSessionsSnapshot | null) {
-  return snapshot?.workspaces[0]?.sessions[0]?.session_id ?? null;
+  return selectLiveWorkspaceSnapshot(snapshot)?.workspaces[0]?.sessions[0]?.session_id ?? null;
 }
 
 export function findSelectedSession(
   snapshot: WorkspaceSessionsSnapshot | null,
   sessionId: string | null,
 ) {
-  if (!snapshot || !sessionId) {
+  const liveSnapshot = selectLiveWorkspaceSnapshot(snapshot);
+
+  if (!liveSnapshot || !sessionId) {
     return null;
   }
 
-  for (const workspace of snapshot.workspaces) {
+  for (const workspace of liveSnapshot.workspaces) {
     for (const session of workspace.sessions) {
       if (session.session_id === sessionId) {
         return session;

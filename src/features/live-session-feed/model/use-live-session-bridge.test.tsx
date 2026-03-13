@@ -71,6 +71,7 @@ describe("useLiveSessionBridge", () => {
         event_count: 1,
         is_archived: false,
         last_event_at: "2026-03-12T07:00:00.000Z",
+        parent_session_id: null,
         session_id: "session-1",
         source_kind: "session_log",
         started_at: "2026-03-12T06:50:00.000Z",
@@ -82,7 +83,7 @@ describe("useLiveSessionBridge", () => {
 
     await waitFor(() =>
       expect(
-        queryClient.getQueryData(monitorQueryKeys.workspaceSessions()),
+        queryClient.getQueryData(monitorQueryKeys.workspaceSessionsLive()),
       ).not.toBeUndefined(),
     );
   });

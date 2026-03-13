@@ -9,6 +9,7 @@ export {
   findSelectedSession,
   firstSessionId,
   mergeBootstrapSnapshot,
+  selectLiveWorkspaceSnapshot,
   sortSnapshot,
   sortWorkspaceGroup,
   upsertLiveSummary,

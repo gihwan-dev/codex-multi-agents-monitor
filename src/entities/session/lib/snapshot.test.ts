@@ -8,6 +8,7 @@ import type {
 
 import {
   mergeBootstrapSnapshot,
+  selectLiveWorkspaceSnapshot,
   sortSnapshot,
   upsertSessionSummary,
 } from "./snapshot";
@@ -20,6 +21,7 @@ function createSummary(
     event_count: 1,
     is_archived: false,
     last_event_at: "2026-03-12T06:00:00.000Z",
+    parent_session_id: null,
     source_kind: "session_log",
     started_at: "2026-03-12T05:00:00.000Z",
     status: "live",
@@ -94,5 +96,49 @@ describe("snapshot helpers", () => {
       "session-live",
       "session-1",
     ]);
+  });
+
+  it("selects the latest non-archived root session per workspace for live mode", () => {
+    const snapshot = sortSnapshot({
+      refreshed_at: "2026-03-12T07:00:00.000Z",
+      workspaces: [
+        {
+          workspace_path: "/workspace/a",
+          sessions: [
+            createSummary({
+              session_id: "root-latest",
+              last_event_at: "2026-03-12T07:10:00.000Z",
+            }),
+            createSummary({
+              session_id: "child-session",
+              last_event_at: "2026-03-12T07:20:00.000Z",
+              parent_session_id: "root-latest",
+            }),
+            createSummary({
+              session_id: "archived-root",
+              is_archived: true,
+              status: "archived",
+              source_kind: "archive_log",
+            }),
+          ],
+        },
+        {
+          workspace_path: "/workspace/b",
+          sessions: [
+            createSummary({
+              session_id: "older-root",
+              workspace_path: "/workspace/b",
+              last_event_at: "2026-03-12T06:00:00.000Z",
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(
+      selectLiveWorkspaceSnapshot(snapshot)?.workspaces.map(
+        (workspace) => workspace.sessions[0]?.session_id,
+      ),
+    ).toEqual(["root-latest", "older-root"]);
   });
 });

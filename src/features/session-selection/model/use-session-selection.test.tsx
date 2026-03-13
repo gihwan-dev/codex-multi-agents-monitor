@@ -15,6 +15,7 @@ function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
           event_count: index + 1,
           is_archived: false,
           last_event_at: `2026-03-12T06:0${index}:00.000Z`,
+          parent_session_id: null,
           session_id: sessionId,
           source_kind: "session_log",
           started_at: `2026-03-12T05:0${index}:00.000Z`,
@@ -29,12 +30,12 @@ function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
 }
 
 describe("useSessionSelection", () => {
-  it("auto-selects the first session on first snapshot", () => {
+  it("auto-selects the most recently active session on first snapshot", () => {
     const { result } = renderHook(() =>
       useSessionSelection(createSnapshot(["session-1", "session-2"])),
     );
 
-    expect(result.current.selectedSessionId).toBe("session-1");
+    expect(result.current.selectedSessionId).toBe("session-2");
   });
 
   it("keeps current selection when the session still exists", () => {

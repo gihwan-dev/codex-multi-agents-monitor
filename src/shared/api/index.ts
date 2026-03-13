@@ -4,5 +4,6 @@ export {
   listenToLiveSessionUpdates,
   querySessionDetail,
   queryWorkspaceSessions,
+  queryWorkspaceSessionsCached,
   startLiveBridge,
 } from "./tauri-monitor";

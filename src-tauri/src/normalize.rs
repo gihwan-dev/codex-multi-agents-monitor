@@ -325,9 +325,12 @@ fn normalize_reader<R: BufRead>(
             }
             DetectedKind::UserMessage => {
                 if let Some(id) = current_session_id.clone() {
-                    let preview = extract_message_preview(&parsed);
+                    let message_text = extract_message_text(&parsed);
+                    let preview = message_text.as_deref().map(|text| truncate(text, 160));
                     if title.is_none() {
-                        title = preview.clone();
+                        title = message_text
+                            .as_deref()
+                            .and_then(extract_substantive_title_candidate);
                     }
                     events.push(CanonicalEvent {
                         event_id: event_id_for(&id, line_index),
@@ -619,11 +622,14 @@ fn event_timestamp(event: &RawLogEvent) -> Option<String> {
     payload_string(event, "timestamp").or_else(|| event.timestamp.clone())
 }
 
-fn extract_message_preview(event: &RawLogEvent) -> Option<String> {
+fn extract_message_text(event: &RawLogEvent) -> Option<String> {
     payload_string(event, "message")
         .or_else(|| payload_string(event, "text"))
         .or_else(|| payload_content_text(event))
-        .map(|text| truncate(&text, 160))
+}
+
+fn extract_message_preview(event: &RawLogEvent) -> Option<String> {
+    extract_message_text(event).map(|text| truncate(&text, 160))
 }
 
 fn extract_reasoning_summary(event: &RawLogEvent) -> Option<String> {
@@ -699,6 +705,159 @@ fn truncate(text: &str, max_len: usize) -> String {
 
 fn event_id_for(session_id: &str, line_index: usize) -> String {
     format!("{session_id}:{line_index}")
+}
+
+fn extract_substantive_title_candidate(message: &str) -> Option<String> {
+    let mut skipped_block: Option<String> = None;
+
+    for raw_line in message.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some(block_name) = skipped_block.as_deref() {
+            if is_block_close_tag(trimmed, block_name) {
+                skipped_block = None;
+            }
+            continue;
+        }
+
+        if let Some(block_name) = match_block_open_tag(trimmed) {
+            skipped_block = Some(block_name.to_string());
+            continue;
+        }
+
+        if is_block_close_tag(trimmed, "instructions")
+            || is_block_close_tag(trimmed, "environment_context")
+            || is_block_close_tag(trimmed, "skill")
+            || is_xml_tag_only(trimmed)
+        {
+            continue;
+        }
+
+        let candidate = strip_title_line_noise(trimmed);
+        if is_substantive_title_line(&candidate) {
+            return Some(truncate(&candidate, 160));
+        }
+    }
+
+    let fallback = strip_title_line_noise(&message.replace('\n', " "));
+    if is_substantive_title_line(&fallback) {
+        Some(truncate(&fallback, 160))
+    } else {
+        None
+    }
+}
+
+fn match_block_open_tag(line: &str) -> Option<&'static str> {
+    match line {
+        "<INSTRUCTIONS>" | "<instructions>" => Some("instructions"),
+        "<environment_context>" => Some("environment_context"),
+        "<skill>" => Some("skill"),
+        _ => None,
+    }
+}
+
+fn is_block_close_tag(line: &str, block_name: &str) -> bool {
+    line.eq_ignore_ascii_case(&format!("</{block_name}>"))
+}
+
+fn is_xml_tag_only(line: &str) -> bool {
+    line.starts_with('<') && line.ends_with('>') && !line.contains(' ')
+}
+
+fn strip_title_line_noise(line: &str) -> String {
+    let normalized_skill_prefix = if let Some(rest) = line.trim().strip_prefix("[$") {
+        if let Some((skill_name, tail)) = rest.split_once(']') {
+            format!("${skill_name} {}", tail.trim_start())
+        } else {
+            line.trim().to_string()
+        }
+    } else {
+        line.trim().to_string()
+    };
+
+    let trimmed = normalized_skill_prefix
+        .trim_start_matches('#')
+        .trim_start_matches(|ch: char| ch.is_whitespace())
+        .trim_start_matches('>')
+        .trim_start_matches(|ch: char| ch.is_whitespace());
+    let trimmed = strip_list_prefix(trimmed);
+    let normalized = collapse_whitespace(trimmed);
+
+    [
+        "AGENTS.md instructions for",
+        "Global Agent Policy",
+        "This file defines global defaults",
+        "<INSTRUCTIONS>",
+        "<environment_context>",
+        "PLEASE IMPLEMENT THIS PLAN",
+    ]
+    .iter()
+    .fold(normalized, |current, pattern| current.replace(pattern, " "))
+    .split_whitespace()
+    .filter(|segment| !segment.starts_with('/'))
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+fn strip_list_prefix(line: &str) -> &str {
+    let mut chars = line.char_indices();
+    let mut digits_end = 0usize;
+
+    while let Some((index, ch)) = chars.next() {
+        if ch.is_ascii_digit() {
+            digits_end = index + ch.len_utf8();
+            continue;
+        }
+
+        if ch == '.' && digits_end > 0 {
+            return line[index + ch.len_utf8()..].trim_start();
+        }
+
+        if ch == '-' || ch == '*' {
+            return line[index + ch.len_utf8()..].trim_start();
+        }
+
+        break;
+    }
+
+    line
+}
+
+fn collapse_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn is_substantive_title_line(line: &str) -> bool {
+    if line.is_empty() || !line.chars().any(|ch| ch.is_alphanumeric() || ch == '$' || ch >= '가') {
+        return false;
+    }
+
+    let lowercase = line.to_ascii_lowercase();
+    let discarded_prefixes = [
+        "instructions",
+        "global agent policy",
+        "environment context",
+        "summary",
+        "key changes",
+        "test plan",
+        "assumptions",
+        "workflow",
+        "hard rules",
+        "required references",
+        "required bundle content",
+        "how to use skills",
+        "available skills",
+        "core goal",
+        "please implement this plan",
+        "this file defines global defaults",
+    ];
+
+    !discarded_prefixes
+        .iter()
+        .any(|prefix| lowercase == *prefix || lowercase.starts_with(&format!("{prefix}:")))
 }
 
 #[cfg(test)]
@@ -896,6 +1055,36 @@ mod tests {
         assert_eq!(
             session_start.meta.get("agent_nickname"),
             Some(&Value::String("Mendel".to_string()))
+        );
+    }
+
+    #[test]
+    fn uses_first_substantive_user_message_as_session_title() {
+        let path = write_temp_log(
+            "substantive-title",
+            &[
+                r#"{"timestamp":"2026-03-12T06:33:41.954Z","type":"session_meta","payload":{"id":"session-1","timestamp":"2026-03-12T06:33:38.907Z","cwd":"/tmp/workspace"}}"#,
+                concat!(
+                    "{\"timestamp\":\"2026-03-12T06:33:42.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"",
+                    "# AGENTS.md instructions for /tmp/workspace\\n",
+                    "<INSTRUCTIONS>\\n",
+                    "Global Agent Policy\\n",
+                    "This file defines global defaults for Codex across all repositories.\\n",
+                    "</INSTRUCTIONS>\\n",
+                    "<environment_context>\\n",
+                    "  <cwd>/tmp/workspace</cwd>\\n",
+                    "</environment_context>\\n",
+                    "[$design-task] 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?",
+                    "\"}}",
+                ),
+            ],
+            RawSourceKind::SessionLog,
+        );
+        let bundle = normalize_session(&path).expect("expected normalization");
+
+        assert_eq!(
+            bundle.session.title.as_deref(),
+            Some("$design-task 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?")
         );
     }
 

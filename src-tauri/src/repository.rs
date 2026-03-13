@@ -18,6 +18,7 @@ pub struct Repository {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionSummaryRecord {
     pub session_id: String,
+    pub parent_session_id: Option<String>,
     pub workspace_path: String,
     pub title: Option<String>,
     pub status: SessionStatus,
@@ -224,6 +225,7 @@ impl Repository {
                 r#"
                 SELECT
                   s.session_id,
+                  s.parent_session_id,
                   s.workspace_path,
                   s.title,
                   s.status,
@@ -237,6 +239,7 @@ impl Repository {
                 LEFT JOIN timeline_events e ON e.session_id = s.session_id
                 GROUP BY
                   s.session_id,
+                  s.parent_session_id,
                   s.workspace_path,
                   s.title,
                   s.status,
@@ -256,15 +259,16 @@ impl Repository {
             .query_map([], |row| {
                 Ok(RawSessionSummaryRecord {
                     session_id: row.get(0)?,
-                    workspace_path: row.get(1)?,
-                    title: row.get(2)?,
-                    status: row.get(3)?,
-                    source_kind: row.get(4)?,
-                    is_archived: row.get::<_, i64>(5)? != 0,
-                    started_at: row.get(6)?,
-                    ended_at: row.get(7)?,
-                    last_event_at: row.get(8)?,
-                    event_count: row.get(9)?,
+                    parent_session_id: row.get(1)?,
+                    workspace_path: row.get(2)?,
+                    title: row.get(3)?,
+                    status: row.get(4)?,
+                    source_kind: row.get(5)?,
+                    is_archived: row.get::<_, i64>(6)? != 0,
+                    started_at: row.get(7)?,
+                    ended_at: row.get(8)?,
+                    last_event_at: row.get(9)?,
+                    event_count: row.get(10)?,
                 })
             })
             .map_err(RepositoryError::Sql)?;
@@ -274,6 +278,7 @@ impl Repository {
             let row = row.map_err(RepositoryError::Sql)?;
             summaries.push(SessionSummaryRecord {
                 session_id: row.session_id,
+                parent_session_id: row.parent_session_id,
                 workspace_path: row.workspace_path,
                 title: row.title,
                 status: parse_session_status(&row.status)?,
@@ -477,6 +482,7 @@ impl Repository {
 #[derive(Debug)]
 struct RawSessionSummaryRecord {
     session_id: String,
+    parent_session_id: Option<String>,
     workspace_path: String,
     title: Option<String>,
     status: String,

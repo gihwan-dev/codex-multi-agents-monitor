@@ -1,7 +1,4 @@
-import {
-  findSelectedSession,
-  firstSessionId,
-} from "@/entities/session";
+import { firstSessionId } from "@/entities/session";
 import type { MonitorTab } from "@/shared/model";
 import type {
   SessionDetailSnapshot,
@@ -22,6 +19,7 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
       sessions: [
         {
           session_id: "sess-ui-shell",
+          parent_session_id: null,
           workspace_path:
             "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
           title: "Liquid Glass shell redesign",
@@ -35,6 +33,7 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
         },
         {
           session_id: "sess-archive-flow",
+          parent_session_id: null,
           workspace_path:
             "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
           title: "Archive filter pass",
@@ -48,6 +47,7 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
         },
         {
           session_id: "sess-live-noisy-title",
+          parent_session_id: "sess-ui-shell",
           workspace_path:
             "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
           title: UI_QA_NOISY_TITLE,
@@ -66,6 +66,7 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
       sessions: [
         {
           session_id: "sess-metrics-audit",
+          parent_session_id: null,
           workspace_path: "/Users/choegihwan/Documents/Projects/agent-lab",
           title: "Metrics density audit",
           status: "stalled",
@@ -78,6 +79,7 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
         },
         {
           session_id: "sess-replay",
+          parent_session_id: null,
           workspace_path: "/Users/choegihwan/Documents/Projects/agent-lab",
           title: "Replay mode cleanup",
           status: "archived",
@@ -716,6 +718,7 @@ UI_QA_DETAIL_BY_SESSION["sess-live-noisy-title"] = {
     session: {
       ...noisyTitleSource.bundle.session,
       session_id: "sess-live-noisy-title",
+      parent_session_id: "sess-ui-shell",
       title: UI_QA_NOISY_TITLE,
       started_at: "2026-03-12T11:36:00.000Z",
     },
@@ -752,6 +755,15 @@ function isDrawerMode(value: string | null): value is "open" | "closed" {
   return value === "open" || value === "closed";
 }
 
+function hasSnapshotSessionId(
+  snapshot: WorkspaceSessionsSnapshot,
+  sessionId: string,
+) {
+  return snapshot.workspaces.some((workspace) =>
+    workspace.sessions.some((session) => session.session_id === sessionId),
+  );
+}
+
 export function resolveMonitorUiQaState(
   search: string,
 ): MonitorUiQaState | null {
@@ -763,8 +775,7 @@ export function resolveMonitorUiQaState(
 
   const requestedSessionId = params.get("session");
   const selectedSessionId =
-    requestedSessionId &&
-    findSelectedSession(UI_QA_SNAPSHOT, requestedSessionId)
+    requestedSessionId && hasSnapshotSessionId(UI_QA_SNAPSHOT, requestedSessionId)
       ? requestedSessionId
       : firstSessionId(UI_QA_SNAPSHOT) ?? "sess-ui-shell";
   const tabParam = params.get("tab");
