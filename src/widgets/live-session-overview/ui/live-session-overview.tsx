@@ -2,8 +2,9 @@ import { GlassSurface } from "@/app/ui";
 import { Activity, AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
+  formatSessionDisplayTitle,
   formatTimestamp,
   type SessionSummary,
   type WorkspaceSessionsSnapshot,
@@ -19,10 +20,25 @@ interface LiveSessionOverviewProps {
 
 const PANEL_CARD_CLASS =
   "flex h-full flex-col gap-0 overflow-hidden border-0 bg-transparent shadow-none ring-0";
-const HERO_METRIC_BLOCK_CLASS =
-  "rounded-[1.05rem] border border-white/8 bg-white/[0.034] px-3.5 py-3 shadow-[0_10px_18px_rgba(2,6,23,0.1),inset_0_1px_0_rgba(255,255,255,0.06)]";
-const RUNTIME_METRIC_BLOCK_CLASS =
-  "rounded-[1.05rem] border border-white/5 bg-white/[0.022] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+const SUMMARY_SECTION_CLASS =
+  "rounded-[1.15rem] border border-white/6 bg-white/[0.024] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+const SUMMARY_CHIP_CLASS =
+  "rounded-[0.95rem] border border-white/6 bg-[#09111d]/62 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+const SUMMARY_LABEL_CLASS =
+  "text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500";
+
+function sourceLabel(selectedSession: SessionSummary | null) {
+  return selectedSession?.source_kind === "archive_log" ? "Archive replay" : "Session log";
+}
+
+function metaChip(label: string, value: string | number) {
+  return (
+    <div className={SUMMARY_CHIP_CLASS}>
+      <p className={SUMMARY_LABEL_CLASS}>{label}</p>
+      <p className="mt-1 text-[13px] font-medium text-slate-100">{value}</p>
+    </div>
+  );
+}
 
 export function LiveSessionOverview({
   degradedMessage,
@@ -34,8 +50,6 @@ export function LiveSessionOverview({
   const sessions = snapshot?.workspaces.flatMap((workspace) => workspace.sessions) ?? [];
   const liveCount = sessions.filter((session) => session.status === "live").length;
   const stalledCount = sessions.filter((session) => session.status === "stalled").length;
-  const sessionSourceLabel =
-    selectedSession?.source_kind === "archive_log" ? "Archive replay" : "Session log";
   const shellHealth = errorMessage
     ? "Degraded"
     : degradedMessage
@@ -43,12 +57,19 @@ export function LiveSessionOverview({
       : loading
         ? "Syncing"
         : "Healthy";
+  const sessionTitle = selectedSession
+    ? formatSessionDisplayTitle({
+        rawTitle: selectedSession.title,
+        workspacePath: selectedSession.workspace_path,
+      })
+    : null;
+  const sessionStateLabel = selectedSession?.status ?? (loading ? "Syncing" : "Ready");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {errorMessage && !snapshot ? (
         <GlassSurface className="rounded-[1.6rem]" refraction="none" variant="danger">
-          <Alert variant="destructive" className="border-0 bg-transparent px-5 py-4 shadow-none">
+          <Alert variant="destructive" className="border-0 bg-transparent px-4 py-3 shadow-none">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Shell fallback</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
@@ -58,7 +79,7 @@ export function LiveSessionOverview({
 
       {degradedMessage ? (
         <GlassSurface className="rounded-[1.6rem]" refraction="none" variant="warning">
-          <Alert className="border-0 bg-transparent px-5 py-4 text-amber-100 shadow-none">
+          <Alert className="border-0 bg-transparent px-4 py-3 text-amber-100 shadow-none">
             <AlertCircle className="h-4 w-4 stroke-amber-400" />
             <AlertTitle className="text-amber-200">Live updates degraded</AlertTitle>
             <AlertDescription className="text-amber-100/80">
@@ -68,147 +89,80 @@ export function LiveSessionOverview({
         </GlassSurface>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(18rem,0.82fr)]">
-        <GlassSurface className="hero-panel h-full" refraction="none" variant="panel">
-          <Card className={PANEL_CARD_CLASS}>
-            <CardHeader className="bg-transparent px-5 pb-3 pt-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 max-w-[54rem]">
-                  <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-slate-400">
-                    <Activity className="h-3.5 w-3.5 text-slate-400" />
-                    Current session
+      <GlassSurface className="panel-subtle" refraction="none" variant="panel">
+        <Card className={PANEL_CARD_CLASS}>
+          <CardContent className="bg-transparent px-4 py-4 md:px-5">
+            <div
+              className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.04fr)]"
+              data-testid="live-session-summary"
+            >
+              <section className={SUMMARY_SECTION_CLASS}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
+                      <Activity className="h-3.5 w-3.5 text-slate-400" />
+                      Live session
+                    </div>
+                    <p
+                      className="mt-1.5 truncate text-[1.02rem] font-medium tracking-[-0.02em] text-white"
+                      title={sessionTitle?.tooltip}
+                    >
+                      {sessionTitle?.displayTitle ?? "Awaiting session selection"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400/78">
+                      {sessionTitle?.workspaceLabel ?? "Select a session from the sidebar"}
+                    </p>
                   </div>
-                  <CardTitle className="max-w-[28ch] text-[clamp(1.8rem,3vw,2.85rem)] font-normal leading-[0.96] tracking-[-0.04em] text-white break-words">
-                    {selectedSession
-                      ? (selectedSession.title ?? "Untitled session")
-                      : "Awaiting session selection"}
-                  </CardTitle>
-                  <p className="mt-2 max-w-[40rem] text-[13px] leading-relaxed text-slate-300/72">
-                    {selectedSession
-                      ? `${sessionSourceLabel} focused on the active run and its latest event pulse.`
-                      : "Choose a session to bring its latest runtime activity into focus."}
-                  </p>
+                  <GlassSurface
+                    className="shrink-0 rounded-full"
+                    interactive
+                    refraction="soft"
+                    variant="control"
+                  >
+                    <div className="px-2.5 py-1.5">
+                      <span className="text-[10.5px] font-medium tracking-[0.01em] text-slate-100 capitalize">
+                        {sessionStateLabel}
+                      </span>
+                    </div>
+                  </GlassSurface>
                 </div>
-                <GlassSurface
-                  className="shrink-0 rounded-full self-start"
-                  interactive
-                  refraction="soft"
-                  variant="control"
-                >
-                  <div className="px-3.5 py-2">
-                    <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
-                      {selectedSession?.status ?? (loading ? "Syncing" : "Ready")}
-                    </span>
-                  </div>
-                </GlassSurface>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col bg-transparent px-5 pb-5 pt-0 text-slate-300">
-              {selectedSession ? (
-                <>
-                  <div className="mb-3 rounded-[1.15rem] border border-white/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] px-3.5 py-3 shadow-[0_12px_22px_rgba(2,6,23,0.1),inset_0_1px_0_rgba(255,255,255,0.07)]">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                      Focus
-                    </p>
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-slate-200/86">
-                      {`${selectedSession.event_count} events in view. Latest update ${formatTimestamp(selectedSession.last_event_at)}.`}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div className={HERO_METRIC_BLOCK_CLASS}>
-                      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                        Status
-                      </p>
-                      <p className="text-[13px] font-medium capitalize text-slate-100">
-                        {selectedSession.status}
-                      </p>
-                    </div>
-                    <div className={HERO_METRIC_BLOCK_CLASS}>
-                      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                        Last event
-                      </p>
-                      <p className="text-[13px] font-medium text-slate-100">
-                        {formatTimestamp(selectedSession.last_event_at)}
-                      </p>
-                    </div>
-                    <div className={HERO_METRIC_BLOCK_CLASS}>
-                      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                        Events
-                      </p>
-                      <p className="text-[13px] font-medium text-slate-100">
-                        {selectedSession.event_count}
-                      </p>
-                    </div>
-                    <div className={HERO_METRIC_BLOCK_CLASS}>
-                      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                        Source
-                      </p>
-                      <p className="text-[13px] font-medium text-slate-100">
-                        {selectedSession.source_kind === "archive_log"
-                          ? "archive replay"
-                          : "session log"}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p className="rounded-[1.45rem] border border-white/6 bg-white/[0.03] px-4 py-4 text-sm text-slate-300/74">
-                  Select a session to inspect the latest activity.
+                <p className="mt-3 text-[12px] leading-relaxed text-slate-300/70">
+                  {selectedSession
+                    ? `${sourceLabel(selectedSession)} selected for live inspection.`
+                    : "Choose a session to bring the latest runtime activity into focus."}
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        </GlassSurface>
+              </section>
 
-        <GlassSurface className="panel-subtle hidden h-full md:block" refraction="none" variant="panel">
-          <Card className={PANEL_CARD_CLASS}>
-            <CardHeader className="bg-transparent px-5 pb-2.5 pt-4">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[12px] font-medium text-slate-400">Runtime</p>
-                <span className="text-[11px] text-slate-500">{shellHealth}</span>
-              </div>
-              <CardTitle className="text-[1.2rem] font-normal tracking-tight text-white">
-                Shell runtime
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-3 bg-transparent px-5 pb-5 pt-0">
-              <div className="grid grid-cols-2 gap-3">
-                <div className={RUNTIME_METRIC_BLOCK_CLASS}>
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                    Live sessions
-                  </p>
-                  <p className="text-[13px] font-medium text-slate-100">{liveCount}</p>
+              <section className={SUMMARY_SECTION_CLASS}>
+                <p className={SUMMARY_LABEL_CLASS}>Selected session</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                  {metaChip("Events", selectedSession?.event_count ?? "No session")}
+                  {metaChip(
+                    "Last event",
+                    selectedSession
+                      ? formatTimestamp(selectedSession.last_event_at)
+                      : "Awaiting selection",
+                  )}
+                  {metaChip("Source", selectedSession ? sourceLabel(selectedSession) : "Pending")}
                 </div>
-                <div className={RUNTIME_METRIC_BLOCK_CLASS}>
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                    Stalled
-                  </p>
-                  <p className="text-[13px] font-medium text-slate-100">{stalledCount}</p>
+              </section>
+
+              <section className={SUMMARY_SECTION_CLASS}>
+                <p className={SUMMARY_LABEL_CLASS}>Runtime</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {metaChip("Live", liveCount)}
+                  {metaChip("Stalled", stalledCount)}
+                  {metaChip(
+                    "Refresh",
+                    snapshot ? formatTimestamp(snapshot.refreshed_at) : "Awaiting feed",
+                  )}
+                  {metaChip("Health", shellHealth)}
                 </div>
-                <div className={RUNTIME_METRIC_BLOCK_CLASS}>
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                    Selected events
-                  </p>
-                  <p className="text-[13px] font-medium text-slate-100">
-                    {selectedSession?.event_count ?? "No session"}
-                  </p>
-                </div>
-                <div className={RUNTIME_METRIC_BLOCK_CLASS}>
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">
-                    Last refresh
-                  </p>
-                  <p className="text-[13px] font-medium text-slate-100">
-                    {snapshot ? formatTimestamp(snapshot.refreshed_at) : "Awaiting feed"}
-                  </p>
-                </div>
-              </div>
-              <p className="text-[12px] leading-relaxed text-slate-400/70">
-                {loading ? "Refreshing live feed." : "Live feed stable and waiting for the next change."}
-              </p>
-            </CardContent>
-          </Card>
-        </GlassSurface>
-      </div>
+              </section>
+            </div>
+          </CardContent>
+        </Card>
+      </GlassSurface>
     </div>
   );
 }

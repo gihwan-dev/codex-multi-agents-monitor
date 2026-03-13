@@ -13,7 +13,7 @@ interface MonitorHeaderProps {
 }
 
 const HEADER_TAB_TRIGGER_CLASS =
-  "rounded-[0.95rem] px-4 text-[12.5px] font-medium tracking-[-0.01em] text-slate-400/78 transition-[background-color,color,box-shadow] duration-200 hover:text-slate-200 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] focus-visible:border-white/18 focus-visible:bg-white/[0.16] focus-visible:text-white focus-visible:ring-[3px] focus-visible:ring-sky-200/26 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_28px_rgba(125,211,252,0.18)] focus-visible:outline-none";
+  "rounded-[0.9rem] px-3.5 text-[12px] font-medium tracking-[-0.01em] text-slate-400/78 transition-[background-color,color,box-shadow] duration-200 hover:text-slate-200 data-[active]:border-white/9 data-[active]:bg-white/[0.11] data-[active]:text-white data-[active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] focus-visible:border-white/18 focus-visible:bg-white/[0.16] focus-visible:text-white focus-visible:ring-[3px] focus-visible:ring-sky-200/26 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_28px_rgba(125,211,252,0.18)] focus-visible:outline-none";
 
 export function MonitorHeader({
   activeTab,
@@ -21,7 +21,7 @@ export function MonitorHeader({
   refreshedAt,
 }: MonitorHeaderProps) {
   return (
-    <header className="sticky top-0 z-20 px-4 pb-1 pt-4 md:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 px-4 pb-0 pt-3 md:px-5 lg:px-6">
       <div className="flex w-full items-center justify-between gap-4">
         <GlassSurface
           className="inline-flex rounded-[1.8rem]"
@@ -29,21 +29,21 @@ export function MonitorHeader({
           refraction="soft"
           variant="toolbar"
         >
-          <div className="flex min-h-[3.25rem] items-center gap-2 px-2 py-2">
+          <div className="flex min-h-[3rem] items-center gap-1.5 px-1.5 py-1.5">
             <GlassSurface
-              className="rounded-[1.15rem]"
+              className="rounded-[1.05rem]"
               interactive
               refraction="soft"
               variant="control"
             >
-              <SidebarTrigger className="size-10 rounded-[inherit] border-0 bg-transparent text-slate-100 hover:bg-transparent hover:text-white focus-visible:ring-0 [&_svg]:size-[1rem]" />
+              <SidebarTrigger className="size-9 rounded-[inherit] border-0 bg-transparent text-slate-100 hover:bg-transparent hover:text-white focus-visible:ring-0 [&_svg]:size-[0.95rem]" />
             </GlassSurface>
             <Tabs
               value={activeTab}
               onValueChange={(value) => onTabChange(value as MonitorTab)}
               className="h-full items-center"
             >
-              <TabsList className="h-10 gap-1 rounded-[1.15rem] border-0 bg-transparent p-0 shadow-none">
+              <TabsList className="h-9 gap-1 rounded-[1.05rem] border-0 bg-transparent p-0 shadow-none">
                 <TabsTrigger
                   value="live"
                   className={HEADER_TAB_TRIGGER_CLASS}
@@ -73,7 +73,7 @@ export function MonitorHeader({
           refraction="soft"
           variant="control"
         >
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-slate-200">
+          <div className="flex items-center gap-2.5 px-3 py-2 text-xs text-slate-200">
             <span className="flex items-center gap-1.5 text-[12px] text-slate-200/86">
               <Clock className="h-3.5 w-3.5 text-slate-400" />
               {refreshedAt ? formatTimestamp(refreshedAt) : "Awaiting signal"}

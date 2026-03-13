@@ -15,6 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
+  formatSessionDisplayTitle,
   formatTime,
   formatWorkspaceLabel,
   SessionBadges,
@@ -103,7 +104,7 @@ function WorkspaceSidebarBody({
       refraction="none"
       variant="sidebar"
     >
-      <SidebarHeader className="px-2.5 pb-0.5 pt-2.5">
+      <SidebarHeader className="px-2.5 pb-0 pt-2.25">
         <div className="space-y-1.5">
           <div className="flex items-end justify-between gap-3">
             <div>
@@ -146,12 +147,17 @@ function WorkspaceSidebarBody({
                   <SidebarMenu className="mt-1 gap-1 px-0">
                     {workspace.sessions.map((session) => {
                       const isSelected = session.session_id === selectedSessionId;
+                      const titlePresentation = formatSessionDisplayTitle({
+                        rawTitle: session.title,
+                        workspacePath: session.workspace_path,
+                      });
 
                       return (
                         <SidebarMenuItem key={session.session_id}>
                           <SidebarMenuButton
                             isActive={isSelected}
                             onClick={() => onSelectSession(session.session_id)}
+                            title={titlePresentation.tooltip}
                             className={`h-auto cursor-pointer flex-col items-start rounded-[1.15rem] border px-2.5 py-2 transition-all duration-200 ${
                               isSelected
                                 ? "border-white/12 bg-white/[0.06] shadow-[0_10px_18px_rgba(2,6,23,0.12),inset_0_1px_0_rgba(255,255,255,0.12)]"
@@ -165,7 +171,7 @@ function WorkspaceSidebarBody({
                                     isSelected ? "text-white" : "text-slate-200"
                                   }`}
                                 >
-                                  {session.title ?? "Untitled session"}
+                                  {titlePresentation.displayTitle}
                                 </span>
                                 <span className="mt-0.5 block text-[10.5px] text-slate-500/84">
                                   {session.source_kind === "archive_log"

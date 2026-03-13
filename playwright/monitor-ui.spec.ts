@@ -11,13 +11,19 @@ const SHOTS = [
     name: "live-collapsed",
     sidebar: "collapsed",
     path: "/?demo=ui-qa&tab=live&sidebar=collapsed&session=sess-ui-shell",
-    text: "Sequence-first timeline",
+    text: "Sequence timeline",
   },
   {
     name: "live-detail-selected",
     sidebar: "expanded",
     path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-archive-flow",
     text: "Archive filter pass",
+  },
+  {
+    name: "live-long-title",
+    sidebar: "expanded",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-live-noisy-title",
+    text: "제목이 이상하게 캡쳐됨.",
   },
   {
     name: "archive",
@@ -52,6 +58,12 @@ for (const shot of SHOTS) {
         .first()
         .evaluate((node) => getComputedStyle(node as HTMLElement).borderRightWidth);
       expect(sidebarBorderWidth).toBe("0px");
+    }
+
+    if (shot.name.startsWith("live-")) {
+      await expect(page.getByTestId("live-session-summary")).toBeVisible();
+      await expect(page.getByTestId("timeline-scroll-area")).toBeVisible();
+      await expect(page.getByTestId("timeline-detail-drawer")).toBeVisible();
     }
 
     await page.screenshot({

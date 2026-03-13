@@ -8,6 +8,12 @@ import type {
   WorkspaceSessionsSnapshot,
 } from "@/shared/queries";
 
+const UI_QA_NOISY_TITLE = `# AGENTS.md instructions for /Users/choegihwan/.codex/worktrees/158b/claude-setup
+<INSTRUCTIONS>
+## Global Agent Policy This file defines global defaults for Codex across all repositories.
+
+1. 제목이 이상하게 캡쳐됨. 2번째 이미지처럼 Codex Desktop 앱 느낌으로 맞춰줘.`;
+
 const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
   refreshed_at: "2026-03-12T12:31:00.000Z",
   workspaces: [
@@ -39,6 +45,19 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
           ended_at: "2026-03-12T10:27:00.000Z",
           last_event_at: "2026-03-12T10:27:00.000Z",
           event_count: 18,
+        },
+        {
+          session_id: "sess-live-noisy-title",
+          workspace_path:
+            "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+          title: UI_QA_NOISY_TITLE,
+          status: "live",
+          source_kind: "session_log",
+          is_archived: false,
+          started_at: "2026-03-12T11:36:00.000Z",
+          ended_at: null,
+          last_event_at: "2026-03-12T12:30:00.000Z",
+          event_count: 42,
         },
       ],
     },
@@ -684,6 +703,30 @@ const UI_QA_DETAIL_BY_SESSION: Record<string, SessionDetailSnapshot> = {
         },
       ],
     },
+  },
+};
+
+const noisyTitleSource = UI_QA_DETAIL_BY_SESSION["sess-ui-shell"];
+
+UI_QA_DETAIL_BY_SESSION["sess-live-noisy-title"] = {
+  ...noisyTitleSource,
+  last_event_at: "2026-03-12T12:30:00.000Z",
+  bundle: {
+    ...noisyTitleSource.bundle,
+    session: {
+      ...noisyTitleSource.bundle.session,
+      session_id: "sess-live-noisy-title",
+      title: UI_QA_NOISY_TITLE,
+      started_at: "2026-03-12T11:36:00.000Z",
+    },
+    events: noisyTitleSource.bundle.events.map((event) => ({
+      ...event,
+      session_id: "sess-live-noisy-title",
+    })),
+    metrics: (noisyTitleSource.bundle.metrics ?? []).map((metric) => ({
+      ...metric,
+      session_id: "sess-live-noisy-title",
+    })),
   },
 };
 

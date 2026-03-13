@@ -426,9 +426,9 @@ function MonitorWorkspaceLayout({
         refreshedAt={refreshedAt}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-8 pt-3 md:px-6 lg:px-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-6 pt-2 md:px-5 lg:px-6">
         {activeTab === "live" ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="shrink-0">
               <LiveSessionOverview
                 degradedMessage={degradedMessage}
@@ -438,7 +438,7 @@ function MonitorWorkspaceLayout({
                 snapshot={snapshot}
               />
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-5 xl:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
               <div className="min-h-0 min-w-0 flex-[2.12]">
                 <TimelineCanvas
                   errorMessage={detailErrorMessage}

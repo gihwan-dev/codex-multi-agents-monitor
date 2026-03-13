@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatTimestamp, type SessionSummary } from "@/entities/session";
+import {
+  formatSessionDisplayTitle,
+  formatTimestamp,
+  type SessionSummary,
+} from "@/entities/session";
 import type { CanonicalMetric } from "@/shared/canonical";
 import { Binary, Braces, Boxes, DatabaseZap, Link2 } from "lucide-react";
 
@@ -187,13 +191,29 @@ export function DetailDrawer({
   const selectedItem = selectionContext?.selectedItem ?? null;
   const selectedSegment = selectionContext?.selectedSegment ?? null;
   const selectedConnector = selectionContext?.selectedConnector ?? null;
+  const sessionDisplayTitle =
+    selectedSession != null
+      ? formatSessionDisplayTitle({
+          rawTitle: selectedSession.title,
+          workspacePath: selectedSession.workspace_path,
+        })
+      : projection
+        ? formatSessionDisplayTitle({
+            rawTitle: projection.session.title,
+            workspacePath: projection.session.workspace_path,
+          })
+        : null;
   const sessionTitle =
     selectedItem?.label ??
     (selectedConnector ? connectorLabel(selectedConnector.kind) : null) ??
     (selectedSegment ? `${laneLabel(projection, selectedSegment.laneId)} activation` : null) ??
-    selectedSession?.title ??
-    projection?.session.title ??
-    "Event detail";
+    "Session summary";
+  const sessionSubtitle =
+    selection.kind === "session"
+      ? sessionDisplayTitle?.displayTitle ?? "Select a session to inspect recent events."
+      : sessionDisplayTitle?.workspaceLabel ?? null;
+  const sessionSubtitleTooltip =
+    selection.kind === "session" ? sessionDisplayTitle?.tooltip : undefined;
   const metrics = projection?.metrics ?? [];
   const latestItem = projection?.items[projection.items.length - 1] ?? null;
   const summaryBody = selectedItem
@@ -234,14 +254,22 @@ export function DetailDrawer({
     >
       <div className="h-full" data-testid="timeline-detail-drawer">
         <Card className={PANEL_CARD_CLASS}>
-          <CardHeader className="bg-transparent px-5 pb-3.5 pt-5">
+          <CardHeader className="bg-transparent px-4 pb-3 pt-4.5">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 max-w-[30rem]">
-                <p className="mb-2 text-[11px] font-medium text-slate-400">Detail drawer</p>
-                <CardTitle className="max-w-[24ch] text-[1.4rem] font-normal leading-[1.04] tracking-[-0.03em] text-white break-words">
+                <p className="mb-1.5 text-[10.5px] font-medium text-slate-400">Detail drawer</p>
+                <CardTitle className="max-w-[24ch] text-[1.12rem] font-medium leading-[1.05] tracking-[-0.02em] text-white break-words">
                   {sessionTitle}
                 </CardTitle>
-                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/64">
+                {sessionSubtitle ? (
+                  <p
+                    className="mt-1 max-w-md truncate text-[12px] text-slate-400/86"
+                    title={sessionSubtitleTooltip}
+                  >
+                    {sessionSubtitle}
+                  </p>
+                ) : null}
+                <p className="mt-2 max-w-md text-[12px] leading-relaxed text-slate-300/64">
                   {errorMessage
                     ? errorMessage
                     : loading
@@ -260,7 +288,7 @@ export function DetailDrawer({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 rounded-[inherit] border-0 bg-transparent px-3 text-[11px] font-medium text-slate-100 hover:bg-transparent hover:text-white"
+                      className="h-7 rounded-[inherit] border-0 bg-transparent px-2.5 text-[10.5px] font-medium text-slate-100 hover:bg-transparent hover:text-white"
                       onClick={() => onSelectionChange({ kind: "session" })}
                     >
                       Session summary
@@ -274,7 +302,7 @@ export function DetailDrawer({
                   variant="control"
                 >
                   <div className="px-2.5 py-1.5">
-                    <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
+                    <span className="text-[10.5px] font-medium tracking-[0.01em] text-slate-100 capitalize">
                       {selectedConnector
                         ? selectedConnector.kind
                         : selectedSegment
@@ -285,7 +313,7 @@ export function DetailDrawer({
                     </span>
                   </div>
                 </GlassSurface>
-                <p className="text-[11px] text-slate-500/88">
+                <p className="text-[10.5px] text-slate-500/88">
                   {projection ? `${projection.items.length} projected items` : "No detail"}
                 </p>
               </div>

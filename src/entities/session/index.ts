@@ -15,7 +15,9 @@ export {
   upsertSessionSummary,
 } from "./lib/snapshot";
 export {
+  formatSessionDisplayTitle,
   formatTime,
+  normalizeSessionTitle,
   formatTimestamp,
   formatWorkspaceLabel,
   statusBadgeVariant,
