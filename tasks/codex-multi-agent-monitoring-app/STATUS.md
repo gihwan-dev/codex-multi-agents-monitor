@@ -1,37 +1,37 @@
 # Current slice
 
-Live row-DAG / SLICE-1
+Live row-DAG / SLICE-2
 
 # Done
 
-- `src/features/timeline/model/live-dag/`를 추가하고, 기존 `TimelineProjection` 위에 `TimelineLiveDagView`를 파생하는 builder를 도입했다.
-- live row-DAG의 핵심 규칙인 global semantic row ordering, `user/main` 고정 track, subagent branch slot reserve/release/reuse, `45_000ms` gap row folding, connector/tool edge taxonomy를 새 모델 안에서 고정했다.
-- row/edge가 기존 selection contract로 역매핑되도록 `itemId`, `connectorId`, `turnBandId`, `segmentId` 계열 메타를 유지했다.
-- `builder.test.ts`를 추가해 branch slot 재사용, global gap folding, connector direction/request-response preview 파생, turn header ordering을 검증했다.
+- live 전용 renderer를 `src/features/timeline/ui/live-dag/` 아래로 분리하고, row-DAG 3열 구조(gutter / graph rail / annotation)를 `LiveDagStage`로 도입했다.
+- `timeline-canvas.tsx`는 viewport, latest-follow, selection shell을 유지하고 live일 때만 새 row-DAG stage를 타도록 재배선했다. archive는 기존 absolute renderer 경로를 유지했다.
+- gap row, turn header row, event row, connector path, annotation meta를 row-DAG 모델 기반으로 렌더하도록 맞췄고, item/connector/turn-header 클릭이 기존 drawer selection contract에 연결되도록 유지했다.
+- 통합 테스트를 row-DAG copy와 구조에 맞게 갱신하고, 좁은 viewport에서 horizontal scroll을 전제하는 stage 폭 계약을 추가로 고정했다.
 
 # Decisions made during implementation
 
-- 이번 slice는 model split만 수행하고, 기존 `projection`, `live-layout`, `viewport`, `timeline-canvas`의 소비 경로는 건드리지 않았다.
-- track label은 UI header용 정적 `User/Main/Branch N`로 두고, row/edge의 actor/direction copy는 기존 lane/session label에서 파생하도록 분리했다.
-- tool은 row 자체의 input/output preview를 유지하고, annotation leader용 `tool` taxonomy edge를 별도로 파생하는 방식으로 고정했다.
-- 문서 영향 범위는 현재 slice 진행 상태를 반영하는 `STATUS.md` 하나로 제한했다. README/UX/TECH 문서는 아직 사용자-visible surface가 바뀌지 않아 이번 slice에서 수정하지 않았다.
+- `timeline-canvas.tsx`는 live stage 렌더만 외부 컴포넌트로 분리하고, archive absolute path는 이번 slice에서 재설계하지 않았다.
+- live viewport는 기존 `live-layout` 대신 row-DAG content height 기준으로 shell 내부에서 별도 follow/refollow 계산을 하도록 분기했다. `viewport.ts` 자체는 변경하지 않았다.
+- row-DAG stage의 최소폭 정책은 stacked fallback 대신 horizontal scroll을 강제하는 쪽으로 고정했다.
+- 이번 slice의 문서 영향 범위도 구현 진행 상태를 반영하는 `STATUS.md` 하나로 제한했다. README/UX/TECH 문서 갱신은 row-DAG interaction semantics가 더 고정되는 다음 slice 이후로 미뤘다.
 
 # Verification results
 
-- `pnpm test -- src/features/timeline/model/live-dag/builder.test.ts`: pass
-- `pnpm test -- src/features/timeline/model/projection.test.ts`: pass
 - `pnpm typecheck`: pass
-- commit: 요청되지 않아 수행하지 않음
+- `pnpm test -- src/features/timeline/ui/timeline-detail-sync.test.tsx src/features/timeline/model/live-dag/builder.test.ts src/features/timeline/model/projection.test.ts`: pass
+- advisory review: `code-quality-reviewer`, `test-engineer` 요청 후 대기 중이었으나 응답 지연. 현재 커밋 sign-off는 메인 검증 결과 기준으로 진행
+- commit: 아직 수행하지 않음
 
 # Known issues / residual risk
 
-- live 화면은 아직 기존 vertical sequence renderer를 사용한다. 새 row-DAG 모델은 `SLICE-2`에서 UI skeleton에 연결해야 실제 화면 변화가 난다.
-- `merge rail`, hover path highlight, selection-to-drawer sync, latest-follow의 row-mode semantics는 아직 미구현이다.
-- 현재 검증은 fixture 기반 model/test 수준이다. 실제 live append burst와 horizontal scroll viewport smoke는 UI slice 이후 다시 확인해야 한다.
+- live row-DAG는 아직 hover path highlight, connector label pill, explicit segment affordance를 제공하지 않는다. 이 상호작용 정리는 `SLICE-3` 범위다.
+- archive renderer는 여전히 기존 absolute path라 shell 파일 크기가 완전히 줄지는 않았다. archive 전용 추출은 별도 slice 또는 cleanup에서 정리해야 한다.
+- viewport smoke는 jsdom 기반 width 계약까지만 확인했다. 실제 브라우저에서 390px 가로 스크롤 affordance와 edge fade는 후속 visual 검증이 필요하다.
 
 # Next slice
 
-Live row-DAG / SLICE-2
-- 목표: `src/features/timeline/ui/live-dag/` skeleton과 synchronized scroll shell을 만들고, `timeline-canvas.tsx`를 얇은 shell로 정리한다.
-- 선행조건: 새 `TimelineLiveDagView`를 live 전용 렌더 경로에 주입하되 archive의 `archive-absolute` 경로는 그대로 유지해야 한다.
-- 먼저 볼 경계: `src/features/timeline/ui/timeline-canvas.tsx`, 새 `ui/live-dag/*` 컴포넌트, live stage의 gutter/graph/annotation 3열 레이아웃, horizontal scroll 정책.
+Live row-DAG / SLICE-3
+- 목표: hover path highlight, connector label pill, selection-to-drawer mapping polish, latest-follow의 row-mode semantics를 정리한다.
+- 선행조건: 현재 row-DAG skeleton을 유지한 채 connector/row hover와 drawer sync를 강화해야 하며, archive 경로는 계속 영향 없이 유지해야 한다.
+- 먼저 볼 경계: `src/features/timeline/ui/live-dag/*`, `timeline-canvas.tsx`의 viewport shell, drawer selection copy, live follow state copy/gesture semantics.

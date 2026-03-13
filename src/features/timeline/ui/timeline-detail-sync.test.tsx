@@ -113,7 +113,7 @@ describe("timeline + detail drawer", () => {
     expect(screen.getByTestId("timeline-turn-header-turn:2")).toHaveTextContent(
       "Now make the relationships readable at a glance.",
     );
-    expect(screen.getByText("+1m idle gap")).toBeVisible();
+    expect(screen.getAllByText(/\/\/ .* hidden \/\//).length).toBeGreaterThan(0);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -141,19 +141,18 @@ describe("timeline + detail drawer", () => {
     ).toBeVisible();
   });
 
-  it("anchors segment selections to the drawer and keeps item detail item-centered", () => {
+  it("uses turn header rows to keep prompt selection mapped into the drawer", () => {
     render(<TimelineHarness mode="live" />);
 
-    fireEvent.click(screen.getByTestId("timeline-segment-segment:turn:1:2"));
+    fireEvent.click(screen.getByTestId("timeline-turn-header-turn:1"));
 
     const drawer = within(screen.getByTestId("timeline-detail-drawer"));
 
     expect(drawer.getByText("Selection chain")).toBeVisible();
-    expect(drawer.getByText("Segment scope")).toBeVisible();
-    expect(drawer.getByText("Newton activation")).toBeVisible();
     expect(
-      drawer.getAllByText("Worker closed the delegated patch slice and handed results back."),
-    ).toHaveLength(2);
+      drawer.getAllByText("Convert the live monitor timeline to a vertical sequence view."),
+    ).toHaveLength(1);
+    expect(drawer.getByText("Related items")).toBeVisible();
   });
 
   it("shows child owner session metadata when a sub-agent item is selected", () => {
@@ -196,18 +195,14 @@ describe("timeline + detail drawer", () => {
     expect(drawer.getByText("Complete connector from Newton to Main.")).toBeVisible();
   });
 
-  it("keeps tool capsules off the live stage and reserves space for turn headers", () => {
+  it("keeps turn headers ahead of the first event rows in live row-dag mode", () => {
     render(<TimelineHarness mode="live" />);
 
-    expect(
-      screen.queryByRole("button", { name: "Apply the timeline and drawer wiring patch." }),
-    ).not.toBeInTheDocument();
-
     const headerRow = screen.getByTestId("timeline-turn-header-row-turn:1");
-    const firstVisibleItem = screen.getByTestId("timeline-item-evt-spawn");
+    const firstEventRow = screen.getByTestId("timeline-event-row-evt-spawn");
 
-    expect(parseFloat(firstVisibleItem.style.top)).toBeGreaterThan(
-      parseFloat(headerRow.style.top) + 52,
+    expect(parseFloat(firstEventRow.style.top)).toBeGreaterThan(
+      parseFloat(headerRow.style.top),
     );
   });
 
@@ -298,5 +293,17 @@ describe("timeline + detail drawer", () => {
 
     expect(screen.getByTestId("timeline-follow-state")).toHaveTextContent("Archive fit");
     expect(screen.queryByTestId("timeline-refollow-button")).not.toBeInTheDocument();
+  });
+
+  it("keeps the live stage wider than a narrow viewport and relies on horizontal scroll", async () => {
+    render(<TimelineHarness mode="live" />);
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+    const stage = screen.getByTestId("live-dag-stage");
+
+    expect(parseFloat(stage.style.minWidth)).toBeGreaterThan(320);
   });
 });
