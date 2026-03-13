@@ -1,5 +1,5 @@
 import type { CanonicalEvent, CanonicalMetric, CanonicalSession } from "@/shared/canonical";
-import type { SessionDetailSnapshot } from "@/shared/queries";
+import type { SessionDetailSnapshot, TimelineLineageRelation } from "@/shared/queries";
 
 export type TimelineMode = "live" | "archive";
 export type TimelineRenderMode = "live-compact" | "archive-absolute";
@@ -26,6 +26,7 @@ export interface TimelineLaneView {
   column: TimelineLaneColumn;
   label: string;
   laneId: string;
+  ownerSessionId: string | null;
 }
 
 export interface TimelineItemView {
@@ -38,6 +39,7 @@ export interface TimelineItemView {
   label: string;
   laneId: string;
   meta: Record<string, unknown>;
+  ownerSessionId: string;
   outputPreview: string | null;
   payloadPreview: string | null;
   sourceEvents: CanonicalEvent[];
@@ -84,6 +86,7 @@ export interface TimelineActivationSegment {
   endedAtMs: number;
   itemIds: string[];
   laneId: string;
+  ownerSessionId: string;
   segmentId: string;
   startedAtMs: number;
   terminalEventKind: CanonicalEvent["kind"];
@@ -148,10 +151,14 @@ export interface TimelineProjection {
   items: TimelineItemView[];
   itemsById: Record<string, TimelineItemView>;
   lanes: TimelineLaneView[];
+  lineageRelations: TimelineLineageRelation[];
   latestItemId: string | null;
   metrics: CanonicalMetric[];
   relationMap: TimelineRelationMap;
+  rootSessionId: string;
   session: CanonicalSession;
+  sessions: CanonicalSession[];
+  sessionsById: Record<string, CanonicalSession>;
   sessionTokenTotals: {
     input: number;
     output: number;

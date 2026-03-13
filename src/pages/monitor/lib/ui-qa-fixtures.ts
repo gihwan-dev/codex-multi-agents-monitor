@@ -2,6 +2,7 @@ import { firstSessionId } from "@/entities/session";
 import type { MonitorTab } from "@/shared/model";
 import type {
   SessionDetailSnapshot,
+  SessionTimelineSnapshot,
   WorkspaceSessionsSnapshot,
 } from "@/shared/queries";
 
@@ -95,7 +96,20 @@ const UI_QA_SNAPSHOT: WorkspaceSessionsSnapshot = {
   ],
 };
 
-const UI_QA_DETAIL_BY_SESSION: Record<string, SessionDetailSnapshot> = {
+type SessionDetailFixture = Omit<SessionDetailSnapshot, "timeline">;
+
+function buildSessionLocalTimelineFromBundle(
+  bundle: SessionDetailFixture["bundle"],
+): SessionTimelineSnapshot {
+  return {
+    root_session_id: bundle.session.session_id,
+    sessions: [bundle.session],
+    events: [...bundle.events],
+    lineage_relations: [],
+  };
+}
+
+const UI_QA_DETAIL_BY_SESSION_FIXTURES: Record<string, SessionDetailFixture> = {
   "sess-ui-shell": {
     last_event_at: "2026-03-12T12:29:30.000Z",
     event_count: 42,
@@ -708,7 +722,223 @@ const UI_QA_DETAIL_BY_SESSION: Record<string, SessionDetailSnapshot> = {
   },
 };
 
+const UI_QA_DETAIL_BY_SESSION: Record<string, SessionDetailSnapshot> = Object.fromEntries(
+  Object.entries(UI_QA_DETAIL_BY_SESSION_FIXTURES).map(([sessionId, detail]) => [
+    sessionId,
+    {
+      ...detail,
+      timeline: buildSessionLocalTimelineFromBundle(detail.bundle),
+    },
+  ]),
+) as Record<string, SessionDetailSnapshot>;
+
 const noisyTitleSource = UI_QA_DETAIL_BY_SESSION["sess-ui-shell"];
+
+function buildUiQaCompositeTimeline(detail: SessionDetailSnapshot): SessionTimelineSnapshot {
+  const rootSession = detail.bundle.session;
+  const rootEvents = detail.bundle.events
+    .filter(
+      (event) =>
+        ![
+          "evt-worker-msg",
+          "evt-worker-reasoning",
+          "evt-tool-call-worker",
+          "evt-tool-output-worker",
+          "evt-worker-complete",
+        ].includes(event.event_id),
+    )
+    .map((event) =>
+      event.event_id === "evt-spawn"
+        ? {
+            ...event,
+            meta: {
+              ...event.meta,
+              agent_role: "main",
+              call_id: "call-worker-a",
+              lineage_resolution: "explicit",
+              spawned_agent_nickname: "Newton",
+              spawned_agent_role: "worker",
+              spawned_session_id: "sess-ui-shell-worker-a",
+              tool_name: "spawn_agent",
+            },
+          }
+        : event,
+    );
+
+  const workerAEvents = detail.bundle.events
+    .filter((event) =>
+      [
+        "evt-worker-msg",
+        "evt-worker-reasoning",
+        "evt-tool-call-worker",
+        "evt-tool-output-worker",
+        "evt-worker-complete",
+      ].includes(event.event_id),
+    )
+    .map((event) => ({
+      ...event,
+      agent_instance_id: "sess-ui-shell-worker-a",
+      lane_id: "agent:sess-ui-shell-worker-a",
+      meta: {
+        ...event.meta,
+        agent_nickname: "Newton",
+        agent_role: "worker",
+        owner_session_id: "sess-ui-shell-worker-a",
+        parent_session_id: "sess-ui-shell",
+      },
+      session_id: "sess-ui-shell-worker-a",
+    }));
+
+  const spawnWorkerB = {
+    event_id: "evt-spawn-worker-b",
+    session_id: "sess-ui-shell",
+    parent_event_id: null,
+    agent_instance_id: "main-01",
+    lane_id: "agent:main",
+    kind: "spawn",
+    detail_level: "operational",
+    occurred_at: "2026-03-12T12:28:38.000Z",
+    duration_ms: null,
+    summary: "Spawned a second worker lane to validate the final relationship pass.",
+    payload_preview: "{\"agent_id\":\"sess-ui-shell-worker-b\",\"nickname\":\"Curie\"}",
+    payload_ref: null,
+    token_input: null,
+    token_output: null,
+    meta: {
+      agent_role: "main",
+      call_id: "call-worker-b",
+      lineage_resolution: "explicit",
+      spawned_agent_nickname: "Curie",
+      spawned_agent_role: "worker",
+      spawned_session_id: "sess-ui-shell-worker-b",
+      tool_name: "spawn_agent",
+    },
+  } as const;
+
+  const workerBEvents = [
+    {
+      event_id: "sess-ui-shell-worker-b:session_start",
+      session_id: "sess-ui-shell-worker-b",
+      parent_event_id: null,
+      agent_instance_id: "sess-ui-shell-worker-b",
+      lane_id: "agent:sess-ui-shell-worker-b",
+      kind: "session_start",
+      detail_level: "operational",
+      occurred_at: "2026-03-12T12:28:39.000Z",
+      duration_ms: null,
+      summary: "Session started",
+      payload_preview:
+        "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+      payload_ref: null,
+      token_input: null,
+      token_output: null,
+      meta: {
+        agent_nickname: "Curie",
+        agent_role: "worker",
+        owner_session_id: "sess-ui-shell-worker-b",
+        parent_session_id: "sess-ui-shell",
+      },
+    },
+    {
+      event_id: "evt-worker-b-msg",
+      session_id: "sess-ui-shell-worker-b",
+      parent_event_id: null,
+      agent_instance_id: "sess-ui-shell-worker-b",
+      lane_id: "agent:sess-ui-shell-worker-b",
+      kind: "agent_message",
+      detail_level: "diagnostic",
+      occurred_at: "2026-03-12T12:28:52.000Z",
+      duration_ms: null,
+      summary: "Second worker audited the final connector chain for readability.",
+      payload_preview:
+        "A second worker keeps the same role but must remain a separate lane in the composite timeline.",
+      payload_ref: null,
+      token_input: null,
+      token_output: null,
+      meta: {
+        agent_nickname: "Curie",
+        agent_role: "worker",
+        owner_session_id: "sess-ui-shell-worker-b",
+        parent_session_id: "sess-ui-shell",
+      },
+    },
+    {
+      event_id: "evt-worker-b-complete",
+      session_id: "sess-ui-shell-worker-b",
+      parent_event_id: null,
+      agent_instance_id: "sess-ui-shell-worker-b",
+      lane_id: "agent:sess-ui-shell-worker-b",
+      kind: "agent_complete",
+      detail_level: "operational",
+      occurred_at: "2026-03-12T12:29:05.000Z",
+      duration_ms: 450,
+      summary: "Second worker handed the final connector audit back to Main.",
+      payload_preview: "Distinct worker lane preserved for final review.",
+      payload_ref: null,
+      token_input: 0,
+      token_output: 0,
+      meta: {
+        agent_nickname: "Curie",
+        agent_role: "worker",
+        owner_session_id: "sess-ui-shell-worker-b",
+        parent_session_id: "sess-ui-shell",
+      },
+    },
+  ] as const;
+
+  return {
+    root_session_id: "sess-ui-shell",
+    sessions: [
+      rootSession,
+      {
+        ...rootSession,
+        session_id: "sess-ui-shell-worker-a",
+        parent_session_id: "sess-ui-shell",
+        status: "completed",
+        title: "Worker A: timeline wiring",
+        started_at: "2026-03-12T12:24:00.000Z",
+        ended_at: "2026-03-12T12:27:05.000Z",
+      },
+      {
+        ...rootSession,
+        session_id: "sess-ui-shell-worker-b",
+        parent_session_id: "sess-ui-shell",
+        status: "completed",
+        title: "Worker B: connector audit",
+        started_at: "2026-03-12T12:28:39.000Z",
+        ended_at: "2026-03-12T12:29:05.000Z",
+      },
+    ],
+    events: [...rootEvents, ...workerAEvents, spawnWorkerB, ...workerBEvents].sort((left, right) =>
+      left.occurred_at.localeCompare(right.occurred_at) || left.event_id.localeCompare(right.event_id),
+    ),
+    lineage_relations: [
+      {
+        relation_id: "lineage:sess-ui-shell:sess-ui-shell-worker-a",
+        parent_session_id: "sess-ui-shell",
+        child_session_id: "sess-ui-shell-worker-a",
+        expected_child_session_id: "sess-ui-shell-worker-a",
+        state: "resolved",
+        resolution: "explicit",
+        spawn_event_id: "evt-spawn",
+      },
+      {
+        relation_id: "lineage:sess-ui-shell:sess-ui-shell-worker-b",
+        parent_session_id: "sess-ui-shell",
+        child_session_id: "sess-ui-shell-worker-b",
+        expected_child_session_id: "sess-ui-shell-worker-b",
+        state: "resolved",
+        resolution: "explicit",
+        spawn_event_id: "evt-spawn-worker-b",
+      },
+    ],
+  };
+}
+
+UI_QA_DETAIL_BY_SESSION["sess-ui-shell"] = {
+  ...noisyTitleSource,
+  timeline: buildUiQaCompositeTimeline(noisyTitleSource),
+};
 
 UI_QA_DETAIL_BY_SESSION["sess-live-noisy-title"] = {
   ...noisyTitleSource,
@@ -731,6 +961,24 @@ UI_QA_DETAIL_BY_SESSION["sess-live-noisy-title"] = {
       session_id: "sess-live-noisy-title",
     })),
   },
+  timeline: buildSessionLocalTimelineFromBundle({
+    ...noisyTitleSource.bundle,
+    session: {
+      ...noisyTitleSource.bundle.session,
+      session_id: "sess-live-noisy-title",
+      parent_session_id: "sess-ui-shell",
+      title: UI_QA_NOISY_TITLE,
+      started_at: "2026-03-12T11:36:00.000Z",
+    },
+    events: noisyTitleSource.bundle.events.map((event) => ({
+      ...event,
+      session_id: "sess-live-noisy-title",
+    })),
+    metrics: (noisyTitleSource.bundle.metrics ?? []).map((metric) => ({
+      ...metric,
+      session_id: "sess-live-noisy-title",
+    })),
+  }),
 };
 
 export interface MonitorUiQaState {

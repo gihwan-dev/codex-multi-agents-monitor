@@ -1,5 +1,5 @@
 import type { CanonicalEvent, EventKind } from "@/shared/canonical";
-import type { SessionDetailSnapshot } from "@/shared/queries";
+import type { SessionDetailSnapshot, TimelineLineageRelation } from "@/shared/queries";
 
 import type {
   TimelineActivationSegment,
@@ -15,6 +15,12 @@ import type {
   TimelineSelectionContext,
   TimelineTurnBand,
 } from "./types";
+import {
+  parseTimelineTimestamp,
+  resolveTimelineSource,
+  timelineEventOrder,
+  timelineMetaString,
+} from "./source";
 
 const LANE_ACCENTS: Record<TimelineLaneColumn, string> = {
   main: "from-emerald-300/78 via-emerald-200/62 to-emerald-100/36",
@@ -26,7 +32,14 @@ type LaneSeed = {
   earliestAtMs: number;
   events: CanonicalEvent[];
   laneId: string;
+  ownerSessionId: string | null;
 };
+
+function isResolvedLineageRelation(
+  relation: TimelineLineageRelation,
+): relation is TimelineLineageRelation & { child_session_id: string; state: "resolved" } {
+  return relation.state === "resolved" && typeof relation.child_session_id === "string";
+}
 
 function formatRoleLabel(role: string) {
   return role
@@ -34,27 +47,6 @@ function formatRoleLabel(role: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function parseTimestamp(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  const next = Date.parse(value);
-  return Number.isNaN(next) ? null : next;
-}
-
-function metaString(event: CanonicalEvent, key: string) {
-  const value = event.meta[key];
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function eventOrder(left: CanonicalEvent, right: CanonicalEvent) {
-  return (
-    (parseTimestamp(left.occurred_at) ?? 0) - (parseTimestamp(right.occurred_at) ?? 0) ||
-    left.event_id.localeCompare(right.event_id)
-  );
 }
 
 function itemOrder(left: TimelineItemView, right: TimelineItemView) {
@@ -65,16 +57,23 @@ function itemOrder(left: TimelineItemView, right: TimelineItemView) {
   );
 }
 
-function laneLabel(seed: LaneSeed) {
+function laneLabel(seed: LaneSeed, rootSessionId: string) {
+  if (
+    seed.ownerSessionId === rootSessionId &&
+    seed.events.some((event) => event.kind !== "user_message")
+  ) {
+    return "Main";
+  }
+
   for (const event of seed.events) {
-    const nickname = metaString(event, "agent_nickname");
+    const nickname = timelineMetaString(event, "agent_nickname");
     if (nickname) {
       return nickname;
     }
   }
 
   for (const event of seed.events) {
-    const role = metaString(event, "agent_role");
+    const role = timelineMetaString(event, "agent_role");
     if (role) {
       return formatRoleLabel(role);
     }
@@ -90,12 +89,21 @@ function laneLabel(seed: LaneSeed) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function isMainLane(seed: LaneSeed) {
+function isMainLane(seed: LaneSeed, rootSessionId: string) {
+  if (
+    seed.ownerSessionId === rootSessionId &&
+    seed.events.some((event) => event.kind !== "user_message")
+  ) {
+    return true;
+  }
+
   if (seed.laneId === "main" || seed.laneId === "agent:main") {
     return true;
   }
 
-  return seed.events.some((event) => metaString(event, "agent_role") === "main");
+  return seed.events.some(
+    (event) => event.session_id === seed.ownerSessionId && timelineMetaString(event, "agent_role") === "main",
+  );
 }
 
 function itemKindForEvent(event: CanonicalEvent): TimelineItemKind {
@@ -136,7 +144,7 @@ function itemLabelForEvent(event: CanonicalEvent) {
 }
 
 function buildSimpleItem(event: CanonicalEvent): TimelineItemView {
-  const startedAtMs = parseTimestamp(event.occurred_at) ?? 0;
+  const startedAtMs = parseTimelineTimestamp(event.occurred_at) ?? 0;
   const endedAtMs = event.duration_ms ? startedAtMs + event.duration_ms : null;
 
   return {
@@ -149,6 +157,7 @@ function buildSimpleItem(event: CanonicalEvent): TimelineItemView {
     label: itemLabelForEvent(event),
     laneId: event.lane_id,
     meta: event.meta,
+    ownerSessionId: event.session_id,
     outputPreview: event.kind === "tool_output" ? event.payload_preview : null,
     payloadPreview: event.payload_preview,
     sourceEvents: [event],
@@ -161,9 +170,9 @@ function buildSimpleItem(event: CanonicalEvent): TimelineItemView {
 }
 
 function buildMergedToolItem(callEvent: CanonicalEvent, outputEvent: CanonicalEvent) {
-  const startedAtMs = parseTimestamp(callEvent.occurred_at) ?? 0;
+  const startedAtMs = parseTimelineTimestamp(callEvent.occurred_at) ?? 0;
   const endedAtMs =
-    parseTimestamp(outputEvent.occurred_at) ??
+    parseTimelineTimestamp(outputEvent.occurred_at) ??
     (callEvent.duration_ms ? startedAtMs + callEvent.duration_ms : null);
 
   return {
@@ -174,15 +183,19 @@ function buildMergedToolItem(callEvent: CanonicalEvent, outputEvent: CanonicalEv
     endedAt: outputEvent.occurred_at,
     endedAtMs,
     inputPreview: callEvent.payload_preview,
-    itemId: `tool:${metaString(callEvent, "call_id") ?? callEvent.event_id}`,
+    itemId: `tool:${timelineMetaString(callEvent, "call_id") ?? callEvent.event_id}`,
     kind: "tool",
     label: callEvent.summary ?? "Tool",
     laneId: callEvent.lane_id,
     meta: {
       ...callEvent.meta,
       ...outputEvent.meta,
+      linked_spawn_session_id:
+        timelineMetaString(outputEvent, "spawned_session_id") ??
+        timelineMetaString(callEvent, "spawned_session_id"),
       merged_tool_output: outputEvent.event_id,
     },
+    ownerSessionId: callEvent.session_id,
     outputPreview: outputEvent.payload_preview,
     payloadPreview: callEvent.payload_preview,
     sourceEvents: [callEvent, outputEvent],
@@ -199,12 +212,12 @@ function shouldRenderEvent(event: CanonicalEvent) {
 }
 
 function buildItems(events: CanonicalEvent[]) {
-  const orderedEvents = [...events].sort(eventOrder);
+  const orderedEvents = [...events].sort(timelineEventOrder);
   const pendingToolCalls = new Map<string, CanonicalEvent>();
   const items: TimelineItemView[] = [];
 
   for (const event of orderedEvents) {
-    const callId = metaString(event, "call_id");
+    const callId = timelineMetaString(event, "call_id");
 
     if (event.kind === "tool_call" && callId) {
       pendingToolCalls.set(callId, event);
@@ -232,17 +245,22 @@ function buildItems(events: CanonicalEvent[]) {
   return items.sort(itemOrder);
 }
 
-function buildLanes(events: CanonicalEvent[]) {
+function laneOwnerSessionId(events: CanonicalEvent[]) {
+  return events.find((event) => event.kind !== "user_message")?.session_id ?? events[0]?.session_id ?? null;
+}
+
+function buildLanes(events: CanonicalEvent[], rootSessionId: string) {
   const laneSeeds = new Map<string, LaneSeed>();
 
   for (const event of events) {
     const key = event.lane_id;
-    const occurredAtMs = parseTimestamp(event.occurred_at) ?? 0;
+    const occurredAtMs = parseTimelineTimestamp(event.occurred_at) ?? 0;
     const existing = laneSeeds.get(key);
 
     if (existing) {
       existing.events.push(event);
       existing.earliestAtMs = Math.min(existing.earliestAtMs, occurredAtMs);
+      existing.ownerSessionId = existing.ownerSessionId ?? event.session_id;
       continue;
     }
 
@@ -250,6 +268,7 @@ function buildLanes(events: CanonicalEvent[]) {
       earliestAtMs: occurredAtMs,
       events: [event],
       laneId: key,
+      ownerSessionId: event.session_id,
     });
   }
 
@@ -261,8 +280,14 @@ function buildLanes(events: CanonicalEvent[]) {
       return 1;
     }
 
-    const leftMain = isMainLane(left);
-    const rightMain = isMainLane(right);
+    const leftMain = isMainLane(
+      { ...left, ownerSessionId: left.ownerSessionId ?? laneOwnerSessionId(left.events) },
+      rootSessionId,
+    );
+    const rightMain = isMainLane(
+      { ...right, ownerSessionId: right.ownerSessionId ?? laneOwnerSessionId(right.events) },
+      rootSessionId,
+    );
     if (leftMain && !rightMain) {
       return -1;
     }
@@ -273,7 +298,14 @@ function buildLanes(events: CanonicalEvent[]) {
     return left.earliestAtMs - right.earliestAtMs || left.laneId.localeCompare(right.laneId);
   });
 
-  const mainLaneId = ordered.find(isMainLane)?.laneId ?? null;
+  const mainLaneId =
+    ordered.find((seed) =>
+      seed.events.some(
+        (event) => event.session_id === rootSessionId && timelineMetaString(event, "agent_role") === "main",
+      ),
+    )?.laneId ??
+    ordered.find((seed) => isMainLane(seed, rootSessionId))?.laneId ??
+    null;
 
   return ordered.map((seed) => {
     const column: TimelineLaneColumn =
@@ -282,8 +314,9 @@ function buildLanes(events: CanonicalEvent[]) {
     return {
       accentClass: LANE_ACCENTS[column],
       column,
-      label: laneLabel(seed),
+      label: laneLabel(seed, rootSessionId),
       laneId: seed.laneId,
+      ownerSessionId: seed.ownerSessionId,
     } satisfies TimelineLaneView;
   });
 }
@@ -304,13 +337,15 @@ function userPromptSummary(item: TimelineItemView) {
   return item.summary ?? item.payloadPreview ?? "User prompt";
 }
 
-function buildTurnBands(items: TimelineItemView[]) {
+function buildTurnBands(items: TimelineItemView[], rootSessionId: string) {
   if (items.length === 0) {
     return [];
   }
 
   const orderedItems = [...items].sort(itemOrder);
-  const promptItems = orderedItems.filter(isUserPromptItem);
+  const promptItems = orderedItems.filter(
+    (item) => item.ownerSessionId === rootSessionId && isUserPromptItem(item),
+  );
   const turnBands: TimelineTurnBand[] = [];
   let cursor = 0;
 
@@ -406,6 +441,7 @@ function buildActivationSegments(turnBands: TimelineTurnBand[], itemsById: Recor
         endedAtMs: itemEndedAtMs(last),
         itemIds: current.map((item) => item.itemId),
         laneId: first.laneId,
+        ownerSessionId: first.ownerSessionId,
         segmentId: `segment:${turnBand.turnBandId}:${nextIndex}`,
         startedAtMs: first.startedAtMs,
         terminalEventKind: itemTerminalEventKind(last),
@@ -457,10 +493,163 @@ function connectorKindForSegments(
   return "handoff";
 }
 
+function firstSegmentForSession(
+  activationSegments: TimelineActivationSegment[],
+  sessionId: string,
+) {
+  return activationSegments
+    .filter((segment) => segment.ownerSessionId === sessionId)
+    .sort(
+      (left, right) =>
+        left.startedAtMs - right.startedAtMs ||
+        left.endedAtMs - right.endedAtMs ||
+        left.segmentId.localeCompare(right.segmentId),
+    )[0] ?? null;
+}
+
+function lastSegmentForSession(
+  activationSegments: TimelineActivationSegment[],
+  sessionId: string,
+) {
+  return activationSegments
+    .filter((segment) => segment.ownerSessionId === sessionId)
+    .sort(
+      (left, right) =>
+        right.endedAtMs - left.endedAtMs ||
+        right.startedAtMs - left.startedAtMs ||
+        right.segmentId.localeCompare(left.segmentId),
+    )[0] ?? null;
+}
+
+function segmentForItemId(
+  activationSegments: TimelineActivationSegment[],
+  itemId: string | null,
+) {
+  if (!itemId) {
+    return null;
+  }
+
+  return activationSegments.find((segment) => segment.itemIds.includes(itemId)) ?? null;
+}
+
+function latestParentSegmentBefore(
+  activationSegments: TimelineActivationSegment[],
+  sessionId: string,
+  limitMs: number,
+) {
+  return activationSegments
+    .filter(
+      (segment) => segment.ownerSessionId === sessionId && segment.startedAtMs <= limitMs,
+    )
+    .sort(
+      (left, right) =>
+        right.endedAtMs - left.endedAtMs ||
+        right.startedAtMs - left.startedAtMs ||
+        right.segmentId.localeCompare(left.segmentId),
+    )[0] ?? null;
+}
+
+function firstParentSegmentAfter(
+  activationSegments: TimelineActivationSegment[],
+  sessionId: string,
+  startAfterMs: number,
+) {
+  return activationSegments
+    .filter(
+      (segment) => segment.ownerSessionId === sessionId && segment.startedAtMs >= startAfterMs,
+    )
+    .sort(
+      (left, right) =>
+        left.startedAtMs - right.startedAtMs ||
+        left.endedAtMs - right.endedAtMs ||
+        left.segmentId.localeCompare(right.segmentId),
+    )[0] ?? null;
+}
+
+function buildExplicitLineageConnectors(
+  relations: TimelineLineageRelation[],
+  activationSegments: TimelineActivationSegment[],
+  itemsById: Record<string, TimelineItemView>,
+) {
+  const connectors: TimelineConnector[] = [];
+
+  for (const relation of relations.filter(isResolvedLineageRelation)) {
+    const targetSegment = firstSegmentForSession(activationSegments, relation.child_session_id);
+    if (!targetSegment) {
+      continue;
+    }
+
+    const sourceSegment =
+      segmentForItemId(activationSegments, relation.spawn_event_id ?? null) ??
+      latestParentSegmentBefore(
+        activationSegments,
+        relation.parent_session_id,
+        targetSegment.startedAtMs,
+      );
+
+    if (sourceSegment && sourceSegment.laneId !== targetSegment.laneId) {
+      connectors.push({
+        anchorItemId: sourceSegment.anchorItemId,
+        connectorId: `connector:${relation.relation_id}:spawn`,
+        endedAtMs: targetSegment.startedAtMs,
+        kind: "spawn",
+        sourceLaneId: sourceSegment.laneId,
+        sourceSegmentId: sourceSegment.segmentId,
+        startedAtMs: sourceSegment.endedAtMs,
+        targetAnchorItemId: targetSegment.anchorItemId,
+        targetLaneId: targetSegment.laneId,
+        targetSegmentId: targetSegment.segmentId,
+        turnBandId: targetSegment.turnBandId,
+      });
+    }
+
+    const childTerminalSegment = lastSegmentForSession(activationSegments, relation.child_session_id);
+    if (!childTerminalSegment) {
+      continue;
+    }
+
+    const childTerminalItem = itemsById[childTerminalSegment.terminalItemId];
+    const isCompleteTerminal =
+      childTerminalItem?.sourceEvents.some(
+        (event) => event.kind === "agent_complete" || event.kind === "turn_aborted",
+      ) ?? false;
+    if (!isCompleteTerminal) {
+      continue;
+    }
+
+    const resumedParentSegment = firstParentSegmentAfter(
+      activationSegments,
+      relation.parent_session_id,
+      childTerminalSegment.endedAtMs,
+    );
+    if (!resumedParentSegment || resumedParentSegment.laneId === childTerminalSegment.laneId) {
+      continue;
+    }
+
+    connectors.push({
+      anchorItemId: childTerminalSegment.anchorItemId,
+      connectorId: `connector:${relation.relation_id}:complete`,
+      endedAtMs: resumedParentSegment.startedAtMs,
+      kind: "complete",
+      sourceLaneId: childTerminalSegment.laneId,
+      sourceSegmentId: childTerminalSegment.segmentId,
+      startedAtMs: childTerminalSegment.endedAtMs,
+      targetAnchorItemId: resumedParentSegment.anchorItemId,
+      targetLaneId: resumedParentSegment.laneId,
+      targetSegmentId: resumedParentSegment.segmentId,
+      turnBandId: resumedParentSegment.turnBandId,
+    });
+  }
+
+  return connectors;
+}
+
 function buildConnectors(
   turnBands: TimelineTurnBand[],
   activationSegments: TimelineActivationSegment[],
   lanesById: Record<string, TimelineLaneView>,
+  lineageRelations: TimelineLineageRelation[],
+  itemsById: Record<string, TimelineItemView>,
 ) {
   const segmentsById = Object.fromEntries(
     activationSegments.map((segment) => [segment.segmentId, segment]),
@@ -478,7 +667,21 @@ function buildConnectors(
     return accumulator;
   }, {});
 
-  const connectors: TimelineConnector[] = [];
+  const connectors = buildExplicitLineageConnectors(
+    lineageRelations,
+    activationSegments,
+    itemsById,
+  );
+  const resolvedRelations = lineageRelations.filter(isResolvedLineageRelation);
+  const relatedSessionPairs = new Set(
+    resolvedRelations.flatMap((relation) => [
+      `${relation.parent_session_id}:${relation.child_session_id}`,
+      `${relation.child_session_id}:${relation.parent_session_id}`,
+    ]),
+  );
+  const existingPairs = new Set(
+    connectors.map((connector) => `${connector.sourceSegmentId}:${connector.targetSegmentId}`),
+  );
 
   for (const turnBand of turnBands) {
     const segmentIds = segmentIdsByTurn[turnBand.turnBandId] ?? [];
@@ -488,6 +691,18 @@ function buildConnectors(
       const target = segmentsById[segmentIds[index + 1]];
 
       if (!source || !target || source.laneId === target.laneId) {
+        continue;
+      }
+
+      if (
+        source.ownerSessionId !== target.ownerSessionId &&
+        relatedSessionPairs.has(`${source.ownerSessionId}:${target.ownerSessionId}`)
+      ) {
+        continue;
+      }
+
+      const pairKey = `${source.segmentId}:${target.segmentId}`;
+      if (existingPairs.has(pairKey)) {
         continue;
       }
 
@@ -504,6 +719,7 @@ function buildConnectors(
         targetSegmentId: target.segmentId,
         turnBandId: turnBand.turnBandId,
       });
+      existingPairs.add(pairKey);
     }
   }
 
@@ -646,28 +862,29 @@ export function buildTimelineProjection(
     return null;
   }
 
-  const events = [...detail.bundle.events].sort(eventOrder);
+  const timelineSource = resolveTimelineSource(detail);
+  const events = timelineSource.events;
   const items = buildItems(events);
   const itemsById = Object.fromEntries(items.map((item) => [item.itemId, item])) as Record<
     string,
     TimelineItemView
   >;
-  const lanes = buildLanes(events);
+  const lanes = buildLanes(events, timelineSource.rootSessionId);
   const lanesById = Object.fromEntries(lanes.map((lane) => [lane.laneId, lane])) as Record<
     string,
     TimelineLaneView
   >;
   const startedAtMs =
-    parseTimestamp(detail.bundle.session.started_at) ??
+    parseTimelineTimestamp(detail.bundle.session.started_at) ??
     items[0]?.startedAtMs ??
     Date.now();
   const latestItem = items[items.length - 1] ?? null;
   const latestAtMs =
     latestItem?.endedAtMs ??
     latestItem?.startedAtMs ??
-    parseTimestamp(detail.last_event_at) ??
+    parseTimelineTimestamp(detail.last_event_at) ??
     startedAtMs;
-  const turnBands = buildTurnBands(items);
+  const turnBands = buildTurnBands(items, timelineSource.rootSessionId);
   const turnBandsById = Object.fromEntries(
     turnBands.map((turnBand) => [turnBand.turnBandId, turnBand]),
   ) as Record<string, TimelineTurnBand>;
@@ -675,12 +892,18 @@ export function buildTimelineProjection(
   const segmentsById = Object.fromEntries(
     activationSegments.map((segment) => [segment.segmentId, segment]),
   ) as Record<string, TimelineActivationSegment>;
-  const connectors = buildConnectors(turnBands, activationSegments, lanesById);
+  const connectors = buildConnectors(
+    turnBands,
+    activationSegments,
+    lanesById,
+    timelineSource.lineageRelations,
+    itemsById,
+  );
   const connectorsById = Object.fromEntries(
     connectors.map((connector) => [connector.connectorId, connector]),
   ) as Record<string, TimelineConnector>;
   const relationMap = buildRelationMap(items, turnBands, activationSegments, connectors);
-  const sessionTokenTotals = detail.bundle.events.reduce(
+  const sessionTokenTotals = events.reduce(
     (totals, event) => ({
       input: totals.input + (event.token_input ?? 0),
       output: totals.output + (event.token_output ?? 0),
@@ -696,11 +919,15 @@ export function buildTimelineProjection(
     items,
     itemsById,
     lanes,
+    lineageRelations: timelineSource.lineageRelations,
     latestItemId: latestItem?.itemId ?? null,
     metrics: detail.bundle.metrics ?? [],
     relationMap,
+    rootSessionId: timelineSource.rootSessionId,
     segmentsById,
     session: detail.bundle.session,
+    sessions: timelineSource.sessions,
+    sessionsById: timelineSource.sessionsById,
     sessionTokenTotals,
     startedAtMs,
     timeRangeMs: Math.max(latestAtMs - startedAtMs, 1),

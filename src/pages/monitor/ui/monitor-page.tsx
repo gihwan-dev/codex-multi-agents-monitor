@@ -668,45 +668,55 @@ function FloatingDetailDrawer({
 
         <div
           className={cn(
-            "pointer-events-none h-full transition-[opacity,transform] duration-200 ease-out",
+            "pointer-events-none h-full overflow-hidden transition-[opacity,width] duration-200 ease-out",
             open
-              ? "visible translate-x-0 opacity-100"
-              : "invisible translate-x-[calc(100%+1rem)] opacity-0",
+              ? "visible opacity-100"
+              : "invisible opacity-0",
           )}
-          style={{ width: "clamp(20rem, 31vw, 28rem)" }}
+          style={{
+            width: open ? "calc(clamp(20rem, 31vw, 28rem) + 0.75rem)" : "0px",
+          }}
         >
-          <div className="pointer-events-auto h-full pl-3">
-            <div className="relative h-full">
-              <GlassSurface
-                className="absolute right-3 top-3 z-10 rounded-full shadow-[0_14px_42px_rgba(2,6,23,0.38)]"
-                interactive
-                refraction="soft"
-                variant="control"
-              >
-                <Button
-                  aria-label="Close detail drawer"
-                  className="h-9 w-9 rounded-[inherit] border-0 bg-transparent p-0 text-slate-100 shadow-none hover:bg-transparent hover:text-white"
-                  data-testid="timeline-detail-drawer-close"
-                  onClick={() => onOpenChange(false)}
-                  size="icon-sm"
-                  variant="ghost"
+          {open ? (
+            <div className="pointer-events-auto box-border h-full w-full pl-3">
+              <div className="relative h-full">
+                <GlassSurface
+                  className="absolute right-3 top-3 z-10 rounded-full shadow-[0_14px_42px_rgba(2,6,23,0.38)]"
+                  interactive
+                  refraction="soft"
+                  variant="control"
                 >
-                  <X className="h-4 w-4" />
-                </Button>
-              </GlassSurface>
-              <div className="h-full rounded-[1.7rem] shadow-[0_24px_80px_rgba(2,6,23,0.38)]">
-                <DetailDrawer
-                  errorMessage={errorMessage}
-                  loading={loading}
-                  onSelectionChange={onSelectionChange}
-                  projection={projection}
-                  selectedSession={selectedSession}
-                  selection={selection}
-                  selectionContext={selectionContext}
-                />
+                  <Button
+                    aria-label="Close detail drawer"
+                    className="h-9 w-9 rounded-[inherit] border-0 bg-transparent p-0 text-slate-100 shadow-none hover:bg-transparent hover:text-white"
+                    data-testid="timeline-detail-drawer-close"
+                    onClick={() => onOpenChange(false)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </GlassSurface>
+                <div className="h-full rounded-[1.7rem] shadow-[0_24px_80px_rgba(2,6,23,0.38)]">
+                  <DetailDrawer
+                    errorMessage={errorMessage}
+                    loading={loading}
+                    onSelectionChange={onSelectionChange}
+                    projection={projection}
+                    selectedSession={selectedSession}
+                    selection={selection}
+                    selectionContext={selectionContext}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none h-0 w-0 overflow-hidden opacity-0"
+              data-testid="timeline-detail-drawer"
+            />
+          )}
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -234,9 +235,11 @@ fn normalize_reader<R: BufRead>(
     let mut last_event_at = None;
     let mut agent_role = None;
     let mut agent_nickname = None;
+    let mut parent_thread_id = None;
     let mut saw_completed = false;
     let mut saw_aborted = false;
     let mut emitted_session_start = false;
+    let mut pending_function_names = HashMap::<String, String>::new();
 
     for (line_index, line_result) in reader.lines().enumerate() {
         let line = line_result.map_err(|source| NormalizeError::Io {
@@ -272,6 +275,7 @@ fn normalize_reader<R: BufRead>(
                 parent_session_id = hints.parent_session_id.or(parent_session_id);
                 agent_role = hints.agent_role.or(agent_role);
                 agent_nickname = hints.agent_nickname.or(agent_nickname);
+                parent_thread_id = hints.parent_thread_id.or(parent_thread_id);
                 workspace_path = payload_string(&parsed, "cwd").or(workspace_path);
                 started_at = payload_string(&parsed, "timestamp")
                     .or_else(|| parsed.timestamp.clone())
@@ -280,11 +284,7 @@ fn normalize_reader<R: BufRead>(
         }
 
         let current_session_id = session_id.clone();
-        let lane_id = lane_id_for_event(
-            detected_kind,
-            agent_role.as_deref(),
-            current_session_id.as_deref(),
-        );
+        let lane_id = lane_id_for_event(detected_kind, current_session_id.as_deref());
 
         match detected_kind {
             DetectedKind::SessionMeta => {
@@ -303,6 +303,20 @@ fn normalize_reader<R: BufRead>(
                         if let Some(parent) = &parent_session_id {
                             meta.insert("parent_session_id".into(), Value::String(parent.clone()));
                         }
+                        if let Some(parent_thread_id) = &parent_thread_id {
+                            meta.insert(
+                                "parent_thread_id".into(),
+                                Value::String(parent_thread_id.clone()),
+                            );
+                        }
+                        attach_session_agent_meta(
+                            &mut meta,
+                            current_session_id.as_deref(),
+                            parent_session_id.as_deref(),
+                            agent_role.as_deref(),
+                            agent_nickname.as_deref(),
+                            parent_thread_id.as_deref(),
+                        );
                         events.push(CanonicalEvent {
                             event_id: format!("{id}:session_start"),
                             session_id: id.clone(),
@@ -327,6 +341,15 @@ fn normalize_reader<R: BufRead>(
                 if let Some(id) = current_session_id.clone() {
                     let message_text = extract_message_text(&parsed);
                     let preview = message_text.as_deref().map(|text| truncate(text, 160));
+                    let mut meta = base_meta(&parsed);
+                    attach_session_agent_meta(
+                        &mut meta,
+                        current_session_id.as_deref(),
+                        parent_session_id.as_deref(),
+                        agent_role.as_deref(),
+                        agent_nickname.as_deref(),
+                        parent_thread_id.as_deref(),
+                    );
                     if title.is_none() {
                         title = message_text
                             .as_deref()
@@ -347,11 +370,20 @@ fn normalize_reader<R: BufRead>(
                         payload_ref: None,
                         token_input: None,
                         token_output: None,
-                        meta: base_meta(&parsed),
+                        meta,
                     });
                 }
             }
             DetectedKind::AgentMessage => {
+                let mut meta = base_meta(&parsed);
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
@@ -362,10 +394,19 @@ fn normalize_reader<R: BufRead>(
                     occurred_at.clone(),
                     extract_message_preview(&parsed),
                     None,
-                    base_meta(&parsed),
+                    meta,
                 );
             }
             DetectedKind::ReasoningSummary => {
+                let mut meta = base_meta(&parsed);
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
@@ -376,14 +417,29 @@ fn normalize_reader<R: BufRead>(
                     occurred_at.clone(),
                     extract_reasoning_summary(&parsed),
                     None,
-                    base_meta(&parsed),
+                    meta,
                 );
             }
             DetectedKind::FunctionCall => {
                 let mut meta = base_meta(&parsed);
+                let function_name = payload_string(&parsed, "name");
                 if let Some(id) = call_id(&parsed) {
                     meta.insert("call_id".into(), Value::String(id.to_string()));
+                    if let Some(name) = function_name.as_deref() {
+                        pending_function_names.insert(id.to_string(), name.to_string());
+                    }
                 }
+                if let Some(name) = function_name.as_deref() {
+                    meta.insert("tool_name".into(), Value::String(name.to_string()));
+                }
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 let preview = payload_string(&parsed, "arguments");
                 push_simple_event(
                     &mut events,
@@ -393,28 +449,105 @@ fn normalize_reader<R: BufRead>(
                     EventKind::ToolCall,
                     DetailLevel::Diagnostic,
                     occurred_at.clone(),
-                    payload_string(&parsed, "name").or_else(|| Some("Tool call".to_string())),
+                    function_name.or_else(|| Some("Tool call".to_string())),
                     preview,
                     meta,
                 );
             }
             DetectedKind::FunctionCallOutput => {
+                let output_lane_id = lane_id.clone();
                 let mut meta = base_meta(&parsed);
+                let output_payload = payload_string(&parsed, "output");
+                let mut spawn_result = None;
+
                 if let Some(id) = call_id(&parsed) {
                     meta.insert("call_id".into(), Value::String(id.to_string()));
+                    if let Some(function_name) = pending_function_names.get(id) {
+                        meta.insert("tool_name".into(), Value::String(function_name.clone()));
+                        if function_name == "spawn_agent" {
+                            spawn_result = spawn_output_result(output_payload.as_deref());
+                        }
+                    }
                 }
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
+
+                if let Some(spawn_result) = &spawn_result {
+                    if let Some(spawned_session_id) =
+                        spawn_result_string(spawn_result, "agent_id")
+                    {
+                        meta.insert(
+                            "spawned_session_id".into(),
+                            Value::String(spawned_session_id.clone()),
+                        );
+                        if let Some(nickname) =
+                            spawn_result_string(spawn_result, "nickname")
+                        {
+                            meta.insert(
+                                "spawned_agent_nickname".into(),
+                                Value::String(nickname.clone()),
+                            );
+                        }
+                    }
+                }
+
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
                     line_index,
-                    lane_id,
+                    output_lane_id,
                     EventKind::ToolOutput,
                     DetailLevel::Diagnostic,
                     occurred_at.clone(),
                     Some("Tool output".to_string()),
-                    payload_string(&parsed, "output"),
+                    output_payload.clone(),
                     meta,
                 );
+
+                if let Some(spawn_result) = spawn_result {
+                    if let Some(spawned_session_id) =
+                        spawn_result_string(&spawn_result, "agent_id")
+                    {
+                        let spawned_agent_nickname =
+                            spawn_result_string(&spawn_result, "nickname");
+                        let spawned_agent_role =
+                            spawn_result_string(&spawn_result, "agent_role");
+                        push_spawn_event(
+                            &mut events,
+                            current_session_id.as_deref(),
+                            line_index,
+                            lane_id,
+                            occurred_at.clone(),
+                            output_payload,
+                            call_id(&parsed),
+                            &spawned_session_id,
+                            spawned_agent_nickname.as_deref(),
+                            spawned_agent_role.as_deref(),
+                            {
+                                let mut spawn_meta = base_meta(&parsed);
+                                spawn_meta.insert(
+                                    "tool_name".into(),
+                                    Value::String("spawn_agent".to_string()),
+                                );
+                                attach_session_agent_meta(
+                                    &mut spawn_meta,
+                                    current_session_id.as_deref(),
+                                    parent_session_id.as_deref(),
+                                    agent_role.as_deref(),
+                                    agent_nickname.as_deref(),
+                                    parent_thread_id.as_deref(),
+                                );
+                                spawn_meta
+                            },
+                        );
+                    }
+                }
             }
             DetectedKind::TokenCount => {
                 if let Some(id) = current_session_id.clone() {
@@ -428,6 +561,15 @@ fn normalize_reader<R: BufRead>(
                             .or_else(|| {
                                 payload_u64(&parsed, &["info", "last_token_usage", "output_tokens"])
                             });
+                    let mut meta = base_meta(&parsed);
+                    attach_session_agent_meta(
+                        &mut meta,
+                        current_session_id.as_deref(),
+                        parent_session_id.as_deref(),
+                        agent_role.as_deref(),
+                        agent_nickname.as_deref(),
+                        parent_thread_id.as_deref(),
+                    );
 
                     events.push(CanonicalEvent {
                         event_id: event_id_for(&id, line_index),
@@ -444,13 +586,21 @@ fn normalize_reader<R: BufRead>(
                         payload_ref: None,
                         token_input: input_tokens,
                         token_output: output_tokens,
-                        meta: base_meta(&parsed),
+                        meta,
                     });
                 }
             }
             DetectedKind::TaskStarted => {
                 let mut meta = base_meta(&parsed);
                 meta.insert("raw_type".into(), Value::String("task_started".to_string()));
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
@@ -467,6 +617,15 @@ fn normalize_reader<R: BufRead>(
             DetectedKind::TaskComplete => {
                 saw_completed = true;
                 completed_at = occurred_at.clone().or(completed_at);
+                let mut meta = base_meta(&parsed);
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
@@ -477,11 +636,20 @@ fn normalize_reader<R: BufRead>(
                     occurred_at.clone(),
                     Some("Task complete".to_string()),
                     payload_string(&parsed, "last_agent_message"),
-                    base_meta(&parsed),
+                    meta,
                 );
             }
             DetectedKind::TurnAborted => {
                 saw_aborted = true;
+                let mut meta = base_meta(&parsed);
+                attach_session_agent_meta(
+                    &mut meta,
+                    current_session_id.as_deref(),
+                    parent_session_id.as_deref(),
+                    agent_role.as_deref(),
+                    agent_nickname.as_deref(),
+                    parent_thread_id.as_deref(),
+                );
                 push_simple_event(
                     &mut events,
                     current_session_id.as_deref(),
@@ -492,7 +660,7 @@ fn normalize_reader<R: BufRead>(
                     occurred_at.clone(),
                     Some("Turn aborted".to_string()),
                     payload_string(&parsed, "reason"),
-                    base_meta(&parsed),
+                    meta,
                 );
             }
             DetectedKind::Unknown => {}
@@ -569,6 +737,121 @@ fn push_simple_event(
     }
 }
 
+fn attach_session_agent_meta(
+    meta: &mut Map<String, Value>,
+    session_id: Option<&str>,
+    parent_session_id: Option<&str>,
+    agent_role: Option<&str>,
+    agent_nickname: Option<&str>,
+    parent_thread_id: Option<&str>,
+) {
+    if let Some(session_id) = session_id {
+        meta.insert(
+            "owner_session_id".into(),
+            Value::String(session_id.to_string()),
+        );
+    }
+
+    if let Some(parent_session_id) = parent_session_id {
+        meta.insert(
+            "parent_session_id".into(),
+            Value::String(parent_session_id.to_string()),
+        );
+    }
+
+    if let Some(agent_role) = agent_role {
+        meta.insert("agent_role".into(), Value::String(agent_role.to_string()));
+    }
+
+    if let Some(agent_nickname) = agent_nickname {
+        meta.insert(
+            "agent_nickname".into(),
+            Value::String(agent_nickname.to_string()),
+        );
+    }
+
+    if let Some(parent_thread_id) = parent_thread_id {
+        meta.insert(
+            "parent_thread_id".into(),
+            Value::String(parent_thread_id.to_string()),
+        );
+    }
+}
+
+fn spawn_output_result(output: Option<&str>) -> Option<Map<String, Value>> {
+    let output = output?.trim();
+    if output.is_empty() {
+        return None;
+    }
+
+    match serde_json::from_str::<Value>(output).ok()? {
+        Value::Object(map) => Some(map),
+        _ => None,
+    }
+}
+
+fn spawn_result_string(map: &Map<String, Value>, key: &str) -> Option<String> {
+    map.get(key).and_then(value_string)
+}
+
+fn spawn_event_summary(nickname: Option<&str>, session_id: &str) -> String {
+    match nickname {
+        Some(nickname) if !nickname.trim().is_empty() => format!("Spawned {nickname}"),
+        _ => format!("Spawned sub-agent {session_id}"),
+    }
+}
+
+fn push_spawn_event(
+    events: &mut Vec<CanonicalEvent>,
+    session_id: Option<&str>,
+    line_index: usize,
+    lane_id: String,
+    occurred_at: Option<String>,
+    payload_preview: Option<String>,
+    call_id: Option<&str>,
+    spawned_session_id: &str,
+    spawned_agent_nickname: Option<&str>,
+    spawned_agent_role: Option<&str>,
+    mut meta: Map<String, Value>,
+) {
+    if let Some(call_id) = call_id {
+        meta.insert("call_id".into(), Value::String(call_id.to_string()));
+    }
+    meta.insert(
+        "spawned_session_id".into(),
+        Value::String(spawned_session_id.to_string()),
+    );
+    if let Some(nickname) = spawned_agent_nickname {
+        meta.insert(
+            "spawned_agent_nickname".into(),
+            Value::String(nickname.to_string()),
+        );
+    }
+    if let Some(role) = spawned_agent_role {
+        meta.insert(
+            "spawned_agent_role".into(),
+            Value::String(role.to_string()),
+        );
+    }
+    meta.insert(
+        "lineage_resolution".into(),
+        Value::String("explicit".to_string()),
+    );
+
+    push_simple_event(
+        events,
+        session_id,
+        line_index,
+        lane_id,
+        EventKind::Spawn,
+        DetailLevel::Operational,
+        occurred_at,
+        Some(spawn_event_summary(spawned_agent_nickname, spawned_session_id)),
+        payload_preview,
+        meta,
+    );
+}
+
 fn map_source_kind(source_kind: RawSourceKind) -> SourceKind {
     match source_kind {
         RawSourceKind::SessionLog => SourceKind::SessionLog,
@@ -600,15 +883,10 @@ fn base_meta(event: &RawLogEvent) -> Map<String, Value> {
 
 fn lane_id_for_event(
     kind: DetectedKind,
-    agent_role: Option<&str>,
     session_id: Option<&str>,
 ) -> String {
     if kind == DetectedKind::UserMessage {
         return "user".to_string();
-    }
-
-    if let Some(role) = agent_role {
-        return format!("agent:{role}");
     }
 
     if let Some(session_id) = session_id {
@@ -1055,6 +1333,93 @@ mod tests {
         assert_eq!(
             session_start.meta.get("agent_nickname"),
             Some(&Value::String("Mendel".to_string()))
+        );
+    }
+
+    #[test]
+    fn assigns_distinct_lane_ids_to_same_role_subagents() {
+        let worker_a = write_temp_log(
+            "worker-a-lane",
+            &[
+                r#"{"timestamp":"2026-03-12T06:33:41.954Z","type":"session_meta","payload":{"id":"worker-a","forked_from_id":"root-session","timestamp":"2026-03-12T06:33:38.907Z","cwd":"/tmp/worker-a","agent_role":"worker","agent_nickname":"Newton","source":{"subagent":{"thread_spawn":{"parent_thread_id":"thread-root"}}}}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:42.000Z","type":"event_msg","payload":{"type":"agent_message","message":"worker a running","phase":"commentary"}}"#,
+            ],
+            RawSourceKind::SessionLog,
+        );
+        let worker_b = write_temp_log(
+            "worker-b-lane",
+            &[
+                r#"{"timestamp":"2026-03-12T06:33:51.954Z","type":"session_meta","payload":{"id":"worker-b","forked_from_id":"root-session","timestamp":"2026-03-12T06:33:48.907Z","cwd":"/tmp/worker-b","agent_role":"worker","agent_nickname":"Curie","source":{"subagent":{"thread_spawn":{"parent_thread_id":"thread-root"}}}}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:52.000Z","type":"event_msg","payload":{"type":"agent_message","message":"worker b running","phase":"commentary"}}"#,
+            ],
+            RawSourceKind::SessionLog,
+        );
+
+        let worker_a_bundle = normalize_session(&worker_a).expect("expected worker-a normalization");
+        let worker_b_bundle = normalize_session(&worker_b).expect("expected worker-b normalization");
+
+        let worker_a_lane = worker_a_bundle
+            .events
+            .iter()
+            .find(|event| event.kind == EventKind::AgentMessage)
+            .map(|event| event.lane_id.clone())
+            .expect("expected worker-a lane");
+        let worker_b_lane = worker_b_bundle
+            .events
+            .iter()
+            .find(|event| event.kind == EventKind::AgentMessage)
+            .map(|event| event.lane_id.clone())
+            .expect("expected worker-b lane");
+
+        assert_eq!(worker_a_lane, "agent:worker-a");
+        assert_eq!(worker_b_lane, "agent:worker-b");
+        assert_ne!(worker_a_lane, worker_b_lane);
+    }
+
+    #[test]
+    fn emits_explicit_spawn_event_from_spawn_agent_output() {
+        let path = write_temp_log(
+            "spawn-agent-output",
+            &[
+                r#"{"timestamp":"2026-03-12T06:33:41.954Z","type":"session_meta","payload":{"id":"root-session","timestamp":"2026-03-12T06:33:38.907Z","cwd":"/tmp/root","agent_role":"main"}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:42.000Z","type":"response_item","payload":{"type":"function_call","call_id":"call-spawn-1","name":"spawn_agent","arguments":"{\"task\":\"delegate\"}"}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:43.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-spawn-1","output":"{\"agent_id\":\"child-session\",\"nickname\":\"Newton\",\"agent_role\":\"worker\"}"}}"#,
+            ],
+            RawSourceKind::SessionLog,
+        );
+        let bundle = normalize_session(&path).expect("expected normalization");
+
+        let tool_output = bundle
+            .events
+            .iter()
+            .find(|event| event.kind == EventKind::ToolOutput)
+            .expect("expected tool output");
+        let spawn_event = bundle
+            .events
+            .iter()
+            .find(|event| event.kind == EventKind::Spawn)
+            .expect("expected spawn event");
+
+        assert_eq!(
+            tool_output.meta.get("tool_name"),
+            Some(&Value::String("spawn_agent".to_string()))
+        );
+        assert_eq!(
+            tool_output.meta.get("spawned_session_id"),
+            Some(&Value::String("child-session".to_string()))
+        );
+        assert_eq!(spawn_event.lane_id, "agent:root-session");
+        assert_eq!(
+            spawn_event.meta.get("spawned_session_id"),
+            Some(&Value::String("child-session".to_string()))
+        );
+        assert_eq!(
+            spawn_event.meta.get("spawned_agent_nickname"),
+            Some(&Value::String("Newton".to_string()))
+        );
+        assert_eq!(
+            spawn_event.meta.get("lineage_resolution"),
+            Some(&Value::String("explicit".to_string()))
         );
     }
 

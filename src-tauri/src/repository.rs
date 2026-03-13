@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -35,6 +36,42 @@ pub struct PersistedSessionDetail {
     pub bundle: CanonicalSessionBundle,
     pub last_event_at: Option<String>,
     pub event_count: u64,
+    pub timeline: SessionTimelineSnapshot,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TimelineLineageResolution {
+    #[serde(rename = "explicit")]
+    Explicit,
+    #[serde(rename = "inferred")]
+    Inferred,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TimelineLineageState {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "resolved")]
+    Resolved,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TimelineLineageRelation {
+    pub relation_id: String,
+    pub parent_session_id: String,
+    pub child_session_id: Option<String>,
+    pub expected_child_session_id: Option<String>,
+    pub state: TimelineLineageState,
+    pub resolution: Option<TimelineLineageResolution>,
+    pub spawn_event_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SessionTimelineSnapshot {
+    pub root_session_id: String,
+    pub sessions: Vec<CanonicalSession>,
+    pub events: Vec<CanonicalEvent>,
+    pub lineage_relations: Vec<TimelineLineageRelation>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -328,123 +365,9 @@ impl Repository {
         &self,
         session_id: &str,
     ) -> Result<PersistedSessionDetail, RepositoryError> {
-        let row = self
-            .conn
-            .query_row(
-                r#"
-                SELECT
-                  session_id,
-                  parent_session_id,
-                  workspace_path,
-                  title,
-                  status,
-                  started_at,
-                  ended_at,
-                  is_archived,
-                  source_kind
-                FROM sessions
-                WHERE session_id = ?1
-                "#,
-                params![session_id],
-                |row| {
-                    Ok(RawSessionRecord {
-                        session_id: row.get(0)?,
-                        parent_session_id: row.get(1)?,
-                        workspace_path: row.get(2)?,
-                        title: row.get(3)?,
-                        status: row.get(4)?,
-                        started_at: row.get(5)?,
-                        ended_at: row.get(6)?,
-                        is_archived: row.get::<_, i64>(7)? != 0,
-                        source_kind: row.get(8)?,
-                    })
-                },
-            )
-            .map_err(RepositoryError::Sql)?;
-
-        let session = CanonicalSession {
-            session_id: row.session_id,
-            parent_session_id: row.parent_session_id,
-            workspace_path: row.workspace_path,
-            title: row.title,
-            status: parse_session_status(&row.status)?,
-            started_at: row.started_at,
-            ended_at: row.ended_at,
-            is_archived: row.is_archived,
-            source_kind: parse_source_kind(&row.source_kind)?,
-        };
-
-        let mut statement = self
-            .conn
-            .prepare(
-                r#"
-                SELECT
-                  event_id,
-                  session_id,
-                  parent_event_id,
-                  agent_instance_id,
-                  lane_id,
-                  kind,
-                  detail_level,
-                  occurred_at,
-                  duration_ms,
-                  summary,
-                  payload_preview,
-                  payload_ref,
-                  token_input,
-                  token_output,
-                  meta_json
-                FROM timeline_events
-                WHERE session_id = ?1
-                ORDER BY occurred_at ASC, event_id ASC
-                "#,
-            )
-            .map_err(RepositoryError::Sql)?;
-
-        let rows = statement
-            .query_map(params![session_id], |row| {
-                Ok(RawEventRecord {
-                    event_id: row.get(0)?,
-                    session_id: row.get(1)?,
-                    parent_event_id: row.get(2)?,
-                    agent_instance_id: row.get(3)?,
-                    lane_id: row.get(4)?,
-                    kind: row.get(5)?,
-                    detail_level: row.get(6)?,
-                    occurred_at: row.get(7)?,
-                    duration_ms: row.get::<_, Option<i64>>(8)?,
-                    summary: row.get(9)?,
-                    payload_preview: row.get(10)?,
-                    payload_ref: row.get(11)?,
-                    token_input: row.get::<_, Option<i64>>(12)?,
-                    token_output: row.get::<_, Option<i64>>(13)?,
-                    meta_json: row.get(14)?,
-                })
-            })
-            .map_err(RepositoryError::Sql)?;
-
-        let mut events = Vec::new();
-        for row in rows {
-            let row = row.map_err(RepositoryError::Sql)?;
-            events.push(CanonicalEvent {
-                event_id: row.event_id,
-                session_id: row.session_id,
-                parent_event_id: row.parent_event_id,
-                agent_instance_id: row.agent_instance_id,
-                lane_id: row.lane_id,
-                kind: parse_event_kind(&row.kind)?,
-                detail_level: parse_detail_level(&row.detail_level)?,
-                occurred_at: row.occurred_at,
-                duration_ms: row.duration_ms.map(|value| value as u64),
-                summary: row.summary,
-                payload_preview: row.payload_preview,
-                payload_ref: row.payload_ref,
-                token_input: row.token_input.map(|value| value as u64),
-                token_output: row.token_output.map(|value| value as u64),
-                meta: serde_json::from_str::<Map<String, Value>>(&row.meta_json)
-                    .map_err(RepositoryError::Deserialize)?,
-            });
-        }
+        let session = load_session_record(&self.conn, session_id)?;
+        let events = load_events_for_session(&self.conn, session_id)?;
+        let timeline = build_timeline_snapshot(&self.conn, session_id)?;
 
         let event_count = events.len() as u64;
         let last_event_at = events.last().map(|event| event.occurred_at.clone());
@@ -457,6 +380,7 @@ impl Repository {
             },
             last_event_at,
             event_count,
+            timeline,
         })
     }
 
@@ -524,6 +448,388 @@ struct RawEventRecord {
     token_input: Option<i64>,
     token_output: Option<i64>,
     meta_json: String,
+}
+
+fn raw_session_record_to_canonical(row: RawSessionRecord) -> Result<CanonicalSession, RepositoryError> {
+    Ok(CanonicalSession {
+        session_id: row.session_id,
+        parent_session_id: row.parent_session_id,
+        workspace_path: row.workspace_path,
+        title: row.title,
+        status: parse_session_status(&row.status)?,
+        started_at: row.started_at,
+        ended_at: row.ended_at,
+        is_archived: row.is_archived,
+        source_kind: parse_source_kind(&row.source_kind)?,
+    })
+}
+
+fn raw_event_record_to_canonical(row: RawEventRecord) -> Result<CanonicalEvent, RepositoryError> {
+    Ok(CanonicalEvent {
+        event_id: row.event_id,
+        session_id: row.session_id,
+        parent_event_id: row.parent_event_id,
+        agent_instance_id: row.agent_instance_id,
+        lane_id: row.lane_id,
+        kind: parse_event_kind(&row.kind)?,
+        detail_level: parse_detail_level(&row.detail_level)?,
+        occurred_at: row.occurred_at,
+        duration_ms: row.duration_ms.map(|value| value as u64),
+        summary: row.summary,
+        payload_preview: row.payload_preview,
+        payload_ref: row.payload_ref,
+        token_input: row.token_input.map(|value| value as u64),
+        token_output: row.token_output.map(|value| value as u64),
+        meta: serde_json::from_str::<Map<String, Value>>(&row.meta_json)
+            .map_err(RepositoryError::Deserialize)?,
+    })
+}
+
+fn load_session_record(conn: &Connection, session_id: &str) -> Result<CanonicalSession, RepositoryError> {
+    let row = conn
+        .query_row(
+            r#"
+            SELECT
+              session_id,
+              parent_session_id,
+              workspace_path,
+              title,
+              status,
+              started_at,
+              ended_at,
+              is_archived,
+              source_kind
+            FROM sessions
+            WHERE session_id = ?1
+            "#,
+            params![session_id],
+            |row| {
+                Ok(RawSessionRecord {
+                    session_id: row.get(0)?,
+                    parent_session_id: row.get(1)?,
+                    workspace_path: row.get(2)?,
+                    title: row.get(3)?,
+                    status: row.get(4)?,
+                    started_at: row.get(5)?,
+                    ended_at: row.get(6)?,
+                    is_archived: row.get::<_, i64>(7)? != 0,
+                    source_kind: row.get(8)?,
+                })
+            },
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    raw_session_record_to_canonical(row)
+}
+
+fn load_events_for_session(conn: &Connection, session_id: &str) -> Result<Vec<CanonicalEvent>, RepositoryError> {
+    let mut statement = conn
+        .prepare(
+            r#"
+            SELECT
+              event_id,
+              session_id,
+              parent_event_id,
+              agent_instance_id,
+              lane_id,
+              kind,
+              detail_level,
+              occurred_at,
+              duration_ms,
+              summary,
+              payload_preview,
+              payload_ref,
+              token_input,
+              token_output,
+              meta_json
+            FROM timeline_events
+            WHERE session_id = ?1
+            ORDER BY occurred_at ASC, event_id ASC
+            "#,
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    let rows = statement
+        .query_map(params![session_id], |row| {
+            Ok(RawEventRecord {
+                event_id: row.get(0)?,
+                session_id: row.get(1)?,
+                parent_event_id: row.get(2)?,
+                agent_instance_id: row.get(3)?,
+                lane_id: row.get(4)?,
+                kind: row.get(5)?,
+                detail_level: row.get(6)?,
+                occurred_at: row.get(7)?,
+                duration_ms: row.get::<_, Option<i64>>(8)?,
+                summary: row.get(9)?,
+                payload_preview: row.get(10)?,
+                payload_ref: row.get(11)?,
+                token_input: row.get::<_, Option<i64>>(12)?,
+                token_output: row.get::<_, Option<i64>>(13)?,
+                meta_json: row.get(14)?,
+            })
+        })
+        .map_err(RepositoryError::Sql)?;
+
+    rows
+        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_event_record_to_canonical))
+        .collect()
+}
+
+fn load_composite_sessions(
+    conn: &Connection,
+    root_session_id: &str,
+) -> Result<Vec<CanonicalSession>, RepositoryError> {
+    let mut statement = conn
+        .prepare(
+            r#"
+            WITH RECURSIVE related AS (
+              SELECT
+                session_id,
+                parent_session_id,
+                workspace_path,
+                title,
+                status,
+                started_at,
+                ended_at,
+                is_archived,
+                source_kind
+              FROM sessions
+              WHERE session_id = ?1
+              UNION ALL
+              SELECT
+                s.session_id,
+                s.parent_session_id,
+                s.workspace_path,
+                s.title,
+                s.status,
+                s.started_at,
+                s.ended_at,
+                s.is_archived,
+                s.source_kind
+              FROM sessions s
+              INNER JOIN related r ON s.parent_session_id = r.session_id
+            )
+            SELECT
+              session_id,
+              parent_session_id,
+              workspace_path,
+              title,
+              status,
+              started_at,
+              ended_at,
+              is_archived,
+              source_kind
+            FROM related
+            ORDER BY started_at ASC, session_id ASC
+            "#,
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    let rows = statement
+        .query_map(params![root_session_id], |row| {
+            Ok(RawSessionRecord {
+                session_id: row.get(0)?,
+                parent_session_id: row.get(1)?,
+                workspace_path: row.get(2)?,
+                title: row.get(3)?,
+                status: row.get(4)?,
+                started_at: row.get(5)?,
+                ended_at: row.get(6)?,
+                is_archived: row.get::<_, i64>(7)? != 0,
+                source_kind: row.get(8)?,
+            })
+        })
+        .map_err(RepositoryError::Sql)?;
+
+    rows
+        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_session_record_to_canonical))
+        .collect()
+}
+
+fn load_composite_events(
+    conn: &Connection,
+    root_session_id: &str,
+) -> Result<Vec<CanonicalEvent>, RepositoryError> {
+    let mut statement = conn
+        .prepare(
+            r#"
+            WITH RECURSIVE related AS (
+              SELECT session_id
+              FROM sessions
+              WHERE session_id = ?1
+              UNION ALL
+              SELECT s.session_id
+              FROM sessions s
+              INNER JOIN related r ON s.parent_session_id = r.session_id
+            )
+            SELECT
+              event_id,
+              session_id,
+              parent_event_id,
+              agent_instance_id,
+              lane_id,
+              kind,
+              detail_level,
+              occurred_at,
+              duration_ms,
+              summary,
+              payload_preview,
+              payload_ref,
+              token_input,
+              token_output,
+              meta_json
+            FROM timeline_events
+            WHERE session_id IN (SELECT session_id FROM related)
+            ORDER BY occurred_at ASC, event_id ASC
+            "#,
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    let rows = statement
+        .query_map(params![root_session_id], |row| {
+            Ok(RawEventRecord {
+                event_id: row.get(0)?,
+                session_id: row.get(1)?,
+                parent_event_id: row.get(2)?,
+                agent_instance_id: row.get(3)?,
+                lane_id: row.get(4)?,
+                kind: row.get(5)?,
+                detail_level: row.get(6)?,
+                occurred_at: row.get(7)?,
+                duration_ms: row.get::<_, Option<i64>>(8)?,
+                summary: row.get(9)?,
+                payload_preview: row.get(10)?,
+                payload_ref: row.get(11)?,
+                token_input: row.get::<_, Option<i64>>(12)?,
+                token_output: row.get::<_, Option<i64>>(13)?,
+                meta_json: row.get(14)?,
+            })
+        })
+        .map_err(RepositoryError::Sql)?;
+
+    rows
+        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_event_record_to_canonical))
+        .collect()
+}
+
+fn event_meta_string(event: &CanonicalEvent, key: &str) -> Option<String> {
+    event.meta.get(key).and_then(Value::as_str).map(str::to_owned)
+}
+
+fn build_timeline_relations(
+    root_session_id: &str,
+    sessions: &[CanonicalSession],
+    events: &[CanonicalEvent],
+) -> Vec<TimelineLineageRelation> {
+    let known_session_ids = sessions
+        .iter()
+        .map(|session| session.session_id.as_str())
+        .collect::<Vec<_>>();
+    let spawn_event_by_child = events
+        .iter()
+        .filter(|event| event.kind == EventKind::Spawn)
+        .filter_map(|event| {
+            let child_session_id = event_meta_string(event, "spawned_session_id")?;
+            Some((child_session_id, event))
+        })
+        .fold(HashMap::<String, &CanonicalEvent>::new(), |mut acc, (child_session_id, event)| {
+            acc.entry(child_session_id).or_insert(event);
+            acc
+        });
+
+    let mut relations = sessions
+        .iter()
+        .filter(|session| session.session_id != root_session_id)
+        .filter_map(|session| {
+            let parent_session_id = session.parent_session_id.clone()?;
+            let explicit_spawn_event = spawn_event_by_child
+                .get(&session.session_id)
+                .copied()
+                .filter(|event| event.session_id == parent_session_id);
+
+            Some(TimelineLineageRelation {
+                relation_id: format!("lineage:{parent_session_id}:{}", session.session_id),
+                parent_session_id,
+                child_session_id: Some(session.session_id.clone()),
+                expected_child_session_id: Some(session.session_id.clone()),
+                state: TimelineLineageState::Resolved,
+                resolution: Some(if explicit_spawn_event.is_some() {
+                    TimelineLineageResolution::Explicit
+                } else {
+                    TimelineLineageResolution::Inferred
+                }),
+                spawn_event_id: explicit_spawn_event.map(|event| event.event_id.clone()),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for event in events.iter().filter(|event| event.kind == EventKind::Spawn) {
+        let Some(expected_child_session_id) = event_meta_string(event, "spawned_session_id") else {
+            continue;
+        };
+        if known_session_ids.contains(&expected_child_session_id.as_str()) {
+            continue;
+        }
+
+        relations.push(TimelineLineageRelation {
+            relation_id: format!(
+                "lineage:{}:{expected_child_session_id}:pending:{}",
+                event.session_id, event.event_id
+            ),
+            parent_session_id: event.session_id.clone(),
+            child_session_id: None,
+            expected_child_session_id: Some(expected_child_session_id),
+            state: TimelineLineageState::Pending,
+            resolution: None,
+            spawn_event_id: Some(event.event_id.clone()),
+        });
+    }
+
+    relations.sort_by(|left, right| {
+        left.parent_session_id
+            .cmp(&right.parent_session_id)
+            .then(
+                left.expected_child_session_id
+                    .as_deref()
+                    .or(left.child_session_id.as_deref())
+                    .cmp(
+                        &right
+                            .expected_child_session_id
+                            .as_deref()
+                            .or(right.child_session_id.as_deref()),
+                    ),
+            )
+            .then(
+                match left.state {
+                    TimelineLineageState::Resolved => 0,
+                    TimelineLineageState::Pending => 1,
+                }
+                .cmp(&match right.state {
+                    TimelineLineageState::Resolved => 0,
+                    TimelineLineageState::Pending => 1,
+                }),
+            )
+            .then(left.spawn_event_id.cmp(&right.spawn_event_id))
+            .then(left.relation_id.cmp(&right.relation_id))
+    });
+    relations
+}
+
+fn build_timeline_snapshot(
+    conn: &Connection,
+    root_session_id: &str,
+) -> Result<SessionTimelineSnapshot, RepositoryError> {
+    let sessions = load_composite_sessions(conn, root_session_id)?;
+    let events = load_composite_events(conn, root_session_id)?;
+    let lineage_relations = build_timeline_relations(root_session_id, &sessions, &events);
+
+    Ok(SessionTimelineSnapshot {
+        root_session_id: root_session_id.to_string(),
+        sessions,
+        events,
+        lineage_relations,
+    })
 }
 
 fn initialize_schema(conn: &Connection) -> Result<(), RepositoryError> {
@@ -874,6 +1180,197 @@ mod tests {
     }
 
     #[test]
+    fn loads_root_detail_with_recursive_composite_timeline_and_lineage() {
+        let db_path = temp_db_path("composite-detail");
+        let mut repository = Repository::open(&db_path).expect("expected repository open");
+
+        let mut root_bundle = sample_bundle(
+            "root-session",
+            "/tmp/workspace-a",
+            vec![
+                sample_event_with_kind(
+                    "root-user",
+                    "root-session",
+                    "user",
+                    EventKind::UserMessage,
+                    DetailLevel::Operational,
+                    "2026-03-12T06:33:40.000Z",
+                    "root prompt",
+                    Map::new(),
+                ),
+                sample_event_with_kind(
+                    "root-spawn-worker-a",
+                    "root-session",
+                    "agent:root-session",
+                    EventKind::Spawn,
+                    DetailLevel::Operational,
+                    "2026-03-12T06:33:41.000Z",
+                    "spawned worker a",
+                    spawn_meta("worker-a"),
+                ),
+                sample_event_with_kind(
+                    "root-spawn-pending",
+                    "root-session",
+                    "agent:root-session",
+                    EventKind::Spawn,
+                    DetailLevel::Operational,
+                    "2026-03-12T06:33:41.500Z",
+                    "spawned pending worker",
+                    spawn_meta("worker-pending"),
+                ),
+                sample_event_with_kind(
+                    "root-complete",
+                    "root-session",
+                    "agent:root-session",
+                    EventKind::AgentComplete,
+                    DetailLevel::Operational,
+                    "2026-03-12T06:33:46.000Z",
+                    "root complete",
+                    Map::new(),
+                ),
+            ],
+        );
+        root_bundle.session.started_at = "2026-03-12T06:33:38.907Z".to_string();
+        root_bundle.session.ended_at = Some("2026-03-12T06:33:46.000Z".to_string());
+
+        let mut worker_a_bundle = sample_bundle(
+            "worker-a",
+            "/tmp/workspace-a",
+            vec![
+                sample_event_with_kind(
+                    "worker-a-msg",
+                    "worker-a",
+                    "agent:worker-a",
+                    EventKind::AgentMessage,
+                    DetailLevel::Diagnostic,
+                    "2026-03-12T06:33:42.000Z",
+                    "worker a running",
+                    session_parent_meta("root-session"),
+                ),
+                sample_event_with_kind(
+                    "worker-a-complete",
+                    "worker-a",
+                    "agent:worker-a",
+                    EventKind::AgentComplete,
+                    DetailLevel::Operational,
+                    "2026-03-12T06:33:43.000Z",
+                    "worker a complete",
+                    session_parent_meta("root-session"),
+                ),
+            ],
+        );
+        worker_a_bundle.session.parent_session_id = Some("root-session".to_string());
+        worker_a_bundle.session.title = Some("Worker A".to_string());
+        worker_a_bundle.session.started_at = "2026-03-12T06:33:42.000Z".to_string();
+        worker_a_bundle.session.ended_at = Some("2026-03-12T06:33:43.000Z".to_string());
+
+        let mut worker_b_bundle = sample_bundle(
+            "worker-b",
+            "/tmp/workspace-a",
+            vec![sample_event_with_kind(
+                "worker-b-msg",
+                "worker-b",
+                "agent:worker-b",
+                EventKind::AgentMessage,
+                DetailLevel::Diagnostic,
+                "2026-03-12T06:33:44.000Z",
+                "worker b running",
+                session_parent_meta("worker-a"),
+            )],
+        );
+        worker_b_bundle.session.parent_session_id = Some("worker-a".to_string());
+        worker_b_bundle.session.title = Some("Worker B".to_string());
+        worker_b_bundle.session.started_at = "2026-03-12T06:33:44.000Z".to_string();
+        worker_b_bundle.session.ended_at = Some("2026-03-12T06:33:45.000Z".to_string());
+
+        repository
+            .upsert_session_bundle(&root_bundle)
+            .expect("expected root insert");
+        repository
+            .upsert_session_bundle(&worker_a_bundle)
+            .expect("expected worker-a insert");
+        repository
+            .upsert_session_bundle(&worker_b_bundle)
+            .expect("expected worker-b insert");
+
+        let detail = repository
+            .load_session_detail("root-session")
+            .expect("expected root session detail");
+        let timeline = detail.timeline;
+
+        assert_eq!(detail.bundle.session.session_id, "root-session");
+        assert_eq!(
+            detail.bundle.events.iter().map(|event| event.event_id.as_str()).collect::<Vec<_>>(),
+            vec![
+                "root-user",
+                "root-spawn-worker-a",
+                "root-spawn-pending",
+                "root-complete",
+            ]
+        );
+        assert_eq!(timeline.root_session_id, "root-session");
+        assert_eq!(
+            timeline
+                .sessions
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["root-session", "worker-a", "worker-b"]
+        );
+        assert_eq!(
+            timeline
+                .events
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "root-user",
+                "root-spawn-worker-a",
+                "root-spawn-pending",
+                "worker-a-msg",
+                "worker-a-complete",
+                "worker-b-msg",
+                "root-complete",
+            ]
+        );
+        assert_eq!(
+            timeline.lineage_relations,
+            vec![
+                TimelineLineageRelation {
+                    relation_id: "lineage:root-session:worker-a".to_string(),
+                    parent_session_id: "root-session".to_string(),
+                    child_session_id: Some("worker-a".to_string()),
+                    expected_child_session_id: Some("worker-a".to_string()),
+                    state: TimelineLineageState::Resolved,
+                    resolution: Some(TimelineLineageResolution::Explicit),
+                    spawn_event_id: Some("root-spawn-worker-a".to_string()),
+                },
+                TimelineLineageRelation {
+                    relation_id: "lineage:root-session:worker-pending:pending:root-spawn-pending"
+                        .to_string(),
+                    parent_session_id: "root-session".to_string(),
+                    child_session_id: None,
+                    expected_child_session_id: Some("worker-pending".to_string()),
+                    state: TimelineLineageState::Pending,
+                    resolution: None,
+                    spawn_event_id: Some("root-spawn-pending".to_string()),
+                },
+                TimelineLineageRelation {
+                    relation_id: "lineage:worker-a:worker-b".to_string(),
+                    parent_session_id: "worker-a".to_string(),
+                    child_session_id: Some("worker-b".to_string()),
+                    expected_child_session_id: Some("worker-b".to_string()),
+                    state: TimelineLineageState::Resolved,
+                    resolution: Some(TimelineLineageResolution::Inferred),
+                    spawn_event_id: None,
+                },
+            ]
+        );
+
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
     fn rejects_mixed_session_bundles_before_sql_insert() {
         let db_path = temp_db_path("mixed-session");
         let mut repository = Repository::open(&db_path).expect("expected repository open");
@@ -963,6 +1460,57 @@ mod tests {
             token_output: None,
             meta: Map::<String, Value>::new(),
         }
+    }
+
+    fn sample_event_with_kind(
+        event_id: &str,
+        session_id: &str,
+        lane_id: &str,
+        kind: EventKind,
+        detail_level: DetailLevel,
+        occurred_at: &str,
+        summary: &str,
+        meta: Map<String, Value>,
+    ) -> CanonicalEvent {
+        CanonicalEvent {
+            event_id: event_id.to_string(),
+            session_id: session_id.to_string(),
+            parent_event_id: None,
+            agent_instance_id: Some(session_id.to_string()),
+            lane_id: lane_id.to_string(),
+            kind,
+            detail_level,
+            occurred_at: occurred_at.to_string(),
+            duration_ms: None,
+            summary: Some(summary.to_string()),
+            payload_preview: None,
+            payload_ref: None,
+            token_input: None,
+            token_output: None,
+            meta,
+        }
+    }
+
+    fn session_parent_meta(parent_session_id: &str) -> Map<String, Value> {
+        let mut meta = Map::new();
+        meta.insert(
+            "parent_session_id".to_string(),
+            Value::String(parent_session_id.to_string()),
+        );
+        meta
+    }
+
+    fn spawn_meta(spawned_session_id: &str) -> Map<String, Value> {
+        let mut meta = session_parent_meta("root-session");
+        meta.insert(
+            "spawned_session_id".to_string(),
+            Value::String(spawned_session_id.to_string()),
+        );
+        meta.insert(
+            "lineage_resolution".to_string(),
+            Value::String("explicit".to_string()),
+        );
+        meta
     }
 
     fn temp_db_path(name: &str) -> PathBuf {

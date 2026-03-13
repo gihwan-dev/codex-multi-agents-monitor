@@ -156,10 +156,38 @@ describe("timeline + detail drawer", () => {
     ).toHaveLength(2);
   });
 
-  it("summarizes connector selections with source and target flow labels", () => {
+  it("shows child owner session metadata when a sub-agent item is selected", () => {
     render(<TimelineHarness mode="live" />);
 
-    fireEvent.click(screen.getByTestId("timeline-connector-connector:turn:1:2"));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Second worker audited the final connector chain for readability.",
+      }),
+    );
+
+    const drawer = within(screen.getByTestId("timeline-detail-drawer"));
+
+    expect(drawer.getByText("Owner session")).toBeVisible();
+    expect(drawer.getByText("Worker B: connector audit")).toBeVisible();
+    expect(drawer.getByText("Owner lane")).toBeVisible();
+    expect(drawer.getByText("Curie")).toBeVisible();
+  });
+
+  it("summarizes connector selections with source and target flow labels", () => {
+    const { projection } = createHarnessState();
+    const completeConnector = projection.connectors.find(
+      (connector) =>
+        connector.kind === "complete" &&
+        connector.connectorId === "connector:lineage:sess-ui-shell:sess-ui-shell-worker-a:complete",
+    );
+
+    if (!completeConnector) {
+      throw new Error("Expected explicit worker completion connector");
+    }
+
+    render(<TimelineHarness mode="live" />);
+
+    fireEvent.click(screen.getByTestId(`timeline-connector-${completeConnector.connectorId}`));
 
     const drawer = within(screen.getByTestId("timeline-detail-drawer"));
 

@@ -76,6 +76,25 @@ function laneLabel(projection: TimelineProjection | null, laneId: string | null 
   return projection.lanes.find((lane) => lane.laneId === laneId)?.label ?? laneId;
 }
 
+function ownerSessionLabel(
+  projection: TimelineProjection | null,
+  sessionId: string | null | undefined,
+) {
+  if (!projection || !sessionId) {
+    return "Unknown session";
+  }
+
+  const session = projection.sessionsById[sessionId];
+  if (!session) {
+    return sessionId;
+  }
+
+  return formatSessionDisplayTitle({
+    rawTitle: session.title,
+    workspacePath: session.workspace_path,
+  }).displayTitle;
+}
+
 function connectorLabel(kind: NonNullable<TimelineSelectionContext["selectedConnector"]>["kind"]) {
   switch (kind) {
     case "spawn":
@@ -148,7 +167,7 @@ function selectionDescription(
     return `${selectionContext.selectedItem.kind} selection in ${laneLabel(
       projection,
       selectionContext.selectedItem.laneId,
-    )}.`;
+    )} from ${ownerSessionLabel(projection, selectionContext.selectedItem.ownerSessionId)}.`;
   }
 
   return describeStatus(selectedSession?.status);
@@ -229,6 +248,7 @@ export function DetailDrawer({
             kind: selectedItem.kind,
             lane_id: selectedItem.laneId,
             meta: selectedItem.meta,
+            owner_session_id: selectedItem.ownerSessionId,
             started_at: selectedItem.startedAt,
           },
           source_events: selectedItem.sourceEvents,
@@ -404,6 +424,22 @@ export function DetailDrawer({
                                 : "No data"}
                           </p>
                         </div>
+                        {selectedItem ? (
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Owner session</p>
+                            <p className="mt-1 text-slate-100">
+                              {ownerSessionLabel(projection, selectedItem.ownerSessionId)}
+                            </p>
+                          </div>
+                        ) : null}
+                        {selectedItem ? (
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Owner lane</p>
+                            <p className="mt-1 text-slate-100">
+                              {laneLabel(projection, selectedItem.laneId)}
+                            </p>
+                          </div>
+                        ) : null}
                       </div>
                     </section>
 

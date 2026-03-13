@@ -1,5 +1,7 @@
 import type {
+  CanonicalEvent,
   CanonicalSessionBundle,
+  CanonicalSession,
   SessionStatus,
   SourceKind,
 } from "./canonical";
@@ -32,10 +34,31 @@ export interface SessionDetailQuery {
   session_id: string;
 }
 
+export type TimelineLineageResolution = "explicit" | "inferred";
+export type TimelineLineageState = "pending" | "resolved";
+
+export interface TimelineLineageRelation {
+  relation_id: string;
+  parent_session_id: string;
+  child_session_id: string | null;
+  expected_child_session_id: string | null;
+  state: TimelineLineageState;
+  resolution: TimelineLineageResolution | null;
+  spawn_event_id: string | null;
+}
+
+export interface SessionTimelineSnapshot {
+  root_session_id: string;
+  sessions: CanonicalSession[];
+  events: CanonicalEvent[];
+  lineage_relations: TimelineLineageRelation[];
+}
+
 export interface SessionDetailSnapshot {
   bundle: CanonicalSessionBundle;
   last_event_at: string | null;
   event_count: number;
+  timeline: SessionTimelineSnapshot;
 }
 
 export interface LiveSessionUpdate {

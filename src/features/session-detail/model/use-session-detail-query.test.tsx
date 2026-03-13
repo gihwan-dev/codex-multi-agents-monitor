@@ -16,6 +16,42 @@ vi.mock("@/shared/api/tauri-monitor", () => ({
   querySessionDetail,
 }));
 
+function sessionDetailPayload(options: {
+  eventCount?: number;
+  lastEventAt?: string | null;
+  sessionId: string;
+  title?: string;
+}) {
+  const { eventCount = 0, lastEventAt = null, sessionId, title = sessionId } = options;
+  const session = {
+    ended_at: null,
+    is_archived: false,
+    parent_session_id: null,
+    session_id: sessionId,
+    source_kind: "session_log" as const,
+    started_at: "2026-03-12T05:00:00.000Z",
+    status: "live" as const,
+    title,
+    workspace_path: "/workspace/a",
+  };
+
+  return {
+    bundle: {
+      events: [],
+      metrics: [],
+      session,
+    },
+    event_count: eventCount,
+    last_event_at: lastEventAt,
+    timeline: {
+      root_session_id: sessionId,
+      sessions: [session],
+      events: [],
+      lineage_relations: [],
+    },
+  };
+}
+
 describe("useSessionDetailQuery", () => {
   afterEach(() => {
     querySessionDetail.mockReset();
@@ -37,25 +73,7 @@ describe("useSessionDetailQuery", () => {
   it("uses separate keys so old detail data does not bleed across ids", async () => {
     isTauriRuntimeAvailable.mockReturnValue(true);
     querySessionDetail.mockImplementation(({ session_id }) =>
-      Promise.resolve({
-        bundle: {
-          events: [],
-          metrics: [],
-          session: {
-            ended_at: null,
-            is_archived: false,
-            parent_session_id: null,
-            session_id,
-            source_kind: "session_log",
-            started_at: "2026-03-12T05:00:00.000Z",
-            status: "live",
-            title: session_id,
-            workspace_path: "/workspace/a",
-          },
-        },
-        event_count: 0,
-        last_event_at: null,
-      }),
+      Promise.resolve(sessionDetailPayload({ sessionId: session_id })),
     );
 
     const { result, rerender } = renderHook(
@@ -84,44 +102,15 @@ describe("useSessionDetailQuery", () => {
 
     isTauriRuntimeAvailable.mockReturnValue(true);
     querySessionDetail
-      .mockResolvedValueOnce({
-        bundle: {
-          events: [],
-          metrics: [],
-          session: {
-            ended_at: null,
-            is_archived: false,
-            parent_session_id: null,
-            session_id: "session-1",
-            source_kind: "session_log",
-            started_at: "2026-03-12T05:00:00.000Z",
-            status: "live",
-            title: "session-1",
-            workspace_path: "/workspace/a",
-          },
-        },
-        event_count: 0,
-        last_event_at: null,
-      })
-      .mockResolvedValueOnce({
-        bundle: {
-          events: [],
-          metrics: [],
-          session: {
-            ended_at: null,
-            is_archived: false,
-            parent_session_id: null,
-            session_id: "session-1",
-            source_kind: "session_log",
-            started_at: "2026-03-12T05:00:00.000Z",
-            status: "live",
-            title: "session-1 refreshed",
-            workspace_path: "/workspace/a",
-          },
-        },
-        event_count: 1,
-        last_event_at: "2026-03-12T05:30:00.000Z",
-      });
+      .mockResolvedValueOnce(sessionDetailPayload({ sessionId: "session-1" }))
+      .mockResolvedValueOnce(
+        sessionDetailPayload({
+          eventCount: 1,
+          lastEventAt: "2026-03-12T05:30:00.000Z",
+          sessionId: "session-1",
+          title: "session-1 refreshed",
+        }),
+      );
 
     const hook = renderHook(() => useSessionDetailQuery("session-1"), {
       wrapper: createQueryClientWrapper(queryClient),

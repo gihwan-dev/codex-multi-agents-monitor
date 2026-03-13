@@ -40,7 +40,16 @@ function latestAgentUpdate(projection: TimelineProjection) {
 }
 
 function participantSummary(projection: TimelineProjection) {
-  const lanes = projection.lanes.filter((lane) => lane.laneId !== "user");
+  const latestTurn = projection.turnBands[projection.turnBands.length - 1] ?? null;
+  const latestTurnLaneIds = new Set(
+    (latestTurn?.itemIds ?? [])
+      .map((itemId) => projection.itemsById[itemId]?.laneId ?? null)
+      .filter((laneId): laneId is string => laneId != null && laneId !== "user"),
+  );
+  const lanes =
+    latestTurnLaneIds.size > 0
+      ? projection.lanes.filter((lane) => latestTurnLaneIds.has(lane.laneId))
+      : projection.lanes.filter((lane) => lane.laneId !== "user");
 
   if (lanes.length === 0) {
     return {

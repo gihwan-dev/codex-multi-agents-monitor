@@ -57,7 +57,7 @@ describe("LiveSessionOverview", () => {
     expect(within(coordination).getByText("Turn 2")).toBeVisible();
     expect(within(coordination).getByText("Participants")).toBeVisible();
     expect(within(coordination).getByText("2 agent lanes")).toBeVisible();
-    expect(within(coordination).getByText("Main · Newton")).toBeVisible();
+    expect(within(coordination).getByText("Main · Curie")).toBeVisible();
     expect(within(coordination).getByText("Latest coordination")).toBeVisible();
     expect(within(coordination).getByText(/Handoff ·/)).toBeVisible();
     expect(screen.queryByText("Selected session")).not.toBeInTheDocument();

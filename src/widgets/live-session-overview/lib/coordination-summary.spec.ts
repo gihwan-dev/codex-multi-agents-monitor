@@ -25,7 +25,7 @@ describe("deriveCoordinationSnapshot", () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot?.currentTurn.label).toBe("Turn 2");
     expect(snapshot?.participants.label).toBe("2 agent lanes");
-    expect(snapshot?.participants.detail).toBe("Main · Newton");
+    expect(snapshot?.participants.detail).toBe("Main · Curie");
     expect(snapshot?.latestCoordination.label).toContain("Handoff");
   });
 

@@ -454,6 +454,14 @@ function isCapsuleItem(item: TimelineItemView) {
   return item.kind === "tool" || item.kind === "reasoning";
 }
 
+function isLinkedSpawnToolItem(item: TimelineItemView) {
+  return (
+    item.kind === "tool" &&
+    typeof item.meta.linked_spawn_session_id === "string" &&
+    item.meta.linked_spawn_session_id.length > 0
+  );
+}
+
 function isPromptItem(item: TimelineItemView) {
   return item.sourceEvents.some((event) => event.kind === "user_message");
 }
@@ -1524,6 +1532,10 @@ export function TimelineCanvas({
                     }
 
                     if (isCapsuleItem(item)) {
+                      if (isLinkedSpawnToolItem(item)) {
+                        return null;
+                      }
+
                       if (currentDensity === "overview") {
                         return null;
                       }
