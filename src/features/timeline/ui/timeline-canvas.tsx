@@ -499,8 +499,10 @@ export function TimelineCanvas({
       return;
     }
 
+    const nextScrollTop = event.currentTarget.scrollTop;
+
     setViewport((current) =>
-      current ? disableTimelineFollow(current, event.currentTarget.scrollTop) : current,
+      current ? disableTimelineFollow(current, nextScrollTop) : current,
     );
   });
 

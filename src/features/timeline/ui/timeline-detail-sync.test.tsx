@@ -239,6 +239,28 @@ describe("timeline + detail drawer", () => {
     );
   });
 
+  it("switches to manual review when the user scrolls the timeline", async () => {
+    render(<TimelineHarness mode="live" />);
+
+    const scrollArea = screen.getByTestId("timeline-scroll-area");
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
+    scrollArea.scrollTop = 120;
+
+    expect(() => {
+      fireEvent.scroll(scrollArea);
+    }).not.toThrow();
+
+    expect(screen.getByTestId("timeline-follow-state")).toHaveTextContent("Manual review");
+    expect(screen.getByTestId("timeline-refollow-button")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
   it("uses the archive preset without exposing the live follow control", () => {
     render(<TimelineHarness mode="archive" />);
 
