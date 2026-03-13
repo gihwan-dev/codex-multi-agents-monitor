@@ -58,6 +58,11 @@ pub enum RepositoryError {
         field: &'static str,
         value: String,
     },
+    EventSessionMismatch {
+        bundle_session_id: String,
+        event_id: String,
+        event_session_id: String,
+    },
 }
 
 impl fmt::Display for RepositoryError {
@@ -79,6 +84,15 @@ impl fmt::Display for RepositoryError {
             Self::InvalidEnum { field, value } => {
                 write!(f, "invalid enum value for {}: {}", field, value)
             }
+            Self::EventSessionMismatch {
+                bundle_session_id,
+                event_id,
+                event_session_id,
+            } => write!(
+                f,
+                "bundle session_id {} does not match event {} session_id {}",
+                bundle_session_id, event_id, event_session_id
+            ),
         }
     }
 }
@@ -90,7 +104,7 @@ impl Error for RepositoryError {
             Self::Sql(source) => Some(source),
             Self::Serialize(source) => Some(source),
             Self::Deserialize(source) => Some(source),
-            Self::InvalidEnum { .. } => None,
+            Self::InvalidEnum { .. } | Self::EventSessionMismatch { .. } => None,
         }
     }
 }
@@ -110,6 +124,7 @@ impl Repository {
         &mut self,
         bundle: &CanonicalSessionBundle,
     ) -> Result<(), RepositoryError> {
+        validate_bundle_session_ids(bundle)?;
         let transaction = self.conn.transaction().map_err(RepositoryError::Sql)?;
         transaction
             .execute(
@@ -626,6 +641,22 @@ fn parse_detail_level(value: &str) -> Result<DetailLevel, RepositoryError> {
     }
 }
 
+fn validate_bundle_session_ids(bundle: &CanonicalSessionBundle) -> Result<(), RepositoryError> {
+    if let Some(event) = bundle
+        .events
+        .iter()
+        .find(|event| event.session_id != bundle.session.session_id)
+    {
+        return Err(RepositoryError::EventSessionMismatch {
+            bundle_session_id: bundle.session.session_id.clone(),
+            event_id: event.event_id.clone(),
+            event_session_id: event.session_id.clone(),
+        });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -832,6 +863,51 @@ mod tests {
         assert_eq!(detail.bundle.events[1].event_id, "event-late");
         assert_eq!(detail.bundle.events[0].summary.as_deref(), Some("earlier"));
         assert_eq!(detail.bundle.events[1].summary.as_deref(), Some("later"));
+
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn rejects_mixed_session_bundles_before_sql_insert() {
+        let db_path = temp_db_path("mixed-session");
+        let mut repository = Repository::open(&db_path).expect("expected repository open");
+        let bundle = sample_bundle(
+            "session-owner",
+            "/tmp/workspace-a",
+            vec![sample_event(
+                "event-foreign",
+                "session-foreign",
+                "2026-03-12T06:33:45.000Z",
+                "foreign",
+            )],
+        );
+
+        let error = repository
+            .upsert_session_bundle(&bundle)
+            .expect_err("expected mixed session bundle rejection");
+
+        assert!(matches!(
+            error,
+            RepositoryError::EventSessionMismatch {
+                bundle_session_id,
+                event_id,
+                event_session_id,
+            } if bundle_session_id == "session-owner"
+                && event_id == "event-foreign"
+                && event_session_id == "session-foreign"
+        ));
+
+        let session_count: i64 = repository
+            .conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+            .expect("expected session count");
+        let event_count: i64 = repository
+            .conn
+            .query_row("SELECT COUNT(*) FROM timeline_events", [], |row| row.get(0))
+            .expect("expected event count");
+
+        assert_eq!(session_count, 0);
+        assert_eq!(event_count, 0);
 
         let _ = fs::remove_file(db_path);
     }

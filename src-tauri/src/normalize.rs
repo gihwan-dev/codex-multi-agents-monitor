@@ -236,6 +236,7 @@ fn normalize_reader<R: BufRead>(
     let mut agent_nickname = None;
     let mut saw_completed = false;
     let mut saw_aborted = false;
+    let mut emitted_session_start = false;
 
     for (line_index, line_result) in reader.lines().enumerate() {
         let line = line_result.map_err(|source| NormalizeError::Io {
@@ -251,56 +252,75 @@ fn normalize_reader<R: BufRead>(
             source,
         })?;
         let occurred_at = event_timestamp(&parsed);
+        let detected_kind = detect_kind(&parsed);
+        let mut session_meta_matches_owner = false;
 
         if let Some(hints) = extract_session_metadata(&parsed) {
-            session_id = hints.session_id.or(session_id);
-            parent_session_id = hints.parent_session_id.or(parent_session_id);
-            agent_role = hints.agent_role.or(agent_role);
-            agent_nickname = hints.agent_nickname.or(agent_nickname);
-            workspace_path = payload_string(&parsed, "cwd").or(workspace_path);
-            started_at = payload_string(&parsed, "timestamp")
-                .or_else(|| parsed.timestamp.clone())
-                .or(started_at);
+            let hinted_session_id = hints.session_id.clone();
+            let matches_owner = match (session_id.as_deref(), hinted_session_id.as_deref()) {
+                (Some(owner_id), Some(hinted_id)) => owner_id == hinted_id,
+                (Some(_), None) => true,
+                (None, _) => true,
+            };
+
+            if session_id.is_none() {
+                session_id = hinted_session_id.clone();
+            }
+
+            session_meta_matches_owner = matches_owner;
+            if matches_owner {
+                parent_session_id = hints.parent_session_id.or(parent_session_id);
+                agent_role = hints.agent_role.or(agent_role);
+                agent_nickname = hints.agent_nickname.or(agent_nickname);
+                workspace_path = payload_string(&parsed, "cwd").or(workspace_path);
+                started_at = payload_string(&parsed, "timestamp")
+                    .or_else(|| parsed.timestamp.clone())
+                    .or(started_at);
+            }
         }
 
         let current_session_id = session_id.clone();
         let lane_id = lane_id_for_event(
-            detect_kind(&parsed),
+            detected_kind,
             agent_role.as_deref(),
             current_session_id.as_deref(),
         );
 
-        match detect_kind(&parsed) {
+        match detected_kind {
             DetectedKind::SessionMeta => {
-                if let (Some(id), Some(started)) = (current_session_id.clone(), started_at.clone())
-                {
-                    let mut meta = base_meta(&parsed);
-                    if let Some(role) = &agent_role {
-                        meta.insert("agent_role".into(), Value::String(role.clone()));
+                if session_meta_matches_owner && !emitted_session_start {
+                    if let (Some(id), Some(started)) =
+                        (current_session_id.clone(), started_at.clone())
+                    {
+                        emitted_session_start = true;
+                        let mut meta = base_meta(&parsed);
+                        if let Some(role) = &agent_role {
+                            meta.insert("agent_role".into(), Value::String(role.clone()));
+                        }
+                        if let Some(nickname) = &agent_nickname {
+                            meta.insert("agent_nickname".into(), Value::String(nickname.clone()));
+                        }
+                        if let Some(parent) = &parent_session_id {
+                            meta.insert("parent_session_id".into(), Value::String(parent.clone()));
+                        }
+                        events.push(CanonicalEvent {
+                            event_id: format!("{id}:session_start"),
+                            session_id: id.clone(),
+                            parent_event_id: None,
+                            agent_instance_id: Some(id),
+                            lane_id,
+                            kind: EventKind::SessionStart,
+                            detail_level: DetailLevel::Operational,
+                            occurred_at: started,
+                            duration_ms: None,
+                            summary: Some("Session started".to_string()),
+                            payload_preview: workspace_path.clone(),
+                            payload_ref: None,
+                            token_input: None,
+                            token_output: None,
+                            meta,
+                        });
                     }
-                    if let Some(nickname) = &agent_nickname {
-                        meta.insert("agent_nickname".into(), Value::String(nickname.clone()));
-                    }
-                    if let Some(parent) = &parent_session_id {
-                        meta.insert("parent_session_id".into(), Value::String(parent.clone()));
-                    }
-                    events.push(CanonicalEvent {
-                        event_id: format!("{id}:session_start"),
-                        session_id: id.clone(),
-                        parent_event_id: None,
-                        agent_instance_id: Some(id),
-                        lane_id,
-                        kind: EventKind::SessionStart,
-                        detail_level: DetailLevel::Operational,
-                        occurred_at: started,
-                        duration_ms: None,
-                        summary: Some("Session started".to_string()),
-                        payload_preview: workspace_path.clone(),
-                        payload_ref: None,
-                        token_input: None,
-                        token_output: None,
-                        meta,
-                    });
                 }
             }
             DetectedKind::UserMessage => {
@@ -832,6 +852,50 @@ mod tests {
         assert_eq!(
             output.meta.get("call_id"),
             Some(&Value::String("call-1".to_string()))
+        );
+    }
+
+    #[test]
+    fn keeps_owner_session_when_subagent_log_replays_parent_metadata() {
+        let path = write_temp_log(
+            "subagent-owner-session",
+            &[
+                r#"{"timestamp":"2026-03-12T06:33:41.954Z","type":"session_meta","payload":{"id":"child-session","forked_from_id":"parent-session","timestamp":"2026-03-12T06:33:38.907Z","cwd":"/tmp/child","agent_role":"test-engineer","agent_nickname":"Mendel"}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:41.955Z","type":"session_meta","payload":{"id":"parent-session","timestamp":"2026-03-12T06:30:00.000Z","cwd":"/tmp/parent"}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:42.000Z","type":"event_msg","payload":{"type":"user_message","message":"subagent brief"}}"#,
+                r#"{"timestamp":"2026-03-12T06:33:43.000Z","type":"event_msg","payload":{"type":"agent_message","message":"working","phase":"commentary"}}"#,
+            ],
+            RawSourceKind::SessionLog,
+        );
+        let bundle = normalize_session(&path).expect("expected normalization");
+
+        assert_eq!(bundle.session.session_id, "child-session");
+        assert_eq!(
+            bundle.session.parent_session_id.as_deref(),
+            Some("parent-session")
+        );
+        assert_eq!(bundle.session.workspace_path, "/tmp/child");
+        assert!(bundle
+            .events
+            .iter()
+            .all(|event| event.session_id == "child-session"));
+        assert_eq!(
+            bundle
+                .events
+                .iter()
+                .filter(|event| event.kind == EventKind::SessionStart)
+                .count(),
+            1
+        );
+
+        let session_start = bundle
+            .events
+            .iter()
+            .find(|event| event.kind == EventKind::SessionStart)
+            .expect("expected session start");
+        assert_eq!(
+            session_start.meta.get("agent_nickname"),
+            Some(&Value::String("Mendel".to_string()))
         );
     }
 
