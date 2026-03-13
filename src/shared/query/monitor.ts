@@ -43,6 +43,8 @@ export function workspaceSessionsCachedQueryOptions() {
 
       return queryWorkspaceSessionsCached();
     },
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
   });
 }
 

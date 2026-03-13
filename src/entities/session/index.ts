@@ -5,10 +5,12 @@ export type {
   WorkspaceSessionsSnapshot,
 } from "@/shared/queries";
 export {
+  compareRefreshMarkers,
   compareSessionSummary,
   findSelectedSession,
   firstSessionId,
   mergeBootstrapSnapshot,
+  pruneLiveSnapshot,
   selectLiveWorkspaceSnapshot,
   sortSnapshot,
   sortWorkspaceGroup,

@@ -15,6 +15,7 @@ use tauri::{App, AppHandle, Emitter, Manager, Runtime, State};
 use walkdir::WalkDir;
 
 use crate::codex_source::{detect_roots, discover_session_logs, SessionLogRef, SourceError};
+use crate::desktop_threads::load_visible_desktop_threads;
 use crate::normalize::{normalize_session, NormalizeError};
 use crate::repository::{
     Repository, RepositoryError, SessionDetailSnapshot, SessionSummary, WorkspaceSessionGroup,
@@ -177,14 +178,19 @@ pub fn query_workspace_sessions_cached_service(
     state: &MonitorState,
 ) -> Result<WorkspaceSessionsSnapshot, IpcError> {
     let repository = Repository::open(state.db_path()).map_err(IpcError::Repository)?;
-
-    Ok(WorkspaceSessionsSnapshot {
-        refreshed_at: repository
-            .current_timestamp()
-            .map_err(IpcError::Repository)?,
-        workspaces: repository
+    let (summaries, refreshed_at) = repository
+        .list_session_summaries_with_refresh_marker()
+        .map_err(IpcError::Repository)?;
+    let workspaces = match load_visible_desktop_threads() {
+        Some(index) => index.filter_workspace_groups(summaries),
+        None => repository
             .list_workspace_sessions()
             .map_err(IpcError::Repository)?,
+    };
+
+    Ok(WorkspaceSessionsSnapshot {
+        refreshed_at,
+        workspaces,
     })
 }
 
@@ -192,10 +198,16 @@ pub fn query_session_detail_service(
     state: &MonitorState,
     query: SessionDetailQuery,
 ) -> Result<SessionDetailSnapshot, IpcError> {
-    Repository::open(state.db_path())
-        .map_err(IpcError::Repository)?
+    let repository = Repository::open(state.db_path()).map_err(IpcError::Repository)?;
+    let mut detail = repository
         .load_session_detail(&query.session_id)
-        .map_err(IpcError::Repository)
+        .map_err(IpcError::Repository)?;
+
+    if let Some(index) = load_visible_desktop_threads() {
+        index.enrich_detail(&mut detail);
+    }
+
+    Ok(detail)
 }
 
 pub fn start_live_bridge_service<R: Runtime + 'static>(
@@ -297,6 +309,7 @@ fn poll_live_updates<R: Runtime>(
     }
 
     let mut repository = Repository::open(db_path).map_err(IpcError::Repository)?;
+    let desktop_threads = load_visible_desktop_threads();
     for live_file in changed {
         let log_ref = SessionLogRef {
             path: live_file.path,
@@ -310,13 +323,18 @@ fn poll_live_updates<R: Runtime>(
             .upsert_session_bundle(&bundle)
             .map_err(IpcError::Repository)?;
 
-        if let Some(summary) = repository
-            .load_session_summary(&session_id)
-            .map_err(IpcError::Repository)?
-        {
-            let refreshed_at = repository
-                .current_timestamp()
-                .map_err(IpcError::Repository)?;
+        let (summary, refreshed_at) = repository
+            .load_session_summary_with_refresh_marker(&session_id)
+            .map_err(IpcError::Repository)?;
+
+        if let Some(summary) = summary {
+            let Some(summary) = desktop_threads
+                .as_ref()
+                .map(|index| index.enrich_summary_for_rollout(&log_ref.path, summary.clone()))
+                .unwrap_or(Some(summary))
+            else {
+                continue;
+            };
             app.emit(
                 LIVE_SESSION_UPDATED_EVENT,
                 LiveSessionUpdate {

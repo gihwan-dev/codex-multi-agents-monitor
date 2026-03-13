@@ -5,6 +5,43 @@ import type {
   WorkspaceSessionsSnapshot,
 } from "@/shared/queries";
 
+function refreshRevision(marker: string | null | undefined) {
+  if (!marker) {
+    return null;
+  }
+
+  const separatorIndex = marker.lastIndexOf("#");
+  if (separatorIndex < 0) {
+    return null;
+  }
+
+  const revision = marker.slice(separatorIndex + 1);
+  return /^\d+$/.test(revision) ? revision : null;
+}
+
+export function compareRefreshMarkers(
+  left: string | null | undefined,
+  right: string | null | undefined,
+) {
+  if (!left && !right) {
+    return 0;
+  }
+  if (!left) {
+    return -1;
+  }
+  if (!right) {
+    return 1;
+  }
+
+  const leftRevision = refreshRevision(left);
+  const rightRevision = refreshRevision(right);
+  if (leftRevision && rightRevision && leftRevision !== rightRevision) {
+    return leftRevision.localeCompare(rightRevision);
+  }
+
+  return left.localeCompare(right);
+}
+
 function sessionActivityTimestamp(session: SessionSummary) {
   return session.last_event_at ?? session.started_at;
 }
@@ -102,6 +139,14 @@ export function mergeBootstrapSnapshot(
   return merged;
 }
 
+function isVisibleLiveSession(session: SessionSummary) {
+  return (
+    !session.is_archived &&
+    !session.parent_session_id &&
+    session.source_kind !== "archive_log"
+  );
+}
+
 export function selectLiveWorkspaceSnapshot(
   snapshot: WorkspaceSessionsSnapshot | null,
 ) {
@@ -109,32 +154,44 @@ export function selectLiveWorkspaceSnapshot(
     return null;
   }
 
-  const latestByWorkspace = new Map<string, SessionSummary>();
+  const workspaces = snapshot.workspaces
+    .map((workspace) => ({
+      ...workspace,
+      sessions: workspace.sessions.filter(isVisibleLiveSession).sort(compareSessionSummary),
+    }))
+    .filter((workspace) => workspace.sessions.length > 0)
+    .sort((left, right) => {
+      const leftHead = left.sessions[0];
+      const rightHead = right.sessions[0];
 
-  for (const workspace of snapshot.workspaces) {
-    for (const session of workspace.sessions) {
-      if (session.is_archived || session.parent_session_id) {
-        continue;
+      if (!leftHead || !rightHead) {
+        return left.workspace_path.localeCompare(right.workspace_path);
       }
 
-      const existing = latestByWorkspace.get(session.workspace_path);
-      if (!existing || compareSessionSummary(session, existing) < 0) {
-        latestByWorkspace.set(session.workspace_path, session);
-      }
-    }
-  }
-
-  const workspaces = Array.from(latestByWorkspace.values())
-    .sort(compareSessionSummary)
-    .map((session) => ({
-      workspace_path: session.workspace_path,
-      sessions: [session],
-    }));
+      return (
+        compareSessionSummary(leftHead, rightHead) ||
+        left.workspace_path.localeCompare(right.workspace_path)
+      );
+    });
 
   return {
     refreshed_at: snapshot.refreshed_at,
     workspaces,
   };
+}
+
+export function pruneLiveSnapshot(
+  snapshot: WorkspaceSessionsSnapshot | null,
+  refreshedAt: string,
+) {
+  if (!snapshot) {
+    return null;
+  }
+  if (compareRefreshMarkers(snapshot.refreshed_at, refreshedAt) <= 0) {
+    return null;
+  }
+
+  return sortSnapshot(snapshot);
 }
 
 export function firstSessionId(snapshot: WorkspaceSessionsSnapshot | null) {

@@ -479,16 +479,13 @@ fn normalize_reader<R: BufRead>(
                 );
 
                 if let Some(spawn_result) = &spawn_result {
-                    if let Some(spawned_session_id) =
-                        spawn_result_string(spawn_result, "agent_id")
+                    if let Some(spawned_session_id) = spawn_result_string(spawn_result, "agent_id")
                     {
                         meta.insert(
                             "spawned_session_id".into(),
                             Value::String(spawned_session_id.clone()),
                         );
-                        if let Some(nickname) =
-                            spawn_result_string(spawn_result, "nickname")
-                        {
+                        if let Some(nickname) = spawn_result_string(spawn_result, "nickname") {
                             meta.insert(
                                 "spawned_agent_nickname".into(),
                                 Value::String(nickname.clone()),
@@ -511,13 +508,10 @@ fn normalize_reader<R: BufRead>(
                 );
 
                 if let Some(spawn_result) = spawn_result {
-                    if let Some(spawned_session_id) =
-                        spawn_result_string(&spawn_result, "agent_id")
+                    if let Some(spawned_session_id) = spawn_result_string(&spawn_result, "agent_id")
                     {
-                        let spawned_agent_nickname =
-                            spawn_result_string(&spawn_result, "nickname");
-                        let spawned_agent_role =
-                            spawn_result_string(&spawn_result, "agent_role");
+                        let spawned_agent_nickname = spawn_result_string(&spawn_result, "nickname");
+                        let spawned_agent_role = spawn_result_string(&spawn_result, "agent_role");
                         push_spawn_event(
                             &mut events,
                             current_session_id.as_deref(),
@@ -828,10 +822,7 @@ fn push_spawn_event(
         );
     }
     if let Some(role) = spawned_agent_role {
-        meta.insert(
-            "spawned_agent_role".into(),
-            Value::String(role.to_string()),
-        );
+        meta.insert("spawned_agent_role".into(), Value::String(role.to_string()));
     }
     meta.insert(
         "lineage_resolution".into(),
@@ -846,7 +837,10 @@ fn push_spawn_event(
         EventKind::Spawn,
         DetailLevel::Operational,
         occurred_at,
-        Some(spawn_event_summary(spawned_agent_nickname, spawned_session_id)),
+        Some(spawn_event_summary(
+            spawned_agent_nickname,
+            spawned_session_id,
+        )),
         payload_preview,
         meta,
     );
@@ -881,10 +875,7 @@ fn base_meta(event: &RawLogEvent) -> Map<String, Value> {
     meta
 }
 
-fn lane_id_for_event(
-    kind: DetectedKind,
-    session_id: Option<&str>,
-) -> String {
+fn lane_id_for_event(kind: DetectedKind, session_id: Option<&str>) -> String {
     if kind == DetectedKind::UserMessage {
         return "user".to_string();
     }
@@ -1109,7 +1100,11 @@ fn collapse_whitespace(value: &str) -> String {
 }
 
 fn is_substantive_title_line(line: &str) -> bool {
-    if line.is_empty() || !line.chars().any(|ch| ch.is_alphanumeric() || ch == '$' || ch >= '가') {
+    if line.is_empty()
+        || !line
+            .chars()
+            .any(|ch| ch.is_alphanumeric() || ch == '$' || ch >= '가')
+    {
         return false;
     }
 
@@ -1355,8 +1350,10 @@ mod tests {
             RawSourceKind::SessionLog,
         );
 
-        let worker_a_bundle = normalize_session(&worker_a).expect("expected worker-a normalization");
-        let worker_b_bundle = normalize_session(&worker_b).expect("expected worker-b normalization");
+        let worker_a_bundle =
+            normalize_session(&worker_a).expect("expected worker-a normalization");
+        let worker_b_bundle =
+            normalize_session(&worker_b).expect("expected worker-b normalization");
 
         let worker_a_lane = worker_a_bundle
             .events

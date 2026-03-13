@@ -16,6 +16,8 @@ pub struct Repository {
     conn: Connection,
 }
 
+const REPOSITORY_REVISION_KEY: &str = "content_revision";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionSummaryRecord {
     pub session_id: String,
@@ -252,83 +254,33 @@ impl Repository {
                 .map_err(RepositoryError::Sql)?;
         }
 
+        transaction
+            .execute(
+                r#"
+                INSERT INTO repository_meta (meta_key, meta_value)
+                VALUES (?1, '1')
+                ON CONFLICT(meta_key) DO UPDATE SET
+                  meta_value = CAST(meta_value AS INTEGER) + 1
+                "#,
+                params![REPOSITORY_REVISION_KEY],
+            )
+            .map_err(RepositoryError::Sql)?;
+
         transaction.commit().map_err(RepositoryError::Sql)
     }
 
     pub fn list_session_summaries(&self) -> Result<Vec<SessionSummaryRecord>, RepositoryError> {
-        let mut statement = self
-            .conn
-            .prepare(
-                r#"
-                SELECT
-                  s.session_id,
-                  s.parent_session_id,
-                  s.workspace_path,
-                  s.title,
-                  s.status,
-                  s.source_kind,
-                  s.is_archived,
-                  s.started_at,
-                  s.ended_at,
-                  MAX(e.occurred_at) AS last_event_at,
-                  COUNT(e.event_id) AS event_count
-                FROM sessions s
-                LEFT JOIN timeline_events e ON e.session_id = s.session_id
-                GROUP BY
-                  s.session_id,
-                  s.parent_session_id,
-                  s.workspace_path,
-                  s.title,
-                  s.status,
-                  s.source_kind,
-                  s.is_archived,
-                  s.started_at,
-                  s.ended_at
-                ORDER BY
-                  s.workspace_path ASC,
-                  last_event_at DESC,
-                  s.session_id ASC
-                "#,
-            )
-            .map_err(RepositoryError::Sql)?;
+        self.read_consistent(|conn| list_session_summaries_from_connection(conn))
+    }
 
-        let rows = statement
-            .query_map([], |row| {
-                Ok(RawSessionSummaryRecord {
-                    session_id: row.get(0)?,
-                    parent_session_id: row.get(1)?,
-                    workspace_path: row.get(2)?,
-                    title: row.get(3)?,
-                    status: row.get(4)?,
-                    source_kind: row.get(5)?,
-                    is_archived: row.get::<_, i64>(6)? != 0,
-                    started_at: row.get(7)?,
-                    ended_at: row.get(8)?,
-                    last_event_at: row.get(9)?,
-                    event_count: row.get(10)?,
-                })
-            })
-            .map_err(RepositoryError::Sql)?;
-
-        let mut summaries = Vec::new();
-        for row in rows {
-            let row = row.map_err(RepositoryError::Sql)?;
-            summaries.push(SessionSummaryRecord {
-                session_id: row.session_id,
-                parent_session_id: row.parent_session_id,
-                workspace_path: row.workspace_path,
-                title: row.title,
-                status: parse_session_status(&row.status)?,
-                source_kind: parse_source_kind(&row.source_kind)?,
-                is_archived: row.is_archived,
-                started_at: row.started_at,
-                ended_at: row.ended_at,
-                last_event_at: row.last_event_at,
-                event_count: row.event_count as u64,
-            });
-        }
-
-        Ok(summaries)
+    pub fn list_session_summaries_with_refresh_marker(
+        &self,
+    ) -> Result<(Vec<SessionSummaryRecord>, String), RepositoryError> {
+        self.read_consistent(|conn| {
+            let summaries = list_session_summaries_from_connection(conn)?;
+            let marker = current_refresh_marker_from_connection(conn)?;
+            Ok((summaries, marker))
+        })
     }
 
     pub fn list_workspace_sessions(&self) -> Result<Vec<WorkspaceSessionGroup>, RepositoryError> {
@@ -359,6 +311,19 @@ impl Repository {
             .list_session_summaries()?
             .into_iter()
             .find(|summary| summary.session_id == session_id))
+    }
+
+    pub fn load_session_summary_with_refresh_marker(
+        &self,
+        session_id: &str,
+    ) -> Result<(Option<SessionSummaryRecord>, String), RepositoryError> {
+        self.read_consistent(|conn| {
+            let summary = list_session_summaries_from_connection(conn)?
+                .into_iter()
+                .find(|summary| summary.session_id == session_id);
+            let marker = current_refresh_marker_from_connection(conn)?;
+            Ok((summary, marker))
+        })
     }
 
     pub fn load_session_detail(
@@ -394,12 +359,30 @@ impl Repository {
             .map_err(RepositoryError::Sql)
     }
 
-    pub fn current_timestamp(&self) -> Result<String, RepositoryError> {
+    pub fn current_refresh_marker(&self) -> Result<String, RepositoryError> {
+        current_refresh_marker_from_connection(&self.conn)
+    }
+
+    fn read_consistent<T, F>(&self, operation: F) -> Result<T, RepositoryError>
+    where
+        F: FnOnce(&Connection) -> Result<T, RepositoryError>,
+    {
         self.conn
-            .query_row("SELECT STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
-                row.get(0)
-            })
-            .map_err(RepositoryError::Sql)
+            .execute_batch("BEGIN DEFERRED TRANSACTION")
+            .map_err(RepositoryError::Sql)?;
+
+        let result = operation(&self.conn);
+        let finalize = if result.is_ok() { "COMMIT" } else { "ROLLBACK" };
+        let finalize_result = self
+            .conn
+            .execute_batch(finalize)
+            .map_err(RepositoryError::Sql);
+
+        match (result, finalize_result) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(source), Ok(())) => Err(source),
+            (Ok(_), Err(source)) | (Err(_), Err(source)) => Err(source),
+        }
     }
 }
 
@@ -450,7 +433,9 @@ struct RawEventRecord {
     meta_json: String,
 }
 
-fn raw_session_record_to_canonical(row: RawSessionRecord) -> Result<CanonicalSession, RepositoryError> {
+fn raw_session_record_to_canonical(
+    row: RawSessionRecord,
+) -> Result<CanonicalSession, RepositoryError> {
     Ok(CanonicalSession {
         session_id: row.session_id,
         parent_session_id: row.parent_session_id,
@@ -485,7 +470,10 @@ fn raw_event_record_to_canonical(row: RawEventRecord) -> Result<CanonicalEvent, 
     })
 }
 
-fn load_session_record(conn: &Connection, session_id: &str) -> Result<CanonicalSession, RepositoryError> {
+fn load_session_record(
+    conn: &Connection,
+    session_id: &str,
+) -> Result<CanonicalSession, RepositoryError> {
     let row = conn
         .query_row(
             r#"
@@ -522,7 +510,10 @@ fn load_session_record(conn: &Connection, session_id: &str) -> Result<CanonicalS
     raw_session_record_to_canonical(row)
 }
 
-fn load_events_for_session(conn: &Connection, session_id: &str) -> Result<Vec<CanonicalEvent>, RepositoryError> {
+fn load_events_for_session(
+    conn: &Connection,
+    session_id: &str,
+) -> Result<Vec<CanonicalEvent>, RepositoryError> {
     let mut statement = conn
         .prepare(
             r#"
@@ -571,9 +562,11 @@ fn load_events_for_session(conn: &Connection, session_id: &str) -> Result<Vec<Ca
         })
         .map_err(RepositoryError::Sql)?;
 
-    rows
-        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_event_record_to_canonical))
-        .collect()
+    rows.map(|row| {
+        row.map_err(RepositoryError::Sql)
+            .and_then(raw_event_record_to_canonical)
+    })
+    .collect()
 }
 
 fn load_composite_sessions(
@@ -642,9 +635,11 @@ fn load_composite_sessions(
         })
         .map_err(RepositoryError::Sql)?;
 
-    rows
-        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_session_record_to_canonical))
-        .collect()
+    rows.map(|row| {
+        row.map_err(RepositoryError::Sql)
+            .and_then(raw_session_record_to_canonical)
+    })
+    .collect()
 }
 
 fn load_composite_events(
@@ -708,13 +703,19 @@ fn load_composite_events(
         })
         .map_err(RepositoryError::Sql)?;
 
-    rows
-        .map(|row| row.map_err(RepositoryError::Sql).and_then(raw_event_record_to_canonical))
-        .collect()
+    rows.map(|row| {
+        row.map_err(RepositoryError::Sql)
+            .and_then(raw_event_record_to_canonical)
+    })
+    .collect()
 }
 
 fn event_meta_string(event: &CanonicalEvent, key: &str) -> Option<String> {
-    event.meta.get(key).and_then(Value::as_str).map(str::to_owned)
+    event
+        .meta
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 fn build_timeline_relations(
@@ -733,10 +734,13 @@ fn build_timeline_relations(
             let child_session_id = event_meta_string(event, "spawned_session_id")?;
             Some((child_session_id, event))
         })
-        .fold(HashMap::<String, &CanonicalEvent>::new(), |mut acc, (child_session_id, event)| {
-            acc.entry(child_session_id).or_insert(event);
-            acc
-        });
+        .fold(
+            HashMap::<String, &CanonicalEvent>::new(),
+            |mut acc, (child_session_id, event)| {
+                acc.entry(child_session_id).or_insert(event);
+                acc
+            },
+        );
 
     let mut relations = sessions
         .iter()
@@ -835,6 +839,11 @@ fn build_timeline_snapshot(
 fn initialize_schema(conn: &Connection) -> Result<(), RepositoryError> {
     conn.execute_batch(
         r#"
+        CREATE TABLE IF NOT EXISTS repository_meta (
+          meta_key TEXT PRIMARY KEY,
+          meta_value TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sessions (
           session_id TEXT PRIMARY KEY,
           parent_session_id TEXT,
@@ -876,7 +885,113 @@ fn initialize_schema(conn: &Connection) -> Result<(), RepositoryError> {
           ON timeline_events(session_id, occurred_at);
         "#,
     )
-    .map_err(RepositoryError::Sql)
+    .map_err(RepositoryError::Sql)?;
+
+    conn.execute(
+        r#"
+        INSERT INTO repository_meta (meta_key, meta_value)
+        VALUES (?1, '0')
+        ON CONFLICT(meta_key) DO NOTHING
+        "#,
+        params![REPOSITORY_REVISION_KEY],
+    )
+    .map_err(RepositoryError::Sql)?;
+
+    Ok(())
+}
+
+fn list_session_summaries_from_connection(
+    conn: &Connection,
+) -> Result<Vec<SessionSummaryRecord>, RepositoryError> {
+    let mut statement = conn
+        .prepare(
+            r#"
+            SELECT
+              s.session_id,
+              s.parent_session_id,
+              s.workspace_path,
+              s.title,
+              s.status,
+              s.source_kind,
+              s.is_archived,
+              s.started_at,
+              s.ended_at,
+              MAX(e.occurred_at) AS last_event_at,
+              COUNT(e.event_id) AS event_count
+            FROM sessions s
+            LEFT JOIN timeline_events e ON e.session_id = s.session_id
+            GROUP BY
+              s.session_id,
+              s.parent_session_id,
+              s.workspace_path,
+              s.title,
+              s.status,
+              s.source_kind,
+              s.is_archived,
+              s.started_at,
+              s.ended_at
+            ORDER BY
+              s.workspace_path ASC,
+              last_event_at DESC,
+              s.session_id ASC
+            "#,
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(RawSessionSummaryRecord {
+                session_id: row.get(0)?,
+                parent_session_id: row.get(1)?,
+                workspace_path: row.get(2)?,
+                title: row.get(3)?,
+                status: row.get(4)?,
+                source_kind: row.get(5)?,
+                is_archived: row.get::<_, i64>(6)? != 0,
+                started_at: row.get(7)?,
+                ended_at: row.get(8)?,
+                last_event_at: row.get(9)?,
+                event_count: row.get(10)?,
+            })
+        })
+        .map_err(RepositoryError::Sql)?;
+
+    let mut summaries = Vec::new();
+    for row in rows {
+        let row = row.map_err(RepositoryError::Sql)?;
+        summaries.push(SessionSummaryRecord {
+            session_id: row.session_id,
+            parent_session_id: row.parent_session_id,
+            workspace_path: row.workspace_path,
+            title: row.title,
+            status: parse_session_status(&row.status)?,
+            source_kind: parse_source_kind(&row.source_kind)?,
+            is_archived: row.is_archived,
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            last_event_at: row.last_event_at,
+            event_count: row.event_count as u64,
+        });
+    }
+
+    Ok(summaries)
+}
+
+fn current_refresh_marker_from_connection(conn: &Connection) -> Result<String, RepositoryError> {
+    let timestamp = conn
+        .query_row("SELECT STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(RepositoryError::Sql)?;
+    let revision = conn
+        .query_row(
+            "SELECT CAST(meta_value AS INTEGER) FROM repository_meta WHERE meta_key = ?1",
+            params![REPOSITORY_REVISION_KEY],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(RepositoryError::Sql)?;
+
+    Ok(format!("{timestamp}#{revision:020}"))
 }
 
 fn session_status_text(value: SessionStatus) -> &'static str {
@@ -1002,6 +1117,36 @@ mod tests {
             .session_event_counts("session-1")
             .expect("expected event count");
         assert_eq!(event_count, 1);
+
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn refresh_marker_increments_with_repository_content_revision() {
+        let db_path = temp_db_path("refresh-marker");
+        let mut repository = Repository::open(&db_path).expect("expected repository open");
+        let initial_marker = repository
+            .current_refresh_marker()
+            .expect("expected initial refresh marker");
+        let bundle = sample_bundle(
+            "session-marker",
+            "/tmp/workspace-a",
+            vec![sample_event(
+                "event-marker",
+                "session-marker",
+                "2026-03-12T06:33:43.000Z",
+                "Task complete",
+            )],
+        );
+
+        repository
+            .upsert_session_bundle(&bundle)
+            .expect("expected insert");
+        let next_marker = repository
+            .current_refresh_marker()
+            .expect("expected next refresh marker");
+
+        assert!(next_marker > initial_marker);
 
         let _ = fs::remove_file(db_path);
     }
@@ -1300,7 +1445,12 @@ mod tests {
 
         assert_eq!(detail.bundle.session.session_id, "root-session");
         assert_eq!(
-            detail.bundle.events.iter().map(|event| event.event_id.as_str()).collect::<Vec<_>>(),
+            detail
+                .bundle
+                .events
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
             vec![
                 "root-user",
                 "root-spawn-worker-a",

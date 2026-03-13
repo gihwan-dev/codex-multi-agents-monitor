@@ -32,12 +32,28 @@ const SESSION_TITLE_DISCARDED_LINES = [
   /^(?:summary|key changes|test plan|assumptions)$/i,
   /^(?:workflow|hard rules|required references|required bundle content)$/i,
   /^(?:how to use skills|available skills|core goal)$/i,
+  /^(?:codex across all repositories)$/i,
   /^(?:please implement this plan\.?)$/i,
   /^this file defines global defaults(?: for codex)?(?: across all repositories)?\.?$/i,
 ];
+const SKILL_MARKER_ONLY_PATTERN = /^\$[A-Za-z0-9._/-]+$/;
 
 function collapseWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function stripRefreshMarker(value: string) {
+  const separatorIndex = value.lastIndexOf("#");
+  if (separatorIndex < 0) {
+    return value;
+  }
+
+  const revision = value.slice(separatorIndex + 1);
+  if (!/^\d+$/.test(revision)) {
+    return value;
+  }
+
+  return value.slice(0, separatorIndex);
 }
 
 function stripLeadingPromptMarkers(value: string) {
@@ -67,6 +83,7 @@ function stripSessionTitleNoise(line: string) {
     return "";
   }
 
+  next = next.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
   next = next.replace(/^\[\$([^\]]+)\]\s*/g, "$$$1 ");
   next = stripLeadingPromptMarkers(next);
   next = next.replace(ABSOLUTE_PATH_PATTERN, " ");
@@ -99,8 +116,13 @@ function isSubstantiveSessionTitleLine(line: string) {
   return !SESSION_TITLE_DISCARDED_LINES.some((pattern) => pattern.test(line));
 }
 
+function isSkillMarkerOnlyLine(line: string) {
+  return SKILL_MARKER_ONLY_PATTERN.test(line);
+}
+
 function findSubstantiveSessionTitle(rawTitle: string) {
   const lines = rawTitle.split(/\r?\n+/);
+  let pendingPrefix: string | null = null;
 
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
@@ -116,12 +138,22 @@ function findSubstantiveSessionTitle(rawTitle: string) {
     }
 
     const candidate = stripSessionTitleNoise(trimmed);
+    if (isSkillMarkerOnlyLine(candidate)) {
+      pendingPrefix = candidate;
+      continue;
+    }
     if (isSubstantiveSessionTitleLine(candidate)) {
-      return candidate;
+      return pendingPrefix && !candidate.startsWith(`${pendingPrefix} `)
+        ? `${pendingPrefix} ${candidate}`
+        : candidate;
     }
   }
 
   const fallback = stripSessionTitleNoise(collapseWhitespace(rawTitle));
+  if (isSkillMarkerOnlyLine(fallback)) {
+    return null;
+  }
+
   return isSubstantiveSessionTitleLine(fallback) ? fallback : null;
 }
 
@@ -205,9 +237,10 @@ export function formatTimestamp(value: string | null) {
     return "No activity yet";
   }
 
-  const date = new Date(value);
+  const displayValue = stripRefreshMarker(value);
+  const date = new Date(displayValue);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return displayValue;
   }
 
   return new Intl.DateTimeFormat("ko-KR", {

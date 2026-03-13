@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatSessionDisplayTitle,
+  formatTimestamp,
   normalizeSessionTitle,
 } from "./presentation";
 
@@ -26,6 +27,19 @@ This file defines global defaults for Codex across all repositories.
   <cwd>/tmp/workspace</cwd>
 </environment_context>
 [$design-task] 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?`;
+
+    expect(normalizeSessionTitle(rawTitle)).toBe(
+      "$design-task 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?",
+    );
+  });
+
+  it("combines multiline skill-link prefixes with the first substantive line", () => {
+    const rawTitle = `# AGENTS.md instructions for /tmp/workspace
+<INSTRUCTIONS>
+Global Agent Policy
+</INSTRUCTIONS>
+[$design-task](/Users/choegihwan/Documents/Projects/claude-setup/skills/design-task/SKILL.md)
+지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?`;
 
     expect(normalizeSessionTitle(rawTitle)).toBe(
       "$design-task 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?",
@@ -60,5 +74,11 @@ This file defines global defaults for Codex across all repositories.
 
     expect(result.displayTitle).toBe("제목이 이상하게 캡쳐됨.");
     expect(result.tooltip).toContain("AGENTS.md instructions for");
+  });
+
+  it("formats refresh markers using only the timestamp portion", () => {
+    expect(
+      formatTimestamp("2026-03-12T07:00:00.000Z#00000000000000000005"),
+    ).toContain("26. 3. 12.");
   });
 });

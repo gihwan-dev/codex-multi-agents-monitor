@@ -7,7 +7,9 @@ import type {
 } from "@/shared/queries";
 
 import {
+  compareRefreshMarkers,
   mergeBootstrapSnapshot,
+  pruneLiveSnapshot,
   selectLiveWorkspaceSnapshot,
   sortSnapshot,
   upsertSessionSummary,
@@ -98,7 +100,7 @@ describe("snapshot helpers", () => {
     ]);
   });
 
-  it("selects the latest non-archived root session per workspace for live mode", () => {
+  it("keeps every visible root session per workspace for live mode", () => {
     const snapshot = sortSnapshot({
       refreshed_at: "2026-03-12T07:00:00.000Z",
       workspaces: [
@@ -108,6 +110,10 @@ describe("snapshot helpers", () => {
             createSummary({
               session_id: "root-latest",
               last_event_at: "2026-03-12T07:10:00.000Z",
+            }),
+            createSummary({
+              session_id: "root-earlier",
+              last_event_at: "2026-03-12T07:05:00.000Z",
             }),
             createSummary({
               session_id: "child-session",
@@ -136,9 +142,46 @@ describe("snapshot helpers", () => {
     });
 
     expect(
-      selectLiveWorkspaceSnapshot(snapshot)?.workspaces.map(
-        (workspace) => workspace.sessions[0]?.session_id,
+      selectLiveWorkspaceSnapshot(snapshot)?.workspaces.map((workspace) => ({
+        sessionIds: workspace.sessions.map((session) => session.session_id),
+        workspacePath: workspace.workspace_path,
+      })),
+    ).toEqual([
+      {
+        sessionIds: ["root-latest", "root-earlier"],
+        workspacePath: "/workspace/a",
+      },
+      {
+        sessionIds: ["older-root"],
+        workspacePath: "/workspace/b",
+      },
+    ]);
+  });
+
+  it("prunes live overlay sessions that are at or before the authoritative refresh", () => {
+    const pruned = pruneLiveSnapshot(
+      createSnapshot([
+        createSummary({
+          session_id: "stale-session",
+          last_event_at: "2026-03-12T06:30:00.000Z",
+        }),
+        createSummary({
+          session_id: "fresh-session",
+          last_event_at: "2026-03-12T07:30:00.000Z",
+        }),
+      ], "2026-03-12T06:30:00.000Z#00000000000000000002"),
+      "2026-03-12T07:00:00.000Z#00000000000000000003",
+    );
+
+    expect(pruned).toBeNull();
+  });
+
+  it("prefers revision markers over wall-clock timestamps when comparing snapshots", () => {
+    expect(
+      compareRefreshMarkers(
+        "2026-03-12T07:00:00.000Z#00000000000000000005",
+        "2026-03-12T08:00:00.000Z#00000000000000000004",
       ),
-    ).toEqual(["root-latest", "older-root"]);
+    ).toBeGreaterThan(0);
   });
 });

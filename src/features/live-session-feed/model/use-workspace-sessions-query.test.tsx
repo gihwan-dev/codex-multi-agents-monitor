@@ -23,9 +23,12 @@ vi.mock("@/shared/api/tauri-monitor", () => ({
   queryWorkspaceSessionsCached,
 }));
 
-function createSnapshot(sessionIds: string[]): WorkspaceSessionsSnapshot {
+function createSnapshot(
+  sessionIds: string[],
+  refreshedAt = "2026-03-12T06:00:00.000Z#00000000000000000001",
+): WorkspaceSessionsSnapshot {
   return {
-    refreshed_at: "2026-03-12T06:00:00.000Z",
+    refreshed_at: refreshedAt,
     workspaces: [
       {
         sessions: sessionIds.map((sessionId, index) => ({
@@ -52,7 +55,7 @@ function createSingleSessionSnapshot(
   lastEventAt: string,
 ): WorkspaceSessionsSnapshot {
   return {
-    refreshed_at: lastEventAt,
+    refreshed_at: `${lastEventAt}#00000000000000000002`,
     workspaces: [
       {
         workspace_path: "/workspace/a",
@@ -121,7 +124,7 @@ describe("useWorkspaceSessionsQuery", () => {
     );
   });
 
-  it("preserves live summaries that arrive before refresh completes", async () => {
+  it("prunes stale live summaries once the authoritative refresh catches up", async () => {
     isTauriRuntimeAvailable.mockReturnValue(true);
     queryWorkspaceSessionsCached.mockResolvedValue(createSnapshot(["cached-session"]));
     const queryClient = createTestQueryClient();
@@ -164,14 +167,42 @@ describe("useWorkspaceSessionsQuery", () => {
 
     const completeRefresh =
       resolveRefresh as (value: WorkspaceSessionsSnapshot) => void;
-    completeRefresh(createSnapshot(["refresh-session"]));
+    completeRefresh(
+      createSnapshot(["refresh-session"], "2026-03-12T07:00:00.000Z#00000000000000000003"),
+    );
 
     await waitFor(() =>
       expect(
         result.current.snapshot?.workspaces[0]?.sessions.map(
           (session) => session.session_id,
         ),
-      ).toEqual(["live-session", "refresh-session"]),
+      ).toEqual(["refresh-session"]),
+    );
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(monitorQueryKeys.workspaceSessionsLive()),
+      ).toBeNull(),
+    );
+  });
+
+  it("prefers the newer cached snapshot over an older full refresh snapshot", async () => {
+    isTauriRuntimeAvailable.mockReturnValue(true);
+    queryWorkspaceSessionsCached.mockResolvedValue(
+      createSnapshot(["cached-session"], "2026-03-12T07:00:00.000Z#00000000000000000003"),
+    );
+    queryWorkspaceSessions.mockResolvedValue(
+      createSnapshot(["refresh-session"], "2026-03-12T08:00:00.000Z#00000000000000000002"),
+    );
+
+    const { result } = renderHook(() => useWorkspaceSessionsQuery(), {
+      wrapper: createQueryClientWrapper(),
+    });
+
+    await waitFor(() =>
+      expect(result.current.snapshot?.workspaces[0]?.sessions[0]?.session_id).toBe(
+        "cached-session",
+      ),
     );
   });
 
@@ -231,5 +262,39 @@ describe("useWorkspaceSessionsQuery", () => {
     });
 
     expect(snapshot.workspaces[0]?.sessions[0]?.session_id).toBe("refresh-session");
+  });
+
+  it("does not prune live overlay when a later wall-clock snapshot has an older revision", async () => {
+    isTauriRuntimeAvailable.mockReturnValue(true);
+    queryWorkspaceSessionsCached.mockResolvedValue(
+      createSnapshot(["cached-session"], "2026-03-12T08:00:00.000Z#00000000000000000001"),
+    );
+    queryWorkspaceSessions.mockResolvedValue(
+      createSnapshot(["refresh-session"], "2026-03-12T09:00:00.000Z#00000000000000000001"),
+    );
+    const queryClient = createTestQueryClient();
+
+    queryClient.setQueryData(
+      monitorQueryKeys.workspaceSessionsLive(),
+      createSingleSessionSnapshot("live-session", "2026-03-12T06:30:00.000Z"),
+    );
+    queryClient.setQueryData(monitorQueryKeys.workspaceSessionsLive(), (current) =>
+      current
+        ? {
+            ...current,
+            refreshed_at: "2026-03-12T07:00:00.000Z#00000000000000000002",
+          }
+        : current,
+    );
+
+    const { result } = renderHook(() => useWorkspaceSessionsQuery(), {
+      wrapper: createQueryClientWrapper(queryClient),
+    });
+
+    await waitFor(() =>
+      expect(
+        result.current.snapshot?.workspaces[0]?.sessions.map((session) => session.session_id),
+      ).toEqual(["live-session", "refresh-session"]),
+    );
   });
 });

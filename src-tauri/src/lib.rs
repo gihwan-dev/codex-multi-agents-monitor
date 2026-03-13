@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 pub mod codex_source;
+pub mod desktop_threads;
 pub mod ipc;
 pub mod log_parser;
 pub mod normalize;
