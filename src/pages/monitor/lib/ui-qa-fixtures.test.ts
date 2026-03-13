@@ -47,8 +47,9 @@ describe("resolveMonitorUiQaState", () => {
     const state = resolveMonitorUiQaState("?demo=ui-qa&tab=live&session=sess-ui-shell");
     const liveEvents = state?.detailBySessionId["sess-ui-shell"]?.bundle.events ?? [];
 
-    expect(liveEvents.some((event) => event.lane_id === "user")).toBe(true);
+    expect(liveEvents.filter((event) => event.kind === "user_message")).toHaveLength(2);
     expect(liveEvents.some((event) => event.lane_id === "agent:worker")).toBe(true);
+    expect(liveEvents.some((event) => event.kind === "agent_complete")).toBe(true);
     expect(liveEvents.some((event) => event.kind === "token_delta")).toBe(true);
   });
 

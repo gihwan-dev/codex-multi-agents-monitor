@@ -5,12 +5,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatTimestamp, type SessionSummary } from "@/entities/session";
 import type { CanonicalMetric } from "@/shared/canonical";
-import { Binary, Braces, Boxes, DatabaseZap } from "lucide-react";
+import { Binary, Braces, Boxes, DatabaseZap, Link2 } from "lucide-react";
 
 import type {
   TimelineItemView,
   TimelineProjection,
   TimelineSelection,
+  TimelineSelectionContext,
 } from "../model/types";
 
 interface DetailDrawerProps {
@@ -18,9 +19,9 @@ interface DetailDrawerProps {
   loading?: boolean;
   onSelectionChange: (selection: TimelineSelection) => void;
   projection: TimelineProjection | null;
-  selectedItem: TimelineItemView | null;
   selectedSession: SessionSummary | null;
   selection: TimelineSelection;
+  selectionContext: TimelineSelectionContext | null;
 }
 
 const PANEL_CARD_CLASS =
@@ -63,6 +64,27 @@ function formatDuration(startedAtMs: number, endedAtMs: number | null) {
   return `${minutes}m ${seconds}s`;
 }
 
+function laneLabel(projection: TimelineProjection | null, laneId: string | null | undefined) {
+  if (!projection || !laneId) {
+    return "Unknown";
+  }
+
+  return projection.lanes.find((lane) => lane.laneId === laneId)?.label ?? laneId;
+}
+
+function connectorLabel(kind: NonNullable<TimelineSelectionContext["selectedConnector"]>["kind"]) {
+  switch (kind) {
+    case "spawn":
+      return "Spawn";
+    case "handoff":
+      return "Handoff";
+    case "reply":
+      return "Reply";
+    default:
+      return "Complete";
+  }
+}
+
 function metricCard(metric: CanonicalMetric) {
   return (
     <section
@@ -102,17 +124,73 @@ function tokenSummary(projection: TimelineProjection | null, selectedItem: Timel
   };
 }
 
+function selectionDescription(
+  projection: TimelineProjection | null,
+  selectedSession: SessionSummary | null,
+  selectionContext: TimelineSelectionContext | null,
+) {
+  if (selectionContext?.selectedConnector) {
+    return `${connectorLabel(selectionContext.selectedConnector.kind)} connector from ${laneLabel(
+      projection,
+      selectionContext.selectedConnector.sourceLaneId,
+    )} to ${laneLabel(projection, selectionContext.selectedConnector.targetLaneId)}.`;
+  }
+
+  if (selectionContext?.selectedSegment) {
+    return `${laneLabel(projection, selectionContext.selectedSegment.laneId)} activation segment.`;
+  }
+
+  if (selectionContext?.selectedItem) {
+    return `${selectionContext.selectedItem.kind} selection in ${laneLabel(
+      projection,
+      selectionContext.selectedItem.laneId,
+    )}.`;
+  }
+
+  return describeStatus(selectedSession?.status);
+}
+
+function selectionChain(projection: TimelineProjection | null, selectionContext: TimelineSelectionContext | null) {
+  if (!projection || !selectionContext || selectionContext.anchorItemId == null) {
+    return null;
+  }
+
+  const connector = selectionContext.selectedConnector;
+  const segment = selectionContext.selectedSegment;
+  const turn = selectionContext.selectedTurnBand;
+  const anchorItem = selectionContext.selectedItem;
+
+  return {
+    connector: connector ? connectorLabel(connector.kind) : segment ? "Segment scope" : "Item scope",
+    flow: connector
+      ? `${laneLabel(projection, connector.sourceLaneId)} -> ${laneLabel(projection, connector.targetLaneId)}`
+      : `${laneLabel(projection, anchorItem?.laneId ?? segment?.laneId)} activation`,
+    relatedCount: selectionContext.relatedItemIds.length,
+    turn:
+      turn == null
+        ? "Session scope"
+        : turn.summary
+          ? `${turn.label} · ${turn.summary}`
+          : turn.label,
+  };
+}
+
 export function DetailDrawer({
   errorMessage = null,
   loading = false,
   onSelectionChange,
   projection,
-  selectedItem,
   selectedSession,
   selection,
+  selectionContext,
 }: DetailDrawerProps) {
+  const selectedItem = selectionContext?.selectedItem ?? null;
+  const selectedSegment = selectionContext?.selectedSegment ?? null;
+  const selectedConnector = selectionContext?.selectedConnector ?? null;
   const sessionTitle =
     selectedItem?.label ??
+    (selectedConnector ? connectorLabel(selectedConnector.kind) : null) ??
+    (selectedSegment ? `${laneLabel(projection, selectedSegment.laneId)} activation` : null) ??
     selectedSession?.title ??
     projection?.session.title ??
     "Event detail";
@@ -146,6 +224,7 @@ export function DetailDrawer({
         null,
         2,
       );
+  const chain = selectionChain(projection, selectionContext);
 
   return (
     <GlassSurface
@@ -167,13 +246,11 @@ export function DetailDrawer({
                     ? errorMessage
                     : loading
                       ? "Hydrating session detail."
-                      : selectedItem
-                        ? `${selectedItem.kind} selection in ${selectedItem.laneId}.`
-                        : describeStatus(selectedSession?.status)}
+                      : selectionDescription(projection, selectedSession, selectionContext)}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 xl:max-w-[12rem] xl:justify-end">
-                {selection.kind === "item" ? (
+                {selection.kind !== "session" ? (
                   <GlassSurface
                     className="rounded-full"
                     interactive
@@ -198,7 +275,13 @@ export function DetailDrawer({
                 >
                   <div className="px-2.5 py-1.5">
                     <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
-                      {selectedItem ? selectedItem.kind : selectedSession?.status ?? "idle"}
+                      {selectedConnector
+                        ? selectedConnector.kind
+                        : selectedSegment
+                          ? "segment"
+                          : selectedItem
+                            ? selectedItem.kind
+                            : selectedSession?.status ?? "idle"}
                     </span>
                   </div>
                 </GlassSurface>
@@ -239,6 +322,33 @@ export function DetailDrawer({
               <div className="flex-1 overflow-hidden">
                 <ScrollArea className="h-full px-4 pb-5 md:px-5 no-scrollbar">
                   <TabsContent value="summary" className="m-0 space-y-4 outline-none">
+                    {chain ? (
+                      <section className="rounded-[1.45rem] border border-sky-200/10 bg-[linear-gradient(180deg,rgba(8,15,24,0.76),rgba(7,13,22,0.54))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                        <div className="mb-3 flex items-center gap-2">
+                          <Link2 className="h-4 w-4 text-sky-300" />
+                          <h3 className="text-[12px] font-medium text-slate-300">Selection chain</h3>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 text-sm text-slate-300/76 sm:grid-cols-2">
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Turn</p>
+                            <p className="mt-1 text-slate-100">{chain.turn}</p>
+                          </div>
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Flow</p>
+                            <p className="mt-1 text-slate-100">{chain.flow}</p>
+                          </div>
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Connector</p>
+                            <p className="mt-1 text-slate-100">{chain.connector}</p>
+                          </div>
+                          <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                            <p className="text-[11px] font-medium text-slate-500">Related items</p>
+                            <p className="mt-1 text-slate-100">{chain.relatedCount}</p>
+                          </div>
+                        </div>
+                      </section>
+                    ) : null}
+
                     <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <div className="mb-3 flex items-center gap-2">
                         <Boxes className="h-4 w-4 text-slate-400" />
@@ -260,10 +370,7 @@ export function DetailDrawer({
                           <p className="text-[11px] font-medium text-slate-500">Duration</p>
                           <p className="mt-1 text-slate-100">
                             {selectedItem
-                              ? formatDuration(
-                                  selectedItem.startedAtMs,
-                                  selectedItem.endedAtMs,
-                                )
+                              ? formatDuration(selectedItem.startedAtMs, selectedItem.endedAtMs)
                               : projection
                                 ? `${projection.items.length} projected items`
                                 : "No data"}

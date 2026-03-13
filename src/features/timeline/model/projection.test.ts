@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveMonitorUiQaState } from "@/pages/monitor/lib/ui-qa-fixtures";
 import type { SessionDetailSnapshot } from "@/shared/queries";
 
-import { buildTimelineProjection } from "./projection";
+import { buildTimelineProjection, resolveTimelineSelection } from "./projection";
 
 function timelineDetail() {
   const state = resolveMonitorUiQaState(
@@ -65,8 +65,8 @@ describe("buildTimelineProjection", () => {
     });
     expect(mergedTool?.outputPreview).toContain("monitor-page.tsx");
     expect(projection?.sessionTokenTotals).toEqual({
-      input: 5246,
-      output: 318,
+      input: 5398,
+      output: 360,
     });
   });
 
@@ -75,5 +75,51 @@ describe("buildTimelineProjection", () => {
 
     expect(projection?.latestItemId).toBe("evt-complete");
     expect(projection?.items[projection.items.length - 1]?.itemId).toBe("evt-complete");
+  });
+
+  it("builds user-turn bands and connector chains for handoff, spawn, and completion", () => {
+    const projection = buildTimelineProjection(timelineDetail());
+
+    expect(projection?.turnBands.map((turn) => turn.label)).toEqual(["Turn 1", "Turn 2"]);
+    expect(projection?.connectors.map((connector) => connector.kind)).toEqual([
+      "handoff",
+      "spawn",
+      "complete",
+      "handoff",
+    ]);
+  });
+
+  it("anchors segment and connector selections to an item while exposing the full turn chain", () => {
+    const projection = buildTimelineProjection(timelineDetail());
+    const workerSegment = projection?.activationSegments.find(
+      (segment) => segment.anchorItemId === "evt-worker-complete",
+    );
+    const completeConnector = projection?.connectors.find((connector) => connector.kind === "complete");
+
+    if (!projection || !workerSegment || !completeConnector) {
+      throw new Error("Expected worker segment and complete connector");
+    }
+
+    const segmentContext = resolveTimelineSelection(projection, {
+      anchorItemId: workerSegment.anchorItemId,
+      kind: "segment",
+      segmentId: workerSegment.segmentId,
+    });
+    const connectorContext = resolveTimelineSelection(projection, {
+      anchorItemId: completeConnector.anchorItemId,
+      connectorId: completeConnector.connectorId,
+      kind: "connector",
+    });
+
+    expect(segmentContext?.selectedItem?.itemId).toBe("evt-worker-complete");
+    expect(segmentContext?.selectedSegment?.segmentId).toBe(workerSegment.segmentId);
+    expect(segmentContext?.selectedTurnBand?.turnBandId).toBe("turn:1");
+    expect(segmentContext?.relatedItemIds).toHaveLength(9);
+
+    expect(connectorContext?.selectedConnector?.connectorId).toBe(completeConnector.connectorId);
+    expect(connectorContext?.selectedItem?.itemId).toBe("evt-worker-complete");
+    expect(connectorContext?.relatedConnectorIds).toEqual(
+      expect.arrayContaining([completeConnector.connectorId]),
+    );
   });
 });

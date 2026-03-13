@@ -1,13 +1,19 @@
-import type { CanonicalEvent } from "@/shared/canonical";
+import type { CanonicalEvent, EventKind } from "@/shared/canonical";
 import type { SessionDetailSnapshot } from "@/shared/queries";
 
 import type {
+  TimelineActivationSegment,
+  TimelineConnector,
+  TimelineConnectorKind,
   TimelineItemKind,
   TimelineItemView,
   TimelineLaneColumn,
   TimelineLaneView,
   TimelineProjection,
+  TimelineRelationMap,
   TimelineSelection,
+  TimelineSelectionContext,
+  TimelineTurnBand,
 } from "./types";
 
 const LANE_ACCENTS: Record<TimelineLaneColumn, string> = {
@@ -54,7 +60,7 @@ function eventOrder(left: CanonicalEvent, right: CanonicalEvent) {
 function itemOrder(left: TimelineItemView, right: TimelineItemView) {
   return (
     left.startedAtMs - right.startedAtMs ||
-    (left.endedAtMs ?? left.startedAtMs) - (right.endedAtMs ?? right.startedAtMs) ||
+    itemEndedAtMs(left) - itemEndedAtMs(right) ||
     left.itemId.localeCompare(right.itemId)
   );
 }
@@ -96,7 +102,6 @@ function itemKindForEvent(event: CanonicalEvent): TimelineItemKind {
   switch (event.kind) {
     case "agent_message":
     case "user_message":
-    case "spawn":
       return "message";
     case "reasoning":
       return "reasoning";
@@ -283,6 +288,357 @@ function buildLanes(events: CanonicalEvent[]) {
   });
 }
 
+function itemEndedAtMs(item: TimelineItemView) {
+  return item.endedAtMs ?? item.startedAtMs;
+}
+
+function itemTerminalEventKind(item: TimelineItemView): EventKind {
+  return item.sourceEvents[item.sourceEvents.length - 1]?.kind ?? "agent_message";
+}
+
+function isUserPromptItem(item: TimelineItemView) {
+  return item.sourceEvents.some((event) => event.kind === "user_message");
+}
+
+function userPromptSummary(item: TimelineItemView) {
+  return item.summary ?? item.payloadPreview ?? "User prompt";
+}
+
+function buildTurnBands(items: TimelineItemView[]) {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const orderedItems = [...items].sort(itemOrder);
+  const promptItems = orderedItems.filter(isUserPromptItem);
+  const turnBands: TimelineTurnBand[] = [];
+  let cursor = 0;
+
+  const takeItemsUntil = (limitExclusive: number) => {
+    const bucket: TimelineItemView[] = [];
+    while (cursor < orderedItems.length && orderedItems[cursor].startedAtMs < limitExclusive) {
+      bucket.push(orderedItems[cursor]);
+      cursor += 1;
+    }
+    return bucket;
+  };
+
+  if (promptItems.length === 0) {
+    return [
+      {
+        endedAtMs: Math.max(...orderedItems.map(itemEndedAtMs)),
+        itemIds: orderedItems.map((item) => item.itemId),
+        label: "Turn 1",
+        startedAtMs: orderedItems[0].startedAtMs,
+        summary: orderedItems[0].summary ?? orderedItems[0].label,
+        turnBandId: "turn:1",
+        turnIndex: 1,
+        userItemId: null,
+      },
+    ];
+  }
+
+  const firstPrompt = promptItems[0];
+  const preludeItems = takeItemsUntil(firstPrompt.startedAtMs);
+  if (preludeItems.length > 0) {
+    turnBands.push({
+      endedAtMs: Math.max(...preludeItems.map(itemEndedAtMs)),
+      itemIds: preludeItems.map((item) => item.itemId),
+      label: "Context",
+      startedAtMs: preludeItems[0].startedAtMs,
+      summary: preludeItems[0].summary ?? "Session setup",
+      turnBandId: "turn:context",
+      turnIndex: 0,
+      userItemId: null,
+    });
+  }
+
+  for (const [index, promptItem] of promptItems.entries()) {
+    const nextPrompt = promptItems[index + 1];
+    const bandItems = takeItemsUntil(nextPrompt?.startedAtMs ?? Number.POSITIVE_INFINITY);
+    if (bandItems.length === 0) {
+      continue;
+    }
+
+    const turnIndex = index + 1;
+    turnBands.push({
+      endedAtMs: Math.max(...bandItems.map(itemEndedAtMs)),
+      itemIds: bandItems.map((item) => item.itemId),
+      label: `Turn ${turnIndex}`,
+      startedAtMs: promptItem.startedAtMs,
+      summary: userPromptSummary(promptItem),
+      turnBandId: `turn:${turnIndex}`,
+      turnIndex,
+      userItemId: promptItem.itemId,
+    });
+  }
+
+  return turnBands;
+}
+
+function buildActivationSegments(turnBands: TimelineTurnBand[], itemsById: Record<string, TimelineItemView>) {
+  const activationSegments: TimelineActivationSegment[] = [];
+
+  for (const turnBand of turnBands) {
+    const bandItems = turnBand.itemIds
+      .map((itemId) => itemsById[itemId])
+      .filter((item): item is TimelineItemView => Boolean(item))
+      .sort(itemOrder);
+
+    if (bandItems.length === 0) {
+      continue;
+    }
+
+    let current: TimelineItemView[] = [];
+
+    const flushSegment = () => {
+      if (current.length === 0) {
+        return;
+      }
+
+      const first = current[0];
+      const last = current[current.length - 1];
+      const nextIndex = activationSegments.filter(
+        (segment) => segment.turnBandId === turnBand.turnBandId,
+      ).length;
+      activationSegments.push({
+        anchorItemId: last.itemId,
+        endedAtMs: itemEndedAtMs(last),
+        itemIds: current.map((item) => item.itemId),
+        laneId: first.laneId,
+        segmentId: `segment:${turnBand.turnBandId}:${nextIndex}`,
+        startedAtMs: first.startedAtMs,
+        terminalEventKind: itemTerminalEventKind(last),
+        terminalItemId: last.itemId,
+        turnBandId: turnBand.turnBandId,
+      });
+      current = [];
+    };
+
+    for (const item of bandItems) {
+      if (current.length === 0 || current[0].laneId === item.laneId) {
+        current.push(item);
+        continue;
+      }
+
+      flushSegment();
+      current.push(item);
+    }
+
+    flushSegment();
+  }
+
+  return activationSegments;
+}
+
+function connectorKindForSegments(
+  source: TimelineActivationSegment,
+  target: TimelineActivationSegment,
+  lanesById: Record<string, TimelineLaneView>,
+): TimelineConnectorKind {
+  const sourceLane = lanesById[source.laneId];
+  const targetLane = lanesById[target.laneId];
+
+  if (source.terminalEventKind === "spawn" && source.laneId !== target.laneId) {
+    return "spawn";
+  }
+
+  if (
+    (source.terminalEventKind === "agent_complete" || source.terminalEventKind === "turn_aborted") &&
+    (targetLane?.column === "main" || targetLane?.column === "user")
+  ) {
+    return "complete";
+  }
+
+  if (sourceLane?.column === "other" && targetLane?.column === "main") {
+    return "reply";
+  }
+
+  return "handoff";
+}
+
+function buildConnectors(
+  turnBands: TimelineTurnBand[],
+  activationSegments: TimelineActivationSegment[],
+  lanesById: Record<string, TimelineLaneView>,
+) {
+  const segmentsById = Object.fromEntries(
+    activationSegments.map((segment) => [segment.segmentId, segment]),
+  ) as Record<string, TimelineActivationSegment>;
+  const segmentIdsByTurn = turnBands.reduce<Record<string, string[]>>((accumulator, turnBand) => {
+    accumulator[turnBand.turnBandId] = activationSegments
+      .filter((segment) => segment.turnBandId === turnBand.turnBandId)
+      .sort(
+        (left, right) =>
+          left.startedAtMs - right.startedAtMs ||
+          left.endedAtMs - right.endedAtMs ||
+          left.segmentId.localeCompare(right.segmentId),
+      )
+      .map((segment) => segment.segmentId);
+    return accumulator;
+  }, {});
+
+  const connectors: TimelineConnector[] = [];
+
+  for (const turnBand of turnBands) {
+    const segmentIds = segmentIdsByTurn[turnBand.turnBandId] ?? [];
+
+    for (let index = 0; index < segmentIds.length - 1; index += 1) {
+      const source = segmentsById[segmentIds[index]];
+      const target = segmentsById[segmentIds[index + 1]];
+
+      if (!source || !target || source.laneId === target.laneId) {
+        continue;
+      }
+
+      connectors.push({
+        anchorItemId: source.anchorItemId,
+        connectorId: `connector:${turnBand.turnBandId}:${connectors.length}`,
+        endedAtMs: target.startedAtMs,
+        kind: connectorKindForSegments(source, target, lanesById),
+        sourceLaneId: source.laneId,
+        sourceSegmentId: source.segmentId,
+        startedAtMs: source.endedAtMs,
+        targetAnchorItemId: target.anchorItemId,
+        targetLaneId: target.laneId,
+        targetSegmentId: target.segmentId,
+        turnBandId: turnBand.turnBandId,
+      });
+    }
+  }
+
+  return connectors;
+}
+
+function pushUnique(values: string[], value: string) {
+  if (!values.includes(value)) {
+    values.push(value);
+  }
+}
+
+function buildRelationMap(
+  items: TimelineItemView[],
+  turnBands: TimelineTurnBand[],
+  activationSegments: TimelineActivationSegment[],
+  connectors: TimelineConnector[],
+) {
+  const relationMap: TimelineRelationMap = {
+    connectors: {},
+    items: Object.fromEntries(
+      items.map((item) => [item.itemId, { connectorIds: [], segmentId: null, turnBandId: null }]),
+    ),
+    segments: {},
+    turns: {},
+  };
+
+  for (const turnBand of turnBands) {
+    relationMap.turns[turnBand.turnBandId] = {
+      connectorIds: [],
+      itemIds: [...turnBand.itemIds],
+      segmentIds: [],
+    };
+
+    for (const itemId of turnBand.itemIds) {
+      relationMap.items[itemId] = relationMap.items[itemId] ?? {
+        connectorIds: [],
+        segmentId: null,
+        turnBandId: null,
+      };
+      relationMap.items[itemId].turnBandId = turnBand.turnBandId;
+    }
+  }
+
+  for (const segment of activationSegments) {
+    relationMap.segments[segment.segmentId] = {
+      connectorIds: [],
+      itemIds: [...segment.itemIds],
+      turnBandId: segment.turnBandId,
+    };
+    pushUnique(relationMap.turns[segment.turnBandId]?.segmentIds ?? [], segment.segmentId);
+
+    for (const itemId of segment.itemIds) {
+      relationMap.items[itemId] = relationMap.items[itemId] ?? {
+        connectorIds: [],
+        segmentId: null,
+        turnBandId: segment.turnBandId,
+      };
+      relationMap.items[itemId].segmentId = segment.segmentId;
+      relationMap.items[itemId].turnBandId = segment.turnBandId;
+    }
+  }
+
+  const segmentsById = Object.fromEntries(
+    activationSegments.map((segment) => [segment.segmentId, segment]),
+  ) as Record<string, TimelineActivationSegment>;
+
+  for (const connector of connectors) {
+    const sourceSegment = segmentsById[connector.sourceSegmentId];
+    const targetSegment = segmentsById[connector.targetSegmentId];
+    const relatedItemIds = Array.from(
+      new Set([...(sourceSegment?.itemIds ?? []), ...(targetSegment?.itemIds ?? [])]),
+    );
+
+    relationMap.connectors[connector.connectorId] = {
+      itemIds: relatedItemIds,
+      segmentIds: [connector.sourceSegmentId, connector.targetSegmentId],
+      turnBandId: connector.turnBandId,
+    };
+
+    pushUnique(relationMap.turns[connector.turnBandId]?.connectorIds ?? [], connector.connectorId);
+    pushUnique(
+      relationMap.segments[connector.sourceSegmentId]?.connectorIds ?? [],
+      connector.connectorId,
+    );
+    pushUnique(
+      relationMap.segments[connector.targetSegmentId]?.connectorIds ?? [],
+      connector.connectorId,
+    );
+
+    for (const itemId of relatedItemIds) {
+      relationMap.items[itemId] = relationMap.items[itemId] ?? {
+        connectorIds: [],
+        segmentId: null,
+        turnBandId: connector.turnBandId,
+      };
+      pushUnique(relationMap.items[itemId].connectorIds, connector.connectorId);
+    }
+  }
+
+  return relationMap;
+}
+
+function emptySelectionContext(): TimelineSelectionContext {
+  return {
+    anchorItemId: null,
+    relatedConnectorIds: [],
+    relatedItemIds: [],
+    relatedSegmentIds: [],
+    selectedConnector: null,
+    selectedItem: null,
+    selectedSegment: null,
+    selectedTurnBand: null,
+  };
+}
+
+function selectionScope(projection: TimelineProjection, turnBandId: string | null) {
+  if (!turnBandId) {
+    return {
+      relatedConnectorIds: [],
+      relatedItemIds: [],
+      relatedSegmentIds: [],
+      selectedTurnBand: null,
+    };
+  }
+
+  const turn = projection.relationMap.turns[turnBandId];
+  return {
+    relatedConnectorIds: turn?.connectorIds ?? [],
+    relatedItemIds: turn?.itemIds ?? [],
+    relatedSegmentIds: turn?.segmentIds ?? [],
+    selectedTurnBand: projection.turnBandsById[turnBandId] ?? null,
+  };
+}
+
 export function buildTimelineProjection(
   detail: SessionDetailSnapshot | null,
 ): TimelineProjection | null {
@@ -292,7 +648,15 @@ export function buildTimelineProjection(
 
   const events = [...detail.bundle.events].sort(eventOrder);
   const items = buildItems(events);
+  const itemsById = Object.fromEntries(items.map((item) => [item.itemId, item])) as Record<
+    string,
+    TimelineItemView
+  >;
   const lanes = buildLanes(events);
+  const lanesById = Object.fromEntries(lanes.map((lane) => [lane.laneId, lane])) as Record<
+    string,
+    TimelineLaneView
+  >;
   const startedAtMs =
     parseTimestamp(detail.bundle.session.started_at) ??
     items[0]?.startedAtMs ??
@@ -303,6 +667,19 @@ export function buildTimelineProjection(
     latestItem?.startedAtMs ??
     parseTimestamp(detail.last_event_at) ??
     startedAtMs;
+  const turnBands = buildTurnBands(items);
+  const turnBandsById = Object.fromEntries(
+    turnBands.map((turnBand) => [turnBand.turnBandId, turnBand]),
+  ) as Record<string, TimelineTurnBand>;
+  const activationSegments = buildActivationSegments(turnBands, itemsById);
+  const segmentsById = Object.fromEntries(
+    activationSegments.map((segment) => [segment.segmentId, segment]),
+  ) as Record<string, TimelineActivationSegment>;
+  const connectors = buildConnectors(turnBands, activationSegments, lanesById);
+  const connectorsById = Object.fromEntries(
+    connectors.map((connector) => [connector.connectorId, connector]),
+  ) as Record<string, TimelineConnector>;
+  const relationMap = buildRelationMap(items, turnBands, activationSegments, connectors);
   const sessionTokenTotals = detail.bundle.events.reduce(
     (totals, event) => ({
       input: totals.input + (event.token_input ?? 0),
@@ -312,16 +689,23 @@ export function buildTimelineProjection(
   );
 
   return {
+    activationSegments,
+    connectors,
+    connectorsById,
     detail,
     items,
-    itemsById: Object.fromEntries(items.map((item) => [item.itemId, item])),
+    itemsById,
     lanes,
     latestItemId: latestItem?.itemId ?? null,
     metrics: detail.bundle.metrics ?? [],
+    relationMap,
+    segmentsById,
     session: detail.bundle.session,
     sessionTokenTotals,
     startedAtMs,
     timeRangeMs: Math.max(latestAtMs - startedAtMs, 1),
+    turnBands,
+    turnBandsById,
   };
 }
 
@@ -329,9 +713,72 @@ export function resolveTimelineSelection(
   projection: TimelineProjection | null,
   selection: TimelineSelection,
 ) {
-  if (!projection || selection.kind === "session") {
+  if (!projection) {
     return null;
   }
 
-  return projection.itemsById[selection.itemId] ?? null;
+  if (selection.kind === "session") {
+    return emptySelectionContext();
+  }
+
+  if (selection.kind === "item") {
+    const selectedItem = projection.itemsById[selection.itemId] ?? null;
+    if (!selectedItem) {
+      return emptySelectionContext();
+    }
+
+    const relation = projection.relationMap.items[selection.itemId];
+    const selectedSegment = relation?.segmentId
+      ? projection.segmentsById[relation.segmentId] ?? null
+      : null;
+    const scope = selectionScope(projection, relation?.turnBandId ?? null);
+
+    return {
+      anchorItemId: selectedItem.itemId,
+      ...scope,
+      selectedConnector: null,
+      selectedItem,
+      selectedSegment,
+    } satisfies TimelineSelectionContext;
+  }
+
+  if (selection.kind === "segment") {
+    const selectedSegment = projection.segmentsById[selection.segmentId] ?? null;
+    if (!selectedSegment) {
+      return emptySelectionContext();
+    }
+
+    const selectedItem =
+      projection.itemsById[selection.anchorItemId] ??
+      projection.itemsById[selectedSegment.anchorItemId] ??
+      null;
+    const scope = selectionScope(projection, selectedSegment.turnBandId);
+
+    return {
+      anchorItemId: selectedItem?.itemId ?? selectedSegment.anchorItemId,
+      ...scope,
+      selectedConnector: null,
+      selectedItem,
+      selectedSegment,
+    } satisfies TimelineSelectionContext;
+  }
+
+  const selectedConnector = projection.connectorsById[selection.connectorId] ?? null;
+  if (!selectedConnector) {
+    return emptySelectionContext();
+  }
+
+  const selectedItem =
+    projection.itemsById[selection.anchorItemId] ??
+    projection.itemsById[selectedConnector.anchorItemId] ??
+    null;
+  const scope = selectionScope(projection, selectedConnector.turnBandId);
+
+  return {
+    anchorItemId: selectedItem?.itemId ?? selectedConnector.anchorItemId,
+    ...scope,
+    selectedConnector,
+    selectedItem,
+    selectedSegment: null,
+  } satisfies TimelineSelectionContext;
 }

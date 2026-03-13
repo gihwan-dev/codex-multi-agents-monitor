@@ -434,5 +434,31 @@
     [data-glass-surface] {
       transition: none;
     }
+
+    .timeline-fresh-flash {
+      animation: none;
+    }
+  }
+
+  @keyframes timeline-fresh-flash {
+    0% {
+      filter: brightness(1.16);
+      transform: scale(1);
+    }
+
+    42% {
+      filter: brightness(1.32);
+      transform: scale(1.012);
+    }
+
+    100% {
+      filter: brightness(1);
+      transform: scale(1);
+    }
+  }
+
+  .timeline-fresh-flash {
+    animation: timeline-fresh-flash 900ms ease-out 1;
+    will-change: transform, filter;
   }
 }

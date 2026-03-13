@@ -5,10 +5,10 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import {
   buildTimelineProjection,
   resolveTimelineSelection,
-  type TimelineItemView,
-  type TimelineProjection,
   type TimelineMode,
+  type TimelineProjection,
   type TimelineSelection,
+  type TimelineSelectionContext,
 } from "@/features/timeline";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useWorkspaceSessionsQuery } from "@/features/live-session-feed";
@@ -55,7 +55,7 @@ interface MonitorWorkspaceLayoutProps {
   refreshedAt: string | null;
   selectedSession: ReturnType<typeof useSessionSelection>["selectedSession"];
   selectedSessionId: string | null;
-  selectedTimelineItem: TimelineItemView | null;
+  timelineSelectionContext: TimelineSelectionContext | null;
   timelineMode: TimelineMode;
   timelineSelection: TimelineSelection;
   snapshot: WorkspaceSessionsSnapshot | null;
@@ -250,7 +250,7 @@ export function MonitorPageShell({
     () => buildTimelineProjection(deferredDetail),
     [deferredDetail],
   );
-  const selectedTimelineItem = useMemo(
+  const timelineSelectionContext = useMemo(
     () => resolveTimelineSelection(timelineProjection, timelineSelection),
     [timelineProjection, timelineSelection],
   );
@@ -260,11 +260,19 @@ export function MonitorPageShell({
   }, [selectedSessionId]);
 
   useEffect(() => {
-    if (
-      timelineSelection.kind === "item" &&
-      timelineProjection &&
-      !timelineProjection.itemsById[timelineSelection.itemId]
-    ) {
+    if (!timelineProjection || timelineSelection.kind === "session") {
+      return;
+    }
+
+    const isValidSelection =
+      (timelineSelection.kind === "item" &&
+        timelineProjection.itemsById[timelineSelection.itemId] != null) ||
+      (timelineSelection.kind === "segment" &&
+        timelineProjection.segmentsById[timelineSelection.segmentId] != null) ||
+      (timelineSelection.kind === "connector" &&
+        timelineProjection.connectorsById[timelineSelection.connectorId] != null);
+
+    if (!isValidSelection) {
       setTimelineSelection({ kind: "session" });
     }
   }, [timelineProjection, timelineSelection]);
@@ -311,8 +319,8 @@ export function MonitorPageShell({
           refreshedAt={snapshot?.refreshed_at ?? null}
           selectedSession={selectedSession}
           selectedSessionId={selectedSessionId}
-          selectedTimelineItem={selectedTimelineItem}
           snapshot={snapshot}
+          timelineSelectionContext={timelineSelectionContext}
           timelineMode="live"
           timelineSelection={timelineSelection}
         />
@@ -335,8 +343,8 @@ function MonitorWorkspaceLayout({
   refreshedAt,
   selectedSession,
   selectedSessionId,
-  selectedTimelineItem,
   snapshot,
+  timelineSelectionContext,
   timelineMode,
   timelineSelection,
 }: MonitorWorkspaceLayoutProps) {
@@ -437,9 +445,9 @@ function MonitorWorkspaceLayout({
                     mode={timelineMode}
                     onSelectionChange={onTimelineSelectionChange}
                     projection={projection}
-                    selectedItem={selectedTimelineItem}
                     selectedSession={selectedSession}
                     selection={timelineSelection}
+                    selectionContext={timelineSelectionContext}
                   />
                 </div>
                 <div className="min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
@@ -448,9 +456,9 @@ function MonitorWorkspaceLayout({
                     loading={detailLoading}
                     onSelectionChange={onTimelineSelectionChange}
                     projection={projection}
-                    selectedItem={selectedTimelineItem}
                     selectedSession={selectedSession}
                     selection={timelineSelection}
+                    selectionContext={timelineSelectionContext}
                   />
                 </div>
               </div>

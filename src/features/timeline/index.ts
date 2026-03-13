@@ -10,12 +10,18 @@ export {
   zoomTimelineViewport,
 } from "./model/viewport";
 export type {
+  TimelineActivationSegment,
+  TimelineConnector,
+  TimelineConnectorKind,
   TimelineItemKind,
   TimelineItemView,
   TimelineLaneView,
   TimelineMode,
   TimelineProjection,
+  TimelineRelationMap,
   TimelineSelection,
+  TimelineSelectionContext,
+  TimelineTurnBand,
   TimelineViewportState,
 } from "./model/types";
 export { TimelineCanvas } from "./ui/timeline-canvas";
