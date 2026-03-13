@@ -8,7 +8,7 @@ SLICE-6
 - Live Monitor는 selected session detail query를 page에서 소유하고, timeline/drawer가 같은 selection state를 공유하도록 재배선했다.
 - 타임라인은 `User -> Main -> 기타 lane` 순서, top -> bottom 시간축, latest-at-bottom, merged tool span, reasoning summary, token collapse 규칙으로 실제 canonical detail을 렌더링한다.
 - live는 recent-zoom + latest follow on으로 시작하고, archive는 fit-all preset을 지원하도록 모델을 열어 두었다. 사용자가 scrub/drag/zoom으로 개입하면 follow를 끄고 `Eye` control로 다시 최신 추적을 복구할 수 있다.
-- Detail drawer는 `Summary`, `Input / Output`, `Raw`, `Tokens`, `Related metrics` 탭으로 selection source-of-truth를 공유한다.
+- Detail drawer는 `Summary`, `Input-Output`, `Raw`, `Tokens`, `Related metrics` 탭으로 selection source-of-truth를 공유한다.
 - root README와 task bundle 문서를 vertical timeline, live/archive preset, latest follow state machine 기준으로 갱신했다.
 
 # Decisions made during implementation
@@ -21,10 +21,9 @@ SLICE-6
 
 # Verification results
 
-- `pnpm typecheck`: pass
-- `pnpm test -- src/features/timeline/model/projection.test.ts src/features/timeline/model/viewport.test.ts src/features/timeline/ui/timeline-detail-sync.test.tsx src/pages/monitor/lib/ui-qa-fixtures.test.ts`: pass (`4` files, `15` tests)
-- `pnpm exec playwright test playwright/monitor-ui.spec.ts`: pass (`12` tests)
-- commit: pending
+- edit-only phase라 validation/commit은 아직 수행하지 않았다.
+- 다음 phase에서 `pnpm test -- src/features/timeline/model/projection.test.ts src/features/timeline/model/viewport.test.ts src/features/timeline/ui/timeline-detail-sync.test.tsx src/pages/monitor/lib/ui-qa-fixtures.test.ts`, `pnpm typecheck`, 필요 시 `pnpm exec playwright test playwright/monitor-ui.spec.ts`를 실행한다.
+- commit: 금지 상태 유지
 
 # Known issues / residual risk
 

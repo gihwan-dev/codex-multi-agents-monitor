@@ -156,210 +156,210 @@ export function DetailDrawer({
       <div className="h-full" data-testid="timeline-detail-drawer">
         <Card className={PANEL_CARD_CLASS}>
           <CardHeader className="bg-transparent px-5 pb-3.5 pt-5">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 max-w-[30rem]">
-              <p className="mb-2 text-[11px] font-medium text-slate-400">Detail drawer</p>
-              <CardTitle className="max-w-[24ch] text-[1.4rem] font-normal leading-[1.04] tracking-[-0.03em] text-white break-words">
-                {sessionTitle}
-              </CardTitle>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/64">
-                {errorMessage
-                  ? errorMessage
-                  : loading
-                    ? "Hydrating session detail."
-                    : selectedItem
-                      ? `${selectedItem.kind} selection in ${selectedItem.laneId}.`
-                      : describeStatus(selectedSession?.status)}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 xl:max-w-[12rem] xl:justify-end">
-              {selection.kind === "item" ? (
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 max-w-[30rem]">
+                <p className="mb-2 text-[11px] font-medium text-slate-400">Detail drawer</p>
+                <CardTitle className="max-w-[24ch] text-[1.4rem] font-normal leading-[1.04] tracking-[-0.03em] text-white break-words">
+                  {sessionTitle}
+                </CardTitle>
+                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/64">
+                  {errorMessage
+                    ? errorMessage
+                    : loading
+                      ? "Hydrating session detail."
+                      : selectedItem
+                        ? `${selectedItem.kind} selection in ${selectedItem.laneId}.`
+                        : describeStatus(selectedSession?.status)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 xl:max-w-[12rem] xl:justify-end">
+                {selection.kind === "item" ? (
+                  <GlassSurface
+                    className="rounded-full"
+                    interactive
+                    refraction="soft"
+                    variant="control"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-[inherit] border-0 bg-transparent px-3 text-[11px] font-medium text-slate-100 hover:bg-transparent hover:text-white"
+                      onClick={() => onSelectionChange({ kind: "session" })}
+                    >
+                      Session summary
+                    </Button>
+                  </GlassSurface>
+                ) : null}
                 <GlassSurface
                   className="rounded-full"
                   interactive
                   refraction="soft"
                   variant="control"
                 >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 rounded-[inherit] border-0 bg-transparent px-3 text-[11px] font-medium text-slate-100 hover:bg-transparent hover:text-white"
-                    onClick={() => onSelectionChange({ kind: "session" })}
-                  >
-                    Session summary
-                  </Button>
+                  <div className="px-2.5 py-1.5">
+                    <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
+                      {selectedItem ? selectedItem.kind : selectedSession?.status ?? "idle"}
+                    </span>
+                  </div>
                 </GlassSurface>
-              ) : null}
-              <GlassSurface
-                className="rounded-full"
-                interactive
-                refraction="soft"
-                variant="control"
-              >
-                <div className="px-2.5 py-1.5">
-                  <span className="text-[11px] font-medium tracking-[0.01em] text-slate-100 capitalize">
-                    {selectedItem ? selectedItem.kind : selectedSession?.status ?? "idle"}
-                  </span>
-                </div>
-              </GlassSurface>
-              <p className="text-[11px] text-slate-500/88">
-                {projection ? `${projection.items.length} projected items` : "No detail"}
-              </p>
+                <p className="text-[11px] text-slate-500/88">
+                  {projection ? `${projection.items.length} projected items` : "No detail"}
+                </p>
+              </div>
             </div>
-          </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col overflow-hidden bg-transparent p-0">
             <Tabs defaultValue="summary" className="flex h-full w-full flex-col">
-            <div className="px-4 py-2.5">
-              <GlassSurface
-                className="inline-flex max-w-full overflow-x-auto rounded-[1.3rem] no-scrollbar"
-                refraction="none"
-                variant="toolbar"
-              >
-                <TabsList className="h-9 w-max gap-1 rounded-[1.1rem] border-0 bg-transparent p-1 shadow-none">
-                  <TabsTrigger value="summary" className={DETAIL_TAB_TRIGGER_CLASS}>
-                    Summary
-                  </TabsTrigger>
-                  <TabsTrigger value="io" className={DETAIL_TAB_TRIGGER_CLASS}>
-                    Input-Output
-                  </TabsTrigger>
-                  <TabsTrigger value="raw" className={DETAIL_TAB_TRIGGER_CLASS}>
-                    Raw
-                  </TabsTrigger>
-                  <TabsTrigger value="tokens" className={DETAIL_TAB_TRIGGER_CLASS}>
-                    Tokens
-                  </TabsTrigger>
-                  <TabsTrigger value="metrics" className={DETAIL_TAB_TRIGGER_CLASS}>
-                    Related metrics
-                  </TabsTrigger>
-                </TabsList>
-              </GlassSurface>
-            </div>
+              <div className="px-4 py-2.5">
+                <GlassSurface
+                  className="inline-flex max-w-full overflow-x-auto rounded-[1.3rem] no-scrollbar"
+                  refraction="none"
+                  variant="toolbar"
+                >
+                  <TabsList className="h-9 w-max gap-1 rounded-[1.1rem] border-0 bg-transparent p-1 shadow-none">
+                    <TabsTrigger value="summary" className={DETAIL_TAB_TRIGGER_CLASS}>
+                      Summary
+                    </TabsTrigger>
+                    <TabsTrigger value="io" className={DETAIL_TAB_TRIGGER_CLASS}>
+                      Input-Output
+                    </TabsTrigger>
+                    <TabsTrigger value="raw" className={DETAIL_TAB_TRIGGER_CLASS}>
+                      Raw
+                    </TabsTrigger>
+                    <TabsTrigger value="tokens" className={DETAIL_TAB_TRIGGER_CLASS}>
+                      Tokens
+                    </TabsTrigger>
+                    <TabsTrigger value="metrics" className={DETAIL_TAB_TRIGGER_CLASS}>
+                      Related metrics
+                    </TabsTrigger>
+                  </TabsList>
+                </GlassSurface>
+              </div>
 
-            <div className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full px-4 pb-5 md:px-5 no-scrollbar">
-                <TabsContent value="summary" className="m-0 space-y-4 outline-none">
-                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Boxes className="h-4 w-4 text-slate-400" />
-                      <h3 className="text-[12px] font-medium text-slate-400">Summary</h3>
-                    </div>
-                    <p className="text-sm leading-relaxed text-slate-200/88">{summaryBody}</p>
-                    <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-300/76 sm:grid-cols-2">
-                      <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
-                        <p className="text-[11px] font-medium text-slate-500">Started</p>
-                        <p className="mt-1 text-slate-100">
-                          {selectedItem?.startedAt
-                            ? formatTimestamp(selectedItem.startedAt)
-                            : projection?.session.started_at
-                              ? formatTimestamp(projection.session.started_at)
-                              : "Awaiting runtime activity"}
+              <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full px-4 pb-5 md:px-5 no-scrollbar">
+                  <TabsContent value="summary" className="m-0 space-y-4 outline-none">
+                    <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Boxes className="h-4 w-4 text-slate-400" />
+                        <h3 className="text-[12px] font-medium text-slate-400">Summary</h3>
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-200/88">{summaryBody}</p>
+                      <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-300/76 sm:grid-cols-2">
+                        <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                          <p className="text-[11px] font-medium text-slate-500">Started</p>
+                          <p className="mt-1 text-slate-100">
+                            {selectedItem?.startedAt
+                              ? formatTimestamp(selectedItem.startedAt)
+                              : projection?.session.started_at
+                                ? formatTimestamp(projection.session.started_at)
+                                : "Awaiting runtime activity"}
+                          </p>
+                        </div>
+                        <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                          <p className="text-[11px] font-medium text-slate-500">Duration</p>
+                          <p className="mt-1 text-slate-100">
+                            {selectedItem
+                              ? formatDuration(
+                                  selectedItem.startedAtMs,
+                                  selectedItem.endedAtMs,
+                                )
+                              : projection
+                                ? `${projection.items.length} projected items`
+                                : "No data"}
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <h3 className="mb-2 text-[12px] font-medium text-slate-400">Latest</h3>
+                      <div className="space-y-2 text-sm text-slate-300/78">
+                        <p>{latestItem?.summary ?? "No latest event payload available yet."}</p>
+                        <p>
+                          {latestItem?.startedAt
+                            ? formatTimestamp(latestItem.startedAt)
+                            : "Awaiting runtime activity"}
                         </p>
                       </div>
-                      <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
-                        <p className="text-[11px] font-medium text-slate-500">Duration</p>
-                        <p className="mt-1 text-slate-100">
-                          {selectedItem
-                            ? formatDuration(
-                                selectedItem.startedAtMs,
-                                selectedItem.endedAtMs,
-                              )
-                            : projection
-                              ? `${projection.items.length} projected items`
-                              : "No data"}
-                        </p>
+                    </section>
+                  </TabsContent>
+
+                  <TabsContent value="io" className="m-0 space-y-4 outline-none">
+                    <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Binary className="h-4 w-4 text-slate-400" />
+                        <h3 className="text-[12px] font-medium text-slate-400">Input-Output</h3>
                       </div>
-                    </div>
-                  </section>
-
-                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <h3 className="mb-2 text-[12px] font-medium text-slate-400">Latest</h3>
-                    <div className="space-y-2 text-sm text-slate-300/78">
-                      <p>{latestItem?.summary ?? "No latest event payload available yet."}</p>
-                      <p>
-                        {latestItem?.startedAt
-                          ? formatTimestamp(latestItem.startedAt)
-                          : "Awaiting runtime activity"}
-                      </p>
-                    </div>
-                  </section>
-                </TabsContent>
-
-                <TabsContent value="io" className="m-0 space-y-4 outline-none">
-                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Binary className="h-4 w-4 text-slate-400" />
-                      <h3 className="text-[12px] font-medium text-slate-400">Input / Output</h3>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <p className="mb-2 text-[11px] font-medium text-slate-500">Input</p>
-                        <pre className="overflow-x-auto rounded-[1.15rem] border border-white/8 bg-[#0a1018]/60 p-3 text-[11px] text-slate-300 no-scrollbar">
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <p className="mb-2 text-[11px] font-medium text-slate-500">Input</p>
+                          <pre className="overflow-x-auto rounded-[1.15rem] border border-white/8 bg-[#0a1018]/60 p-3 text-[11px] text-slate-300 no-scrollbar">
 {selectedItem?.inputPreview ??
   selectedItem?.payloadPreview ??
   "No input preview available for the current selection."}
-                        </pre>
-                      </div>
-                      <div>
-                        <p className="mb-2 text-[11px] font-medium text-slate-500">Output</p>
-                        <pre className="overflow-x-auto rounded-[1.15rem] border border-white/8 bg-[#0a1018]/60 p-3 text-[11px] text-slate-300 no-scrollbar">
+                          </pre>
+                        </div>
+                        <div>
+                          <p className="mb-2 text-[11px] font-medium text-slate-500">Output</p>
+                          <pre className="overflow-x-auto rounded-[1.15rem] border border-white/8 bg-[#0a1018]/60 p-3 text-[11px] text-slate-300 no-scrollbar">
 {selectedItem?.outputPreview ??
   latestItem?.outputPreview ??
   "No output preview available for the current selection."}
-                        </pre>
+                          </pre>
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                </TabsContent>
+                    </section>
+                  </TabsContent>
 
-                <TabsContent value="raw" className="m-0 outline-none">
-                  <section className="space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                      <Braces className="h-4 w-4 text-slate-400" />
-                      <p className="text-[12px] font-medium text-slate-400">
-                        Raw selection payload
-                      </p>
-                    </div>
-                    <pre className="w-full overflow-x-auto rounded-[1.45rem] border border-white/5 bg-[#0a1018]/64 p-4 text-[11px] text-slate-300/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] no-scrollbar">
+                  <TabsContent value="raw" className="m-0 outline-none">
+                    <section className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <Braces className="h-4 w-4 text-slate-400" />
+                        <p className="text-[12px] font-medium text-slate-400">
+                          Raw selection payload
+                        </p>
+                      </div>
+                      <pre className="w-full overflow-x-auto rounded-[1.45rem] border border-white/5 bg-[#0a1018]/64 p-4 text-[11px] text-slate-300/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] no-scrollbar">
 {rawPayload}
-                    </pre>
-                  </section>
-                </TabsContent>
+                      </pre>
+                    </section>
+                  </TabsContent>
 
-                <TabsContent value="tokens" className="m-0 space-y-4 outline-none">
-                  <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="mb-3 flex items-center gap-2">
-                      <DatabaseZap className="h-4 w-4 text-slate-400" />
-                      <h3 className="text-[12px] font-medium text-slate-400">
-                        {tokenState.label}
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
-                        <p className="text-[11px] font-medium text-slate-500">Input</p>
-                        <p className="mt-1 text-lg text-white">{tokenState.input}</p>
+                  <TabsContent value="tokens" className="m-0 space-y-4 outline-none">
+                    <section className="rounded-[1.45rem] border border-white/5 bg-white/[0.024] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <DatabaseZap className="h-4 w-4 text-slate-400" />
+                        <h3 className="text-[12px] font-medium text-slate-400">
+                          {tokenState.label}
+                        </h3>
                       </div>
-                      <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
-                        <p className="text-[11px] font-medium text-slate-500">Output</p>
-                        <p className="mt-1 text-lg text-white">{tokenState.output}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                          <p className="text-[11px] font-medium text-slate-500">Input</p>
+                          <p className="mt-1 text-lg text-white">{tokenState.input}</p>
+                        </div>
+                        <div className="rounded-[1rem] border border-white/5 bg-[#09111d]/60 px-3 py-3">
+                          <p className="text-[11px] font-medium text-slate-500">Output</p>
+                          <p className="mt-1 text-lg text-white">{tokenState.output}</p>
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                </TabsContent>
+                    </section>
+                  </TabsContent>
 
-                <TabsContent value="metrics" className="m-0 space-y-4 outline-none">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {metrics.length > 0 ? (
-                      metrics.map(metricCard)
-                    ) : (
-                      <section className="rounded-[1.4rem] border border-white/5 bg-white/[0.024] p-5 text-sm text-slate-300/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:col-span-2">
-                        No metrics available for the selected session.
-                      </section>
-                    )}
-                  </div>
-                </TabsContent>
-              </ScrollArea>
-            </div>
+                  <TabsContent value="metrics" className="m-0 space-y-4 outline-none">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {metrics.length > 0 ? (
+                        metrics.map(metricCard)
+                      ) : (
+                        <section className="rounded-[1.4rem] border border-white/5 bg-white/[0.024] p-5 text-sm text-slate-300/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:col-span-2">
+                          No metrics available for the selected session.
+                        </section>
+                      )}
+                    </div>
+                  </TabsContent>
+                </ScrollArea>
+              </div>
             </Tabs>
           </CardContent>
         </Card>

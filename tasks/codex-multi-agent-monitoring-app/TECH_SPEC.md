@@ -143,7 +143,7 @@ Codex local files
   - global decorative UI와 top-level composition만 가진다.
 - `pages/monitor`
   - `activeTab`, selected session, timeline selection을 소유한다.
-  - selected session detail query owner로 동작하고 Live surface와 deferred placeholder surface를 스위칭한다.
+  - selected session detail query owner로 동작하고 Live surface를 실제 timeline/detail MVP에 연결한다.
 - `widgets`
   - `workspace-sidebar`, `monitor-header`, `live-session-overview`, `timeline`, `detail-drawer`, `tab-placeholder-panel`
   - 모두 prop-driven dumb component로 유지한다.
@@ -159,7 +159,7 @@ Codex local files
 - `shared`
   - `api/tauri-monitor`: Tauri invoke/listen runtime bridge
   - `query/*`: stable query client, query provider, query key/options factory
-  - `model/monitor`: tab contract과 deferred placeholder copy
+  - `model/monitor`: tab contract
   - `queries.ts`: Rust와 공유하는 query contract
 
 ## Frontend query layer

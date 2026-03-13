@@ -104,7 +104,7 @@ describe("timeline + detail drawer", () => {
     expect(drawer.getByText("Apply the timeline and drawer wiring patch.")).toBeVisible();
     expect(drawer.getByText("tool selection in agent:worker.")).toBeVisible();
 
-    fireEvent.click(drawer.getByRole("tab", { name: "Input / Output" }));
+    fireEvent.click(drawer.getByRole("tab", { name: "Input-Output" }));
 
     expect(
       drawer.getByText("update timeline selection source-of-truth in monitor page"),
