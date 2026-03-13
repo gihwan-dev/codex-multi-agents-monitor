@@ -733,13 +733,23 @@ UI_QA_DETAIL_BY_SESSION["sess-live-noisy-title"] = {
 export interface MonitorUiQaState {
   activeTab: MonitorTab;
   detailBySessionId: Record<string, SessionDetailSnapshot>;
+  detailDrawerOpen: boolean;
   selectedSessionId: string;
   sidebarOpen: boolean;
   snapshot: WorkspaceSessionsSnapshot;
+  summaryCollapsed: boolean;
 }
 
 function isMonitorTab(value: string | null): value is MonitorTab {
   return value === "live" || value === "archive" || value === "metrics";
+}
+
+function isSummaryMode(value: string | null): value is "collapsed" | "expanded" {
+  return value === "collapsed" || value === "expanded";
+}
+
+function isDrawerMode(value: string | null): value is "open" | "closed" {
+  return value === "open" || value === "closed";
 }
 
 export function resolveMonitorUiQaState(
@@ -759,12 +769,16 @@ export function resolveMonitorUiQaState(
       : firstSessionId(UI_QA_SNAPSHOT) ?? "sess-ui-shell";
   const tabParam = params.get("tab");
   const sidebarParam = params.get("sidebar");
+  const summaryParam = params.get("summary");
+  const drawerParam = params.get("drawer");
 
   return {
     activeTab: isMonitorTab(tabParam) ? tabParam : "live",
     detailBySessionId: UI_QA_DETAIL_BY_SESSION,
+    detailDrawerOpen: isDrawerMode(drawerParam) ? drawerParam === "open" : true,
     selectedSessionId,
     sidebarOpen: sidebarParam !== "collapsed",
     snapshot: UI_QA_SNAPSHOT,
+    summaryCollapsed: isSummaryMode(summaryParam) ? summaryParam === "collapsed" : false,
   };
 }

@@ -1,7 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
+import { ChevronLeft, X } from "lucide-react";
 
+import { GlassSurface } from "@/app/ui";
+import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { cn } from "@/lib/utils";
 import {
   buildTimelineProjection,
   resolveTimelineSelection,
@@ -34,7 +38,9 @@ interface MonitorPageShellProps {
   detailBySessionId?: Record<string, SessionDetailSnapshot>;
   errorMessage: string | null;
   initialActiveTab?: MonitorTab;
+  initialDetailDrawerOpen?: boolean;
   initialSidebarOpen?: boolean;
+  initialSummaryCollapsed?: boolean;
   loading: boolean;
   preferredSessionId?: string | null;
   snapshot: WorkspaceSessionsSnapshot | null;
@@ -44,11 +50,15 @@ interface MonitorPageShellProps {
 interface MonitorWorkspaceLayoutProps {
   activeTab: MonitorTab;
   detailErrorMessage: string | null;
+  detailDrawerOpen: boolean;
   detailLoading: boolean;
   degradedMessage: string | null;
   errorMessage: string | null;
+  onDetailDrawerOpenChange: (open: boolean) => void;
   loading: boolean;
   onSelectSession: (sessionId: string) => void;
+  summaryCollapsed: boolean;
+  onSummaryCollapsedChange: (collapsed: boolean) => void;
   onTabChange: (tab: MonitorTab) => void;
   onTimelineSelectionChange: (selection: TimelineSelection) => void;
   projection: TimelineProjection | null;
@@ -210,7 +220,9 @@ export function DemoMonitorPage({ uiQaState }: { uiQaState: MonitorUiQaState }) 
       detailBySessionId={uiQaState.detailBySessionId}
       errorMessage={null}
       initialActiveTab={uiQaState.activeTab}
+      initialDetailDrawerOpen={uiQaState.detailDrawerOpen}
       initialSidebarOpen={uiQaState.sidebarOpen}
+      initialSummaryCollapsed={uiQaState.summaryCollapsed}
       loading={false}
       preferredSessionId={uiQaState.selectedSessionId}
       snapshot={uiQaState.snapshot}
@@ -224,14 +236,18 @@ export function MonitorPageShell({
   detailBySessionId,
   errorMessage,
   initialActiveTab = "live",
+  initialDetailDrawerOpen = true,
   initialSidebarOpen = true,
+  initialSummaryCollapsed = false,
   loading,
   preferredSessionId = null,
   snapshot,
   uiQaMode = false,
 }: MonitorPageShellProps) {
   const [activeTab, setActiveTab] = useState<MonitorTab>(initialActiveTab);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(initialDetailDrawerOpen);
   const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(initialSummaryCollapsed);
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection>({
     kind: "session",
   });
@@ -308,11 +324,14 @@ export function MonitorPageShell({
         <MonitorWorkspaceLayout
           activeTab={activeTab}
           detailErrorMessage={activeDetail ? null : detailQuery.errorMessage}
+          detailDrawerOpen={detailDrawerOpen}
           detailLoading={detailQuery.loading && !activeDetail}
           degradedMessage={degradedMessage}
           errorMessage={errorMessage}
           loading={loading}
+          onDetailDrawerOpenChange={setDetailDrawerOpen}
           onSelectSession={selectSession}
+          onSummaryCollapsedChange={setSummaryCollapsed}
           onTabChange={setActiveTab}
           onTimelineSelectionChange={setTimelineSelection}
           projection={timelineProjection}
@@ -320,6 +339,7 @@ export function MonitorPageShell({
           selectedSession={selectedSession}
           selectedSessionId={selectedSessionId}
           snapshot={snapshot}
+          summaryCollapsed={summaryCollapsed}
           timelineSelectionContext={timelineSelectionContext}
           timelineMode="live"
           timelineSelection={timelineSelection}
@@ -332,11 +352,15 @@ export function MonitorPageShell({
 function MonitorWorkspaceLayout({
   activeTab,
   detailErrorMessage,
+  detailDrawerOpen,
   detailLoading,
   degradedMessage,
   errorMessage,
   loading,
+  onDetailDrawerOpenChange,
   onSelectSession,
+  onSummaryCollapsedChange,
+  summaryCollapsed,
   onTabChange,
   onTimelineSelectionChange,
   projection,
@@ -356,6 +380,7 @@ function MonitorWorkspaceLayout({
   const desktopGroupRef = useRef<GroupImperativeHandle | null>(null);
   const pendingProgrammaticLayoutRef = useRef<PanelLayout | null>(null);
   const sidebarSizing = getDesktopSidebarSizing(viewportWidth);
+  const isFloatingDrawerViewport = !isMobile && viewportWidth >= 1280;
   const effectiveDesktopLayout = useMemo(
     () => sanitizeLayoutForViewport(desktopLayoutPreference, viewportWidth),
     [desktopLayoutPreference, viewportWidth],
@@ -414,6 +439,13 @@ function MonitorWorkspaceLayout({
     />
   );
 
+  const handleTimelineSelectionChange = (selection: TimelineSelection) => {
+    onTimelineSelectionChange(selection);
+    if (selection.kind !== "session") {
+      onDetailDrawerOpenChange(true);
+    }
+  };
+
   const mainContent = (
     <main
       className={`relative flex flex-1 flex-col overflow-hidden bg-transparent ${
@@ -431,37 +463,66 @@ function MonitorWorkspaceLayout({
           <div className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="shrink-0">
               <LiveSessionOverview
+                collapsed={summaryCollapsed}
                 degradedMessage={degradedMessage}
                 errorMessage={errorMessage}
                 loading={loading}
+                onCollapsedChange={onSummaryCollapsedChange}
                 selectedSession={selectedSession}
                 snapshot={snapshot}
               />
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-              <div className="min-h-0 min-w-0 flex-[2.12]">
-                <TimelineCanvas
+            <div
+              className="relative min-h-0 flex-1"
+              data-drawer-mode={
+                isFloatingDrawerViewport
+                  ? detailDrawerOpen
+                    ? "floating-open"
+                    : "floating-closed"
+                  : "stacked"
+              }
+              data-testid="live-timeline-stage"
+            >
+              <div className="flex min-h-0 h-full flex-col gap-4">
+                <div className="min-h-0 min-w-0 flex-1">
+                  <TimelineCanvas
+                    errorMessage={detailErrorMessage}
+                    loading={detailLoading}
+                    mode={timelineMode}
+                    onSelectionChange={handleTimelineSelectionChange}
+                    projection={projection}
+                    selectedSession={selectedSession}
+                    selection={timelineSelection}
+                    selectionContext={timelineSelectionContext}
+                  />
+                </div>
+                {!isFloatingDrawerViewport ? (
+                  <div className="min-h-0 min-w-0">
+                    <DetailDrawer
+                      errorMessage={detailErrorMessage}
+                      loading={detailLoading}
+                      onSelectionChange={handleTimelineSelectionChange}
+                      projection={projection}
+                      selectedSession={selectedSession}
+                      selection={timelineSelection}
+                      selectionContext={timelineSelectionContext}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              {isFloatingDrawerViewport ? (
+                <FloatingDetailDrawer
                   errorMessage={detailErrorMessage}
                   loading={detailLoading}
-                  mode={timelineMode}
-                  onSelectionChange={onTimelineSelectionChange}
+                  onOpenChange={onDetailDrawerOpenChange}
+                  onSelectionChange={handleTimelineSelectionChange}
+                  open={detailDrawerOpen}
                   projection={projection}
                   selectedSession={selectedSession}
                   selection={timelineSelection}
                   selectionContext={timelineSelectionContext}
                 />
-              </div>
-              <div className="min-h-0 min-w-0 xl:min-w-[285px] xl:max-w-[408px] xl:flex-[0.72]">
-                <DetailDrawer
-                  errorMessage={detailErrorMessage}
-                  loading={detailLoading}
-                  onSelectionChange={onTimelineSelectionChange}
-                  projection={projection}
-                  selectedSession={selectedSession}
-                  selection={timelineSelection}
-                  selectionContext={timelineSelectionContext}
-                />
-              </div>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -542,5 +603,108 @@ function MonitorWorkspaceLayout({
         {mainContent}
       </ResizablePanel>
     </ResizablePanelGroup>
+  );
+}
+
+interface FloatingDetailDrawerProps {
+  errorMessage: string | null;
+  loading: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelectionChange: (selection: TimelineSelection) => void;
+  open: boolean;
+  projection: TimelineProjection | null;
+  selectedSession: ReturnType<typeof useSessionSelection>["selectedSession"];
+  selection: TimelineSelection;
+  selectionContext: TimelineSelectionContext | null;
+}
+
+function FloatingDetailDrawer({
+  errorMessage,
+  loading,
+  onOpenChange,
+  onSelectionChange,
+  open,
+  projection,
+  selectedSession,
+  selection,
+  selectionContext,
+}: FloatingDetailDrawerProps) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-y-0 right-0 z-30 hidden items-stretch justify-end xl:flex"
+      data-state={open ? "open" : "closed"}
+      data-testid="timeline-detail-floating-shell"
+    >
+      <div className="relative flex h-full items-center">
+        <GlassSurface
+          className={cn(
+            "absolute right-0 top-1/2 -translate-y-1/2 rounded-[1.4rem] border-white/10 shadow-[0_18px_60px_rgba(2,6,23,0.42)] transition-[opacity,transform] duration-200",
+            open
+              ? "pointer-events-none invisible translate-x-3 opacity-0"
+              : "pointer-events-auto visible translate-x-0 opacity-100",
+          )}
+          interactive
+          refraction="soft"
+          variant="control"
+        >
+          <Button
+            aria-label="Open detail drawer"
+            className="h-28 w-11 rounded-[inherit] border-0 bg-transparent px-0 text-slate-100 shadow-none hover:bg-transparent hover:text-white"
+            data-testid="timeline-detail-drawer-handle"
+            onClick={() => onOpenChange(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <span className="flex -rotate-90 items-center gap-2 whitespace-nowrap text-[11px] font-medium tracking-[0.08em] text-slate-200/86">
+              <ChevronLeft className="h-4 w-4 rotate-180" />
+              Detail
+            </span>
+          </Button>
+        </GlassSurface>
+
+        <div
+          className={cn(
+            "pointer-events-none h-full transition-[opacity,transform] duration-200 ease-out",
+            open
+              ? "visible translate-x-0 opacity-100"
+              : "invisible translate-x-[calc(100%+1rem)] opacity-0",
+          )}
+          style={{ width: "clamp(20rem, 31vw, 28rem)" }}
+        >
+          <div className="pointer-events-auto h-full pl-3 pt-1.5">
+            <div className="relative h-full">
+              <GlassSurface
+                className="absolute right-3 top-3 z-10 rounded-full shadow-[0_14px_42px_rgba(2,6,23,0.38)]"
+                interactive
+                refraction="soft"
+                variant="control"
+              >
+                <Button
+                  aria-label="Close detail drawer"
+                  className="h-9 w-9 rounded-[inherit] border-0 bg-transparent p-0 text-slate-100 shadow-none hover:bg-transparent hover:text-white"
+                  data-testid="timeline-detail-drawer-close"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </GlassSurface>
+              <div className="h-full rounded-[1.7rem] shadow-[0_24px_80px_rgba(2,6,23,0.38)]">
+                <DetailDrawer
+                  errorMessage={errorMessage}
+                  loading={loading}
+                  onSelectionChange={onSelectionChange}
+                  projection={projection}
+                  selectedSession={selectedSession}
+                  selection={selection}
+                  selectionContext={selectionContext}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

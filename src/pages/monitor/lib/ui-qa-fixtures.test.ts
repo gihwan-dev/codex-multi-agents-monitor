@@ -9,15 +9,17 @@ describe("resolveMonitorUiQaState", () => {
 
   it("parses tab, sidebar, and session params for deterministic captures", () => {
     const state = resolveMonitorUiQaState(
-      "?demo=ui-qa&tab=archive&sidebar=collapsed&session=sess-archive-flow",
+      "?demo=ui-qa&tab=archive&sidebar=collapsed&session=sess-archive-flow&summary=collapsed&drawer=closed",
     );
 
     expect(state).not.toBeNull();
     expect(state?.activeTab).toBe("archive");
+    expect(state?.detailDrawerOpen).toBe(false);
     expect(state?.sidebarOpen).toBe(false);
     expect(state?.selectedSessionId).toBe("sess-archive-flow");
     expect(state?.detailBySessionId["sess-archive-flow"]?.event_count).toBe(18);
     expect(state?.detailBySessionId["sess-archive-flow"]?.bundle.events).toHaveLength(4);
+    expect(state?.summaryCollapsed).toBe(true);
   });
 
   it("falls back to the first fixture session for unknown session ids", () => {
@@ -26,7 +28,9 @@ describe("resolveMonitorUiQaState", () => {
     );
 
     expect(state?.activeTab).toBe("metrics");
+    expect(state?.detailDrawerOpen).toBe(true);
     expect(state?.selectedSessionId).toBe("sess-ui-shell");
+    expect(state?.summaryCollapsed).toBe(false);
   });
 
   it("provides detail fixtures for every snapshot session", () => {

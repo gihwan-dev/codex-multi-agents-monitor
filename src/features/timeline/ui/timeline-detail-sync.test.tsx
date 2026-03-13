@@ -102,7 +102,7 @@ describe("timeline + detail drawer", () => {
     );
 
     expect(screen.getAllByText("No active session context")).toHaveLength(2);
-    expect(screen.getByText("Event detail")).toBeVisible();
+    expect(screen.getByText("Session summary")).toBeVisible();
   });
 
   it("renders turn headers and syncs visible item selection into the drawer", () => {

@@ -4,26 +4,38 @@ const SHOTS = [
   {
     name: "live-expanded",
     sidebar: "expanded",
-    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell&summary=expanded&drawer=open",
     text: "Liquid Glass shell redesign",
   },
   {
-    name: "live-collapsed",
-    sidebar: "collapsed",
-    path: "/?demo=ui-qa&tab=live&sidebar=collapsed&session=sess-ui-shell",
+    name: "live-summary-collapsed",
+    sidebar: "expanded",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell&summary=collapsed&drawer=open",
     text: "Sequence timeline",
+  },
+  {
+    name: "live-drawer-closed",
+    sidebar: "expanded",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell&summary=expanded&drawer=closed",
+    text: "Liquid Glass shell redesign",
   },
   {
     name: "live-detail-selected",
     sidebar: "expanded",
-    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-archive-flow",
-    text: "Archive filter pass",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell&summary=expanded&drawer=open",
+    text: "Liquid Glass shell redesign",
   },
   {
     name: "live-long-title",
     sidebar: "expanded",
-    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-live-noisy-title",
+    path: "/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-live-noisy-title&summary=expanded&drawer=open",
     text: "제목이 이상하게 캡쳐됨.",
+  },
+  {
+    name: "live-sidebar-collapsed",
+    sidebar: "collapsed",
+    path: "/?demo=ui-qa&tab=live&sidebar=collapsed&session=sess-ui-shell&summary=expanded&drawer=open",
+    text: "Sequence timeline",
   },
   {
     name: "archive",
@@ -62,7 +74,63 @@ for (const shot of SHOTS) {
 
     if (shot.name.startsWith("live-")) {
       await expect(page.getByTestId("live-session-summary")).toBeVisible();
+      await expect(page.getByTestId("live-timeline-stage")).toBeVisible();
       await expect(page.getByTestId("timeline-scroll-area")).toBeVisible();
+    }
+
+    if (shot.name === "live-expanded") {
+      const layout = await page.evaluate(() => {
+        const stage = document.querySelector('[data-testid="live-timeline-stage"]');
+        const scrollArea = document.querySelector('[data-testid="timeline-scroll-area"]');
+
+        return {
+          stageWidth: stage?.getBoundingClientRect().width ?? 0,
+          scrollWidth: scrollArea?.getBoundingClientRect().width ?? 0,
+        };
+      });
+
+      expect(layout.stageWidth).toBeGreaterThan(0);
+      expect(layout.scrollWidth / layout.stageWidth).toBeGreaterThan(0.9);
+      await expect(page.getByTestId("timeline-detail-floating-shell")).toHaveAttribute(
+        "data-state",
+        "open",
+      );
+      await expect(page.getByTestId("timeline-detail-drawer")).toBeVisible();
+    }
+
+    if (shot.name === "live-summary-collapsed") {
+      await expect(page.getByTestId("live-session-summary")).toHaveAttribute(
+        "data-state",
+        "collapsed",
+      );
+      await expect(page.getByText("Selected session")).toBeHidden();
+    }
+
+    if (shot.name === "live-drawer-closed") {
+      await expect(page.getByTestId("timeline-detail-floating-shell")).toHaveAttribute(
+        "data-state",
+        "closed",
+      );
+      await expect(page.getByTestId("timeline-detail-drawer-handle")).toBeVisible();
+      await expect(page.getByTestId("timeline-detail-drawer")).toBeHidden();
+    }
+
+    if (shot.name === "live-detail-selected") {
+      await page
+        .getByRole("button", {
+          name: "Main integrated the worker patch into the live monitor shell.",
+        })
+        .click();
+      await expect(
+        page.getByText("Main integrated the worker patch into the live monitor shell.").nth(1),
+      ).toBeVisible();
+      await expect(page.getByText("Selection chain")).toBeVisible();
+    }
+
+    if (
+      shot.name === "live-long-title" ||
+      shot.name === "live-sidebar-collapsed"
+    ) {
       await expect(page.getByTestId("timeline-detail-drawer")).toBeVisible();
     }
 
@@ -74,7 +142,7 @@ for (const shot of SHOTS) {
 }
 
 test("sidebar toggle focus and hover capture", async ({ page }, testInfo) => {
-  await page.goto("/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell", {
+  await page.goto("/?demo=ui-qa&tab=live&sidebar=expanded&session=sess-ui-shell&summary=expanded&drawer=open", {
     waitUntil: "networkidle",
   });
 
