@@ -1,5 +1,11 @@
 # Execution slices
 
+## Bootstrap preflight
+
+- Before product slices, lock the command surface in `package.json` for `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm storybook:build`, `pnpm build`.
+- Preferred path is real package installation for `Biome`, `Vitest`, `Playwright`, and `Storybook`.
+- If registry access is unavailable, keep the same command surface with local fallback scripts and document the gap in `STATUS.md`. Replace fallback scripts with package-backed tooling once registry access returns.
+
 ## SLICE-1
 
 - Change boundary: static desktop shell, left rail, run detail chrome, summary strip, anomaly jump bar, graph lane scaffold, inspector shell

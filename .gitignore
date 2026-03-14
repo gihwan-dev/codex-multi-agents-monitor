@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+storybook-static
+.tmp-tests
 playwright-report
 src-tauri/target
 src-tauri/gen

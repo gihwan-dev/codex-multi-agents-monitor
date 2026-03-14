@@ -8,9 +8,17 @@
   },
   "scripts": {
     "dev": "vite",
+    "lint": "biome check .",
+    "lint:smoke": "node scripts/lint.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:smoke": "rm -rf .tmp-tests && tsc -p tsconfig.test.json && node --experimental-specifier-resolution=node scripts/test.mjs",
+    "test:e2e": "pnpm build && playwright test",
+    "test:e2e:smoke": "pnpm build && node scripts/e2e-smoke.mjs",
+    "storybook:build": "storybook build || node scripts/storybook-build.mjs",
+    "storybook:build:smoke": "node scripts/storybook-build.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
@@ -20,12 +28,16 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "@playwright/test": "^1.58.2",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^28.1.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
 }

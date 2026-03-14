@@ -1,0 +1,27 @@
+@keyframes pulse-status {
+  0% {
+    box-shadow: 0 0 0 0 rgba(77, 163, 255, 0.3);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(77, 163, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(77, 163, 255, 0);
+  }
+}
+
+.live-badge--live {
+  animation: pulse-status 2.2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge--live {
+    animation: none;
+  }
+
+  .monitor-shell,
+  .monitor-shell * {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+  }
+}
