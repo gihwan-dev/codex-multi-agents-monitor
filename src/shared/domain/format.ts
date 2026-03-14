@@ -54,6 +54,32 @@ export function formatTimestamp(timestamp: number): string {
   }).format(timestamp);
 }
 
+export function formatRelativeTime(
+  timestamp: number,
+  referenceTimestamp = Date.now(),
+): string {
+  const formatter = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+  const deltaSeconds = Math.round((timestamp - referenceTimestamp) / 1000);
+  const absoluteSeconds = Math.abs(deltaSeconds);
+
+  if (absoluteSeconds < 60) {
+    return formatter.format(deltaSeconds, "second");
+  }
+
+  const deltaMinutes = Math.round(deltaSeconds / 60);
+  if (Math.abs(deltaMinutes) < 60) {
+    return formatter.format(deltaMinutes, "minute");
+  }
+
+  const deltaHours = Math.round(deltaMinutes / 60);
+  if (Math.abs(deltaHours) < 24) {
+    return formatter.format(deltaHours, "hour");
+  }
+
+  const deltaDays = Math.round(deltaHours / 24);
+  return formatter.format(deltaDays, "day");
+}
+
 export function truncateId(value: string): string {
   if (value.length <= 12) {
     return value;

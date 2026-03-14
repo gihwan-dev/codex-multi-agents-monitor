@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
-import { TimelineGraphView } from "../features/run-detail/graph/TimelineGraphView";
+import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
 import { MapView } from "../features/run-detail/map/MapView";
 import { WaterfallView } from "../features/run-detail/waterfall/WaterfallView";
 import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
@@ -9,8 +9,9 @@ import {
   type DrawerTab,
   type EventType,
   formatCurrency,
-  formatDuration,
   formatTokens,
+  type SummaryFact,
+  type ViewMode,
 } from "../shared/domain";
 import { MetricPill, Panel, StatusChip } from "../shared/ui";
 import { useMonitorAppState } from "./useMonitorAppState";
@@ -27,7 +28,6 @@ const eventFilterOptions: Array<EventType | "all"> = [
 type MonitorAppState = ReturnType<typeof useMonitorAppState>;
 type ActiveDataset = MonitorAppState["activeDataset"];
 type ActiveFilters = MonitorAppState["activeFilters"];
-type ViewMode = MonitorAppState["state"]["viewMode"];
 type LiveConnection = MonitorAppState["activeLiveConnection"];
 
 export function MonitorApp() {
@@ -37,11 +37,13 @@ export function MonitorApp() {
     activeFilters,
     activeFollowLive,
     activeLiveConnection,
+    activePathOnly,
     rawTabAvailable,
-    laneDisplays,
-    selectionDetails,
+    graphModel,
+    inspectorSummary,
+    summaryFacts,
     anomalyJumps,
-    waterfallSegments,
+    waterfallModel,
     mapNodes,
     actions,
   } = useMonitorAppState();
@@ -123,38 +125,33 @@ export function MonitorApp() {
         </aside>
 
         <main className="workspace__main">
-          <SummaryStrip dataset={activeDataset} />
+          <SummaryStrip facts={summaryFacts} activeFocus={inspectorSummary?.title ?? null} />
           <GraphToolbar
             dataset={activeDataset}
             filters={activeFilters}
             anomalyJumps={anomalyJumps}
+            pathOnly={activePathOnly}
             rawTabAvailable={rawTabAvailable}
             viewMode={state.viewMode}
             onJump={actions.selectItem}
             onOpenDrawer={openDrawer}
             onSetFilter={actions.setFilter}
             onSetViewMode={actions.setViewMode}
+            onTogglePathOnly={actions.togglePathOnly}
           />
 
           {state.viewMode === "graph" ? (
-            <TimelineGraphView
-              lanes={laneDisplays}
-              edges={activeDataset.edges}
-              selectedId={state.selection?.id ?? null}
-              onSelect={actions.selectItem}
-            />
+            <CausalGraphView model={graphModel} onSelect={actions.selectItem} />
           ) : null}
           {state.viewMode === "waterfall" ? (
-            <WaterfallView segments={waterfallSegments} />
+            <WaterfallView model={waterfallModel} onSelect={actions.selectItem} />
           ) : null}
           {state.viewMode === "map" ? <MapView nodes={mapNodes} /> : null}
 
           {isCompactViewport ? (
             <CausalInspectorPane
               compact
-              dataset={activeDataset}
-              selection={selectionDetails}
-              rawEnabled={activeDataset.run.rawIncluded}
+              summary={inspectorSummary}
               onSelectJump={actions.selectItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
@@ -187,9 +184,7 @@ export function MonitorApp() {
               position={state.inspectorWidth}
             />
             <CausalInspectorPane
-              dataset={activeDataset}
-              selection={selectionDetails}
-              rawEnabled={activeDataset.run.rawIncluded}
+              summary={inspectorSummary}
               onSelectJump={actions.selectItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
@@ -209,6 +204,7 @@ export function MonitorApp() {
             <li>`G` graph mode</li>
             <li>`W` waterfall mode</li>
             <li>`M` map mode</li>
+            <li>`P` path only toggle</li>
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
             <li>`E` error only</li>
@@ -241,7 +237,7 @@ function TopBar({
   return (
     <header className="top-bar top-bar--compact">
       <div className="top-bar__identity">
-        <p className="eyebrow">Warm Graphite Observatory</p>
+        <p className="eyebrow">Graph-first run workbench</p>
         <p className="top-bar__breadcrumb">
           {dataset.project.name} / {dataset.session.title}
         </p>
@@ -268,11 +264,7 @@ function TopBar({
         >
           Follow live
         </button>
-        <button
-          type="button"
-          className="button"
-          onClick={(event) => onExport(event.currentTarget)}
-        >
+        <button type="button" className="button" onClick={(event) => onExport(event.currentTarget)}>
           Export
         </button>
         <button type="button" className="button button--ghost" onClick={onToggleShortcuts}>
@@ -284,38 +276,22 @@ function TopBar({
 }
 
 function SummaryStrip({
-  dataset,
+  facts,
+  activeFocus,
 }: {
-  dataset: ActiveDataset;
+  facts: SummaryFact[];
+  activeFocus: string | null;
 }) {
   return (
     <section className="summary-strip summary-strip--compact">
       <div className="summary-strip__heading">
-        <p className="summary-strip__eyebrow">30-second checklist</p>
-        <strong>Keep the graph centered and elevate only the blocker path.</strong>
+        <p className="summary-strip__eyebrow">Run understanding</p>
+        <strong>{activeFocus ? `Active focus: ${activeFocus}` : "No active focus yet."}</strong>
       </div>
       <div className="summary-strip__metrics">
-        <MetricPill label="Agents" value={`${dataset.run.summaryMetrics.agentCount}`} />
-        <MetricPill
-          label="Current split"
-          value={`${dataset.lanes.filter((lane) => lane.laneStatus === "running").length} running`}
-        />
-        <MetricPill
-          label="Longest gap"
-          value={formatDuration(dataset.run.summaryMetrics.idleTimeMs)}
-        />
-        <MetricPill
-          label="First failure"
-          value={`${dataset.run.summaryMetrics.errorCount || 0}`}
-        />
-        <MetricPill
-          label="Tokens"
-          value={formatTokens(dataset.run.summaryMetrics.tokens)}
-        />
-        <MetricPill
-          label="Cost"
-          value={formatCurrency(dataset.run.summaryMetrics.costUsd)}
-        />
+        {facts.map((fact) => (
+          <MetricPill key={fact.label} label={fact.label} value={fact.value} />
+        ))}
       </div>
     </section>
   );
@@ -325,27 +301,31 @@ function GraphToolbar({
   dataset,
   filters,
   anomalyJumps,
+  pathOnly,
   rawTabAvailable,
   viewMode,
   onJump,
   onOpenDrawer,
   onSetFilter,
   onSetViewMode,
+  onTogglePathOnly,
 }: {
   dataset: ActiveDataset;
   filters: ActiveFilters;
   anomalyJumps: AnomalyJump[];
+  pathOnly: boolean;
   rawTabAvailable: boolean;
   viewMode: ViewMode;
   onJump: (selection: { kind: "event" | "edge" | "artifact"; id: string }) => void;
   onOpenDrawer: (tab: DrawerTab, target?: HTMLElement | null) => void;
   onSetFilter: MonitorAppState["actions"]["setFilter"];
   onSetViewMode: MonitorAppState["actions"]["setViewMode"];
+  onTogglePathOnly: () => void;
 }) {
   return (
-    <section className="graph-toolbar">
-      <div className="graph-toolbar__row">
-        <div className="graph-toolbar__cluster">
+    <section className="graph-toolbar graph-toolbar--split">
+      <div className="graph-toolbar__row graph-toolbar__row--primary">
+        <div className="graph-toolbar__cluster graph-toolbar__cluster--jumps">
           <p className="graph-toolbar__label">Anomaly jumps</p>
           <div className="jump-bar__content">
             {anomalyJumps.map((jump) => (
@@ -355,7 +335,7 @@ function GraphToolbar({
         </div>
 
         <div className="graph-toolbar__cluster graph-toolbar__cluster--modes">
-          <p className="graph-toolbar__label">Mode</p>
+          <p className="graph-toolbar__label">Visualization</p>
           <div className="mode-tabs">
             {(["graph", "waterfall", "map"] as const).map((mode) => (
               <button
@@ -367,6 +347,58 @@ function GraphToolbar({
                 {mode}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="graph-toolbar__row graph-toolbar__row--secondary">
+        <div className="graph-toolbar__cluster graph-toolbar__cluster--filters">
+          <p className="graph-toolbar__label">Focus</p>
+          <div className="graph-toolbar__filters">
+            <label>
+              Agent
+              <select
+                value={filters.agentId ?? ""}
+                onChange={(event) => onSetFilter("agentId", event.target.value || null)}
+              >
+                <option value="">All lanes</option>
+                {dataset.lanes.map((lane) => (
+                  <option key={lane.laneId} value={lane.agentId}>
+                    {lane.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Event type
+              <select
+                value={filters.eventType}
+                onChange={(event) =>
+                  onSetFilter("eventType", event.target.value as EventType | "all")
+                }
+              >
+                {eventFilterOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={filters.errorOnly}
+                onChange={(event) => onSetFilter("errorOnly", event.target.checked)}
+              />
+              Error-only
+            </label>
+            <button
+              type="button"
+              className={`button ${pathOnly ? "button--active" : "button--ghost"}`.trim()}
+              onClick={onTogglePathOnly}
+            >
+              Path only
+            </button>
           </div>
         </div>
 
@@ -383,46 +415,6 @@ function GraphToolbar({
             />
           </div>
         </div>
-      </div>
-
-      <div className="graph-toolbar__filters">
-        <label>
-          Agent
-          <select
-            value={filters.agentId ?? ""}
-            onChange={(event) => onSetFilter("agentId", event.target.value || null)}
-          >
-            <option value="">All lanes</option>
-            {dataset.lanes.map((lane) => (
-              <option key={lane.laneId} value={lane.agentId}>
-                {lane.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Event type
-          <select
-            value={filters.eventType}
-            onChange={(event) =>
-              onSetFilter("eventType", event.target.value as EventType | "all")
-            }
-          >
-            {eventFilterOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={filters.errorOnly}
-            onChange={(event) => onSetFilter("errorOnly", event.target.checked)}
-          />
-          Error-only
-        </label>
       </div>
     </section>
   );
@@ -614,6 +606,10 @@ function Drawer({
       {state.drawerTab === "log" ? (
         <pre className="drawer__pre">{state.exportText || "No export generated yet."}</pre>
       ) : null}
+      <div className="drawer__footer">
+        <span>{formatTokens(activeDataset.run.summaryMetrics.tokens)}</span>
+        <span>{formatCurrency(activeDataset.run.summaryMetrics.costUsd)}</span>
+      </div>
     </Panel>
   );
 }

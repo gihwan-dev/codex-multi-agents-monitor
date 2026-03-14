@@ -214,6 +214,108 @@ export interface RunGroup {
   runs: RunDataset[];
 }
 
+export interface QuickFilterSummary {
+  key: "all" | "live" | "waiting" | "failed";
+  label: string;
+  count: number;
+}
+
+export interface WorkspaceRunRow {
+  id: string;
+  title: string;
+  status: RunStatus;
+  lastEventSummary: string;
+  relativeTime: string;
+  liveMode: LiveMode;
+}
+
+export interface WorkspaceThreadGroup {
+  id: string;
+  title: string;
+  runs: WorkspaceRunRow[];
+}
+
+export interface WorkspaceTreeItem {
+  id: string;
+  name: string;
+  repoPath: string;
+  badge: string | null;
+  runCount: number;
+  threads: WorkspaceThreadGroup[];
+}
+
+export interface WorkspaceTreeModel {
+  quickFilters: QuickFilterSummary[];
+  workspaces: WorkspaceTreeItem[];
+}
+
+export interface SummaryFact {
+  label: string;
+  value: string;
+  emphasis?: "default" | "warning" | "danger" | "accent";
+}
+
+export interface SelectionPath {
+  eventIds: string[];
+  edgeIds: string[];
+  laneIds: string[];
+}
+
+export interface GraphCanvasLane {
+  laneId: string;
+  name: string;
+  role: string;
+  model: string;
+  badge: string;
+  status: RunStatus;
+}
+
+export interface GraphCanvasStepEvent {
+  kind: "event";
+  id: string;
+  eventId: string;
+  laneId: string;
+  title: string;
+  summary: string;
+  status: RunStatus;
+  waitReason: string | null;
+  timeLabel: string;
+  durationLabel: string;
+  inPath: boolean;
+  selected: boolean;
+  dimmed: boolean;
+}
+
+export interface GraphCanvasStepGap {
+  kind: "gap";
+  id: string;
+  label: string;
+}
+
+export type GraphCanvasStep = GraphCanvasStepEvent | GraphCanvasStepGap;
+
+export interface GraphCanvasEdge {
+  id: string;
+  sourceEventId: string;
+  targetEventId: string;
+  sourceLaneId: string;
+  targetLaneId: string;
+  sourceStepId: string;
+  targetStepId: string;
+  edgeType: EdgeType | "timeline";
+  label: string;
+  inPath: boolean;
+  selected: boolean;
+}
+
+export interface GraphCanvasModel {
+  lanes: GraphCanvasLane[];
+  steps: GraphCanvasStep[];
+  edges: GraphCanvasEdge[];
+  selectionPath: SelectionPath;
+  hiddenLaneCount: number;
+}
+
 export interface WaterfallSegment {
   eventId: string;
   laneId: string;
@@ -221,6 +323,42 @@ export interface WaterfallSegment {
   leftPercent: number;
   widthPercent: number;
   status: RunStatus;
+}
+
+export interface WaterfallRowEvent {
+  kind: "event";
+  id: string;
+  eventId: string;
+  startLabel: string;
+  durationLabel: string;
+}
+
+export interface WaterfallRowGap {
+  kind: "gap";
+  id: string;
+  label: string;
+}
+
+export type WaterfallRow = WaterfallRowEvent | WaterfallRowGap;
+
+export interface WaterfallCell {
+  eventId: string;
+  laneId: string;
+  title: string;
+  summary: string;
+  status: RunStatus;
+  waitReason: string | null;
+  leftPercent: number;
+  widthPercent: number;
+  selected: boolean;
+  inPath: boolean;
+}
+
+export interface WaterfallModel {
+  lanes: GraphCanvasLane[];
+  rows: WaterfallRow[];
+  cells: WaterfallCell[];
+  selectionPath: SelectionPath;
 }
 
 export interface MapNode {
@@ -236,6 +374,29 @@ export interface LiveWatchFrame {
   events: EventRecord[];
   status?: RunStatus;
   connection?: "live" | "stale" | "disconnected" | "reconnected";
+}
+
+export interface InspectorFact {
+  label: string;
+  value: string;
+}
+
+export interface InspectorJump {
+  label: string;
+  description: string;
+  selection: SelectionState;
+}
+
+export interface InspectorCausalSummary {
+  title: string;
+  preview: string;
+  facts: InspectorFact[];
+  whyBlocked: string | null;
+  upstream: InspectorJump[];
+  downstream: InspectorJump[];
+  nextAction: string | null;
+  payloadPreview: string;
+  rawStatusLabel: string;
 }
 
 export interface RawImportEvent {

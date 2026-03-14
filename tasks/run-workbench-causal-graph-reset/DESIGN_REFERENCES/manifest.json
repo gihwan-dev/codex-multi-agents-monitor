@@ -1,0 +1,16 @@
+{
+  "task": "run-workbench-causal-graph-reset",
+  "generated_at": "2026-03-15T00:00:00+09:00",
+  "adopt": [
+    "curated/gitkraken-graph-grammar-adopt.md",
+    "curated/langfuse-timeline-density-adopt.md"
+  ],
+  "avoid": [
+    "curated/current-waterfall-shell-avoid.md"
+  ],
+  "raw": [
+    "raw/gitkraken-commit-graph.md",
+    "raw/langfuse-timeline-view.md",
+    "raw/current-monitor-shell-audit.md"
+  ]
+}

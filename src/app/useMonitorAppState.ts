@@ -3,8 +3,11 @@ import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT, LIVE_FIXTURE_FRAMES } from "../f
 import { applyLiveFrame, buildExportPayload, normalizeImportPayload, parseCompletedRunPayload } from "../features/ingestion";
 import {
   buildAnomalyJumps,
-  buildLaneDisplays,
+  buildGraphCanvasModel,
+  buildInspectorCausalSummary,
   buildMapNodes,
+  buildSummaryFacts,
+  buildWaterfallModel,
   buildWaterfallSegments,
   type DrawerTab,
   defaultCollapsedGapIds,
@@ -29,6 +32,7 @@ export interface MonitorState {
   drawerOpen: boolean;
   inspectorOpen: boolean;
   inspectorPinned: boolean;
+  pathOnlyByRunId: Record<string, boolean>;
   followLiveByRunId: Record<string, boolean>;
   liveConnectionByRunId: Record<string, LiveConnection>;
   filtersByRunId: Record<string, RunFilters>;
@@ -52,6 +56,7 @@ type Action =
   | { type: "toggle-drawer" }
   | { type: "toggle-inspector" }
   | { type: "toggle-pin" }
+  | { type: "toggle-path-only"; traceId: string }
   | { type: "toggle-follow-live"; traceId: string }
   | { type: "set-follow-live"; traceId: string; value: boolean }
   | { type: "set-live-connection"; traceId: string; connection: LiveConnection }
@@ -98,6 +103,12 @@ function buildConnectionMap(datasets: RunDataset[]) {
   ) as Record<string, LiveConnection>;
 }
 
+function buildPathOnlyMap(datasets: RunDataset[]) {
+  return Object.fromEntries(
+    datasets.map((dataset) => [dataset.run.traceId, true]),
+  ) as Record<string, boolean>;
+}
+
 function buildFilterMap(datasets: RunDataset[]) {
   return Object.fromEntries(
     datasets.map((dataset) => [dataset.run.traceId, createDefaultFilters()]),
@@ -128,6 +139,7 @@ export function createMonitorInitialState(): MonitorState {
     drawerOpen: false,
     inspectorOpen: !compactViewport,
     inspectorPinned: false,
+    pathOnlyByRunId: buildPathOnlyMap(FIXTURE_DATASETS),
     followLiveByRunId: buildFollowLiveMap(FIXTURE_DATASETS),
     liveConnectionByRunId: buildConnectionMap(FIXTURE_DATASETS),
     filtersByRunId: buildFilterMap(FIXTURE_DATASETS),
@@ -181,6 +193,14 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
       return { ...state, inspectorOpen: !state.inspectorOpen };
     case "toggle-pin":
       return { ...state, inspectorPinned: !state.inspectorPinned };
+    case "toggle-path-only":
+      return {
+        ...state,
+        pathOnlyByRunId: {
+          ...state.pathOnlyByRunId,
+          [action.traceId]: !(state.pathOnlyByRunId[action.traceId] ?? true),
+        },
+      };
     case "toggle-follow-live": {
       const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
       if (!dataset || dataset.run.liveMode !== "live") {
@@ -281,6 +301,10 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
           ...state.followLiveByRunId,
           [action.dataset.run.traceId]: false,
         },
+        pathOnlyByRunId: {
+          ...state.pathOnlyByRunId,
+          [action.dataset.run.traceId]: true,
+        },
         filtersByRunId: {
           ...state.filtersByRunId,
           [action.dataset.run.traceId]: createDefaultFilters(),
@@ -329,14 +353,36 @@ export function useMonitorAppState() {
   const activeDataset =
     state.datasets.find((item) => item.run.traceId === state.activeRunId) ?? state.datasets[0];
   const activeFilters = state.filtersByRunId[activeDataset.run.traceId] ?? createDefaultFilters();
+  const activePathOnly = state.pathOnlyByRunId[activeDataset.run.traceId] ?? true;
   const activeFollowLive = state.followLiveByRunId[activeDataset.run.traceId] ?? false;
   const activeLiveConnection =
     state.liveConnectionByRunId[activeDataset.run.traceId] ??
     (activeDataset.run.liveMode === "live" ? "live" : "paused");
   const collapsedGapIds = new Set(state.collapsedGapIds[activeDataset.run.traceId] ?? []);
-  const laneDisplays = buildLaneDisplays(activeDataset, activeFilters, collapsedGapIds);
+  const graphModel = buildGraphCanvasModel(
+    activeDataset,
+    activeFilters,
+    state.selection,
+    activePathOnly,
+  );
   const selectionDetails = findSelectionDetails(activeDataset, state.selection);
+  const inspectorSummary = buildInspectorCausalSummary(
+    activeDataset,
+    state.selection,
+    activeDataset.run.rawIncluded,
+  );
+  const summaryFacts = buildSummaryFacts(
+    activeDataset,
+    graphModel.selectionPath,
+    activePathOnly,
+  );
   const anomalyJumps = buildAnomalyJumps(activeDataset);
+  const waterfallModel = buildWaterfallModel(
+    activeDataset,
+    activeFilters,
+    state.selection,
+    activePathOnly,
+  );
   const waterfallSegments = buildWaterfallSegments(activeDataset);
   const mapNodes = buildMapNodes(activeDataset);
 
@@ -354,11 +400,10 @@ export function useMonitorAppState() {
   }, [state.appliedLiveFrames]);
 
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
-    const visibleEventIds = laneDisplays.flatMap((lane) =>
-      lane.hiddenByDegradation
-        ? []
-        : lane.items.flatMap((item) => (item.kind === "event" ? [item.event.eventId] : [])),
-    );
+    const visibleEventIds =
+      state.viewMode === "waterfall"
+        ? waterfallModel.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []))
+        : graphModel.steps.flatMap((step) => (step.kind === "event" ? [step.eventId] : []));
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -389,6 +434,9 @@ export function useMonitorAppState() {
           key: "errorOnly",
           value: !activeFilters.errorOnly,
         });
+        break;
+      case "p":
+        dispatch({ type: "toggle-path-only", traceId: activeDataset.run.traceId });
         break;
       case "?":
         dispatch({ type: "toggle-shortcuts" });
@@ -430,9 +478,13 @@ export function useMonitorAppState() {
     activeFollowLive,
     activeLiveConnection,
     rawTabAvailable: hasRawPayload(activeDataset),
-    laneDisplays,
+    activePathOnly,
+    graphModel,
+    inspectorSummary,
     selectionDetails,
+    summaryFacts,
     anomalyJumps,
+    waterfallModel,
     waterfallSegments,
     mapNodes,
     collapsedGapIds,
@@ -470,6 +522,9 @@ export function useMonitorAppState() {
       },
       togglePinned() {
         dispatch({ type: "toggle-pin" });
+      },
+      togglePathOnly() {
+        dispatch({ type: "toggle-path-only", traceId: activeDataset.run.traceId });
       },
       toggleFollowLive() {
         dispatch({ type: "toggle-follow-live", traceId: activeDataset.run.traceId });

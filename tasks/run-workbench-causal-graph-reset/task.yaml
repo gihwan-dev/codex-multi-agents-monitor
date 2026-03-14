@@ -1,0 +1,52 @@
+task: run-workbench-causal-graph-reset
+goal: Reset the run workbench around a true causal Graph mode and demote the prior time-grid renderer to Waterfall.
+success_criteria:
+  - A user can find the target run from a workspace-grouped tree with dense nested rows in under 10 seconds.
+  - A user can explain the current blocker, affected agents, last handoff, longest gap, and first failure within 30 seconds from the summary strip, Graph mode, and inspector without opening raw payload.
+  - Selecting a row, edge, or anomaly jump highlights the same causal path in Graph, Waterfall, and the inspector.
+  - Visualization mode toggles stay separate from drawer content toggles, and the drawer consumes no layout height until explicitly opened.
+major_boundaries:
+  - Workspace tree navigation, quick filters, and dense run rows
+  - Summary strip, graph toolbar, and separated visualization versus drawer controls
+  - Selector/view-model split for Graph, Waterfall, summary facts, and inspector causal summaries
+  - True Graph mode node-edge canvas plus Waterfall demotion and mode alignment
+  - Inspector causal explanation, drawer reveal policy, and shared selection state
+work_type: refactor
+impact_flags:
+  - ui_surface_changed
+  - workflow_changed
+  - architecture_significant
+  - high_user_risk
+required_docs:
+  - README.md
+  - EXECUTION_PLAN.md
+  - SPEC_VALIDATION.md
+  - STATUS.md
+  - CURRENT_STATE.md
+  - TARGET_STATE.md
+  - UX_SPEC.md
+  - UX_BEHAVIOR_ACCESSIBILITY.md
+  - DESIGN_REFERENCES/
+  - TECH_SPEC.md
+  - ACCEPTANCE.feature
+source_of_truth:
+  current_state: CURRENT_STATE.md
+  target_state: TARGET_STATE.md
+  ux: UX_SPEC.md
+  ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
+  design_references: DESIGN_REFERENCES/manifest.json
+  architecture: TECH_SPEC.md
+  execution: EXECUTION_PLAN.md
+  acceptance: ACCEPTANCE.feature
+  validation: SPEC_VALIDATION.md
+ids:
+  requirement_prefix: REQ
+  screen_prefix: SCR
+  flow_prefix: FLOW
+  adr_prefix: ADR
+  acceptance_prefix: AC
+  slice_prefix: SLICE
+  risk_prefix: RISK
+delivery_strategy: ui-first
+validation_gate: blocking
+current_phase: complete

@@ -1,16 +1,37 @@
+import {
+  formatDuration,
+  formatRelativeTime,
+  formatTimestamp,
+  truncateId,
+} from "./format.js";
 import type {
   AnomalyJump,
   EventRecord,
   GapSegment,
+  GraphCanvasEdge,
+  GraphCanvasModel,
+  GraphCanvasStep,
+  InspectorCausalSummary,
+  InspectorJump,
   LaneDisplay,
   LaneDisplayItem,
   MapNode,
+  QuickFilterSummary,
   RunDataset,
   RunFilters,
   RunGroup,
+  SelectionPath,
   SelectionState,
+  SummaryFact,
   SummaryMetrics,
+  WaterfallCell,
+  WaterfallModel,
+  WaterfallRow,
   WaterfallSegment,
+  WorkspaceRunRow,
+  WorkspaceThreadGroup,
+  WorkspaceTreeItem,
+  WorkspaceTreeModel,
 } from "./types.js";
 
 const GAP_THRESHOLD_MS = 90_000;
@@ -80,12 +101,91 @@ function calculatePeakParallelism(events: EventRecord[]): number {
   return peak || 1;
 }
 
+function sortEvents(events: EventRecord[]) {
+  return [...events].sort((left, right) => left.startTs - right.startTs);
+}
+
+function buildEdgeMaps(dataset: RunDataset) {
+  const incomingByEventId = new Map<string, RunDataset["edges"]>();
+  const outgoingByEventId = new Map<string, RunDataset["edges"]>();
+
+  dataset.edges.forEach((edge) => {
+    incomingByEventId.set(edge.targetEventId, [
+      ...(incomingByEventId.get(edge.targetEventId) ?? []),
+      edge,
+    ]);
+    outgoingByEventId.set(edge.sourceEventId, [
+      ...(outgoingByEventId.get(edge.sourceEventId) ?? []),
+      edge,
+    ]);
+  });
+
+  return {
+    incomingByEventId,
+    outgoingByEventId,
+  };
+}
+
+function buildLaneEventMaps(dataset: RunDataset) {
+  const orderedByLaneId = new Map<string, EventRecord[]>();
+
+  dataset.lanes.forEach((lane) => {
+    orderedByLaneId.set(
+      lane.laneId,
+      sortEvents(dataset.events.filter((event) => event.laneId === lane.laneId)),
+    );
+  });
+
+  const previousByEventId = new Map<string, EventRecord>();
+  const nextByEventId = new Map<string, EventRecord>();
+
+  orderedByLaneId.forEach((events) => {
+    events.forEach((event, index) => {
+      const previous = events[index - 1];
+      const next = events[index + 1];
+      if (previous) {
+        previousByEventId.set(event.eventId, previous);
+      }
+      if (next) {
+        nextByEventId.set(event.eventId, next);
+      }
+    });
+  });
+
+  return {
+    orderedByLaneId,
+    previousByEventId,
+    nextByEventId,
+  };
+}
+
+function resolveBaseEventIds(dataset: RunDataset, selection: SelectionState | null) {
+  if (!selection) {
+    return dataset.run.selectedByDefaultId ? [dataset.run.selectedByDefaultId] : [];
+  }
+
+  if (selection.kind === "event") {
+    return [selection.id];
+  }
+
+  if (selection.kind === "edge") {
+    const edge = dataset.edges.find((item) => item.edgeId === selection.id);
+    return edge ? [edge.sourceEventId, edge.targetEventId] : [];
+  }
+
+  const artifact = dataset.artifacts.find((item) => item.artifactId === selection.id);
+  return artifact ? [artifact.producerEventId] : [];
+}
+
 export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
   const events = dataset.events;
   const totalTokens = events.reduce((acc, event) => acc + event.tokensIn + event.tokensOut, 0);
   const activeTimeMs = events.reduce(
     (acc, event) =>
-      acc + (["llm.started", "llm.finished", "tool.started", "tool.finished"].includes(event.eventType) ? event.durationMs : 0),
+      acc +
+      (["llm.started", "llm.finished", "tool.started", "tool.finished"].includes(event.eventType)
+        ? event.durationMs
+        : 0),
     0,
   );
   const errorCount = events.filter(
@@ -94,8 +194,7 @@ export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
   const timePoints = events.flatMap((event) => [event.startTs, event.endTs ?? event.startTs]);
   const peakParallelism = calculatePeakParallelism(events);
   const durationMs =
-    dataset.run.durationMs ||
-    Math.max(...timePoints) - Math.min(...timePoints);
+    dataset.run.durationMs || Math.max(...timePoints) - Math.min(...timePoints);
 
   return {
     totalDurationMs: durationMs,
@@ -112,22 +211,24 @@ export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
 }
 
 export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
-  const events = [...dataset.events].sort((a, b) => a.startTs - b.startTs);
-  const firstError = events.find((event) => event.status === "failed" || event.eventType === "error");
+  const events = sortEvents(dataset.events);
+  const firstError = events.find(
+    (event) => event.status === "failed" || event.eventType === "error",
+  );
   const waitingEvent = [...events]
     .filter((event) => ["waiting", "blocked", "interrupted"].includes(event.status))
-    .sort((a, b) => b.durationMs - a.durationMs)[0];
+    .sort((left, right) => right.durationMs - left.durationMs)[0];
   const lastHandoff = [...dataset.edges]
     .filter((edge) => edge.edgeType === "handoff")
-    .sort((a, b) => {
-      const sourceA = events.find((event) => event.eventId === a.sourceEventId)?.startTs ?? 0;
-      const sourceB = events.find((event) => event.eventId === b.sourceEventId)?.startTs ?? 0;
+    .sort((left, right) => {
+      const sourceA = events.find((event) => event.eventId === left.sourceEventId)?.startTs ?? 0;
+      const sourceB = events.find((event) => event.eventId === right.sourceEventId)?.startTs ?? 0;
       return sourceB - sourceA;
     })[0];
   const finalArtifact = dataset.artifacts.find(
     (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
   );
-  const expensive = [...events].sort((a, b) => b.costUsd - a.costUsd)[0];
+  const expensive = [...events].sort((left, right) => right.costUsd - left.costUsd)[0];
 
   return [
     waitingEvent && {
@@ -159,24 +260,21 @@ export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
 }
 
 export function groupRuns(datasets: RunDataset[]): RunGroup[] {
-  const sorted = [...datasets].sort((a, b) => {
+  const sorted = [...datasets].sort((left, right) => {
     const priority = (dataset: RunDataset) => {
       if (dataset.run.liveMode === "live") {
         return 0;
       }
-
       if (["waiting", "blocked", "interrupted"].includes(dataset.run.status)) {
         return 1;
       }
-
       if (dataset.run.status === "failed") {
         return 2;
       }
-
       return 3;
     };
 
-    return priority(a) - priority(b) || b.run.startTs - a.run.startTs;
+    return priority(left) - priority(right) || right.run.startTs - left.run.startTs;
   });
 
   const running = sorted.filter(
@@ -192,18 +290,9 @@ export function groupRuns(datasets: RunDataset[]): RunGroup[] {
   );
 
   return [
-    {
-      title: "Running",
-      runs: running,
-    },
-    {
-      title: "Waiting",
-      runs: waiting,
-    },
-    {
-      title: "Recent",
-      runs: recent,
-    },
+    { title: "Running", runs: running },
+    { title: "Waiting", runs: waiting },
+    { title: "Recent", runs: recent },
   ];
 }
 
@@ -211,12 +300,13 @@ function buildGaps(
   events: EventRecord[],
   laneId: string,
 ): Array<{ event: EventRecord } | { gap: GapSegment; events: EventRecord[] }> {
-  const sorted = [...events].sort((a, b) => a.startTs - b.startTs);
-  const items: ({ event: EventRecord } | { gap: GapSegment; events: EventRecord[] })[] = [];
+  const sorted = sortEvents(events);
+  const items: Array<{ event: EventRecord } | { gap: GapSegment; events: EventRecord[] }> = [];
 
   for (let index = 0; index < sorted.length; index += 1) {
     const current = sorted[index];
     const previous = sorted[index - 1];
+
     if (previous) {
       const delta = current.startTs - (previous.endTs ?? previous.startTs);
       if (delta >= GAP_THRESHOLD_MS) {
@@ -246,7 +336,8 @@ export function buildLaneDisplays(
   filters: RunFilters,
   collapsedGapIds: Set<string>,
 ): LaneDisplay[] {
-  const largeRun = dataset.events.length > LARGE_RUN_EVENT_THRESHOLD || dataset.lanes.length > LARGE_RUN_LANE_THRESHOLD;
+  const largeRun =
+    dataset.events.length > LARGE_RUN_EVENT_THRESHOLD || dataset.lanes.length > LARGE_RUN_LANE_THRESHOLD;
   const anomalies = new Set(
     buildAnomalyJumps(dataset)
       .filter((item) => item.selection.kind === "event")
@@ -259,17 +350,17 @@ export function buildLaneDisplays(
     );
     const items: LaneDisplayItem[] = buildGaps(filteredEvents, lane.laneId).reduce(
       (acc, item) => {
-      if ("gap" in item) {
-        if (collapsedGapIds.has(item.gap.gapId)) {
+        if ("gap" in item) {
+          if (collapsedGapIds.has(item.gap.gapId)) {
             acc.push({ kind: "gap", gap: item.gap, events: item.events });
             return acc;
-        }
+          }
 
           item.events.forEach((event) => {
             acc.push({ kind: "event", event });
           });
           return acc;
-      }
+        }
 
         acc.push({ kind: "event", event: item.event });
         return acc;
@@ -291,6 +382,430 @@ export function buildLaneDisplays(
   });
 }
 
+export function buildSelectionPath(
+  dataset: RunDataset,
+  selection: SelectionState | null,
+): SelectionPath {
+  const maxDepth = 3;
+  const baseEventIds = resolveBaseEventIds(dataset, selection);
+  const eventIds = new Set<string>(baseEventIds);
+  const edgeIds = new Set<string>();
+  const laneIds = new Set<string>();
+  const visited = new Set<string>();
+  const queue = baseEventIds.map((eventId) => ({ eventId, depth: 0 }));
+  const { incomingByEventId, outgoingByEventId } = buildEdgeMaps(dataset);
+  const { previousByEventId, nextByEventId } = buildLaneEventMaps(dataset);
+  const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+
+  while (queue.length && visited.size < 24) {
+    const current = queue.shift();
+    if (!current || visited.has(current.eventId)) {
+      continue;
+    }
+
+    visited.add(current.eventId);
+    const event = eventsById.get(current.eventId);
+    if (!event) {
+      continue;
+    }
+
+    eventIds.add(event.eventId);
+    laneIds.add(event.laneId);
+
+    if (current.depth >= maxDepth) {
+      continue;
+    }
+
+    const enqueue = (eventId: string | null | undefined) => {
+      if (!eventId || visited.has(eventId)) {
+        return;
+      }
+      queue.push({ eventId, depth: current.depth + 1 });
+    };
+
+    enqueue(previousByEventId.get(event.eventId)?.eventId);
+    enqueue(nextByEventId.get(event.eventId)?.eventId);
+    enqueue(event.parentId);
+
+    dataset.events
+      .filter((candidate) => candidate.parentId === event.eventId)
+      .forEach((candidate) => {
+        enqueue(candidate.eventId);
+      });
+
+    (incomingByEventId.get(event.eventId) ?? []).forEach((edge) => {
+      edgeIds.add(edge.edgeId);
+      enqueue(edge.sourceEventId);
+    });
+
+    (outgoingByEventId.get(event.eventId) ?? []).forEach((edge) => {
+      edgeIds.add(edge.edgeId);
+      enqueue(edge.targetEventId);
+    });
+  }
+
+  dataset.events
+    .filter((event) => eventIds.has(event.eventId))
+    .forEach((event) => {
+      laneIds.add(event.laneId);
+    });
+
+  return {
+    eventIds: sortEvents(dataset.events)
+      .filter((event) => eventIds.has(event.eventId))
+      .map((event) => event.eventId),
+    edgeIds: dataset.edges
+      .filter(
+        (edge) =>
+          edgeIds.has(edge.edgeId) ||
+          (eventIds.has(edge.sourceEventId) && eventIds.has(edge.targetEventId)),
+      )
+      .map((edge) => edge.edgeId),
+    laneIds: dataset.lanes
+      .filter((lane) => laneIds.has(lane.laneId))
+      .map((lane) => lane.laneId),
+  };
+}
+
+function latestActivityTimestamp(dataset: RunDataset) {
+  return Math.max(
+    dataset.run.endTs ?? dataset.run.startTs,
+    ...dataset.events.map((event) => event.endTs ?? event.startTs),
+  );
+}
+
+function matchesQuickFilter(dataset: RunDataset, filter: QuickFilterSummary["key"]) {
+  if (filter === "all") {
+    return true;
+  }
+  if (filter === "live") {
+    return dataset.run.liveMode === "live";
+  }
+  if (filter === "waiting") {
+    return ["waiting", "blocked", "interrupted"].includes(dataset.run.status);
+  }
+  return dataset.run.status === "failed";
+}
+
+function buildWorkspaceRunRow(dataset: RunDataset, referenceTimestamp: number): WorkspaceRunRow {
+  const orderedEvents = sortEvents(dataset.events);
+  const latestEvent = orderedEvents[orderedEvents.length - 1] ?? null;
+
+  return {
+    id: dataset.run.traceId,
+    title: dataset.run.title,
+    status: dataset.run.status,
+    lastEventSummary:
+      latestEvent?.waitReason ??
+      latestEvent?.outputPreview ??
+      latestEvent?.inputPreview ??
+      latestEvent?.title ??
+      "No event summary yet.",
+    relativeTime: formatRelativeTime(latestActivityTimestamp(dataset), referenceTimestamp),
+    liveMode: dataset.run.liveMode,
+  };
+}
+
+export function buildWorkspaceTreeModel(
+  datasets: RunDataset[],
+  search: string,
+  quickFilter: QuickFilterSummary["key"],
+): WorkspaceTreeModel {
+  const referenceTimestamp = Math.max(...datasets.map((dataset) => latestActivityTimestamp(dataset)));
+  const normalizedSearch = search.trim().toLowerCase();
+  const quickFilters: QuickFilterSummary[] = [
+    { key: "all", label: "All", count: datasets.length },
+    {
+      key: "live",
+      label: "Live",
+      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "live")).length,
+    },
+    {
+      key: "waiting",
+      label: "Waiting",
+      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "waiting")).length,
+    },
+    {
+      key: "failed",
+      label: "Failed",
+      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "failed")).length,
+    },
+  ];
+
+  const workspaceMap = new Map<string, WorkspaceTreeItem>();
+  datasets
+    .filter((dataset) => matchesQuickFilter(dataset, quickFilter))
+    .forEach((dataset) => {
+      const runRow = buildWorkspaceRunRow(dataset, referenceTimestamp);
+      const searchTarget = [
+        dataset.project.name,
+        dataset.project.repoPath,
+        dataset.project.badge ?? "",
+        dataset.session.title,
+        dataset.run.title,
+        runRow.lastEventSummary,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      if (normalizedSearch && !searchTarget.includes(normalizedSearch)) {
+        return;
+      }
+
+      const workspace =
+        workspaceMap.get(dataset.project.projectId) ??
+        ({
+          id: dataset.project.projectId,
+          name: dataset.project.name,
+          repoPath: dataset.project.repoPath,
+          badge: dataset.project.badge ?? null,
+          runCount: 0,
+          threads: [],
+        } satisfies WorkspaceTreeItem);
+
+      const thread =
+        workspace.threads.find((item) => item.id === dataset.session.sessionId) ??
+        ({
+          id: dataset.session.sessionId,
+          title: dataset.session.title,
+          runs: [],
+        } satisfies WorkspaceThreadGroup);
+
+      if (!workspace.threads.some((item) => item.id === thread.id)) {
+        workspace.threads.push(thread);
+      }
+
+      thread.runs.push(runRow);
+      thread.runs.sort((left, right) => right.relativeTime.localeCompare(left.relativeTime));
+      workspace.runCount += 1;
+      workspaceMap.set(workspace.id, workspace);
+    });
+
+  return {
+    quickFilters,
+    workspaces: [...workspaceMap.values()]
+      .map((workspace) => ({
+        ...workspace,
+        threads: workspace.threads
+          .map((thread) => ({
+            ...thread,
+            runs: [...thread.runs].sort((left, right) => right.title.localeCompare(left.title)),
+          }))
+          .sort((left, right) => left.title.localeCompare(right.title)),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+  };
+}
+
+export function buildSummaryFacts(
+  dataset: RunDataset,
+  selectionPath: SelectionPath,
+  pathOnly: boolean,
+): SummaryFact[] {
+  const orderedEvents = sortEvents(dataset.events);
+  const blockerEvent =
+    orderedEvents.find((event) => event.status === "blocked") ??
+    orderedEvents.find((event) => event.status === "waiting") ??
+    orderedEvents.find((event) => event.status === "interrupted") ??
+    null;
+  const affectedLaneIds = new Set(
+    orderedEvents
+      .filter(
+        (event) =>
+          selectionPath.eventIds.includes(event.eventId) &&
+          ["waiting", "blocked", "interrupted", "failed"].includes(event.status),
+      )
+      .map((event) => event.laneId),
+  );
+  if (blockerEvent) {
+    affectedLaneIds.delete(blockerEvent.laneId);
+  }
+
+  const lastHandoff = [...dataset.edges]
+    .filter((edge) => edge.edgeType === "handoff")
+    .sort((left, right) => {
+      const sourceA = orderedEvents.find((event) => event.eventId === left.sourceEventId)?.startTs ?? 0;
+      const sourceB = orderedEvents.find((event) => event.eventId === right.sourceEventId)?.startTs ?? 0;
+      return sourceB - sourceA;
+    })[0];
+  const firstFailure = orderedEvents.find(
+    (event) => event.status === "failed" || event.eventType === "error",
+  );
+  const blockerLaneName = blockerEvent
+    ? dataset.lanes.find((lane) => lane.laneId === blockerEvent.laneId)?.name ?? blockerEvent.title
+    : "n/a";
+  const lastHandoffLabel = lastHandoff
+    ? (() => {
+        const source = dataset.lanes.find((lane) => lane.agentId === lastHandoff.sourceAgentId)?.name ?? "Unknown";
+        const target = dataset.lanes.find((lane) => lane.agentId === lastHandoff.targetAgentId)?.name ?? "Unknown";
+        return `${source} -> ${target}`;
+      })()
+    : "n/a";
+
+  return [
+    { label: "Blocked by", value: blockerLaneName, emphasis: blockerEvent ? "warning" : "default" },
+    { label: "Affected", value: `${affectedLaneIds.size}`, emphasis: affectedLaneIds.size ? "accent" : "default" },
+    { label: "Last handoff", value: lastHandoffLabel, emphasis: lastHandoff ? "accent" : "default" },
+    { label: "Longest gap", value: formatDuration(dataset.run.summaryMetrics.idleTimeMs), emphasis: "default" },
+    { label: "First failure", value: firstFailure?.title ?? "None", emphasis: firstFailure ? "danger" : "default" },
+    { label: "Path only", value: pathOnly ? "On" : "Off", emphasis: pathOnly ? "accent" : "default" },
+  ];
+}
+
+function buildGraphLanes(dataset: RunDataset, selectionPath: SelectionPath) {
+  const pathLaneIds = new Set(selectionPath.laneIds);
+  const visibleLanes = dataset.lanes.filter(
+    (lane, index) =>
+      pathLaneIds.has(lane.laneId) ||
+      index < LARGE_RUN_LANE_THRESHOLD ||
+      lane.laneStatus !== "done",
+  );
+
+  return {
+    lanes: visibleLanes.map((lane) => ({
+      laneId: lane.laneId,
+      name: lane.name,
+      role: lane.role,
+      model: lane.model,
+      badge: lane.badge,
+      status: lane.laneStatus,
+    })),
+    hiddenLaneCount: Math.max(dataset.lanes.length - visibleLanes.length, 0),
+  };
+}
+
+function buildGraphVisibleEvents(
+  dataset: RunDataset,
+  filters: RunFilters,
+  selectionPath: SelectionPath,
+  pathOnly: boolean,
+) {
+  const pathEventIds = new Set(selectionPath.eventIds);
+  return sortEvents(dataset.events).filter((event) => {
+    if (pathOnly) {
+      return pathEventIds.has(event.eventId);
+    }
+    return pathEventIds.has(event.eventId) || eventMatchesFilters(event, filters);
+  });
+}
+
+export function buildGraphCanvasModel(
+  dataset: RunDataset,
+  filters: RunFilters,
+  selection: SelectionState | null,
+  pathOnly: boolean,
+): GraphCanvasModel {
+  const selectionPath = buildSelectionPath(dataset, selection);
+  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly);
+  const visibleEventIds = new Set(visibleEvents.map((event) => event.eventId));
+  const graphLanes = buildGraphLanes(dataset, selectionPath);
+  const visibleLanes = graphLanes.lanes;
+  const laneIds = new Set(visibleLanes.map((lane) => lane.laneId));
+  const steps: GraphCanvasStep[] = [];
+  const stepIdByEventId = new Map<string, string>();
+
+  visibleEvents.forEach((event, index) => {
+    const previous = visibleEvents[index - 1];
+    const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
+    const gap = previousEnd ? event.startTs - previousEnd : 0;
+    if (gap >= GAP_THRESHOLD_MS) {
+      steps.push({
+        kind: "gap",
+        id: `graph-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
+        label: `${formatDuration(gap)} hidden`,
+      });
+    }
+
+    if (!laneIds.has(event.laneId)) {
+      return;
+    }
+
+    const stepId = `graph-step-${event.eventId}`;
+    stepIdByEventId.set(event.eventId, stepId);
+    steps.push({
+      kind: "event",
+      id: stepId,
+      eventId: event.eventId,
+      laneId: event.laneId,
+      title: event.title,
+      summary: event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a",
+      status: event.status,
+      waitReason: event.waitReason,
+      timeLabel: formatTimestamp(event.startTs),
+      durationLabel: formatDuration(event.durationMs),
+      inPath: selectionPath.eventIds.includes(event.eventId),
+      selected: selection?.kind === "event" && selection.id === event.eventId,
+      dimmed: !selectionPath.eventIds.includes(event.eventId),
+    });
+  });
+
+  const graphEdges: GraphCanvasEdge[] = dataset.edges
+    .filter(
+      (edge) =>
+        visibleEventIds.has(edge.sourceEventId) &&
+        visibleEventIds.has(edge.targetEventId) &&
+        stepIdByEventId.has(edge.sourceEventId) &&
+        stepIdByEventId.has(edge.targetEventId),
+    )
+    .map((edge) => ({
+      id: edge.edgeId,
+      sourceEventId: edge.sourceEventId,
+      targetEventId: edge.targetEventId,
+      sourceLaneId: dataset.events.find((event) => event.eventId === edge.sourceEventId)?.laneId ?? "",
+      targetLaneId: dataset.events.find((event) => event.eventId === edge.targetEventId)?.laneId ?? "",
+      sourceStepId: stepIdByEventId.get(edge.sourceEventId) ?? "",
+      targetStepId: stepIdByEventId.get(edge.targetEventId) ?? "",
+      edgeType: edge.edgeType,
+      label: edge.payloadPreview ?? edge.edgeType,
+      inPath:
+        selectionPath.edgeIds.includes(edge.edgeId) ||
+        (selectionPath.eventIds.includes(edge.sourceEventId) &&
+          selectionPath.eventIds.includes(edge.targetEventId)),
+      selected: selection?.kind === "edge" && selection.id === edge.edgeId,
+    }));
+
+  const { orderedByLaneId } = buildLaneEventMaps(dataset);
+  orderedByLaneId.forEach((events, laneId) => {
+    const laneVisibleEvents = events.filter((event) => visibleEventIds.has(event.eventId));
+    laneVisibleEvents.forEach((event, index) => {
+      const next = laneVisibleEvents[index + 1];
+      if (!next) {
+        return;
+      }
+
+      graphEdges.push({
+        id: `timeline-${event.eventId}-${next.eventId}`,
+        sourceEventId: event.eventId,
+        targetEventId: next.eventId,
+        sourceLaneId: laneId,
+        targetLaneId: laneId,
+        sourceStepId: stepIdByEventId.get(event.eventId) ?? "",
+        targetStepId: stepIdByEventId.get(next.eventId) ?? "",
+        edgeType: "timeline",
+        label: "continues",
+        inPath:
+          selectionPath.eventIds.includes(event.eventId) &&
+          selectionPath.eventIds.includes(next.eventId),
+        selected: false,
+      });
+    });
+  });
+
+  return {
+    lanes: visibleLanes,
+    steps,
+    edges: graphEdges.filter(
+      (edge) =>
+        edge.sourceStepId &&
+        edge.targetStepId &&
+        laneIds.has(edge.sourceLaneId) &&
+        laneIds.has(edge.targetLaneId),
+    ),
+    selectionPath,
+    hiddenLaneCount: graphLanes.hiddenLaneCount,
+  };
+}
+
 export function buildWaterfallSegments(dataset: RunDataset): WaterfallSegment[] {
   const start = dataset.run.startTs;
   const totalDuration = Math.max(dataset.run.durationMs, 1);
@@ -303,6 +818,63 @@ export function buildWaterfallSegments(dataset: RunDataset): WaterfallSegment[] 
     widthPercent: Math.max((event.durationMs / totalDuration) * 100, 2),
     status: event.status,
   }));
+}
+
+export function buildWaterfallModel(
+  dataset: RunDataset,
+  filters: RunFilters,
+  selection: SelectionState | null,
+  pathOnly: boolean,
+): WaterfallModel {
+  const selectionPath = buildSelectionPath(dataset, selection);
+  const graphLanes = buildGraphLanes(dataset, selectionPath);
+  const laneIds = new Set(graphLanes.lanes.map((lane) => lane.laneId));
+  const start = dataset.run.startTs;
+  const totalDuration = Math.max(dataset.run.durationMs, 1);
+  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly).filter((event) =>
+    laneIds.has(event.laneId),
+  );
+  const rows: WaterfallRow[] = [];
+
+  visibleEvents.forEach((event, index) => {
+    const previous = visibleEvents[index - 1];
+    const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
+    const gap = previousEnd ? event.startTs - previousEnd : 0;
+    if (gap >= GAP_THRESHOLD_MS) {
+      rows.push({
+        kind: "gap",
+        id: `waterfall-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
+        label: `${formatDuration(gap)} hidden · ${graphLanes.lanes.length} lanes quiet`,
+      });
+    }
+    rows.push({
+      kind: "event",
+      id: `waterfall-row-${event.eventId}`,
+      eventId: event.eventId,
+      startLabel: formatTimestamp(event.startTs),
+      durationLabel: formatDuration(event.durationMs),
+    });
+  });
+
+  const cells: WaterfallCell[] = visibleEvents.map((event) => ({
+    eventId: event.eventId,
+    laneId: event.laneId,
+    title: event.title,
+    summary: event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a",
+    status: event.status,
+    waitReason: event.waitReason,
+    leftPercent: ((event.startTs - start) / totalDuration) * 100,
+    widthPercent: Math.max((event.durationMs / totalDuration) * 100, 2),
+    selected: selection?.kind === "event" && selection.id === event.eventId,
+    inPath: selectionPath.eventIds.includes(event.eventId),
+  }));
+
+  return {
+    lanes: graphLanes.lanes,
+    rows,
+    cells,
+    selectionPath,
+  };
 }
 
 export function buildMapNodes(dataset: RunDataset): MapNode[] {
@@ -335,6 +907,148 @@ export function findSelectionDetails(
   }
 
   return dataset.artifacts.find((artifact) => artifact.artifactId === selection.id) ?? null;
+}
+
+export function buildInspectorCausalSummary(
+  dataset: RunDataset,
+  selection: SelectionState | null,
+  rawEnabled: boolean,
+): InspectorCausalSummary | null {
+  const details = findSelectionDetails(dataset, selection);
+  if (!details) {
+    return null;
+  }
+
+  const { incomingByEventId, outgoingByEventId } = buildEdgeMaps(dataset);
+  const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+  const { previousByEventId } = buildLaneEventMaps(dataset);
+  const buildEventJump = (eventId: string, label: string, description: string): InspectorJump => ({
+    label,
+    description,
+    selection: { kind: "event", id: eventId },
+  });
+
+  if ("eventId" in details) {
+    const upstream = [
+      ...(details.parentId
+        ? [buildEventJump(details.parentId, "Parent event", "Jump to the upstream event context.")]
+        : []),
+      ...(incomingByEventId.get(details.eventId) ?? []).map((edge) =>
+        buildEventJump(
+          edge.sourceEventId,
+          `${edge.edgeType} source`,
+          edge.payloadPreview ?? "Jump to the upstream source event.",
+        ),
+      ),
+    ];
+
+    let downstream = [
+      ...dataset.events
+        .filter((event) => event.parentId === details.eventId)
+        .map((event) =>
+          buildEventJump(
+            event.eventId,
+            event.title,
+            event.outputPreview ?? event.inputPreview ?? "Jump to the downstream event.",
+          ),
+        ),
+      ...(outgoingByEventId.get(details.eventId) ?? []).map((edge) =>
+        buildEventJump(
+          edge.targetEventId,
+          `${edge.edgeType} target`,
+          edge.payloadPreview ?? "Jump to the downstream target event.",
+        ),
+      ),
+    ];
+
+    if (!downstream.length && ["blocked", "waiting", "interrupted"].includes(details.status)) {
+      const previous = previousByEventId.get(details.eventId);
+      if (previous) {
+        downstream = [
+          ...(outgoingByEventId.get(previous.eventId) ?? []).map((edge) =>
+            buildEventJump(
+              edge.targetEventId,
+              `${edge.edgeType} target`,
+              edge.payloadPreview ?? "Jump to the downstream target event.",
+            ),
+          ),
+        ];
+      }
+    }
+
+    const affectedStatuses = downstream
+      .map((item) => ("selection" in item ? eventsById.get(item.selection.id) : null))
+      .filter(Boolean) as EventRecord[];
+    const whyBlocked =
+      details.status === "blocked" || details.status === "waiting" || details.status === "interrupted"
+        ? details.waitReason ?? "reason unavailable"
+        : null;
+    const nextAction =
+      affectedStatuses.find((event) => ["waiting", "blocked", "interrupted"].includes(event.status))
+        ?.waitReason ??
+      downstream[0]?.description ??
+      null;
+
+    return {
+      title: details.title,
+      preview: details.outputPreview ?? details.inputPreview ?? "n/a",
+      facts: [
+        { label: "Status", value: details.status },
+        { label: "Started", value: formatTimestamp(details.startTs) },
+        { label: "Duration", value: formatDuration(details.durationMs) },
+        { label: "wait_reason", value: details.waitReason ?? "reason unavailable" },
+        { label: "Trace", value: truncateId(details.eventId) },
+      ],
+      whyBlocked,
+      upstream,
+      downstream,
+      nextAction,
+      payloadPreview: details.outputPreview ?? details.inputPreview ?? "n/a",
+      rawStatusLabel:
+        rawEnabled && (details.rawInput || details.rawOutput) ? "Raw available in drawer." : "Raw gated by default.",
+    };
+  }
+
+  if ("edgeId" in details) {
+    return {
+      title: details.edgeType,
+      preview: details.payloadPreview ?? "n/a",
+      facts: [
+        { label: "Source", value: truncateId(details.sourceEventId) },
+        { label: "Target", value: truncateId(details.targetEventId) },
+        { label: "Artifact", value: details.artifactId ? truncateId(details.artifactId) : "n/a" },
+      ],
+      whyBlocked: null,
+      upstream: [buildEventJump(details.sourceEventId, "Source event", "Jump to the upstream event.")],
+      downstream: [buildEventJump(details.targetEventId, "Target event", "Jump to the downstream event.")],
+      nextAction: details.payloadPreview ?? null,
+      payloadPreview: details.payloadPreview ?? "n/a",
+      rawStatusLabel: "Edge payload is summarized in the drawer log view.",
+    };
+  }
+
+  return {
+    title: details.title,
+    preview: details.preview,
+    facts: [
+      { label: "Artifact", value: truncateId(details.artifactId) },
+      { label: "Producer", value: truncateId(details.producerEventId) },
+      { label: "Raw", value: rawEnabled && details.rawContent ? "available" : "redacted" },
+    ],
+    whyBlocked: null,
+    upstream: [
+      buildEventJump(
+        details.producerEventId,
+        "Producer event",
+        "Jump to the event that created this artifact.",
+      ),
+    ],
+    downstream: [],
+    nextAction: "Open artifacts or raw drawer for the full payload.",
+    payloadPreview: details.preview,
+    rawStatusLabel:
+      rawEnabled && details.rawContent ? "Raw available in drawer." : "Raw gated by default.",
+  };
 }
 
 export function defaultCollapsedGapIds(dataset: RunDataset): Set<string> {

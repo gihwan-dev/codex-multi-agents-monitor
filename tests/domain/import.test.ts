@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { createMonitorInitialState, monitorStateReducer } from "../../src/app/useMonitorAppState.js";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/features/fixtures/index.js";
 import { normalizeImportPayload, parseCompletedRunPayload } from "../../src/features/ingestion/index.js";
-import { buildAnomalyJumps, calculateSummaryMetrics, hasRawPayload } from "../../src/shared/domain/index.js";
+import {
+  buildAnomalyJumps,
+  buildGraphCanvasModel,
+  buildInspectorCausalSummary,
+  buildSummaryFacts,
+  buildWorkspaceTreeModel,
+  calculateSummaryMetrics,
+  hasRawPayload,
+} from "../../src/shared/domain/index.js";
 
 describe("completedRunParser", () => {
   it("rejects waiting-class events without wait_reason", () => {
@@ -138,6 +146,77 @@ describe("normalization and selectors", () => {
 
     const metrics = calculateSummaryMetrics(dataset);
     expect(metrics.peakParallelism).toBe(2);
+  });
+
+  it("builds a graph model that keeps the blocker path readable", () => {
+    const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(dataset).toBeDefined();
+    if (!dataset) {
+      throw new Error("waiting-chain fixture missing");
+    }
+
+    const model = buildGraphCanvasModel(
+      dataset,
+      { agentId: null, eventType: "all", search: "", errorOnly: false },
+      { kind: "event", id: "fix2-blocked" },
+      true,
+    );
+
+    expect(model.steps.some((step) => step.kind === "event" && step.eventId === "fix2-blocked")).toBe(true);
+    expect(model.edges.some((edge) => edge.edgeType === "handoff")).toBe(true);
+    expect(model.edges.some((edge) => edge.edgeType === "timeline")).toBe(true);
+  });
+
+  it("derives factual summary strip values for the waiting chain", () => {
+    const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(dataset).toBeDefined();
+    if (!dataset) {
+      throw new Error("waiting-chain fixture missing");
+    }
+
+    const model = buildGraphCanvasModel(
+      dataset,
+      { agentId: null, eventType: "all", search: "", errorOnly: false },
+      { kind: "event", id: "fix2-blocked" },
+      true,
+    );
+    const facts = buildSummaryFacts(dataset, model.selectionPath, true);
+
+    expect(facts.find((fact) => fact.label === "Blocked by")?.value).toBe("Planner");
+    expect(facts.find((fact) => fact.label === "Last handoff")?.value).toContain("Planner");
+    expect(facts.find((fact) => fact.label === "Path only")?.value).toBe("On");
+  });
+
+  it("derives causal inspector copy from the selected event", () => {
+    const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(dataset).toBeDefined();
+    if (!dataset) {
+      throw new Error("waiting-chain fixture missing");
+    }
+
+    const summary = buildInspectorCausalSummary(dataset, { kind: "event", id: "fix2-blocked" }, false);
+    expect(summary?.whyBlocked).toMatch(/Spec approval missing/i);
+    expect(summary?.downstream.some((item) => item.label === "handoff target")).toBe(true);
+  });
+
+  it("derives causal inspector copy from an edge selection", () => {
+    const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(dataset).toBeDefined();
+    if (!dataset) {
+      throw new Error("waiting-chain fixture missing");
+    }
+
+    const summary = buildInspectorCausalSummary(dataset, { kind: "edge", id: "edge-fix2-handoff" }, false);
+    expect(summary?.title).toBe("handoff");
+    expect(summary?.upstream[0]?.label).toBe("Source event");
+    expect(summary?.downstream[0]?.label).toBe("Target event");
+  });
+
+  it("builds a workspace tree model with workspace-first grouping", () => {
+    const model = buildWorkspaceTreeModel(FIXTURE_DATASETS, "", "all");
+    expect(model.workspaces.length).toBeGreaterThan(0);
+    expect(model.workspaces[0]?.threads.length).toBeGreaterThan(0);
+    expect(model.workspaces[0]?.threads[0]?.runs.length).toBeGreaterThan(0);
   });
 });
 

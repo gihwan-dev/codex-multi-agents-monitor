@@ -122,9 +122,14 @@ test("mode switches preserve the active run title and inspector selection", asyn
 
   await expect(page.getByRole("heading", { name: "Planner blocked" })).toBeVisible();
 
-  for (const mode of ["waterfall", "map", "graph"]) {
-    await page.getByRole("button", { name: mode }).click();
+  for (const [key, mode] of [
+    ["w", "waterfall"],
+    ["m", "map"],
+    ["g", "graph"],
+  ] as const) {
+    await page.keyboard.press(key);
     await expect(page.getByRole("heading", { name: "FIX-002 Waiting chain run" })).toBeVisible();
+    await expect(page.getByRole("button", { name: mode })).toHaveClass(/button--active/);
     await expect(page.getByRole("heading", { name: "Planner blocked" })).toBeVisible();
   }
 });
@@ -155,7 +160,6 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 
   await page.getByRole("treeitem", { name: /FIX-004 Dense parallel run/i }).click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
-  await expect(
-    page.getByText(/inactive done lanes are folded to preserve the active path/i),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Path only" })).toHaveClass(/button--active/);
+  await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();
 });
