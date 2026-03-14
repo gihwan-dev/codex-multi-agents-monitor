@@ -49,13 +49,13 @@ describe("graphLayout", () => {
   });
 
   it("fills available width evenly and overflows when the minimum lane width wins", () => {
-    const roomy = computeLaneMetrics(1000, 4);
+    const roomy = computeLaneMetrics(1400, 4);
     const cramped = computeLaneMetrics(700, 4);
 
-    expect(roomy.contentWidth).toBe(1000);
-    expect(roomy.laneWidth).toBeCloseTo((1000 - TIME_GUTTER) / 4, 5);
-    expect(cramped.laneWidth).toBe(192);
-    expect(cramped.contentWidth).toBe(TIME_GUTTER + 192 * 4);
+    expect(roomy.contentWidth).toBe(1400);
+    expect(roomy.laneWidth).toBeCloseTo((1400 - TIME_GUTTER) / 4, 5);
+    expect(cramped.laneWidth).toBe(280);
+    expect(cramped.contentWidth).toBe(TIME_GUTTER + 280 * 4);
     expect(cramped.contentWidth).toBeGreaterThan(700);
   });
 
@@ -116,7 +116,7 @@ describe("graphLayout", () => {
     const scene = buildFixtureScene("trace-fix-004", { kind: "event", id: "fix4-lane-1-0" });
     const layout = buildGraphLayoutSnapshot(scene, 900);
 
-    expect(layout.laneMetrics.laneWidth).toBeGreaterThanOrEqual(192);
+    expect(layout.laneMetrics.laneWidth).toBeGreaterThanOrEqual(280);
     expect(layout.contentWidth).toBeGreaterThan(900);
   });
 
@@ -139,7 +139,7 @@ describe("graphLayout", () => {
     expect(wide.cardWidth).toBe(Math.floor(wide.laneWidth * 0.8));
 
     const narrow = computeLaneMetrics(700, 4);
-    expect(narrow.cardWidth).toBe(176);
+    expect(narrow.cardWidth).toBe(256);
   });
 
   it("builds rowPositions with correct topY and height for every row", () => {

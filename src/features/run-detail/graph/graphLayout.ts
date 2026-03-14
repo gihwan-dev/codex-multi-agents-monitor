@@ -5,8 +5,8 @@ export const EVENT_ROW_HEIGHT = 132;
 export const GAP_ROW_HEIGHT = 36;
 export const ROW_GAP = 16;
 
-const MIN_LANE_WIDTH = 192;
-const CARD_WIDTH_MIN = 176;
+const MIN_LANE_WIDTH = 280;
+const CARD_WIDTH_MIN = 256;
 const CARD_WIDTH_RATIO = 0.8;
 const CARD_HEIGHT = 80;
 const PORT_SLOT_SPACING = 12;
