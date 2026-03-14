@@ -30,8 +30,6 @@ export function WaterfallView({ model, onSelect, expandedGapIds, onToggleGap }: 
             <div
               key={row.id}
               className={`waterfall-grid__gap-separator${expandedGapIds.has(row.id) ? " waterfall-grid__gap-separator--expanded" : ""}`}
-              role="separator"
-              aria-label={`Gap: ${row.label}`}
             >
               <div className="waterfall-grid__gap-label" />
               <div

@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
 import { GapDetailSection } from "../features/run-detail/GapDetailSection";
 import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
@@ -8,8 +8,8 @@ import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
 import {
   type AnomalyJump,
   type DrawerTab,
-  type EventType,
   type EventRecord,
+  type EventType,
   formatCurrency,
   formatTokens,
   type GraphSceneRow,

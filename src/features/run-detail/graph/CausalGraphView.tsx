@@ -376,8 +376,6 @@ export function CausalGraphView({
                   <div
                     key={row.id}
                     className={`graph-sequence__gap-separator${expandedGapIds?.has(row.id) ? " graph-sequence__gap-separator--expanded" : ""}`}
-                    role="separator"
-                    aria-label={`Gap: ${row.label}`}
                     style={{ gridTemplateColumns, top: rowPos.topY, height: rowPos.height }}
                   >
                     <div className="graph-sequence__time graph-sequence__time--gap" />
