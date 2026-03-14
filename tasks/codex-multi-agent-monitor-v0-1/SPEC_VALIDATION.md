@@ -20,7 +20,7 @@
 - `RISK-001` large-run rendering cost가 graph, waterfall, map 모두에서 동시에 올라갈 수 있다. virtualization, gap folding, edge aggregation 기준을 구현 전에 고정해야 한다.
 - `RISK-002` event source마다 `wait_reason`, `handoff`, `transfer`, usage/cost 필드가 다르게 올 수 있다. normalization layer와 fallback copy가 필요하다.
 - `RISK-003` raw prompt/tool output을 무심코 저장하면 privacy boundary가 무너진다. preview-only default와 project-level no-raw switch가 필요하다.
-- `RISK-004` 현재 repo가 starter metadata(`Hello World`)와 placeholder UI를 가지고 있어 구현 초기에 branding/packaging noise가 섞일 수 있다. package/window rename은 기능 shell 이후로 미룬다.
+- `RISK-004` 현재 환경에서는 Playwright가 Chromium launch 권한 제약을 받아 built-artifact smoke 수준으로만 검증된다. browser-permission-aware navigation smoke는 follow-up으로 남는다.
 
 # Slice dependency risks
 

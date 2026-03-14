@@ -63,4 +63,4 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - Large-run rendering cost can spike across graph, waterfall, and map simultaneously.
 - Source schema drift may omit or reshape `wait_reason`, handoff, transfer, or usage fields.
 - Preview-first masking can regress if import or live-watch code stores raw payload too early.
-- Starter branding and Tauri metadata still contain `Hello World`; rename and packaging polish remain deferred until the functional shell is stable.
+- The current environment still blocks full Playwright browser navigation, so end-to-end coverage remains limited to built-artifact smoke plus contract assertions.

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Hello World",
+  "productName": "Codex Multi-Agent Monitor",
   "version": "0.1.0",
-  "identifier": "com.choegihwan.helloworld",
+  "identifier": "com.choegihwan.codex_multi_agent_monitor",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Hello World",
+        "title": "Codex Multi-Agent Monitor",
         "width": 960,
         "height": 640,
         "resizable": true

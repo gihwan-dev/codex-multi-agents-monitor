@@ -1,12 +1,12 @@
 [package]
-name = "helloworld"
+name = "codex-multi-agent-monitor"
 version = "0.1.0"
-description = "Hello World starter"
+description = "Codex multi-agent run debugging workbench"
 authors = ["choegihwan"]
 edition = "2021"
 
 [lib]
-name = "helloworld_lib"
+name = "codex_multi_agent_monitor_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
