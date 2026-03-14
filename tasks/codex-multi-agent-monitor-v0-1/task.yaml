@@ -30,6 +30,7 @@ required_docs:
   - ACCEPTANCE.feature
   - EXECUTION_PLAN.md
   - SPEC_VALIDATION.md
+  - IMPLEMENTATION_CONTRACT.md
   - STATUS.md
   - ADRs/ADR-001-hybrid-trace-model.md
   - ADRs/ADR-002-compressed-graph-default.md
@@ -42,6 +43,7 @@ source_of_truth:
   data_contract: tasks/codex-multi-agent-monitor-v0-1/schema.json
   acceptance: tasks/codex-multi-agent-monitor-v0-1/ACCEPTANCE.feature
   execution: tasks/codex-multi-agent-monitor-v0-1/EXECUTION_PLAN.md
+  implementation: tasks/codex-multi-agent-monitor-v0-1/IMPLEMENTATION_CONTRACT.md
   validation: tasks/codex-multi-agent-monitor-v0-1/SPEC_VALIDATION.md
 ids:
   requirement_prefix: REQ

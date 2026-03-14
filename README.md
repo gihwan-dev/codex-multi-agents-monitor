@@ -22,3 +22,11 @@ pnpm typecheck
 pnpm build
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+<!-- bootstrap-project-rules:start -->
+## AI Workflow
+
+- Engineering rules: `docs/ai/ENGINEERING_RULES.md`
+- Task implementation contract: `tasks/codex-multi-agent-monitor-v0-1/IMPLEMENTATION_CONTRACT.md`
+- 구현 전에는 task contract를 먼저 읽고 `SPEC_VALIDATION.md` blocker를 그대로 따른다
+<!-- bootstrap-project-rules:end -->
