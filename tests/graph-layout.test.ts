@@ -129,6 +129,14 @@ describe("graphLayout", () => {
     expect(waitingLayout.cardRect.y + waitingLayout.cardRect.height / 2).toBe(waitingLayout.rowAnchorY);
   });
 
+  it("scales card width to 80% of lane width, floored at minimum", () => {
+    const wide = computeLaneMetrics(1400, 3);
+    expect(wide.cardWidth).toBe(Math.floor(wide.laneWidth * 0.8));
+
+    const narrow = computeLaneMetrics(700, 4);
+    expect(narrow.cardWidth).toBe(176);
+  });
+
   it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
     const dataset = getFixtureDataset("trace-fix-002");
     const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" }, false);

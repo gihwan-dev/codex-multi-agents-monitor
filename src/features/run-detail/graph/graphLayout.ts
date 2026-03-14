@@ -1,14 +1,13 @@
 import type { GraphSceneEdgeBundle, GraphSceneModel } from "../../../shared/domain";
 
-export const TIME_GUTTER = 88;
+export const TIME_GUTTER = 120;
 export const EVENT_ROW_HEIGHT = 132;
 export const GAP_ROW_HEIGHT = 52;
 export const ROW_GAP = 16;
 
 const MIN_LANE_WIDTH = 192;
 const CARD_WIDTH_MIN = 176;
-const CARD_WIDTH_MAX = 208;
-const CARD_WIDTH_PADDING = 24;
+const CARD_WIDTH_RATIO = 0.8;
 const CARD_HEIGHT = 80;
 const PORT_SLOT_SPACING = 12;
 const PORT_EDGE_PADDING = 12;
@@ -116,7 +115,7 @@ export function computeLaneMetrics(viewportWidth: number, laneCount: number): La
   const minimumContentWidth = TIME_GUTTER + laneFloorWidth * safeLaneCount;
   const contentWidth = Math.max(viewportWidth, minimumContentWidth);
   const laneWidth = (contentWidth - TIME_GUTTER) / safeLaneCount;
-  const cardWidth = clamp(laneWidth - CARD_WIDTH_PADDING, CARD_WIDTH_MIN, CARD_WIDTH_MAX);
+  const cardWidth = Math.max(CARD_WIDTH_MIN, Math.floor(laneWidth * CARD_WIDTH_RATIO));
 
   return {
     timeGutter: TIME_GUTTER,
