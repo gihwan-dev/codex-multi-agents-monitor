@@ -28,6 +28,20 @@ struct SessionMessageSnapshot {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SubagentSnapshot {
+    session_id: String,
+    parent_thread_id: String,
+    depth: u32,
+    agent_nickname: String,
+    agent_role: String,
+    model: Option<String>,
+    started_at: String,
+    updated_at: String,
+    messages: Vec<SessionMessageSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SessionLogSnapshot {
     session_id: String,
     workspace_path: String,
@@ -37,6 +51,7 @@ struct SessionLogSnapshot {
     updated_at: String,
     model: Option<String>,
     messages: Vec<SessionMessageSnapshot>,
+    subagents: Vec<SubagentSnapshot>,
 }
 
 #[tauri::command]
@@ -90,25 +105,44 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     session_files.sort_by(|left, right| right.cmp(left));
 
     let mut seen_origin_paths = HashSet::new();
-    let mut snapshots = Vec::new();
+    let mut parent_snapshots = Vec::new();
+    let mut subagent_snapshots = Vec::new();
 
-    for session_file in session_files {
-        if snapshots.len() >= MAX_RECENT_WORKSPACES {
-            break;
+    for session_file in &session_files {
+        match read_subagent_snapshot(session_file) {
+            Ok(Some(sub)) => {
+                subagent_snapshots.push(sub);
+                continue;
+            }
+            Ok(None) => {}
+            Err(_) => continue,
         }
 
-        let snapshot = match read_session_snapshot(&session_file, &projects_root) {
+        if parent_snapshots.len() >= MAX_RECENT_WORKSPACES {
+            continue;
+        }
+
+        let snapshot = match read_session_snapshot(session_file, &projects_root) {
             Ok(Some(snapshot)) => snapshot,
             Ok(None) => continue,
             Err(_) => continue,
         };
 
         if seen_origin_paths.insert(snapshot.origin_path.clone()) {
-            snapshots.push(snapshot);
+            parent_snapshots.push(snapshot);
         }
     }
 
-    Ok(snapshots)
+    for parent in &mut parent_snapshots {
+        let matched: Vec<SubagentSnapshot> = subagent_snapshots
+            .iter()
+            .filter(|sub| sub.parent_thread_id == parent.session_id)
+            .cloned()
+            .collect();
+        parent.subagents = matched;
+    }
+
+    Ok(parent_snapshots)
 }
 
 fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -131,6 +165,113 @@ fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result
     }
 
     Ok(())
+}
+
+fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnapshot>> {
+    let file = File::open(session_file)?;
+    let mut reader = BufReader::new(file);
+    let mut first_line = String::new();
+    if reader.read_line(&mut first_line)? == 0 {
+        return Ok(None);
+    }
+
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let payload = session_meta
+        .get("payload")
+        .and_then(Value::as_object)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "payload missing"))?;
+
+    let thread_spawn = payload
+        .get("source")
+        .and_then(|s| s.get("subagent"))
+        .and_then(|s| s.get("thread_spawn"))
+        .and_then(Value::as_object);
+
+    let thread_spawn = match thread_spawn {
+        Some(ts) => ts,
+        None => return Ok(None),
+    };
+
+    let parent_thread_id = thread_spawn
+        .get("parent_thread_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let depth = thread_spawn
+        .get("depth")
+        .and_then(Value::as_u64)
+        .unwrap_or(1) as u32;
+    let agent_nickname = thread_spawn
+        .get("agent_nickname")
+        .and_then(Value::as_str)
+        .unwrap_or("Subagent")
+        .to_owned();
+    let agent_role = thread_spawn
+        .get("agent_role")
+        .or_else(|| thread_spawn.get("subagent_type"))
+        .and_then(Value::as_str)
+        .unwrap_or("agent")
+        .to_owned();
+
+    let session_id = payload
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| session_file.display().to_string());
+    let started_at = payload
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_owned();
+
+    let mut messages = Vec::new();
+    let mut updated_at = started_at.clone();
+    let mut model: Option<String> = None;
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let entry = match serde_json::from_str::<Value>(&line) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+
+        if model.is_none() {
+            if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
+                model = entry
+                    .get("payload")
+                    .and_then(|p| p.get("model"))
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.trim().is_empty())
+                    .map(ToOwned::to_owned);
+            }
+        }
+
+        let Some(message) = extract_message_snapshot(&entry) else {
+            continue;
+        };
+
+        updated_at = message.timestamp.clone();
+        messages.push(message);
+    }
+
+    Ok(Some(SubagentSnapshot {
+        session_id,
+        parent_thread_id,
+        depth,
+        agent_nickname,
+        agent_role,
+        model,
+        started_at,
+        updated_at,
+        messages,
+    }))
 }
 
 fn read_session_snapshot(
@@ -222,6 +363,7 @@ fn read_session_snapshot(
         updated_at,
         model,
         messages,
+        subagents: Vec::new(),
     }))
 }
 

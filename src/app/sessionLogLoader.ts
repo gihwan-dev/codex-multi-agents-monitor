@@ -1,10 +1,29 @@
-import { type AgentLane, calculateSummaryMetrics, type EventRecord, type RunDataset, type RunStatus } from "../shared/domain";
+import {
+  type AgentLane,
+  calculateSummaryMetrics,
+  type EdgeRecord,
+  type EventRecord,
+  type RunDataset,
+  type RunStatus,
+} from "../shared/domain";
 import { invokeTauri } from "./tauri";
 
 export interface SessionLogSnapshotMessage {
   timestamp: string;
   role: "user" | "assistant";
   text: string;
+}
+
+export interface SubagentSnapshot {
+  sessionId: string;
+  parentThreadId: string;
+  depth: number;
+  agentNickname: string;
+  agentRole: string;
+  model: string | null;
+  startedAt: string;
+  updatedAt: string;
+  messages: SessionLogSnapshotMessage[];
 }
 
 export interface SessionLogSnapshot {
@@ -16,6 +35,7 @@ export interface SessionLogSnapshot {
   updatedAt: string;
   model: string | null;
   messages: SessionLogSnapshotMessage[];
+  subagents?: SubagentSnapshot[];
 }
 
 export const NEW_THREAD_TITLE = "새 스레드";
@@ -113,24 +133,16 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     laneStatus: status,
   };
 
-  const timelineMessages = snapshot.messages.filter(
-    (message) => !isAgentsInstruction(message.text),
-  );
-  const firstUserMessageIndex = timelineMessages.findIndex((message) => message.role === "user");
-  const messageEvents = timelineMessages.map((message, index) =>
-    buildMessageEvent({
-      displayTitle,
-      message,
-      lane,
-      nextTimestamp: timelineMessages[index + 1]?.timestamp ?? snapshot.updatedAt,
-      useDisplayTitle: index === firstUserMessageIndex,
-      isLatest: index === timelineMessages.length - 1,
-      runStatus: status,
-      model: resolvedModel,
-    }),
-  );
+  const parentEvents = buildLaneEvents({
+    displayTitle,
+    messages: snapshot.messages,
+    lane,
+    updatedAt: snapshot.updatedAt,
+    status,
+    model: resolvedModel,
+  });
 
-  const firstEventTs = messageEvents[0]?.startTs ?? updatedTs;
+  const firstEventTs = parentEvents[0]?.startTs ?? updatedTs;
   const runStartEvent: EventRecord = {
     eventId: `${snapshot.sessionId}:run-start`,
     parentId: null,
@@ -139,7 +151,8 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     agentId: lane.agentId,
     threadId: lane.threadId,
     eventType: "run.started",
-    status: timelineMessages.length === 0 && status === "running" ? "running" : "done",
+    status:
+      parentEvents.length === 0 && status === "running" ? "running" : "done",
     waitReason: null,
     retryCount: 0,
     startTs,
@@ -165,9 +178,101 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   };
 
   const runEndEvent = buildRunEndEvent(snapshot.sessionId, lane, updatedTs, status, resolvedModel);
-  const events = [runStartEvent, ...messageEvents, ...(runEndEvent ? [runEndEvent] : [])];
+
+  const allLanes: AgentLane[] = [lane];
+  const allEvents: EventRecord[] = [runStartEvent, ...parentEvents, ...(runEndEvent ? [runEndEvent] : [])];
+  const allEdges: EdgeRecord[] = [];
+
+  const subagents = snapshot.subagents ?? [];
+  for (const sub of subagents) {
+    const subLaneId = `${sub.sessionId}:sub`;
+    const subModel = sub.model ?? resolvedModel;
+    const subStatus = deriveSessionLogStatus(sub.messages);
+    const subLane: AgentLane = {
+      laneId: subLaneId,
+      agentId: subLaneId,
+      threadId: sub.sessionId,
+      name: sub.agentNickname,
+      role: sub.agentRole,
+      model: subModel,
+      provider: "OpenAI",
+      badge: "Subagent",
+      laneStatus: subStatus,
+    };
+    allLanes.push(subLane);
+
+    const subEvents = buildLaneEvents({
+      displayTitle: sub.agentNickname,
+      messages: sub.messages,
+      lane: subLane,
+      updatedAt: sub.updatedAt,
+      status: subStatus,
+      model: subModel,
+    });
+
+    const subStartTs = parseTimestamp(sub.startedAt);
+    const subFirstEventTs = subEvents[0]?.startTs ?? subStartTs;
+    const spawnEvent: EventRecord = {
+      eventId: `${sub.sessionId}:spawn`,
+      parentId: null,
+      linkIds: [],
+      laneId: subLane.laneId,
+      agentId: subLane.agentId,
+      threadId: subLane.threadId,
+      eventType: "agent.spawned",
+      status: "done",
+      waitReason: null,
+      retryCount: 0,
+      startTs: subStartTs,
+      endTs: Math.max(subFirstEventTs, subStartTs + 1_000),
+      durationMs: Math.max(subFirstEventTs - subStartTs, 1_000),
+      title: `${sub.agentNickname} spawned`,
+      inputPreview: sub.agentRole,
+      outputPreview: null,
+      artifactId: null,
+      errorCode: null,
+      errorMessage: null,
+      provider: "OpenAI",
+      model: subModel,
+      toolName: null,
+      tokensIn: 0,
+      tokensOut: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: 0,
+      finishReason: null,
+      rawInput: null,
+      rawOutput: null,
+    };
+
+    const subEndEvent = buildRunEndEvent(
+      sub.sessionId,
+      subLane,
+      parseTimestamp(sub.updatedAt),
+      subStatus,
+      subModel,
+    );
+
+    allEvents.push(spawnEvent, ...subEvents, ...(subEndEvent ? [subEndEvent] : []));
+
+    const sourceEventId = findClosestParentEvent(
+      [runStartEvent, ...parentEvents],
+      subStartTs,
+    );
+    allEdges.push({
+      edgeId: `spawn:${sub.sessionId}`,
+      edgeType: "spawn",
+      sourceAgentId: lane.agentId,
+      targetAgentId: subLane.agentId,
+      sourceEventId,
+      targetEventId: spawnEvent.eventId,
+      payloadPreview: `${sub.agentNickname} (${sub.agentRole})`,
+      artifactId: null,
+    });
+  }
+
   const selectedByDefaultId =
-    messageEvents[messageEvents.length - 1]?.eventId ?? runStartEvent.eventId;
+    parentEvents[parentEvents.length - 1]?.eventId ?? runStartEvent.eventId;
 
   const dataset: RunDataset = {
     project: {
@@ -208,9 +313,9 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       rawIncluded: false,
       noRawStorage: true,
     },
-    lanes: [lane],
-    events,
-    edges: [],
+    lanes: allLanes,
+    events: allEvents,
+    edges: allEdges,
     artifacts: [],
   };
 
@@ -221,6 +326,58 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       summaryMetrics: calculateSummaryMetrics(dataset),
     },
   };
+}
+
+function buildLaneEvents({
+  displayTitle,
+  messages,
+  lane,
+  updatedAt,
+  status,
+  model,
+}: {
+  displayTitle: string;
+  messages: SessionLogSnapshotMessage[];
+  lane: AgentLane;
+  updatedAt: string;
+  status: RunStatus;
+  model: string;
+}): EventRecord[] {
+  const timelineMessages = messages.filter(
+    (message) => !isAgentsInstruction(message.text),
+  );
+  const firstUserMessageIndex = timelineMessages.findIndex(
+    (message) => message.role === "user",
+  );
+  return timelineMessages.map((message, index) =>
+    buildMessageEvent({
+      displayTitle,
+      message,
+      lane,
+      nextTimestamp: timelineMessages[index + 1]?.timestamp ?? updatedAt,
+      useDisplayTitle: index === firstUserMessageIndex,
+      isLatest: index === timelineMessages.length - 1,
+      runStatus: status,
+      model,
+    }),
+  );
+}
+
+function findClosestParentEvent(
+  parentEvents: EventRecord[],
+  targetTs: number,
+): string {
+  if (parentEvents.length === 0) return "";
+  let best = parentEvents[0];
+  let bestDelta = Math.abs(best.startTs - targetTs);
+  for (const event of parentEvents) {
+    const delta = Math.abs(event.startTs - targetTs);
+    if (delta < bestDelta) {
+      best = event;
+      bestDelta = delta;
+    }
+  }
+  return best.eventId;
 }
 
 function buildMessageEvent({

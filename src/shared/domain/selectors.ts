@@ -381,6 +381,28 @@ export function buildSelectionPath(
     });
   }
 
+  // Always include spawn topology in the selection path.
+  // Spawn edges create parallel execution branches that BFS
+  // may not reach when the source event is far from the selection origin.
+  const spawnTargetLaneIds = new Set<string>();
+  dataset.edges
+    .filter((edge) => edge.edgeType === "spawn")
+    .forEach((edge) => {
+      edgeIds.add(edge.edgeId);
+      eventIds.add(edge.sourceEventId);
+      eventIds.add(edge.targetEventId);
+      const targetEvent = eventsById.get(edge.targetEventId);
+      if (targetEvent) {
+        spawnTargetLaneIds.add(targetEvent.laneId);
+      }
+    });
+
+  dataset.events.forEach((event) => {
+    if (spawnTargetLaneIds.has(event.laneId)) {
+      eventIds.add(event.eventId);
+    }
+  });
+
   dataset.events
     .filter((event) => eventIds.has(event.eventId))
     .forEach((event) => {
