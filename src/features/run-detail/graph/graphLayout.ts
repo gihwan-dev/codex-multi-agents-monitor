@@ -1,8 +1,8 @@
 import type { GraphSceneEdgeBundle, GraphSceneModel } from "../../../shared/domain";
 
-export const TIME_GUTTER = 120;
+export const TIME_GUTTER = 148;
 export const EVENT_ROW_HEIGHT = 132;
-export const GAP_ROW_HEIGHT = 52;
+export const GAP_ROW_HEIGHT = 36;
 export const ROW_GAP = 16;
 
 const MIN_LANE_WIDTH = 192;

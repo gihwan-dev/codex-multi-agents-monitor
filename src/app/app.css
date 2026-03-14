@@ -193,6 +193,26 @@ textarea {
   border-left-width: 0;
 }
 
+.summary-strip--inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+}
+
+.summary-strip__focus {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.summary-strip--inline .metric-pill {
+  min-width: auto;
+  padding: 4px 8px;
+  flex-direction: row;
+  gap: 4px;
+}
+
 .summary-strip__heading {
   display: grid;
   gap: 4px;
@@ -226,7 +246,7 @@ textarea {
 }
 
 .graph-toolbar__row--secondary {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: end;
 }
 
@@ -288,7 +308,7 @@ textarea {
   flex: 1 1 auto;
   align-content: start;
   align-items: start;
-  gap: 4px;
+  gap: 2px;
   min-height: 0;
   overflow: auto;
   overflow: overlay;
@@ -297,9 +317,9 @@ textarea {
 
 .run-list__workspace {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 2px 0 6px;
+  padding: 1px 0 4px;
 }
 
 .run-list__workspace-row {
@@ -347,6 +367,40 @@ textarea {
   letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.run-list__workspace-count {
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+
+.run-row__sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.run-row__meta {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+}
+
+.run-row__sub-sep {
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+}
+
+.run-row__summary {
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .run-list__runs {
@@ -601,21 +655,42 @@ textarea {
   color: rgba(243, 246, 251, 0.72);
 }
 
+.graph-sequence__route--spawn path {
+  stroke-dasharray: none;
+}
+
+.graph-sequence__route--handoff path {
+  stroke-dasharray: 6 4;
+}
+
+.graph-sequence__route--transfer path {
+  stroke-dasharray: 2 4;
+}
+
+.graph-sequence__route--merge path {
+  stroke-dasharray: 1 3;
+}
+
 .graph-sequence__route--path,
 .graph-sequence__route--selected,
 .graph-sequence__route--active {
   opacity: 1;
 }
 
+.graph-sequence__route--path path {
+  stroke-width: 3.5;
+  filter: saturate(1.3);
+}
+
 .graph-sequence__route--selected path,
 .graph-sequence__route--selected circle,
 .graph-sequence__route--active path,
 .graph-sequence__route--active circle {
-  stroke-width: 3.25;
+  stroke-width: 3.5;
 }
 
 .graph-sequence__route--dimmed {
-  opacity: 0.18;
+  opacity: 0.12;
 }
 
 .graph-sequence__rows {
@@ -653,6 +728,7 @@ textarea {
   display: grid;
   gap: 4px;
   justify-items: start;
+  white-space: nowrap;
 }
 
 .graph-sequence__time--gap {
@@ -719,7 +795,7 @@ textarea {
 
 .graph-sequence__card--path-dimmed,
 .graph-sequence__card--dimmed {
-  opacity: 0.3;
+  opacity: 0.22;
 }
 
 .graph-sequence__card-head {
@@ -748,13 +824,15 @@ textarea {
 .graph-sequence__gap-band {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-height: var(--graph-gap-row-height);
   padding: 0 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .graph-sequence__route-hitbox {
@@ -1002,6 +1080,19 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.inspector__affected-count {
+  color: var(--color-active);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.inspector__suggested-action {
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-active);
+  background: rgba(77, 163, 255, 0.04);
+  border-radius: 0 6px 6px 0;
 }
 
 .inspector__payload-actions,

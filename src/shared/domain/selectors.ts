@@ -958,6 +958,16 @@ export function buildInspectorCausalSummary(
       downstream[0]?.description ??
       null;
 
+    const downstreamAgentIds = new Set(
+      downstream
+        .map((item) => eventsById.get(item.selection.id))
+        .filter(Boolean)
+        .map((event) => (event as EventRecord).agentId),
+    );
+    const downstreamWaitingCount = affectedStatuses.filter((event) =>
+      ["waiting", "blocked", "interrupted"].includes(event.status),
+    ).length;
+
     return {
       title: details.title,
       preview: details.outputPreview ?? details.inputPreview ?? "n/a",
@@ -965,8 +975,6 @@ export function buildInspectorCausalSummary(
         { label: "Status", value: details.status },
         { label: "Started", value: formatTimestamp(details.startTs) },
         { label: "Duration", value: formatDuration(details.durationMs) },
-        { label: "wait_reason", value: details.waitReason ?? "reason unavailable" },
-        { label: "Trace", value: truncateId(details.eventId) },
       ],
       whyBlocked,
       upstream,
@@ -975,6 +983,8 @@ export function buildInspectorCausalSummary(
       payloadPreview: details.outputPreview ?? details.inputPreview ?? "n/a",
       rawStatusLabel:
         rawEnabled && (details.rawInput || details.rawOutput) ? "Raw available in drawer." : "Raw gated by default.",
+      affectedAgentCount: downstreamAgentIds.size,
+      downstreamWaitingCount,
     };
   }
 
@@ -993,6 +1003,8 @@ export function buildInspectorCausalSummary(
       nextAction: details.payloadPreview ?? null,
       payloadPreview: details.payloadPreview ?? "n/a",
       rawStatusLabel: "Edge payload is summarized in the drawer log view.",
+      affectedAgentCount: 0,
+      downstreamWaitingCount: 0,
     };
   }
 
@@ -1017,6 +1029,8 @@ export function buildInspectorCausalSummary(
     payloadPreview: details.preview,
     rawStatusLabel:
       rawEnabled && details.rawContent ? "Raw available in drawer." : "Raw gated by default.",
+    affectedAgentCount: 0,
+    downstreamWaitingCount: 0,
   };
 }
 

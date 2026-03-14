@@ -454,7 +454,7 @@ export function CausalGraphView({
                     onFocus={() => setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })}
                     onBlur={() => setActiveSelection(null)}
                   >
-                    <title>{bundle.label}</title>
+                    <title>{bundle.edgeType}: {bundle.label}</title>
                     <path className="graph-sequence__route-hitbox" d={route.path} />
                   </a>
                 );

@@ -150,10 +150,8 @@ export function MonitorApp() {
             filters={activeFilters}
             anomalyJumps={anomalyJumps}
             pathOnly={activePathOnly}
-            rawTabAvailable={rawTabAvailable}
             viewMode={state.viewMode}
             onJump={actions.selectItem}
-            onOpenDrawer={openDrawer}
             onSetFilter={actions.setFilter}
             onSetViewMode={actions.setViewMode}
             onTogglePathOnly={actions.togglePathOnly}
@@ -308,16 +306,13 @@ function SummaryStrip({
   activeFocus: string | null;
 }) {
   return (
-    <section className="summary-strip summary-strip--compact">
-      <div className="summary-strip__heading">
-        <p className="summary-strip__eyebrow">Run understanding</p>
-        <strong>{activeFocus ? `Active focus: ${activeFocus}` : "No active focus yet."}</strong>
-      </div>
-      <div className="summary-strip__metrics">
-        {facts.map((fact) => (
-          <MetricPill key={fact.label} label={fact.label} value={fact.value} />
-        ))}
-      </div>
+    <section className="summary-strip summary-strip--inline">
+      <span className="summary-strip__focus">
+        {activeFocus ?? "No focus"}
+      </span>
+      {facts.map((fact) => (
+        <MetricPill key={fact.label} label={fact.label} value={fact.value} />
+      ))}
     </section>
   );
 }
@@ -327,10 +322,8 @@ function GraphToolbar({
   filters,
   anomalyJumps,
   pathOnly,
-  rawTabAvailable,
   viewMode,
   onJump,
-  onOpenDrawer,
   onSetFilter,
   onSetViewMode,
   onTogglePathOnly,
@@ -339,10 +332,8 @@ function GraphToolbar({
   filters: ActiveFilters;
   anomalyJumps: AnomalyJump[];
   pathOnly: boolean;
-  rawTabAvailable: boolean;
   viewMode: ViewMode;
   onJump: (selection: { kind: "event" | "edge" | "artifact"; id: string }) => void;
-  onOpenDrawer: (tab: DrawerTab, target?: HTMLElement | null) => void;
   onSetFilter: MonitorAppState["actions"]["setFilter"];
   onSetViewMode: MonitorAppState["actions"]["setViewMode"];
   onTogglePathOnly: () => void;
@@ -427,44 +418,8 @@ function GraphToolbar({
           </div>
         </div>
 
-        <div className="graph-toolbar__cluster graph-toolbar__cluster--drawer">
-          <p className="graph-toolbar__label">Drawer</p>
-          <div className="graph-toolbar__drawer-actions">
-            <DrawerButton label="Artifacts" tab="artifacts" onOpenDrawer={onOpenDrawer} />
-            <DrawerButton label="Log" tab="log" onOpenDrawer={onOpenDrawer} />
-            <DrawerButton
-              label="Raw"
-              tab="raw"
-              disabled={!rawTabAvailable}
-              onOpenDrawer={onOpenDrawer}
-            />
-          </div>
-        </div>
       </div>
     </section>
-  );
-}
-
-function DrawerButton({
-  label,
-  tab,
-  disabled = false,
-  onOpenDrawer,
-}: {
-  label: string;
-  tab: DrawerTab;
-  disabled?: boolean;
-  onOpenDrawer: (tab: DrawerTab, target?: HTMLElement | null) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="button button--ghost"
-      disabled={disabled}
-      onClick={(event) => onOpenDrawer(tab, event.currentTarget)}
-    >
-      {label}
-    </button>
   );
 }
 

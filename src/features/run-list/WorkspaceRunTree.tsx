@@ -218,6 +218,7 @@ export function WorkspaceRunTree({
                   <span className="run-list__workspace-name" title={workspace.name}>
                     {workspace.name}
                   </span>
+                  <span className="run-list__workspace-count">{workspace.runCount}</span>
                 </div>
               </button>
 
@@ -243,6 +244,11 @@ export function WorkspaceRunTree({
                         <div className="run-row__title">
                           <span>{run.title}</span>
                           <StatusChip status={run.status} subtle />
+                        </div>
+                        <div className="run-row__sub">
+                          <span className="run-row__meta">{run.relativeTime}</span>
+                          <span className="run-row__sub-sep">·</span>
+                          <span className="run-row__summary">{run.lastEventSummary}</span>
                         </div>
                       </button>
                     );

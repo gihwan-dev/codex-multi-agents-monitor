@@ -408,6 +408,8 @@ export interface InspectorCausalSummary {
   nextAction: string | null;
   payloadPreview: string;
   rawStatusLabel: string;
+  affectedAgentCount: number;
+  downstreamWaitingCount: number;
 }
 
 export interface RawImportEvent {

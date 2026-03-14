@@ -23,9 +23,10 @@ export function CausalInspectorPane({
   open,
   compact = false,
 }: CausalInspectorPaneProps) {
-  const showWhyBlocked = Boolean(summary?.whyBlocked || summary?.nextAction);
+  const showDirectCause = Boolean(summary?.whyBlocked);
   const showUpstream = Boolean(summary?.upstream.length);
   const showDownstream = Boolean(summary?.downstream.length);
+  const showSuggestedNext = Boolean(summary?.nextAction);
 
   return (
     <Panel
@@ -52,16 +53,20 @@ export function CausalInspectorPane({
           <Section title="Summary">
             <SummarySection summary={summary} />
           </Section>
-          {showWhyBlocked ? (
-            <Section title="Why blocked">
-              {summary?.whyBlocked ? <p>{summary.whyBlocked}</p> : null}
-              {summary?.nextAction ? (
-                <p className="inspector__next-action">Next likely action: {summary.nextAction}</p>
+          {showDirectCause ? (
+            <Section title="Direct cause">
+              <p>{summary?.whyBlocked}</p>
+              {summary?.upstream[0] ? (
+                <JumpButton
+                  label={summary.upstream[0].label}
+                  description={summary.upstream[0].description}
+                  onClick={() => onSelectJump(summary.upstream[0].selection)}
+                />
               ) : null}
             </Section>
           ) : null}
           {showUpstream ? (
-            <Section title="Upstream dependency">
+            <Section title="Upstream chain">
               {summary?.upstream.map((item) => (
                 <JumpButton
                   key={`${item.label}:${item.selection.id}`}
@@ -74,6 +79,14 @@ export function CausalInspectorPane({
           ) : null}
           {showDownstream ? (
             <Section title="Downstream impact">
+              {summary?.affectedAgentCount ? (
+                <p className="inspector__affected-count">
+                  {summary.affectedAgentCount} agent{summary.affectedAgentCount !== 1 ? "s" : ""} affected
+                  {summary.downstreamWaitingCount
+                    ? ` · ${summary.downstreamWaitingCount} waiting`
+                    : ""}
+                </p>
+              ) : null}
               {summary?.downstream.map((item) => (
                 <JumpButton
                   key={`${item.label}:${item.selection.id}`}
@@ -82,6 +95,13 @@ export function CausalInspectorPane({
                   onClick={() => onSelectJump(item.selection)}
                 />
               ))}
+            </Section>
+          ) : null}
+          {showSuggestedNext ? (
+            <Section title="Suggested next">
+              <div className="inspector__suggested-action">
+                <p>{summary?.nextAction}</p>
+              </div>
             </Section>
           ) : null}
           <Section title="Payload">
