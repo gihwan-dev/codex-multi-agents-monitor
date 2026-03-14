@@ -1,7 +1,9 @@
 .monitor-shell {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
   min-height: 100vh;
-  gap: var(--space-3);
+  gap: 0;
   padding: 18px;
 }
 
@@ -12,7 +14,7 @@
   align-items: center;
   padding: 12px 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
+  border-radius: 16px 16px 0 0;
   background:
     linear-gradient(180deg, rgba(18, 22, 31, 0.96), rgba(13, 17, 24, 0.96)),
     radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 32%);
@@ -93,8 +95,9 @@ textarea {
 .workspace {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  min-height: calc(100vh - 144px);
+  gap: 0;
+  margin-top: -1px;
+  min-height: 0;
 }
 
 .workspace--stacked {
@@ -104,9 +107,9 @@ textarea {
 .workspace__rail,
 .workspace__inspector {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  min-height: 0;
   min-width: 0;
-  align-content: start;
 }
 
 .workspace__rail {
@@ -119,10 +122,15 @@ textarea {
 
 .workspace__rail-pane,
 .workspace__main {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
   min-width: 0;
-  align-content: start;
+}
+
+.workspace__main > * + * {
+  margin-top: -1px;
 }
 
 .panel.run-list,
@@ -131,11 +139,18 @@ textarea {
 .panel.inspector,
 .panel.drawer,
 .panel.canvas-panel {
+  min-height: 0;
   gap: 12px;
   padding: 14px;
   border-color: rgba(255, 255, 255, 0.045);
   background: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(17, 21, 30, 0.96));
   box-shadow: none;
+}
+
+.panel.run-list,
+.panel.inspector,
+.panel.canvas-panel {
+  flex: 1 1 auto;
 }
 
 .summary-strip,
@@ -144,8 +159,39 @@ textarea {
   gap: 10px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.045);
-  border-radius: 14px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.workspace__rail-pane > .panel.run-list,
+.workspace__main > .summary-strip,
+.workspace__main > .graph-toolbar,
+.workspace__main > .panel.canvas-panel,
+.workspace__main > .panel.drawer,
+.workspace__inspector > .panel.inspector {
+  border-radius: 0;
+}
+
+.workspace__rail-pane > .panel.run-list,
+.workspace__main > :first-child,
+.workspace__inspector > .panel.inspector {
+  border-top-width: 0;
+}
+
+.workspace__rail-pane > .panel.run-list {
+  border-right-width: 0;
+}
+
+.workspace__main > .summary-strip,
+.workspace__main > .graph-toolbar,
+.workspace__main > .panel.canvas-panel,
+.workspace__main > .panel.drawer {
+  border-left-width: 0;
+  border-right-width: 0;
+}
+
+.workspace__inspector > .panel.inspector {
+  border-left-width: 0;
 }
 
 .summary-strip__heading {
@@ -262,8 +308,11 @@ textarea {
 
 .run-list__tree {
   display: grid;
+  flex: 1 1 auto;
   gap: 10px;
   min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .run-list__workspace {
@@ -580,15 +629,20 @@ textarea {
 }
 
 .graph-sequence-panel {
+  min-height: 0;
   overflow: hidden;
 }
 
 .graph-sequence {
   display: grid;
+  flex: 1 1 auto;
   gap: 12px;
+  min-height: 0;
 }
 
 .graph-sequence__scroll {
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   padding-bottom: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -1058,6 +1112,9 @@ textarea {
 }
 
 .inspector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 
@@ -1068,7 +1125,14 @@ textarea {
 .inspector__content,
 .drawer__body {
   display: grid;
+  flex: 1 1 auto;
   gap: 12px;
+  min-height: 0;
+}
+
+.inspector__content {
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .inspector__empty {
@@ -1248,21 +1312,42 @@ textarea {
 
 @media (max-width: 720px) {
   .monitor-shell {
+    height: auto;
+    gap: var(--space-3);
     padding: 12px;
   }
 
   .top-bar {
     grid-template-columns: 1fr;
+    border-radius: 16px;
   }
 
   .workspace,
   .workspace--stacked {
     grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 0;
   }
 
   .workspace__rail,
-  .workspace__inspector {
+  .workspace__inspector,
+  .workspace__main {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .workspace__main > * + * {
+    margin-top: 0;
+  }
+
+  .workspace__rail-pane > .panel.run-list,
+  .workspace__main > .summary-strip,
+  .workspace__main > .graph-toolbar,
+  .workspace__main > .panel.canvas-panel,
+  .workspace__main > .panel.drawer,
+  .workspace__inspector > .panel.inspector {
+    border-width: 1px;
+    border-radius: 14px;
   }
 
   .resize-handle {
