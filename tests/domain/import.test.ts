@@ -279,6 +279,44 @@ describe("normalization and selectors", () => {
     expect(buildWorkspaceTreeModel([fix4], "codex-multi-agent-monitor", "all", overrides).workspaces).toHaveLength(1);
     expect(buildWorkspaceTreeModel([fix4], fix4.project.name, "all", overrides).workspaces).toHaveLength(1);
   });
+
+  it("prefers the first user input preview for the sidebar run title", () => {
+    const fix5 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-005");
+    expect(fix5).toBeDefined();
+    if (!fix5) {
+      throw new Error("fixture for sidebar title test missing");
+    }
+
+    const model = buildWorkspaceTreeModel([fix5], "", "all");
+    const runTitle = model.workspaces[0]?.threads[0]?.runs[0]?.title;
+
+    expect(runTitle).toBe("outline migration plan");
+  });
+
+  it("falls back to the session title when no user input preview is available", () => {
+    const fix2 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(fix2).toBeDefined();
+    if (!fix2) {
+      throw new Error("fixture for sidebar session fallback test missing");
+    }
+
+    const model = buildWorkspaceTreeModel([fix2], "", "all");
+    const runTitle = model.workspaces[0]?.threads[0]?.runs[0]?.title;
+
+    expect(runTitle).toBe("Waiting chain review");
+  });
+
+  it("searches displayed run titles derived from the first user input", () => {
+    const fix5 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-005");
+    expect(fix5).toBeDefined();
+    if (!fix5) {
+      throw new Error("fixture for sidebar title search test missing");
+    }
+
+    const model = buildWorkspaceTreeModel([fix5], "outline migration plan", "all");
+    expect(model.workspaces).toHaveLength(1);
+    expect(model.workspaces[0]?.threads[0]?.runs[0]?.title).toBe("outline migration plan");
+  });
 });
 
 describe("monitor state contracts", () => {

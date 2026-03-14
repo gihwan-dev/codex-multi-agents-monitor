@@ -106,6 +106,30 @@ function sortEvents(events: EventRecord[]) {
   return [...events].sort((left, right) => left.startTs - right.startTs);
 }
 
+function sanitizeSidebarRunTitle(value: string) {
+  return value
+    .replace(/^(prompt|input|user(?:\s+message)?)(?:\s+preview)?\s*:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function deriveWorkspaceRunTitle(dataset: RunDataset, orderedEvents: EventRecord[]) {
+  const firstInputPreview = orderedEvents
+    .map((event) => sanitizeSidebarRunTitle(event.inputPreview ?? ""))
+    .find((value) => value.length > 0);
+
+  if (firstInputPreview) {
+    return firstInputPreview;
+  }
+
+  const sessionTitle = dataset.session.title.trim();
+  if (sessionTitle.length > 0) {
+    return sessionTitle;
+  }
+
+  return dataset.run.title;
+}
+
 function buildEdgeMaps(dataset: RunDataset) {
   const incomingByEventId = new Map<string, RunDataset["edges"]>();
   const outgoingByEventId = new Map<string, RunDataset["edges"]>();
@@ -406,7 +430,7 @@ function buildWorkspaceRunRow(dataset: RunDataset, referenceTimestamp: number): 
 
   return {
     id: dataset.run.traceId,
-    title: dataset.run.title,
+    title: deriveWorkspaceRunTitle(dataset, orderedEvents),
     status: dataset.run.status,
     lastEventSummary:
       latestEvent?.waitReason ??
@@ -457,6 +481,7 @@ export function buildWorkspaceTreeModel(
         dataset.project.name,
         dataset.project.repoPath,
         dataset.project.badge ?? "",
+        runRow.title,
         dataset.session.title,
         dataset.run.title,
         runRow.lastEventSummary,

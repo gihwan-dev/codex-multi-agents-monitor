@@ -116,10 +116,10 @@ test("left rail uses a simplified workspace to run tree", async ({ page }) => {
 
   await expect(rail.getByRole("button", { name: "All" })).toHaveCount(0);
   await expect(rail.getByRole("button", { name: "Live" })).toHaveCount(0);
-  await expect(rail.getByText("Waiting chain review", { exact: true })).toHaveCount(0);
+  await expect(rail.getByText("FIX-002 Waiting chain run", { exact: true })).toHaveCount(0);
   await expect(rail.getByText(/\bago\b/i)).toHaveCount(0);
 
-  const runTreeItem = rail.getByRole("treeitem", { name: /FIX-002 Waiting chain run/i });
+  const runTreeItem = rail.getByRole("treeitem", { name: /Waiting chain review/i });
   await expect(runTreeItem).toBeVisible();
   await expect(runTreeItem).toContainText("Waiting");
   await expect(runTreeItem).not.toContainText("Imported");
@@ -244,7 +244,7 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 }) => {
   await openBuiltApp(page);
 
-  await page.locator('.run-row[title="FIX-004 Dense parallel run"]').click();
+  await page.locator('.run-row[title="Dense parallel replay"]').click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Path only" })).toHaveClass(/button--active/);
   await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();
