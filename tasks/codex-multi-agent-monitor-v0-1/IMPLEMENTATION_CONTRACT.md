@@ -23,7 +23,7 @@
 - privacy posture는 `preview-only` default를 유지하고 `raw opt-in`, `export raw excluded`를 end to end로 보존한다
 - v0.1 ingest scope는 completed run import와 local live tail/watch로 제한하며, direct runtime coupling은 이 contract에 포함하지 않는다
 - internal data model은 vendor-agnostic을 유지하고, adapter는 source payload와 normalized schema 사이의 sole translation layer로 둔다
-- slice sequencing은 `SLICE-1 -> SLICE-2 -> SLICE-3 -> SLICE-4`를 유지하고 `ui-first` delivery strategy를 보존한다
+- slice sequencing은 `SLICE-0 -> SLICE-1 -> SLICE-2 -> SLICE-3 -> SLICE-4`를 유지하고 `ui-first` delivery strategy를 보존한다
 
 # Allowed Core Libraries
 
@@ -71,13 +71,15 @@
 
 # Validation Overrides
 
-- bootstrap 단계에서는 별도 override가 없다
+- one-time review gate 예외는 `SLICE-0`와 `SLICE-1`에 한해 limited approval로 적용된다
+- `SLICE-0` focused validation은 `pnpm typecheck` + `pnpm build`를 사용한다
 - repo baseline validation command는 `docs/ai/ENGINEERING_RULES.md`를 따른다
-- `EXECUTION_PLAN.md`의 slice-specific smoke check는 additive이며 baseline command를 대체하지 않는다
+- `EXECUTION_PLAN.md`의 slice-specific smoke check와 focused validation은 additive이며 baseline command를 대체하지 않는다
+- `SLICE-2` 진입 전에는 review gate를 다시 확인해야 하며, 이후 slice는 blocker 해소 전 시작하지 않는다
 
 # Open Risks
 
-- `RISK-05`: bundle이 review gate를 통과하기 전에는 implementation을 시작할 수 없다
-- `RISK-06`: canonical fixture와 `schema.json` contract review가 끝나기 전에는 import/watch implementation을 시작할 수 없다
-- `RISK-07`: privacy/export default가 운영 승인되기 전에는 raw payload handling을 시작할 수 없다
-- bootstrap documentation은 위 blocker를 해소하지 않으며, 승인이 닫히기 전까지 task는 계속 `blocking` 상태다
+- `RISK-05`: review gate는 one-time 예외로 `SLICE-0`와 `SLICE-1`에 한해 승인됐다. `SLICE-2` 진입 전에는 추가 review approval이 필요하다
+- `RISK-06`: canonical fixture와 `schema.json` contract review가 끝나기 전에는 import pipeline 또는 local watch implementation을 시작할 수 없다
+- `RISK-07`: privacy/export default가 운영 승인되기 전에는 privacy/export implementation과 raw payload handling을 시작할 수 없다
+- bootstrap documentation과 `SLICE-0` baseline setup은 위 blocker를 해소하지 않으며, task status는 `SLICE-0`/`SLICE-1` 한정 `limited-proceed`로 유지된다

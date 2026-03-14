@@ -1,8 +1,18 @@
 # Execution slices
 
+## `SLICE-0` Tailwind CSS Vite baseline
+
+- Change boundary: official Tailwind CSS Vite baseline, global token/base layer, shell-compatible compatibility classes only
+- Expected files: `package.json`, `pnpm-lock.yaml`, `vite.config.ts`, `src/styles.css`
+- Validation owner: main thread
+- Focused validation plan: `pnpm typecheck` + `pnpm build`
+- Stop / Replan trigger: Radix, shadcn CLI/bootstrap, shared primitive extraction, 또는 App shell markup 변경이 필요해지면 현재 slice를 닫고 `SLICE-1` 진입 전에 재계획
+- Split decision: `src/styles.css` 안에 App-specific layout/state logic가 섞이기 시작하면 중단하고 이후 slice에서 owning module로 분리
+- Guardrail: Tailwind baseline setup만 허용, Radix/shadcn/shared primitive 추출 금지, App.tsx markup 수정 금지
+
 ## `SLICE-1` Static/visual UI shell
 
-- Change boundary: Run List, Run Detail Graph shell, summary strip, inspector skeleton, theme/token, navigation shell
+- Change boundary: Run List, Run Detail Graph shell, summary strip, inspector skeleton, navigation shell
 - Expected files: `src/App.tsx`, `src/styles.css`, 필요 시 `src/features/monitor-shell/*`로 분리
 - Validation owner: main thread
 - Focused validation plan: `pnpm typecheck` + visual shell smoke check
@@ -40,6 +50,7 @@
 
 # Verification
 
+- `SLICE-0`: `pnpm typecheck`, `pnpm build`
 - `SLICE-1`: `pnpm typecheck`
 - `SLICE-2`: `pnpm typecheck`
 - `SLICE-3`: `pnpm typecheck`, import fixture/schema validation
@@ -48,6 +59,7 @@
 
 # Stop / Replan conditions
 
+- review gate limited approval은 `SLICE-0`와 `SLICE-1`까지만 유효하며, `SLICE-2` 진입 전 다시 확인한다
 - `UX_SPEC.md`의 screen/state/source-of-truth가 변경되면 다음 slice 진입 전에 replan
 - `schema.json`이 import와 watch를 동시에 설명하지 못하면 `SLICE-3` 시작 금지
 - privacy/export 기본 정책에 합의가 없으면 `SLICE-4` 시작 금지

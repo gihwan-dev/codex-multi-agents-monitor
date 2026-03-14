@@ -13,7 +13,7 @@
 
 # UX/state gaps
 
-- `SCR-01`~`SCR-04`와 `FLOW-01`~`FLOW-05`는 정의됐지만, 실제 visual fidelity는 `SLICE-1`의 mock UI 결과물로 검증돼야 한다.
+- `SCR-01`~`SCR-04`와 `FLOW-01`~`FLOW-05`는 정의됐지만, 실제 visual fidelity는 `SLICE-0`의 baseline token 정리 이후 `SLICE-1`의 mock UI 결과물로 검증돼야 한다.
 - Graph mode의 dense row threshold와 gap folding trigger는 설계 의도가 있으나 실제 fixture를 통한 조정이 필요하다.
 - Waterfall과 Map은 보조 모드로 정의됐으므로 `SLICE-1`에서 navigation shell만, `SLICE-2`에서 interaction mock까지 확보해야 한다.
 
@@ -26,18 +26,19 @@
 
 # Slice dependency risks
 
+- `SLICE-0`의 Tailwind baseline 정리가 닫히지 않으면 `SLICE-1` shell visual consistency가 흔들린다.
 - `SLICE-1`의 shell 승인 없이는 `SLICE-2` 상태 모델이 흔들린다.
 - `SLICE-2`에서 mock trace와 state transition이 정리되지 않으면 `SLICE-3`의 store/read model 계약이 불안정하다.
 - `SLICE-3`에서 import adapter와 schema validation이 닫히지 않으면 `SLICE-4`의 live watch incremental update가 불안정하다.
 
 # Blocking issues
 
-- `RISK-05` 이 bundle은 구현 전 review gate를 통과해야 한다. 승인 전에는 실제 build slice 시작 금지.
-- `RISK-06` canonical fixture와 `schema.json` 계약 검토가 끝나기 전에는 import/watch 구현 시작 금지.
-- `RISK-07` privacy/export policy의 기본값에 대한 운영 승인 전에는 raw payload handling 구현 시작 금지.
+- `RISK-05` review gate는 one-time 예외로 `SLICE-0`와 `SLICE-1`에 한해 승인됐다. `SLICE-2` 진입 전에는 추가 review approval이 필요하다.
+- `RISK-06` canonical fixture와 `schema.json` 계약 검토가 끝나기 전에는 import pipeline 또는 local watch 구현 시작 금지.
+- `RISK-07` privacy/export policy의 기본값에 대한 운영 승인 전에는 privacy/export 구현과 raw payload handling 시작 금지.
 
 # Proceed verdict
 
-`blocking`
+`limited-proceed`
 
-문서는 v0.1 구현 방향을 시작할 수 있을 만큼 정리됐지만, 현재 단계는 design bundle 생성 단계다. 따라서 gate 해소 전 실제 build slice를 시작하지 않는다.
+문서는 `SLICE-0`과 `SLICE-1`을 시작할 수 있을 만큼 정리됐지만, 그 이후 slice는 추가 review gate 확인이 필요하다. 따라서 import/watch와 privacy/export/raw handling은 각 blocker가 해소되기 전까지 시작하지 않는다.
