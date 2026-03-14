@@ -30,8 +30,9 @@
 
 # Blocking issues
 
-- greenfield bootstrap requirement remains. `docs/ai/ENGINEERING_RULES.md`가 없으므로 `$bootstrap-project-rules`가 repo baseline implementation rules를 먼저 생성해야 한다.
+- Resolved: greenfield bootstrap requirement is cleared by `../../docs/ai/ENGINEERING_RULES.md` and `IMPLEMENTATION_CONTRACT.md`.
+- No additional bootstrap blocker remains. The next step is `implement-task`.
 
 # Proceed verdict
 
-- hold for bootstrap
+- proceed to implement-task

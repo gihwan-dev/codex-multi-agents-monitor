@@ -26,6 +26,7 @@ required_docs:
   - UX_BEHAVIOR_ACCESSIBILITY.md
   - DESIGN_REFERENCES/
   - TECH_SPEC.md
+  - IMPLEMENTATION_CONTRACT.md
   - ACCEPTANCE.feature
   - ADRs/
 source_of_truth:
@@ -34,6 +35,7 @@ source_of_truth:
   ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
   design_references: DESIGN_REFERENCES/manifest.json
   architecture: TECH_SPEC.md
+  implementation: IMPLEMENTATION_CONTRACT.md
   execution: EXECUTION_PLAN.md
   acceptance: ACCEPTANCE.feature
   validation: SPEC_VALIDATION.md
