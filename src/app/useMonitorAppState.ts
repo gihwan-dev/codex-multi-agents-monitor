@@ -8,10 +8,8 @@ import {
   buildMapNodes,
   buildSummaryFacts,
   buildWaterfallModel,
-  buildWaterfallSegments,
   type DrawerTab,
   defaultCollapsedGapIds,
-  findSelectionDetails,
   hasRawPayload,
   type InspectorTab,
   type RunDataset,
@@ -358,14 +356,12 @@ export function useMonitorAppState() {
   const activeLiveConnection =
     state.liveConnectionByRunId[activeDataset.run.traceId] ??
     (activeDataset.run.liveMode === "live" ? "live" : "paused");
-  const collapsedGapIds = new Set(state.collapsedGapIds[activeDataset.run.traceId] ?? []);
   const graphScene = buildGraphSceneModel(
     activeDataset,
     activeFilters,
     state.selection,
     activePathOnly,
   );
-  const selectionDetails = findSelectionDetails(activeDataset, state.selection);
   const inspectorSummary = buildInspectorCausalSummary(
     activeDataset,
     state.selection,
@@ -383,7 +379,6 @@ export function useMonitorAppState() {
     state.selection,
     activePathOnly,
   );
-  const waterfallSegments = buildWaterfallSegments(activeDataset);
   const mapNodes = buildMapNodes(activeDataset);
 
   useEffect(() => {
@@ -481,13 +476,10 @@ export function useMonitorAppState() {
     activePathOnly,
     graphScene,
     inspectorSummary,
-    selectionDetails,
     summaryFacts,
     anomalyJumps,
     waterfallModel,
-    waterfallSegments,
     mapNodes,
-    collapsedGapIds,
     actions: {
       selectRun(traceId: string) {
         startTransition(() => {

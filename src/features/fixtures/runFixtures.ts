@@ -753,11 +753,11 @@ export const FIXTURE_DATASETS = [
   buildFix006(),
 ];
 
-export const FIXTURE_BY_ID = Object.fromEntries(
+const FIXTURE_BY_ID = Object.fromEntries(
   FIXTURE_DATASETS.map((dataset) => [dataset.run.traceId, dataset]),
 ) as Record<string, RunDataset>;
 
-export const FIXTURE_IMPORT_PAYLOAD = {
+const FIXTURE_IMPORT_PAYLOAD = {
   project: FIXTURE_BY_ID["trace-fix-005"].project,
   session: FIXTURE_BY_ID["trace-fix-005"].session,
   run: {

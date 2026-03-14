@@ -13,13 +13,10 @@ import type {
   GraphSceneRow,
   InspectorCausalSummary,
   InspectorJump,
-  LaneDisplay,
-  LaneDisplayItem,
   MapNode,
   QuickFilterSummary,
   RunDataset,
   RunFilters,
-  RunGroup,
   SelectionPath,
   SelectionState,
   SummaryFact,
@@ -35,7 +32,6 @@ import type {
 } from "./types.js";
 
 const GAP_THRESHOLD_MS = 90_000;
-const LARGE_RUN_EVENT_THRESHOLD = 120;
 const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
@@ -263,43 +259,6 @@ export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
   ].filter(Boolean) as AnomalyJump[];
 }
 
-export function groupRuns(datasets: RunDataset[]): RunGroup[] {
-  const sorted = [...datasets].sort((left, right) => {
-    const priority = (dataset: RunDataset) => {
-      if (dataset.run.liveMode === "live") {
-        return 0;
-      }
-      if (["waiting", "blocked", "interrupted"].includes(dataset.run.status)) {
-        return 1;
-      }
-      if (dataset.run.status === "failed") {
-        return 2;
-      }
-      return 3;
-    };
-
-    return priority(left) - priority(right) || right.run.startTs - left.run.startTs;
-  });
-
-  const running = sorted.filter(
-    (dataset) =>
-      dataset.run.liveMode === "live" &&
-      ["running", "stale", "disconnected"].includes(dataset.run.status),
-  );
-  const waiting = sorted.filter((dataset) =>
-    ["waiting", "blocked", "interrupted"].includes(dataset.run.status),
-  );
-  const recent = sorted.filter(
-    (dataset) => !running.includes(dataset) && !waiting.includes(dataset),
-  );
-
-  return [
-    { title: "Running", runs: running },
-    { title: "Waiting", runs: waiting },
-    { title: "Recent", runs: recent },
-  ];
-}
-
 function buildGaps(
   events: EventRecord[],
   laneId: string,
@@ -333,57 +292,6 @@ function buildGaps(
   }
 
   return items;
-}
-
-export function buildLaneDisplays(
-  dataset: RunDataset,
-  filters: RunFilters,
-  collapsedGapIds: Set<string>,
-): LaneDisplay[] {
-  const largeRun =
-    dataset.events.length > LARGE_RUN_EVENT_THRESHOLD || dataset.lanes.length > LARGE_RUN_LANE_THRESHOLD;
-  const anomalies = new Set(
-    buildAnomalyJumps(dataset)
-      .filter((item) => item.selection.kind === "event")
-      .map((item) => item.selection.id),
-  );
-
-  return dataset.lanes.map((lane, laneIndex) => {
-    const filteredEvents = dataset.events.filter(
-      (event) => event.laneId === lane.laneId && eventMatchesFilters(event, filters),
-    );
-    const items: LaneDisplayItem[] = buildGaps(filteredEvents, lane.laneId).reduce(
-      (acc, item) => {
-        if ("gap" in item) {
-          if (collapsedGapIds.has(item.gap.gapId)) {
-            acc.push({ kind: "gap", gap: item.gap, events: item.events });
-            return acc;
-          }
-
-          item.events.forEach((event) => {
-            acc.push({ kind: "event", event });
-          });
-          return acc;
-        }
-
-        acc.push({ kind: "event", event: item.event });
-        return acc;
-      },
-      [] as LaneDisplayItem[],
-    );
-
-    const hiddenByDegradation =
-      largeRun &&
-      laneIndex >= LARGE_RUN_LANE_THRESHOLD &&
-      lane.laneStatus === "done" &&
-      !filteredEvents.some((event) => anomalies.has(event.eventId));
-
-    return {
-      lane,
-      items,
-      hiddenByDegradation,
-    };
-  });
 }
 
 export function buildSelectionPath(
