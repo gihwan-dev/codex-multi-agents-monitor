@@ -3,7 +3,7 @@ import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT, LIVE_FIXTURE_FRAMES } from "../f
 import { applyLiveFrame, buildExportPayload, normalizeImportPayload, parseCompletedRunPayload } from "../features/ingestion";
 import {
   buildAnomalyJumps,
-  buildGraphCanvasModel,
+  buildGraphSceneModel,
   buildInspectorCausalSummary,
   buildMapNodes,
   buildSummaryFacts,
@@ -359,7 +359,7 @@ export function useMonitorAppState() {
     state.liveConnectionByRunId[activeDataset.run.traceId] ??
     (activeDataset.run.liveMode === "live" ? "live" : "paused");
   const collapsedGapIds = new Set(state.collapsedGapIds[activeDataset.run.traceId] ?? []);
-  const graphModel = buildGraphCanvasModel(
+  const graphScene = buildGraphSceneModel(
     activeDataset,
     activeFilters,
     state.selection,
@@ -373,7 +373,7 @@ export function useMonitorAppState() {
   );
   const summaryFacts = buildSummaryFacts(
     activeDataset,
-    graphModel.selectionPath,
+    graphScene.selectionPath,
     activePathOnly,
   );
   const anomalyJumps = buildAnomalyJumps(activeDataset);
@@ -403,7 +403,7 @@ export function useMonitorAppState() {
     const visibleEventIds =
       state.viewMode === "waterfall"
         ? waterfallModel.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []))
-        : graphModel.steps.flatMap((step) => (step.kind === "event" ? [step.eventId] : []));
+        : graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []));
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -479,7 +479,7 @@ export function useMonitorAppState() {
     activeLiveConnection,
     rawTabAvailable: hasRawPayload(activeDataset),
     activePathOnly,
-    graphModel,
+    graphScene,
     inspectorSummary,
     selectionDetails,
     summaryFacts,
@@ -537,6 +537,12 @@ export function useMonitorAppState() {
             });
           }
         }
+      },
+      pauseFollowLive() {
+        if (!activeFollowLive || activeDataset.run.liveMode !== "live") {
+          return;
+        }
+        dispatch({ type: "set-follow-live", traceId: activeDataset.run.traceId, value: false });
       },
       setFilter(key: keyof RunFilters, value: string | boolean | null) {
         dispatch({ type: "set-filter", traceId: activeDataset.run.traceId, key, value });

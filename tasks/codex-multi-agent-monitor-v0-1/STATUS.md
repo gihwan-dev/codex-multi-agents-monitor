@@ -1,5 +1,5 @@
 # Current slice
-Post-implementation cleanup completed.
+Sequence-lane graph redesign completed.
 
 # Done
 - Locked command surface is wired in `package.json`: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm storybook:build`, `pnpm build`.
@@ -9,11 +9,14 @@ Post-implementation cleanup completed.
 - Shared trace domain, fixture matrix, completed-run import, preview-first masking, export default, and live-watch mock semantics are implemented under split-first module boundaries.
 - Follow-live defaults are now run-scoped, imported runs stay opt-in, filters persist per trace, raw tabs are gated by dataset capability, `peakParallelism` uses real overlap, and the completed-run parser rejects invalid array/enum/shape inputs.
 - Starter package and Tauri metadata were renamed from `Hello World` / `helloworld` to `Codex Multi-Agent Monitor`.
+- Graph mode now renders as a fixed-lane sequence timeline with DOM cards, SVG lifelines, cross-lane route bundling, sticky lane headers, and live-follow pause on manual scroll.
+- Graph scene selectors are split from pixel layout concerns: semantic `GraphSceneModel` is produced in `src/shared/domain`, and layout snapshotting stays inside the graph renderer.
 
 # Decisions made during implementation
 - `src/App.tsx` stays composition-only and feature styling moved into `src/theme/*` plus `src/app/app.css`.
 - `pnpm lint`, `pnpm test`, `pnpm test:e2e`, and `pnpm storybook:build` now execute the real locked tools.
 - `FIX-001` ~ `FIX-006` drive the home list, graph shell, waiting/error states, import parser, redaction flow, and live reconnect simulation from one normalized dataset contract.
+- Graph routes no longer rely on selector-side `LANE_WIDTH` / `STEP_HEIGHT` assumptions; the renderer owns lane width, row height, anchor, and route geometry through one shared layout snapshot.
 
 # Verification results
 - Passed: `pnpm lint`
@@ -25,6 +28,7 @@ Post-implementation cleanup completed.
 
 # Known issues / residual risk
 - `pnpm test:e2e` runs through the real Playwright test runner, but the current environment blocks Chromium launch (`bootstrap_check_in ... Permission denied (1100)`), so the smoke stays at built-artifact validation instead of full browser navigation.
+- Storybook build passed for the new graph stories, but this slice did not capture image snapshots, so visual review still depends on manual story inspection when pixel polish matters.
 
 # Next slice
-No mandatory next slice. Optional follow-up: browser-permission-aware Playwright navigation coverage.
+Optional follow-up: grouped-edge inspector drilldown and browser-permission-aware graph screenshot regression coverage.

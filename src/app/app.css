@@ -579,6 +579,392 @@ textarea {
   font-size: 0.78rem;
 }
 
+.graph-sequence-panel {
+  overflow: hidden;
+}
+
+.graph-sequence {
+  display: grid;
+  gap: 12px;
+}
+
+.graph-sequence__scroll {
+  overflow: auto;
+  padding-bottom: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.graph-sequence__lane-strip {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  align-items: end;
+  background:
+    linear-gradient(180deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.92)),
+    radial-gradient(circle at top, rgba(167, 139, 250, 0.08), transparent 48%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.graph-sequence__corner,
+.graph-sequence__time {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: linear-gradient(90deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.88));
+}
+
+.graph-sequence__corner {
+  padding: 0 12px 10px;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.graph-sequence__lane-header {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 14px 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  transition: opacity 180ms ease;
+}
+
+.graph-sequence__lane-header--dimmed,
+.graph-sequence__lifeline--dimmed,
+.graph-sequence__lane-cell--dimmed {
+  opacity: 0.35;
+}
+
+.graph-sequence__lane-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.graph-sequence__lane-header span,
+.graph-sequence__lane-header small {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-sequence__content {
+  position: relative;
+}
+
+.graph-sequence__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.graph-sequence__lifeline {
+  stroke: rgba(166, 175, 189, 0.18);
+  stroke-width: 2;
+  stroke-dasharray: 3 8;
+}
+
+.graph-sequence__anchor {
+  fill: var(--color-panel);
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 2;
+}
+
+.graph-sequence__anchor--selected {
+  stroke-width: 3;
+}
+
+.graph-sequence__anchor--dimmed {
+  opacity: 0.28;
+}
+
+.graph-sequence__anchor--running,
+.graph-sequence__anchor--stale,
+.graph-sequence__anchor--disconnected {
+  fill: var(--color-active);
+}
+
+.graph-sequence__anchor--waiting {
+  fill: transparent;
+  stroke: var(--color-waiting);
+}
+
+.graph-sequence__anchor--blocked,
+.graph-sequence__anchor--interrupted {
+  fill: transparent;
+  stroke: var(--color-blocked);
+  stroke-dasharray: 2 2;
+}
+
+.graph-sequence__anchor--done {
+  fill: var(--color-success);
+  stroke: rgba(52, 211, 153, 0.28);
+}
+
+.graph-sequence__anchor--failed,
+.graph-sequence__anchor--cancelled {
+  fill: var(--color-failed);
+  stroke: rgba(255, 107, 107, 0.28);
+}
+
+.graph-sequence__route {
+  color: rgba(166, 175, 189, 0.34);
+  transition: opacity 180ms ease;
+}
+
+.graph-sequence__route path,
+.graph-sequence__route circle {
+  stroke: currentColor;
+  fill: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.graph-sequence__route path {
+  fill: none;
+}
+
+.graph-sequence__route--handoff {
+  color: var(--color-handoff);
+}
+
+.graph-sequence__route--transfer {
+  color: var(--color-transfer);
+}
+
+.graph-sequence__route--spawn {
+  color: var(--color-active);
+}
+
+.graph-sequence__route--merge {
+  color: rgba(243, 246, 251, 0.72);
+}
+
+.graph-sequence__route--path,
+.graph-sequence__route--selected,
+.graph-sequence__route--active {
+  opacity: 1;
+}
+
+.graph-sequence__route--selected path,
+.graph-sequence__route--selected circle,
+.graph-sequence__route--active path,
+.graph-sequence__route--active circle {
+  stroke-width: 3.25;
+}
+
+.graph-sequence__route--dimmed {
+  opacity: 0.18;
+}
+
+.graph-sequence__rows {
+  position: relative;
+  display: grid;
+  gap: var(--graph-row-gap);
+}
+
+.graph-sequence__event-row,
+.graph-sequence__gap-row {
+  display: grid;
+  align-items: start;
+}
+
+.graph-sequence__event-row {
+  min-height: var(--graph-event-row-height);
+}
+
+.graph-sequence__gap-row {
+  min-height: var(--graph-gap-row-height);
+}
+
+.graph-sequence__time {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 100%;
+  padding: 2px 12px 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.graph-sequence__time--gap {
+  display: flex;
+  align-items: center;
+}
+
+.graph-sequence__lane-cell {
+  position: relative;
+  min-height: var(--graph-event-row-height);
+}
+
+.graph-sequence__lane-cell--occupied::before {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(166, 175, 189, 0.06), rgba(166, 175, 189, 0));
+}
+
+.graph-sequence__card {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  width: 184px;
+  min-height: 88px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+  color: var(--color-text);
+  text-align: left;
+  box-shadow: 0 18px 34px rgba(4, 8, 14, 0.26);
+  transition:
+    opacity 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.graph-sequence__card:hover,
+.graph-sequence__card:focus-visible {
+  border-color: rgba(77, 163, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.24), 0 18px 34px rgba(4, 8, 14, 0.26);
+}
+
+.graph-sequence__card--path {
+  border-color: rgba(77, 163, 255, 0.28);
+  background:
+    linear-gradient(180deg, rgba(77, 163, 255, 0.12), rgba(255, 255, 255, 0.025)),
+    rgba(255, 255, 255, 0.02);
+}
+
+.graph-sequence__card--selected,
+.graph-sequence__card--active {
+  border-color: rgba(77, 163, 255, 0.58);
+  box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
+}
+
+.graph-sequence__card--path-dimmed,
+.graph-sequence__card--dimmed {
+  opacity: 0.3;
+}
+
+.graph-sequence__card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.graph-sequence__card-head strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.graph-sequence__card p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.graph-sequence__callout {
+  color: var(--color-waiting);
+  font-size: 0.76rem;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+.graph-sequence__gap-band {
+  display: flex;
+  align-items: center;
+  min-height: var(--graph-gap-row-height);
+  padding: 0 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.graph-sequence__edge-hotspot {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(20, 24, 33, 0.92);
+  color: var(--color-text-secondary);
+  box-shadow: 0 12px 24px rgba(4, 8, 14, 0.28);
+}
+
+.graph-sequence__edge-hotspot span {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+
+.graph-sequence__edge-hotspot:hover,
+.graph-sequence__edge-hotspot:focus-visible,
+.graph-sequence__edge-hotspot--selected,
+.graph-sequence__edge-hotspot--active {
+  border-color: rgba(77, 163, 255, 0.42);
+  color: var(--color-text);
+}
+
+.graph-sequence__edge-hotspot--handoff {
+  color: var(--color-handoff);
+}
+
+.graph-sequence__edge-hotspot--transfer {
+  color: var(--color-transfer);
+}
+
+.graph-sequence__edge-hotspot--spawn {
+  color: var(--color-active);
+}
+
+.graph-sequence__edge-hotspot--merge {
+  color: rgba(243, 246, 251, 0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-sequence__card,
+  .graph-sequence__route,
+  .graph-sequence__lane-header,
+  .graph-sequence__edge-hotspot {
+    transition: none;
+  }
+}
+
 .waterfall-grid {
   display: grid;
   grid-template-columns: 92px repeat(var(--waterfall-lanes, 4), minmax(160px, 1fr));

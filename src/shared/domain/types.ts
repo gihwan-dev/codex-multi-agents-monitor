@@ -261,7 +261,7 @@ export interface SelectionPath {
   laneIds: string[];
 }
 
-export interface GraphCanvasLane {
+export interface GraphSceneLane {
   laneId: string;
   name: string;
   role: string;
@@ -270,7 +270,7 @@ export interface GraphCanvasLane {
   status: RunStatus;
 }
 
-export interface GraphCanvasStepEvent {
+export interface GraphSceneRowEvent {
   kind: "event";
   id: string;
   eventId: string;
@@ -286,34 +286,37 @@ export interface GraphCanvasStepEvent {
   dimmed: boolean;
 }
 
-export interface GraphCanvasStepGap {
+export interface GraphSceneRowGap {
   kind: "gap";
   id: string;
   label: string;
+  idleLaneCount: number;
 }
 
-export type GraphCanvasStep = GraphCanvasStepEvent | GraphCanvasStepGap;
+export type GraphSceneRow = GraphSceneRowEvent | GraphSceneRowGap;
 
-export interface GraphCanvasEdge {
+export interface GraphSceneEdgeBundle {
   id: string;
+  primaryEdgeId: string;
+  edgeIds: string[];
   sourceEventId: string;
   targetEventId: string;
   sourceLaneId: string;
   targetLaneId: string;
-  sourceStepId: string;
-  targetStepId: string;
-  edgeType: EdgeType | "timeline";
+  edgeType: EdgeType;
   label: string;
+  bundleCount: number;
   inPath: boolean;
   selected: boolean;
 }
 
-export interface GraphCanvasModel {
-  lanes: GraphCanvasLane[];
-  steps: GraphCanvasStep[];
-  edges: GraphCanvasEdge[];
+export interface GraphSceneModel {
+  lanes: GraphSceneLane[];
+  rows: GraphSceneRow[];
+  edgeBundles: GraphSceneEdgeBundle[];
   selectionPath: SelectionPath;
   hiddenLaneCount: number;
+  latestVisibleEventId: string | null;
 }
 
 export interface WaterfallSegment {
@@ -355,7 +358,7 @@ export interface WaterfallCell {
 }
 
 export interface WaterfallModel {
-  lanes: GraphCanvasLane[];
+  lanes: GraphSceneLane[];
   rows: WaterfallRow[];
   cells: WaterfallCell[];
   selectionPath: SelectionPath;

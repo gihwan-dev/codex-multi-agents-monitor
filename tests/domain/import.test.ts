@@ -4,7 +4,7 @@ import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/features/fixtur
 import { normalizeImportPayload, parseCompletedRunPayload } from "../../src/features/ingestion/index.js";
 import {
   buildAnomalyJumps,
-  buildGraphCanvasModel,
+  buildGraphSceneModel,
   buildInspectorCausalSummary,
   buildSummaryFacts,
   buildWorkspaceTreeModel,
@@ -155,16 +155,16 @@ describe("normalization and selectors", () => {
       throw new Error("waiting-chain fixture missing");
     }
 
-    const model = buildGraphCanvasModel(
+    const scene = buildGraphSceneModel(
       dataset,
       { agentId: null, eventType: "all", search: "", errorOnly: false },
       { kind: "event", id: "fix2-blocked" },
       true,
     );
 
-    expect(model.steps.some((step) => step.kind === "event" && step.eventId === "fix2-blocked")).toBe(true);
-    expect(model.edges.some((edge) => edge.edgeType === "handoff")).toBe(true);
-    expect(model.edges.some((edge) => edge.edgeType === "timeline")).toBe(true);
+    expect(scene.rows.some((row) => row.kind === "event" && row.eventId === "fix2-blocked")).toBe(true);
+    expect(scene.edgeBundles.some((bundle) => bundle.edgeType === "handoff")).toBe(true);
+    expect(scene.edgeBundles.every((bundle) => bundle.sourceLaneId !== bundle.targetLaneId)).toBe(true);
   });
 
   it("derives factual summary strip values for the waiting chain", () => {
@@ -174,13 +174,13 @@ describe("normalization and selectors", () => {
       throw new Error("waiting-chain fixture missing");
     }
 
-    const model = buildGraphCanvasModel(
+    const scene = buildGraphSceneModel(
       dataset,
       { agentId: null, eventType: "all", search: "", errorOnly: false },
       { kind: "event", id: "fix2-blocked" },
       true,
     );
-    const facts = buildSummaryFacts(dataset, model.selectionPath, true);
+    const facts = buildSummaryFacts(dataset, scene.selectionPath, true);
 
     expect(facts.find((fact) => fact.label === "Blocked by")?.value).toBe("Planner");
     expect(facts.find((fact) => fact.label === "Last handoff")?.value).toContain("Planner");

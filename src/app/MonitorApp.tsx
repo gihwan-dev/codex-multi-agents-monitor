@@ -39,7 +39,7 @@ export function MonitorApp() {
     activeLiveConnection,
     activePathOnly,
     rawTabAvailable,
-    graphModel,
+    graphScene,
     inspectorSummary,
     summaryFacts,
     anomalyJumps,
@@ -141,7 +141,13 @@ export function MonitorApp() {
           />
 
           {state.viewMode === "graph" ? (
-            <CausalGraphView model={graphModel} onSelect={actions.selectItem} />
+            <CausalGraphView
+              scene={graphScene}
+              onSelect={actions.selectItem}
+              followLive={activeFollowLive}
+              liveMode={activeDataset.run.liveMode}
+              onPauseFollowLive={actions.pauseFollowLive}
+            />
           ) : null}
           {state.viewMode === "waterfall" ? (
             <WaterfallView model={waterfallModel} onSelect={actions.selectItem} />

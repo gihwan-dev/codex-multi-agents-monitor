@@ -10,6 +10,14 @@ export default meta;
 
 export const Default = {};
 
+export const MinimalCompletedRun = {
+  render: () => <StoryScenario selectRunLabel="FIX-001 Minimal completed run" />,
+};
+
+export const WaitingChainRun = {
+  render: () => <StoryScenario selectRunLabel="FIX-002 Waiting chain run" />,
+};
+
 export const WaterfallMode = {
   render: () => <StoryScenario mode="w" />,
 };

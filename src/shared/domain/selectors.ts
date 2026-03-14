@@ -8,9 +8,9 @@ import type {
   AnomalyJump,
   EventRecord,
   GapSegment,
-  GraphCanvasEdge,
-  GraphCanvasModel,
-  GraphCanvasStep,
+  GraphSceneEdgeBundle,
+  GraphSceneModel,
+  GraphSceneRow,
   InspectorCausalSummary,
   InspectorJump,
   LaneDisplay,
@@ -37,6 +37,10 @@ import type {
 const GAP_THRESHOLD_MS = 90_000;
 const LARGE_RUN_EVENT_THRESHOLD = 120;
 const LARGE_RUN_LANE_THRESHOLD = 8;
+
+function formatGapLabel(durationMs: number, idleLaneCount: number) {
+  return `// ${formatDuration(durationMs)} hidden · ${idleLaneCount} lanes idle //`;
+}
 
 function eventMatchesFilters(event: EventRecord, filters: RunFilters): boolean {
   if (filters.agentId && event.agentId !== filters.agentId) {
@@ -689,30 +693,30 @@ function buildGraphVisibleEvents(
   });
 }
 
-export function buildGraphCanvasModel(
+export function buildGraphSceneModel(
   dataset: RunDataset,
   filters: RunFilters,
   selection: SelectionState | null,
   pathOnly: boolean,
-): GraphCanvasModel {
+): GraphSceneModel {
   const selectionPath = buildSelectionPath(dataset, selection);
   const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly);
-  const visibleEventIds = new Set(visibleEvents.map((event) => event.eventId));
   const graphLanes = buildGraphLanes(dataset, selectionPath);
   const visibleLanes = graphLanes.lanes;
   const laneIds = new Set(visibleLanes.map((lane) => lane.laneId));
-  const steps: GraphCanvasStep[] = [];
-  const stepIdByEventId = new Map<string, string>();
+  const rows: GraphSceneRow[] = [];
+  const visibleRowsByEventId = new Map<string, string>();
 
   visibleEvents.forEach((event, index) => {
     const previous = visibleEvents[index - 1];
     const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
     const gap = previousEnd ? event.startTs - previousEnd : 0;
     if (gap >= GAP_THRESHOLD_MS) {
-      steps.push({
+      rows.push({
         kind: "gap",
         id: `graph-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
-        label: `${formatDuration(gap)} hidden`,
+        label: formatGapLabel(gap, visibleLanes.length || 1),
+        idleLaneCount: visibleLanes.length || 1,
       });
     }
 
@@ -720,11 +724,11 @@ export function buildGraphCanvasModel(
       return;
     }
 
-    const stepId = `graph-step-${event.eventId}`;
-    stepIdByEventId.set(event.eventId, stepId);
-    steps.push({
+    const rowId = `graph-row-${event.eventId}`;
+    visibleRowsByEventId.set(event.eventId, rowId);
+    rows.push({
       kind: "event",
-      id: stepId,
+      id: rowId,
       eventId: event.eventId,
       laneId: event.laneId,
       title: event.title,
@@ -739,70 +743,86 @@ export function buildGraphCanvasModel(
     });
   });
 
-  const graphEdges: GraphCanvasEdge[] = dataset.edges
+  const visibleEventIds = new Set(
+    rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : [])),
+  );
+  const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+  const edgeBundleMap = new Map<string, GraphSceneEdgeBundle>();
+
+  dataset.edges
     .filter(
       (edge) =>
         visibleEventIds.has(edge.sourceEventId) &&
         visibleEventIds.has(edge.targetEventId) &&
-        stepIdByEventId.has(edge.sourceEventId) &&
-        stepIdByEventId.has(edge.targetEventId),
+        visibleRowsByEventId.has(edge.sourceEventId) &&
+        visibleRowsByEventId.has(edge.targetEventId),
     )
-    .map((edge) => ({
-      id: edge.edgeId,
-      sourceEventId: edge.sourceEventId,
-      targetEventId: edge.targetEventId,
-      sourceLaneId: dataset.events.find((event) => event.eventId === edge.sourceEventId)?.laneId ?? "",
-      targetLaneId: dataset.events.find((event) => event.eventId === edge.targetEventId)?.laneId ?? "",
-      sourceStepId: stepIdByEventId.get(edge.sourceEventId) ?? "",
-      targetStepId: stepIdByEventId.get(edge.targetEventId) ?? "",
-      edgeType: edge.edgeType,
-      label: edge.payloadPreview ?? edge.edgeType,
-      inPath:
-        selectionPath.edgeIds.includes(edge.edgeId) ||
-        (selectionPath.eventIds.includes(edge.sourceEventId) &&
-          selectionPath.eventIds.includes(edge.targetEventId)),
-      selected: selection?.kind === "edge" && selection.id === edge.edgeId,
-    }));
-
-  const { orderedByLaneId } = buildLaneEventMaps(dataset);
-  orderedByLaneId.forEach((events, laneId) => {
-    const laneVisibleEvents = events.filter((event) => visibleEventIds.has(event.eventId));
-    laneVisibleEvents.forEach((event, index) => {
-      const next = laneVisibleEvents[index + 1];
-      if (!next) {
+    .forEach((edge) => {
+      const sourceEvent = eventsById.get(edge.sourceEventId);
+      const targetEvent = eventsById.get(edge.targetEventId);
+      if (!sourceEvent || !targetEvent) {
         return;
       }
 
-      graphEdges.push({
-        id: `timeline-${event.eventId}-${next.eventId}`,
-        sourceEventId: event.eventId,
-        targetEventId: next.eventId,
-        sourceLaneId: laneId,
-        targetLaneId: laneId,
-        sourceStepId: stepIdByEventId.get(event.eventId) ?? "",
-        targetStepId: stepIdByEventId.get(next.eventId) ?? "",
-        edgeType: "timeline",
-        label: "continues",
+      const bundleKey = [
+        edge.sourceEventId,
+        edge.targetEventId,
+        edge.edgeType,
+        sourceEvent.laneId,
+        targetEvent.laneId,
+      ].join(":");
+      const existing = edgeBundleMap.get(bundleKey);
+
+      if (existing) {
+        existing.edgeIds.push(edge.edgeId);
+        existing.bundleCount += 1;
+        existing.selected = existing.selected || (selection?.kind === "edge" && selection.id === edge.edgeId);
+        if (!existing.label && edge.payloadPreview) {
+          existing.label = edge.payloadPreview;
+        }
+        return;
+      }
+
+      edgeBundleMap.set(bundleKey, {
+        id: bundleKey,
+        primaryEdgeId: edge.edgeId,
+        edgeIds: [edge.edgeId],
+        sourceEventId: edge.sourceEventId,
+        targetEventId: edge.targetEventId,
+        sourceLaneId: sourceEvent.laneId,
+        targetLaneId: targetEvent.laneId,
+        edgeType: edge.edgeType,
+        label: edge.payloadPreview ?? edge.edgeType,
+        bundleCount: 1,
         inPath:
-          selectionPath.eventIds.includes(event.eventId) &&
-          selectionPath.eventIds.includes(next.eventId),
-        selected: false,
+          selectionPath.edgeIds.includes(edge.edgeId) ||
+          (selectionPath.eventIds.includes(edge.sourceEventId) &&
+            selectionPath.eventIds.includes(edge.targetEventId)),
+        selected: selection?.kind === "edge" && selection.id === edge.edgeId,
       });
     });
-  });
+
+  const edgeBundles = [...edgeBundleMap.values()].map((bundle) => ({
+    ...bundle,
+    label:
+      bundle.bundleCount > 1
+        ? `${bundle.bundleCount} ${bundle.edgeType} events`
+        : bundle.label,
+  }));
 
   return {
     lanes: visibleLanes,
-    steps,
-    edges: graphEdges.filter(
-      (edge) =>
-        edge.sourceStepId &&
-        edge.targetStepId &&
-        laneIds.has(edge.sourceLaneId) &&
-        laneIds.has(edge.targetLaneId),
+    rows,
+    edgeBundles: edgeBundles.filter(
+      (bundle) => laneIds.has(bundle.sourceLaneId) && laneIds.has(bundle.targetLaneId),
     ),
     selectionPath,
     hiddenLaneCount: graphLanes.hiddenLaneCount,
+    latestVisibleEventId:
+      [...rows]
+        .reverse()
+        .find((row) => row.kind === "event")
+        ?.eventId ?? null,
   };
 }
 
@@ -844,7 +864,7 @@ export function buildWaterfallModel(
       rows.push({
         kind: "gap",
         id: `waterfall-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
-        label: `${formatDuration(gap)} hidden · ${graphLanes.lanes.length} lanes quiet`,
+        label: formatGapLabel(gap, graphLanes.lanes.length || 1),
       });
     }
     rows.push({
