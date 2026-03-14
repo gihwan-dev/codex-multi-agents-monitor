@@ -211,10 +211,13 @@ export function WorkspaceRunTree({
                 }}
               >
                 <div className="run-list__workspace-copy">
-                  <span className="run-list__workspace-chevron" aria-hidden="true">
-                    {expanded ? "v" : ">"}
+                  <span
+                    className={`run-list__disclosure${expanded ? " run-list__disclosure--open" : ""}`}
+                    aria-hidden="true"
+                  />
+                  <span className="run-list__workspace-name" title={workspace.name}>
+                    {workspace.name}
                   </span>
-                  <strong title={workspace.name}>{workspace.name}</strong>
                 </div>
               </button>
 
@@ -238,7 +241,7 @@ export function WorkspaceRunTree({
                         title={run.title}
                       >
                         <div className="run-row__title">
-                          <strong>{run.title}</strong>
+                          <span>{run.title}</span>
                           <StatusChip status={run.status} subtle />
                         </div>
                       </button>
