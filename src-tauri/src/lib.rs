@@ -35,6 +35,7 @@ struct SessionLogSnapshot {
     display_name: String,
     started_at: String,
     updated_at: String,
+    model: Option<String>,
     messages: Vec<SessionMessageSnapshot>,
 }
 
@@ -180,6 +181,7 @@ fn read_session_snapshot(
 
     let mut messages = Vec::new();
     let mut updated_at = started_at.clone();
+    let mut model: Option<String> = None;
 
     for line in reader.lines() {
         let line = line?;
@@ -191,6 +193,17 @@ fn read_session_snapshot(
             Ok(entry) => entry,
             Err(_) => continue,
         };
+
+        if model.is_none() {
+            if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
+                model = entry
+                    .get("payload")
+                    .and_then(|p| p.get("model"))
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.trim().is_empty())
+                    .map(ToOwned::to_owned);
+            }
+        }
 
         let Some(message) = extract_message_snapshot(&entry) else {
             continue;
@@ -207,6 +220,7 @@ fn read_session_snapshot(
         display_name: workspace_identity.display_name,
         started_at,
         updated_at,
+        model,
         messages,
     }))
 }

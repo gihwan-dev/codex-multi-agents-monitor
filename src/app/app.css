@@ -509,7 +509,7 @@ textarea {
   top: 0;
   z-index: 4;
   display: grid;
-  align-items: end;
+  align-items: center;
   background:
     linear-gradient(180deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.92)),
     radial-gradient(circle at top, rgba(167, 139, 250, 0.08), transparent 48%);
@@ -525,7 +525,7 @@ textarea {
 }
 
 .graph-sequence__corner {
-  padding: 0 12px 10px;
+  padding: 10px 12px;
   color: var(--color-text-secondary);
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -533,10 +533,11 @@ textarea {
 }
 
 .graph-sequence__lane-header {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   min-width: 0;
-  padding: 0 14px 10px;
+  padding: 10px 14px;
+  min-height: 48px;
   border-left: 1px solid rgba(255, 255, 255, 0.05);
   transition: opacity 180ms ease;
 }
@@ -548,19 +549,32 @@ textarea {
 }
 
 .graph-sequence__lane-title {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.graph-sequence__lane-header span,
-.graph-sequence__lane-header small {
-  color: var(--color-text-secondary);
-  font-size: 0.76rem;
-  white-space: nowrap;
+.graph-sequence__lane-status {
+  position: absolute;
+  right: 0;
+}
+
+.graph-sequence__lane-title strong {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-sequence__model-badge {
+  color: var(--color-text-tertiary);
+  font-size: 0.74rem;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .graph-sequence__content {

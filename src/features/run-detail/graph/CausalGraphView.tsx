@@ -192,12 +192,11 @@ export function CausalGraphView({
               >
                 <div className="graph-sequence__lane-title">
                   <strong>{lane.name}</strong>
-                  <StatusChip status={lane.status} subtle />
+                  <span className="graph-sequence__model-badge">{lane.model}</span>
+                  <span className="graph-sequence__lane-status">
+                    <StatusChip status={lane.status} subtle />
+                  </span>
                 </div>
-                <span>
-                  {lane.role} · {lane.model}
-                </span>
-                <small>{lane.badge}</small>
               </header>
             ))}
           </div>

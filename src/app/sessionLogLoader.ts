@@ -14,6 +14,7 @@ export interface SessionLogSnapshot {
   displayName: string;
   startedAt: string;
   updatedAt: string;
+  model: string | null;
   messages: SessionLogSnapshotMessage[];
 }
 
@@ -99,13 +100,14 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   const displayTitle = deriveSessionLogTitle(snapshot.messages);
   const status = deriveSessionLogStatus(snapshot.messages);
   const laneId = `${snapshot.sessionId}:main`;
+  const resolvedModel = snapshot.model ?? "unknown";
   const lane: AgentLane = {
     laneId,
     agentId: laneId,
     threadId: snapshot.sessionId,
     name: "Main thread",
     role: "session",
-    model: "gpt-5",
+    model: resolvedModel,
     provider: "OpenAI",
     badge: "Desktop",
     laneStatus: status,
@@ -124,6 +126,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       useDisplayTitle: index === firstUserMessageIndex,
       isLatest: index === timelineMessages.length - 1,
       runStatus: status,
+      model: resolvedModel,
     }),
   );
 
@@ -149,7 +152,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     errorCode: null,
     errorMessage: null,
     provider: "OpenAI",
-    model: "gpt-5",
+    model: resolvedModel,
     toolName: null,
     tokensIn: 0,
     tokensOut: 0,
@@ -161,7 +164,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     rawOutput: null,
   };
 
-  const runEndEvent = buildRunEndEvent(snapshot.sessionId, lane, updatedTs, status);
+  const runEndEvent = buildRunEndEvent(snapshot.sessionId, lane, updatedTs, status, resolvedModel);
   const events = [runStartEvent, ...messageEvents, ...(runEndEvent ? [runEndEvent] : [])];
   const selectedByDefaultId =
     messageEvents[messageEvents.length - 1]?.eventId ?? runStartEvent.eventId;
@@ -228,6 +231,7 @@ function buildMessageEvent({
   useDisplayTitle,
   isLatest,
   runStatus,
+  model,
 }: {
   displayTitle: string;
   message: SessionLogSnapshotMessage;
@@ -236,6 +240,7 @@ function buildMessageEvent({
   useDisplayTitle: boolean;
   isLatest: boolean;
   runStatus: RunStatus;
+  model: string;
 }): EventRecord {
   const startTs = parseTimestamp(message.timestamp);
   const nextTs = parseTimestamp(nextTimestamp);
@@ -264,7 +269,7 @@ function buildMessageEvent({
     errorCode: null,
     errorMessage: null,
     provider: "OpenAI",
-    model: "gpt-5",
+    model,
     toolName: null,
     tokensIn: 0,
     tokensOut: 0,
@@ -282,6 +287,7 @@ function buildRunEndEvent(
   lane: AgentLane,
   updatedTs: number,
   status: RunStatus,
+  model: string,
 ) {
   if (status === "running") {
     return null;
@@ -309,7 +315,7 @@ function buildRunEndEvent(
     errorCode: null,
     errorMessage: null,
     provider: "OpenAI",
-    model: "gpt-5",
+    model,
     toolName: null,
     tokensIn: 0,
     tokensOut: 0,
