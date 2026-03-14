@@ -177,7 +177,7 @@ export function CausalGraphView({
             className="graph-sequence__lane-strip"
             style={{ gridTemplateColumns, width: layout.contentWidth }}
           >
-            <div className="graph-sequence__corner">Time</div>
+            <div className="graph-sequence__corner">Time (dur)</div>
             {scene.lanes.map((lane) => (
               <header
                 key={lane.laneId}
@@ -358,7 +358,7 @@ export function CausalGraphView({
                     <div className="graph-sequence__time">
                       <div className="graph-sequence__time-stack">
                         <strong>{row.timeLabel}</strong>
-                        <span>{row.durationLabel}</span>
+                        <span>({row.durationLabel})</span>
                       </div>
                     </div>
                     {scene.lanes.map((lane) => {

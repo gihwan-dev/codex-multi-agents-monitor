@@ -725,10 +725,15 @@ textarea {
 }
 
 .graph-sequence__time-stack {
-  display: grid;
-  gap: 4px;
-  justify-items: start;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   white-space: nowrap;
+}
+
+.graph-sequence__time-stack span {
+  color: var(--color-text-tertiary);
+  font-size: 0.68rem;
 }
 
 .graph-sequence__time--gap {
