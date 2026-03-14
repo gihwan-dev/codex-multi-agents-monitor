@@ -663,7 +663,16 @@ textarea {
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+.graph-sequence__overlay--visible {
   pointer-events: none;
+  z-index: 0;
+}
+
+.graph-sequence__overlay--interactive {
+  pointer-events: none;
+  z-index: 2;
 }
 
 .graph-sequence__lifeline {
@@ -672,47 +681,24 @@ textarea {
   stroke-dasharray: 3 8;
 }
 
-.graph-sequence__anchor {
-  fill: var(--color-panel);
-  stroke: rgba(255, 255, 255, 0.72);
-  stroke-width: 2;
+.graph-sequence__row-guide {
+  stroke: rgba(166, 175, 189, 0.12);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
 }
 
-.graph-sequence__anchor--selected {
-  stroke-width: 3;
+.graph-sequence__row-guide--active,
+.graph-sequence__row-guide--selected {
+  stroke: rgba(166, 175, 189, 0.24);
+  stroke-width: 1.25;
 }
 
-.graph-sequence__anchor--dimmed {
-  opacity: 0.28;
+.graph-sequence__row-guide--selected {
+  stroke: rgba(77, 163, 255, 0.34);
 }
 
-.graph-sequence__anchor--running,
-.graph-sequence__anchor--stale,
-.graph-sequence__anchor--disconnected {
-  fill: var(--color-active);
-}
-
-.graph-sequence__anchor--waiting {
-  fill: transparent;
-  stroke: var(--color-waiting);
-}
-
-.graph-sequence__anchor--blocked,
-.graph-sequence__anchor--interrupted {
-  fill: transparent;
-  stroke: var(--color-blocked);
-  stroke-dasharray: 2 2;
-}
-
-.graph-sequence__anchor--done {
-  fill: var(--color-success);
-  stroke: rgba(52, 211, 153, 0.28);
-}
-
-.graph-sequence__anchor--failed,
-.graph-sequence__anchor--cancelled {
-  fill: var(--color-failed);
-  stroke: rgba(255, 107, 107, 0.28);
+.graph-sequence__row-guide--dimmed {
+  stroke-opacity: 0.38;
 }
 
 .graph-sequence__route {
@@ -731,6 +717,11 @@ textarea {
 
 .graph-sequence__route path {
   fill: none;
+}
+
+.graph-sequence__route-port {
+  stroke: rgba(20, 24, 33, 0.96);
+  stroke-width: 1.5;
 }
 
 .graph-sequence__route--handoff {
@@ -770,6 +761,7 @@ textarea {
   position: relative;
   display: grid;
   gap: var(--graph-row-gap);
+  z-index: 1;
 }
 
 .graph-sequence__event-row,
@@ -787,14 +779,19 @@ textarea {
 }
 
 .graph-sequence__time {
-  display: grid;
-  align-content: start;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   min-height: 100%;
-  padding: 2px 12px 0;
+  padding: 0 12px;
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: 0.74rem;
+}
+
+.graph-sequence__time-stack {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
 }
 
 .graph-sequence__time--gap {
@@ -814,14 +811,13 @@ textarea {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, rgba(166, 175, 189, 0.06), rgba(166, 175, 189, 0));
+  background: linear-gradient(180deg, rgba(166, 175, 189, 0.045), rgba(166, 175, 189, 0));
 }
 
 .graph-sequence__card {
   position: absolute;
   left: 50%;
-  top: 36px;
-  width: 184px;
+  width: var(--graph-card-width);
   min-height: 88px;
   transform: translateX(-50%);
   display: grid;
@@ -829,12 +825,11 @@ textarea {
   padding: 12px 14px 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.02);
+  background: linear-gradient(180deg, rgba(24, 29, 39, 1), rgba(16, 20, 29, 1));
   color: var(--color-text);
   text-align: left;
   box-shadow: 0 18px 34px rgba(4, 8, 14, 0.26);
+  z-index: 1;
   transition:
     opacity 180ms ease,
     border-color 180ms ease,
@@ -850,9 +845,7 @@ textarea {
 
 .graph-sequence__card--path {
   border-color: rgba(77, 163, 255, 0.28);
-  background:
-    linear-gradient(180deg, rgba(77, 163, 255, 0.12), rgba(255, 255, 255, 0.025)),
-    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.12), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
 .graph-sequence__card--selected,
@@ -912,55 +905,18 @@ textarea {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.graph-sequence__edge-hotspot {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  padding: 0;
-  background: rgba(20, 24, 33, 0.92);
-  color: var(--color-text-secondary);
-  box-shadow: 0 12px 24px rgba(4, 8, 14, 0.28);
-}
-
-.graph-sequence__edge-hotspot span {
-  font-size: 0.72rem;
-  font-family: var(--font-mono);
-}
-
-.graph-sequence__edge-hotspot:hover,
-.graph-sequence__edge-hotspot:focus-visible,
-.graph-sequence__edge-hotspot--selected,
-.graph-sequence__edge-hotspot--active {
-  border-color: rgba(77, 163, 255, 0.42);
-  color: var(--color-text);
-}
-
-.graph-sequence__edge-hotspot--handoff {
-  color: var(--color-handoff);
-}
-
-.graph-sequence__edge-hotspot--transfer {
-  color: var(--color-transfer);
-}
-
-.graph-sequence__edge-hotspot--spawn {
-  color: var(--color-active);
-}
-
-.graph-sequence__edge-hotspot--merge {
-  color: rgba(243, 246, 251, 0.82);
+.graph-sequence__route-hitbox {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20;
+  pointer-events: stroke;
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .graph-sequence__card,
   .graph-sequence__route,
-  .graph-sequence__lane-header,
-  .graph-sequence__edge-hotspot {
+  .graph-sequence__lane-header {
     transition: none;
   }
 }

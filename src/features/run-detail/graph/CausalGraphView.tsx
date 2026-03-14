@@ -1,13 +1,13 @@
-import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
-import type { GraphSceneEdgeBundle, GraphSceneModel, LiveMode, SelectionState } from "../../../shared/domain";
+import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import type { GraphSceneModel, LiveMode, SelectionState } from "../../../shared/domain";
 import { Panel, StatusChip } from "../../../shared/ui";
-
-const TIME_GUTTER = 88;
-const LANE_WIDTH = 224;
-const EVENT_ROW_HEIGHT = 132;
-const GAP_ROW_HEIGHT = 52;
-const ROW_GAP = 16;
-const ANCHOR_OFFSET_Y = 28;
+import {
+  buildGraphLayoutSnapshot,
+  EVENT_ROW_HEIGHT,
+  GAP_ROW_HEIGHT,
+  ROW_GAP,
+  TIME_GUTTER,
+} from "./graphLayout";
 
 interface CausalGraphViewProps {
   scene: GraphSceneModel;
@@ -15,37 +15,6 @@ interface CausalGraphViewProps {
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
-}
-
-interface EventLayout {
-  eventId: string;
-  laneId: string;
-  anchorX: number;
-  anchorY: number;
-  cardRect: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
-interface EdgeRouteLayout {
-  bundleId: string;
-  edgeType: GraphSceneEdgeBundle["edgeType"];
-  path: string;
-  hotspotX: number;
-  hotspotY: number;
-  targetX: number;
-  targetY: number;
-}
-
-interface GraphLayoutSnapshot {
-  contentWidth: number;
-  contentHeight: number;
-  laneCenterById: Map<string, number>;
-  eventById: Map<string, EventLayout>;
-  edgeRoutes: EdgeRouteLayout[];
 }
 
 interface ActiveHighlight {
@@ -63,9 +32,11 @@ export function CausalGraphView({
 }: CausalGraphViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeSelection, setActiveSelection] = useState<SelectionState | null>(null);
-  const layout = buildGraphLayoutSnapshot(scene);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const layout = buildGraphLayoutSnapshot(scene, viewportWidth);
   const activeHighlight = buildActiveHighlight(scene, activeSelection);
   const routeMarkerId = useId();
+  const bundleById = new Map(scene.edgeBundles.map((bundle) => [bundle.id, bundle]));
 
   useEffect(() => {
     if (!followLive || liveMode !== "live" || !scene.latestVisibleEventId) {
@@ -83,6 +54,33 @@ export function CausalGraphView({
     });
   }, [followLive, liveMode, scene.latestVisibleEventId]);
 
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateViewportWidth = () => {
+      setViewportWidth(element.clientWidth);
+    };
+
+    updateViewportWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateViewportWidth();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   const handleScroll = () => {
     const element = scrollRef.current;
     if (!element || !followLive || liveMode !== "live") {
@@ -95,7 +93,23 @@ export function CausalGraphView({
     }
   };
 
-  const gridTemplateColumns = `${TIME_GUTTER}px repeat(${scene.lanes.length || 1}, ${LANE_WIDTH}px)`;
+  const gridTemplateColumns = `${TIME_GUTTER}px repeat(${scene.lanes.length || 1}, ${layout.laneMetrics.laneWidth}px)`;
+
+  const selectEdge = (edgeId: string) => {
+    if (followLive && liveMode === "live") {
+      onPauseFollowLive();
+    }
+    onSelect({ kind: "edge", id: edgeId });
+  };
+
+  const handleEdgeKeyDown = (event: KeyboardEvent<HTMLAnchorElement>, edgeId: string) => {
+    if (event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    selectEdge(edgeId);
+  };
 
   return (
     <Panel title="Graph" className="canvas-panel graph-sequence-panel">
@@ -109,7 +123,8 @@ export function CausalGraphView({
         style={
           {
             ["--graph-time-gutter" as string]: `${TIME_GUTTER}px`,
-            ["--graph-lane-width" as string]: `${LANE_WIDTH}px`,
+            ["--graph-lane-width" as string]: `${layout.laneMetrics.laneWidth}px`,
+            ["--graph-card-width" as string]: `${layout.laneMetrics.cardWidth}px`,
             ["--graph-event-row-height" as string]: `${EVENT_ROW_HEIGHT}px`,
             ["--graph-gap-row-height" as string]: `${GAP_ROW_HEIGHT}px`,
             ["--graph-row-gap" as string]: `${ROW_GAP}px`,
@@ -148,7 +163,7 @@ export function CausalGraphView({
             style={{ width: layout.contentWidth, minHeight: layout.contentHeight }}
           >
             <svg
-              className="graph-sequence__overlay"
+              className="graph-sequence__overlay graph-sequence__overlay--visible"
               viewBox={`0 0 ${layout.contentWidth} ${layout.contentHeight}`}
               preserveAspectRatio="none"
               aria-hidden="true"
@@ -185,29 +200,43 @@ export function CausalGraphView({
                 />
               ))}
 
-              {scene.rows.map((row) =>
-                row.kind === "event" ? (
-                  <circle
-                    key={`anchor-${row.eventId}`}
+              {scene.rows.map((row) => {
+                if (row.kind !== "event") {
+                  return null;
+                }
+
+                const guideY = layout.rowGuideYByEventId.get(row.eventId);
+                if (guideY === undefined) {
+                  return null;
+                }
+
+                const active =
+                  activeHighlight?.eventIds.has(row.eventId) ??
+                  false;
+                const dimmed =
+                  activeHighlight !== null && !active;
+
+                return (
+                  <line
+                    key={`guide-${row.eventId}`}
                     className={[
-                      "graph-sequence__anchor",
-                      `graph-sequence__anchor--${row.status}`,
-                      row.selected ? "graph-sequence__anchor--selected" : "",
-                      activeHighlight && !activeHighlight.eventIds.has(row.eventId)
-                        ? "graph-sequence__anchor--dimmed"
-                        : "",
+                      "graph-sequence__row-guide",
+                      row.selected ? "graph-sequence__row-guide--selected" : "",
+                      row.inPath || active ? "graph-sequence__row-guide--active" : "",
+                      dimmed ? "graph-sequence__row-guide--dimmed" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    cx={layout.eventById.get(row.eventId)?.anchorX ?? 0}
-                    cy={layout.eventById.get(row.eventId)?.anchorY ?? 0}
-                    r={6}
+                    x1={TIME_GUTTER}
+                    y1={guideY}
+                    x2={layout.contentWidth}
+                    y2={guideY}
                   />
-                ) : null,
-              )}
+                );
+              })}
 
               {layout.edgeRoutes.map((route) => {
-                const bundle = scene.edgeBundles.find((item) => item.id === route.bundleId);
+                const bundle = bundleById.get(route.bundleId);
                 if (!bundle) {
                   return null;
                 }
@@ -232,7 +261,18 @@ export function CausalGraphView({
                       .join(" ")}
                   >
                     <path d={route.path} markerEnd={`url(#${routeMarkerId})`} />
-                    <circle cx={route.targetX} cy={route.targetY} r={4} />
+                    <circle
+                      className="graph-sequence__route-port"
+                      cx={route.sourcePort.x}
+                      cy={route.sourcePort.y}
+                      r={4}
+                    />
+                    <circle
+                      className="graph-sequence__route-port"
+                      cx={route.targetPort.x}
+                      cy={route.targetPort.y}
+                      r={4}
+                    />
                   </g>
                 );
               })}
@@ -261,8 +301,10 @@ export function CausalGraphView({
                     style={{ gridTemplateColumns }}
                   >
                     <div className="graph-sequence__time">
-                      <strong>{row.timeLabel}</strong>
-                      <span>{row.durationLabel}</span>
+                      <div className="graph-sequence__time-stack">
+                        <strong>{row.timeLabel}</strong>
+                        <span>{row.durationLabel}</span>
+                      </div>
                     </div>
                     {scene.lanes.map((lane) => {
                       const active =
@@ -271,6 +313,7 @@ export function CausalGraphView({
                       const laneActive =
                         activeHighlight?.laneIds.has(lane.laneId) ??
                         false;
+                      const eventLayout = layout.eventById.get(row.eventId);
 
                       return (
                         <div
@@ -296,6 +339,14 @@ export function CausalGraphView({
                               ]
                                 .filter(Boolean)
                                 .join(" ")}
+                              style={
+                                eventLayout
+                                  ? {
+                                      top: `${eventLayout.cardRect.y - eventLayout.rowTop}px`,
+                                      width: `${eventLayout.cardRect.width}px`,
+                                    }
+                                  : undefined
+                              }
                               onClick={() => onSelect({ kind: "event", id: row.eventId })}
                               onMouseEnter={() =>
                                 setActiveSelection({ kind: "event", id: row.eventId })
@@ -325,127 +376,46 @@ export function CausalGraphView({
               )}
             </div>
 
-            {layout.edgeRoutes.map((route) => {
-              const bundle = scene.edgeBundles.find((item) => item.id === route.bundleId);
-              if (!bundle) {
-                return null;
-              }
+            <svg
+              className="graph-sequence__overlay graph-sequence__overlay--interactive"
+              viewBox={`0 0 ${layout.contentWidth} ${layout.contentHeight}`}
+              preserveAspectRatio="none"
+            >
+              <title>Interactive graph edge hit targets</title>
+              {layout.edgeRoutes.map((route) => {
+                const bundle = bundleById.get(route.bundleId);
+                if (!bundle) {
+                  return null;
+                }
 
-              const active =
-                activeHighlight?.bundleIds.has(bundle.id) ?? false;
-
-              return (
-                <button
-                  key={`hotspot-${route.bundleId}`}
-                  type="button"
-                  className={[
-                    "graph-sequence__edge-hotspot",
-                    `graph-sequence__edge-hotspot--${bundle.edgeType}`,
-                    bundle.selected ? "graph-sequence__edge-hotspot--selected" : "",
-                    active ? "graph-sequence__edge-hotspot--active" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  style={{
-                    left: `${route.hotspotX - 16}px`,
-                    top: `${route.hotspotY - 16}px`,
-                  }}
-                  aria-label={`${bundle.edgeType} edge between ${bundle.sourceEventId} and ${bundle.targetEventId}`}
-                  onClick={() => {
-                    if (followLive && liveMode === "live") {
-                      onPauseFollowLive();
+                return (
+                  <a
+                    key={`interactive-route-${route.bundleId}`}
+                    href={`#${bundle.primaryEdgeId}`}
+                    aria-label={`${bundle.edgeType} edge between ${bundle.sourceEventId} and ${bundle.targetEventId}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      selectEdge(bundle.primaryEdgeId);
+                    }}
+                    onKeyDown={(event) => handleEdgeKeyDown(event, bundle.primaryEdgeId)}
+                    onMouseEnter={() =>
+                      setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })
                     }
-                    onSelect({ kind: "edge", id: bundle.primaryEdgeId });
-                  }}
-                  onMouseEnter={() =>
-                    setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })
-                  }
-                  onMouseLeave={() => setActiveSelection(null)}
-                  onFocus={() => setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })}
-                  onBlur={() => setActiveSelection(null)}
-                >
-                  <span>{bundle.bundleCount > 1 ? bundle.bundleCount : ""}</span>
-                </button>
-              );
-            })}
+                    onMouseLeave={() => setActiveSelection(null)}
+                    onFocus={() => setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })}
+                    onBlur={() => setActiveSelection(null)}
+                  >
+                    <title>{bundle.label}</title>
+                    <path className="graph-sequence__route-hitbox" d={route.path} />
+                  </a>
+                );
+              })}
+            </svg>
           </div>
         </div>
       </div>
     </Panel>
   );
-}
-
-function buildGraphLayoutSnapshot(scene: GraphSceneModel): GraphLayoutSnapshot {
-  const laneCenterById = new Map<string, number>();
-  const eventById = new Map<string, EventLayout>();
-
-  scene.lanes.forEach((lane, index) => {
-    laneCenterById.set(lane.laneId, TIME_GUTTER + index * LANE_WIDTH + LANE_WIDTH / 2);
-  });
-
-  let cursorY = 0;
-  scene.rows.forEach((row, index) => {
-    const height = row.kind === "gap" ? GAP_ROW_HEIGHT : EVENT_ROW_HEIGHT;
-    if (row.kind === "event") {
-      const anchorX = laneCenterById.get(row.laneId) ?? TIME_GUTTER;
-      const anchorY = cursorY + ANCHOR_OFFSET_Y;
-      eventById.set(row.eventId, {
-        eventId: row.eventId,
-        laneId: row.laneId,
-        anchorX,
-        anchorY,
-        cardRect: {
-          x: anchorX - 92,
-          y: cursorY + 36,
-          width: 184,
-          height: 88,
-        },
-      });
-    }
-
-    cursorY += height;
-    if (index < scene.rows.length - 1) {
-      cursorY += ROW_GAP;
-    }
-  });
-
-  const edgeRoutes = scene.edgeBundles.flatMap((bundle) => {
-    const source = eventById.get(bundle.sourceEventId);
-    const target = eventById.get(bundle.targetEventId);
-    if (!source || !target || bundle.sourceLaneId === bundle.targetLaneId) {
-      return [];
-    }
-
-    const deltaY = target.anchorY - source.anchorY;
-    const bridgeY =
-      source.anchorY +
-      (deltaY >= 0 ? 1 : -1) * Math.min(Math.max(Math.abs(deltaY) * 0.4, 28), 88);
-
-    return [
-      {
-        bundleId: bundle.id,
-        edgeType: bundle.edgeType,
-        path: [
-          `M ${source.anchorX} ${source.anchorY}`,
-          `L ${source.anchorX} ${bridgeY}`,
-          `L ${target.anchorX} ${bridgeY}`,
-          `L ${target.anchorX} ${target.anchorY}`,
-        ].join(" "),
-        hotspotX: source.anchorX + (target.anchorX - source.anchorX) / 2,
-        hotspotY: bridgeY,
-        targetX: target.anchorX,
-        targetY: target.anchorY,
-      } satisfies EdgeRouteLayout,
-    ];
-  });
-
-  return {
-    contentWidth: TIME_GUTTER + scene.lanes.length * LANE_WIDTH,
-    contentHeight: Math.max(cursorY, EVENT_ROW_HEIGHT),
-    laneCenterById,
-    eventById,
-    edgeRoutes,
-  };
 }
 
 function buildActiveHighlight(
