@@ -9,6 +9,11 @@ import {
   choosePortPair,
   computeLaneMetrics,
   computeRenderedContentHeight,
+  computeVisibleEdgeRoutes,
+  computeVisibleRowRange,
+  EVENT_ROW_HEIGHT,
+  GAP_ROW_HEIGHT,
+  ROW_GAP,
   TIME_GUTTER,
 } from "../src/features/run-detail/graph/graphLayout";
 import { buildGraphSceneModel, type GraphSceneModel, type RunFilters } from "../src/shared/domain";
@@ -135,6 +140,88 @@ describe("graphLayout", () => {
 
     const narrow = computeLaneMetrics(700, 4);
     expect(narrow.cardWidth).toBe(176);
+  });
+
+  it("builds rowPositions with correct topY and height for every row", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+
+    expect(layout.rowPositions.length).toBe(scene.rows.length);
+
+    let expectedY = 0;
+    layout.rowPositions.forEach((pos, index) => {
+      const row = scene.rows[index];
+      const expectedHeight = row.kind === "gap" ? GAP_ROW_HEIGHT : EVENT_ROW_HEIGHT;
+
+      expect(pos.rowIndex).toBe(index);
+      expect(pos.topY).toBe(expectedY);
+      expect(pos.height).toBe(expectedHeight);
+      expect(pos.kind).toBe(row.kind === "gap" ? "gap" : "event");
+
+      expectedY += expectedHeight;
+      if (index < scene.rows.length - 1) {
+        expectedY += ROW_GAP;
+      }
+    });
+  });
+
+  it("computeVisibleRowRange returns all rows when viewport exceeds content", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const range = computeVisibleRowRange(layout.rowPositions, 0, 10000, 3);
+
+    expect(range.startIndex).toBe(0);
+    expect(range.endIndex).toBe(scene.rows.length);
+    expect(range.topPadding).toBe(0);
+    expect(range.bottomPadding).toBe(0);
+  });
+
+  it("computeVisibleRowRange clips to viewport with overscan", () => {
+    const scene = createLargeScene(20);
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const rowHeight = EVENT_ROW_HEIGHT + ROW_GAP;
+    const scrollTop = rowHeight * 5;
+    const viewportHeight = rowHeight * 3;
+
+    const range = computeVisibleRowRange(layout.rowPositions, scrollTop, viewportHeight, 2);
+
+    expect(range.startIndex).toBeGreaterThanOrEqual(3);
+    expect(range.startIndex).toBeLessThanOrEqual(5);
+    expect(range.endIndex).toBeGreaterThanOrEqual(8);
+    expect(range.endIndex).toBeLessThanOrEqual(11);
+    expect(range.endIndex - range.startIndex).toBeLessThan(20);
+  });
+
+  it("computeVisibleRowRange handles empty rowPositions", () => {
+    const range = computeVisibleRowRange([], 0, 500, 3);
+
+    expect(range.startIndex).toBe(0);
+    expect(range.endIndex).toBe(0);
+    expect(range.topPadding).toBe(0);
+    expect(range.bottomPadding).toBe(0);
+  });
+
+  it("computeVisibleRowRange at scrollTop=0 starts from index 0", () => {
+    const scene = createLargeScene(20);
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const range = computeVisibleRowRange(layout.rowPositions, 0, 400, 3);
+
+    expect(range.startIndex).toBe(0);
+    expect(range.endIndex).toBeGreaterThan(0);
+    expect(range.endIndex).toBeLessThanOrEqual(20);
+  });
+
+  it("computeVisibleEdgeRoutes filters edges outside viewport", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const allRoutes = layout.edgeRoutes;
+    expect(allRoutes.length).toBeGreaterThan(0);
+
+    const farBelowRoutes = computeVisibleEdgeRoutes(allRoutes, 100000, 500, 500);
+    expect(farBelowRoutes.length).toBe(0);
+
+    const allVisibleRoutes = computeVisibleEdgeRoutes(allRoutes, 0, 10000, 500);
+    expect(allVisibleRoutes.length).toBe(allRoutes.length);
   });
 
   it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
@@ -270,6 +357,31 @@ function findRouteByPrimaryEdge(
 ) {
   const bundle = scene.edgeBundles.find((item) => item.primaryEdgeId === edgeId);
   return bundle ? layout.edgeRoutes.find((route) => route.bundleId === bundle.id) : undefined;
+}
+
+function createLargeScene(eventCount: number): GraphSceneModel {
+  const rows: GraphSceneModel["rows"] = [];
+  for (let index = 0; index < eventCount; index += 1) {
+    rows.push(makeEventRow(`event-${index}`, "planner", `Event ${index}`));
+  }
+
+  return {
+    lanes: [
+      {
+        laneId: "planner",
+        name: "Planner",
+        role: "orchestrator",
+        model: "gpt-5",
+        badge: "Main",
+        status: "running",
+      },
+    ],
+    rows,
+    edgeBundles: [],
+    selectionPath: { eventIds: [], edgeIds: [], laneIds: [] },
+    hiddenLaneCount: 0,
+    latestVisibleEventId: `event-${eventCount - 1}`,
+  };
 }
 
 function getFixtureDataset(traceId: string) {

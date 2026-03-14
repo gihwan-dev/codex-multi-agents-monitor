@@ -709,21 +709,16 @@ textarea {
 
 .graph-sequence__rows {
   position: relative;
-  display: grid;
-  gap: var(--graph-row-gap);
   z-index: 1;
-}
-
-@keyframes row-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 .graph-sequence__event-row,
 .graph-sequence__gap-separator {
+  position: absolute;
+  left: 0;
+  width: 100%;
   display: grid;
   align-items: start;
-  animation: row-enter 200ms ease both;
 }
 
 .graph-sequence__event-row {
@@ -1012,11 +1007,6 @@ textarea {
   .gap-chip,
   .gap-chip__chevron {
     transition: none;
-  }
-
-  .graph-sequence__event-row,
-  .graph-sequence__gap-separator {
-    animation: none;
   }
 }
 

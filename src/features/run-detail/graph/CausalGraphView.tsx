@@ -5,6 +5,8 @@ import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
   computeRenderedContentHeight,
+  computeVisibleEdgeRoutes,
+  computeVisibleRowRange,
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
   ROW_GAP,
@@ -47,6 +49,9 @@ export function CausalGraphView({
   const [viewportWidth, setViewportWidth] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(viewportHeightOverride ?? 0);
   const [laneHeaderHeight, setLaneHeaderHeight] = useState(laneHeaderHeightOverride ?? 0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const scrollTopRef = useRef(0);
+  const rafRef = useRef(0);
   const layout = buildGraphLayoutSnapshot(scene, viewportWidth);
   const activeHighlight = buildActiveHighlight(scene, activeSelection);
   const routeMarkerId = useId();
@@ -62,6 +67,14 @@ export function CausalGraphView({
   const continuationGuideYs = buildContinuationGuideYs(
     layout.contentHeight,
     renderedContentHeight,
+  );
+  const visibleRange = computeVisibleRowRange(
+    layout.rowPositions, scrollTop, availableCanvasHeight, 3,
+  );
+  const visibleRows = scene.rows.slice(visibleRange.startIndex, visibleRange.endIndex);
+  const visibleRowPositions = layout.rowPositions.slice(visibleRange.startIndex, visibleRange.endIndex);
+  const visibleEdgeRoutes = computeVisibleEdgeRoutes(
+    layout.edgeRoutes, scrollTop, availableCanvasHeight, 500,
   );
 
   useEffect(() => {
@@ -124,15 +137,33 @@ export function CausalGraphView({
     };
   }, [laneHeaderHeightOverride, viewportHeightOverride]);
 
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
   const handleScroll = () => {
     const element = scrollRef.current;
-    if (!element || !followLive || liveMode !== "live") {
+    if (!element) {
       return;
     }
 
-    const nearBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 32;
-    if (!nearBottom) {
-      onPauseFollowLive();
+    if (followLive && liveMode === "live") {
+      const nearBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 32;
+      if (!nearBottom) {
+        onPauseFollowLive();
+      }
+    }
+
+    scrollTopRef.current = element.scrollTop;
+    if (rafRef.current === 0) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = 0;
+        setScrollTop(scrollTopRef.current);
+      });
     }
   };
 
@@ -247,7 +278,7 @@ export function CausalGraphView({
                 />
               ))}
 
-              {scene.rows.map((row) => {
+              {visibleRows.map((row) => {
                 if (row.kind !== "event") {
                   return null;
                 }
@@ -282,7 +313,9 @@ export function CausalGraphView({
                 );
               })}
 
-              {continuationGuideYs.map((guideY) => (
+              {continuationGuideYs
+                .filter((guideY) => guideY >= scrollTop - 500 && guideY <= scrollTop + availableCanvasHeight + 500)
+                .map((guideY) => (
                 <line
                   key={`continuation-guide-${guideY}`}
                   className="graph-sequence__row-guide graph-sequence__row-guide--continuation"
@@ -293,7 +326,7 @@ export function CausalGraphView({
                 />
               ))}
 
-              {layout.edgeRoutes.map((route) => {
+              {visibleEdgeRoutes.map((route) => {
                 const bundle = bundleById.get(route.bundleId);
                 if (!bundle) {
                   return null;
@@ -336,15 +369,16 @@ export function CausalGraphView({
               })}
             </svg>
 
-            <div className="graph-sequence__rows">
-              {scene.rows.map((row) =>
-                row.kind === "gap" ? (
+            <div className="graph-sequence__rows" style={{ height: renderedContentHeight }}>
+              {visibleRows.map((row, visibleIndex) => {
+                const rowPos = visibleRowPositions[visibleIndex];
+                return row.kind === "gap" ? (
                   <div
                     key={row.id}
-                    className={`graph-sequence__gap-separator${expandedGapIds.has(row.id) ? " graph-sequence__gap-separator--expanded" : ""}`}
+                    className={`graph-sequence__gap-separator${expandedGapIds?.has(row.id) ? " graph-sequence__gap-separator--expanded" : ""}`}
                     role="separator"
                     aria-label={`Gap: ${row.label}`}
-                    style={{ gridTemplateColumns }}
+                    style={{ gridTemplateColumns, top: rowPos.topY, height: rowPos.height }}
                   >
                     <div className="graph-sequence__time graph-sequence__time--gap" />
                     <div
@@ -355,7 +389,7 @@ export function CausalGraphView({
                         gapId={row.id}
                         label={row.label}
                         durationMs={row.durationMs}
-                        expanded={expandedGapIds.has(row.id)}
+                        expanded={expandedGapIds?.has(row.id) ?? false}
                         onToggle={onToggleGap}
                       />
                     </div>
@@ -364,7 +398,7 @@ export function CausalGraphView({
                   <div
                     key={row.id}
                     className="graph-sequence__event-row"
-                    style={{ gridTemplateColumns }}
+                    style={{ gridTemplateColumns, top: rowPos.topY, height: rowPos.height }}
                   >
                     <div className="graph-sequence__time">
                       <div className="graph-sequence__time-stack">
@@ -432,8 +466,8 @@ export function CausalGraphView({
                       );
                     })}
                   </div>
-                ),
-              )}
+                );
+              })}
             </div>
 
             <svg
@@ -442,7 +476,7 @@ export function CausalGraphView({
               preserveAspectRatio="none"
             >
               <title>Interactive graph edge hit targets</title>
-              {layout.edgeRoutes.map((route) => {
+              {visibleEdgeRoutes.map((route) => {
                 const bundle = bundleById.get(route.bundleId);
                 if (!bundle) {
                   return null;

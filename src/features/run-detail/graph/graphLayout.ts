@@ -73,6 +73,20 @@ export interface EdgeRouteLayout {
   targetPort: RoutePort;
 }
 
+export interface RowPosition {
+  rowIndex: number;
+  topY: number;
+  height: number;
+  kind: "event" | "gap";
+}
+
+export interface VisibleRowRange {
+  startIndex: number;
+  endIndex: number;
+  topPadding: number;
+  bottomPadding: number;
+}
+
 export interface GraphLayoutSnapshot {
   contentWidth: number;
   contentHeight: number;
@@ -81,6 +95,7 @@ export interface GraphLayoutSnapshot {
   eventById: Map<string, EventLayout>;
   rowGuideYByEventId: Map<string, number>;
   edgeRoutes: EdgeRouteLayout[];
+  rowPositions: RowPosition[];
 }
 
 export function computeRenderedContentHeight(
@@ -133,10 +148,12 @@ export function buildEventRects(
   laneCenterById: Map<string, number>;
   eventById: Map<string, EventLayout>;
   rowGuideYByEventId: Map<string, number>;
+  rowPositions: RowPosition[];
 } {
   const laneCenterById = new Map<string, number>();
   const eventById = new Map<string, EventLayout>();
   const rowGuideYByEventId = new Map<string, number>();
+  const rowPositions: RowPosition[] = [];
 
   scene.lanes.forEach((lane, index) => {
     laneCenterById.set(
@@ -148,6 +165,12 @@ export function buildEventRects(
   let cursorY = 0;
   scene.rows.forEach((row, index) => {
     const height = row.kind === "gap" ? GAP_ROW_HEIGHT : EVENT_ROW_HEIGHT;
+    rowPositions.push({
+      rowIndex: index,
+      topY: cursorY,
+      height,
+      kind: row.kind === "gap" ? "gap" : "event",
+    });
     if (row.kind === "event") {
       const laneIndex = scene.lanes.findIndex((lane) => lane.laneId === row.laneId);
       const laneCenter = laneCenterById.get(row.laneId) ?? laneMetrics.timeGutter;
@@ -180,6 +203,7 @@ export function buildEventRects(
     laneCenterById,
     eventById,
     rowGuideYByEventId,
+    rowPositions,
   };
 }
 
@@ -270,7 +294,7 @@ export function buildGraphLayoutSnapshot(
   viewportWidth: number,
 ): GraphLayoutSnapshot {
   const laneMetrics = computeLaneMetrics(viewportWidth, scene.lanes.length);
-  const { contentHeight, laneCenterById, eventById, rowGuideYByEventId } = buildEventRects(scene, laneMetrics);
+  const { contentHeight, laneCenterById, eventById, rowGuideYByEventId, rowPositions } = buildEventRects(scene, laneMetrics);
 
   const pendingRoutes = scene.edgeBundles.flatMap((bundle) => {
     const source = eventById.get(bundle.sourceEventId);
@@ -326,7 +350,75 @@ export function buildGraphLayoutSnapshot(
     eventById,
     rowGuideYByEventId,
     edgeRoutes,
+    rowPositions,
   };
+}
+
+export function computeVisibleRowRange(
+  rowPositions: RowPosition[],
+  scrollTop: number,
+  viewportHeight: number,
+  overscanCount: number,
+): VisibleRowRange {
+  if (rowPositions.length === 0) {
+    return { startIndex: 0, endIndex: 0, topPadding: 0, bottomPadding: 0 };
+  }
+
+  const viewportEnd = scrollTop + viewportHeight;
+
+  let lo = 0;
+  let hi = rowPositions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const row = rowPositions[mid];
+    if (row.topY + row.height <= scrollTop) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  let startIndex = lo;
+
+  lo = startIndex;
+  hi = rowPositions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (rowPositions[mid].topY < viewportEnd) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  let endIndex = lo;
+
+  startIndex = Math.max(0, startIndex - overscanCount);
+  endIndex = Math.min(rowPositions.length, endIndex + overscanCount);
+
+  const topPadding = startIndex > 0 ? rowPositions[startIndex].topY : 0;
+  const lastVisible = endIndex > 0 ? rowPositions[endIndex - 1] : undefined;
+  const lastRow = rowPositions[rowPositions.length - 1];
+  const totalHeight = lastRow.topY + lastRow.height;
+  const bottomPadding = lastVisible
+    ? Math.max(0, totalHeight - (lastVisible.topY + lastVisible.height))
+    : 0;
+
+  return { startIndex, endIndex, topPadding, bottomPadding };
+}
+
+export function computeVisibleEdgeRoutes(
+  edgeRoutes: EdgeRouteLayout[],
+  scrollTop: number,
+  viewportHeight: number,
+  overscanPx: number,
+): EdgeRouteLayout[] {
+  const visibleTop = scrollTop - overscanPx;
+  const visibleBottom = scrollTop + viewportHeight + overscanPx;
+
+  return edgeRoutes.filter((route) => {
+    const minY = Math.min(route.sourcePort.y, route.targetPort.y);
+    const maxY = Math.max(route.sourcePort.y, route.targetPort.y);
+    return maxY >= visibleTop && minY <= visibleBottom;
+  });
 }
 
 function addPortGroupEntry(
