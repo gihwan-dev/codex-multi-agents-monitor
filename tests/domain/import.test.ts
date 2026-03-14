@@ -218,6 +218,67 @@ describe("normalization and selectors", () => {
     expect(model.workspaces[0]?.threads.length).toBeGreaterThan(0);
     expect(model.workspaces[0]?.threads[0]?.runs.length).toBeGreaterThan(0);
   });
+
+  it("merges worktrees that resolve to the same origin workspace", () => {
+    const fix4 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-004");
+    const fix5 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-005");
+
+    expect(fix4).toBeDefined();
+    expect(fix5).toBeDefined();
+    if (!fix4 || !fix5) {
+      throw new Error("fixtures for workspace merge test missing");
+    }
+
+    const model = buildWorkspaceTreeModel([fix4, fix5], "", "all", {
+      [fix4.project.repoPath]: {
+        originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+        displayName: "codex-multi-agent-monitor",
+        isWorktree: true,
+      },
+      [fix5.project.repoPath]: {
+        originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+        displayName: "codex-multi-agent-monitor",
+        isWorktree: true,
+      },
+    });
+
+    expect(model.workspaces).toHaveLength(1);
+    expect(model.workspaces[0]?.name).toBe("codex-multi-agent-monitor");
+    expect(model.workspaces[0]?.runCount).toBe(2);
+  });
+
+  it("keeps project grouping when origin resolution is absent", () => {
+    const fix4 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-004");
+    const fix5 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-005");
+
+    expect(fix4).toBeDefined();
+    expect(fix5).toBeDefined();
+    if (!fix4 || !fix5) {
+      throw new Error("fixtures for workspace fallback test missing");
+    }
+
+    const model = buildWorkspaceTreeModel([fix4, fix5], "", "all");
+    expect(model.workspaces).toHaveLength(2);
+  });
+
+  it("searches both resolved origin names and original payload names", () => {
+    const fix4 = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-004");
+    expect(fix4).toBeDefined();
+    if (!fix4) {
+      throw new Error("fixture for workspace search test missing");
+    }
+
+    const overrides = {
+      [fix4.project.repoPath]: {
+        originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+        displayName: "codex-multi-agent-monitor",
+        isWorktree: true,
+      },
+    };
+
+    expect(buildWorkspaceTreeModel([fix4], "codex-multi-agent-monitor", "all", overrides).workspaces).toHaveLength(1);
+    expect(buildWorkspaceTreeModel([fix4], fix4.project.name, "all", overrides).workspaces).toHaveLength(1);
+  });
 });
 
 describe("monitor state contracts", () => {

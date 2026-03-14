@@ -482,9 +482,7 @@ export function useMonitorAppState() {
     mapNodes,
     actions: {
       selectRun(traceId: string) {
-        startTransition(() => {
-          dispatch({ type: "set-active-run", traceId });
-        });
+        dispatch({ type: "set-active-run", traceId });
       },
       selectItem(selection: SelectionState) {
         dispatch({ type: "set-selection", selection });
@@ -543,12 +541,12 @@ export function useMonitorAppState() {
         dispatch({ type: "toggle-gap", traceId: activeDataset.run.traceId, gapId });
       },
       resizeRail(width: number) {
-        dispatch({ type: "set-rail-width", width: Math.min(Math.max(width, 220), 340) });
+        dispatch({ type: "set-rail-width", width: Math.max(width, 220) });
       },
       resizeInspector(width: number) {
         dispatch({
           type: "set-inspector-width",
-          width: Math.min(Math.max(width, 256), 380),
+          width: Math.max(width, 256),
         });
       },
       setImportText(value: string) {

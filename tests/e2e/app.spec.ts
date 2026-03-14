@@ -107,6 +107,92 @@ test("built bundle contains imported/live contract copy", async () => {
   expect(bundle).toContain("Following paused");
 });
 
+test("left rail uses a simplified workspace to run tree", async ({ page }) => {
+  await openBuiltApp(page);
+
+  const rail = page.locator(".workspace__rail");
+  await expect(rail.getByPlaceholder("Search workspaces and runs")).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Import" })).toBeVisible();
+
+  await expect(rail.getByRole("button", { name: "All" })).toHaveCount(0);
+  await expect(rail.getByRole("button", { name: "Live" })).toHaveCount(0);
+  await expect(rail.getByText("Waiting chain review", { exact: true })).toHaveCount(0);
+  await expect(rail.getByText(/\bago\b/i)).toHaveCount(0);
+
+  const runTreeItem = rail.getByRole("treeitem", { name: /FIX-002 Waiting chain run/i });
+  await expect(runTreeItem).toBeVisible();
+  await expect(runTreeItem).toContainText("Waiting");
+  await expect(runTreeItem).not.toContainText("Imported");
+  await expect(runTreeItem).not.toContainText("Spec approval missing");
+});
+
+test("left rail preserves hierarchy and single-line run titles", async ({ page }) => {
+  await openBuiltApp(page);
+
+  const rail = page.locator(".workspace__rail");
+  const workspaceLabel = rail.locator(".run-list__workspace-copy strong").first();
+  const runTitle = rail.locator(".run-row__title strong").first();
+  const tree = rail.locator(".run-list__tree");
+
+  const workspaceFontSize = await workspaceLabel.evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).fontSize),
+  );
+  const runFontSize = await runTitle.evaluate((element) =>
+    Number.parseFloat(window.getComputedStyle(element).fontSize),
+  );
+  const runTitleStyles = await runTitle.evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      overflow: styles.overflow,
+      textOverflow: styles.textOverflow,
+      whiteSpace: styles.whiteSpace,
+    };
+  });
+  const treeAlignContent = await tree.evaluate((element) => window.getComputedStyle(element).alignContent);
+
+  expect(runFontSize).toBeGreaterThan(workspaceFontSize);
+  expect(runTitleStyles).toEqual({
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  });
+  expect(treeAlignContent).toBe("start");
+});
+
+test("rail and inspector resize beyond the previous width caps", async ({ page }) => {
+  await openBuiltApp(page);
+
+  const railHandle = page.getByRole("button", { name: "Resize run list" });
+  await railHandle.focus();
+  for (let index = 0; index < 8; index += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+
+  await expect
+    .poll(() =>
+      page.locator(".workspace__rail").evaluate((element) => {
+        const width = (element as HTMLElement).style.width;
+        return Number.parseFloat(width);
+      }),
+    )
+    .toBeGreaterThan(340);
+
+  const inspectorHandle = page.getByRole("button", { name: "Resize inspector" });
+  await inspectorHandle.focus();
+  for (let index = 0; index < 8; index += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+
+  await expect
+    .poll(() =>
+      page.locator(".workspace__inspector").evaluate((element) => {
+        const width = (element as HTMLElement).style.width;
+        return Number.parseFloat(width);
+      }),
+    )
+    .toBeGreaterThan(380);
+});
+
 test("drawer stays hidden until an explicit drawer action", async ({ page }) => {
   await openBuiltApp(page);
 
@@ -158,7 +244,7 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 }) => {
   await openBuiltApp(page);
 
-  await page.getByRole("treeitem", { name: /FIX-004 Dense parallel run/i }).click();
+  await page.locator('.run-row[title="FIX-004 Dense parallel run"]').click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Path only" })).toHaveClass(/button--active/);
   await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();

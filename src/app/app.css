@@ -286,6 +286,8 @@ textarea {
 .run-list__tree {
   display: grid;
   flex: 1 1 auto;
+  align-content: start;
+  align-items: start;
   gap: 4px;
   min-height: 0;
   overflow: auto;
@@ -293,20 +295,22 @@ textarea {
 }
 
 .run-list__workspace {
+  display: grid;
+  gap: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding-bottom: 4px;
+  padding: 2px 0 6px;
 }
 
 .run-list__workspace-row {
   width: 100%;
   display: flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 28px;
   border: 0;
   border-radius: 8px;
-  padding: 8px 6px;
+  padding: 4px 4px 2px;
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   text-align: left;
 }
 
@@ -315,6 +319,7 @@ textarea {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .run-list__workspace-chevron {
@@ -329,6 +334,13 @@ textarea {
 
 .run-list__workspace-copy strong {
   min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .run-list__workspace-copy span {
@@ -338,9 +350,9 @@ textarea {
 
 .run-list__runs {
   display: grid;
-  gap: 2px;
-  margin-left: 11px;
-  padding-left: 12px;
+  gap: 4px;
+  margin-left: 6px;
+  padding-left: 14px;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -349,17 +361,20 @@ textarea {
   display: block;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 6px 10px;
+  padding: 8px 10px;
   background: transparent;
   color: var(--color-text);
   text-align: left;
 }
 
 .run-row--active,
-.run-row:hover,
-.run-list__workspace-row:hover {
+.run-row:hover {
   border-color: rgba(77, 163, 255, 0.22);
   background: rgba(77, 163, 255, 0.06);
+}
+
+.run-list__workspace-row:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .run-row__title,
@@ -369,6 +384,15 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+}
+
+.run-row__title strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .graph-panel__collapsed-copy,

@@ -12,9 +12,11 @@ import {
   formatTokens,
   type SummaryFact,
   type ViewMode,
+  type WorkspaceIdentityOverrideMap,
 } from "../shared/domain";
 import { MetricPill, Panel, StatusChip } from "../shared/ui";
 import { useMonitorAppState } from "./useMonitorAppState";
+import { resolveWorkspaceIdentityOverrides } from "./workspaceIdentityResolver";
 
 const eventFilterOptions: Array<EventType | "all"> = [
   "all",
@@ -49,6 +51,8 @@ export function MonitorApp() {
   } = useMonitorAppState();
   const searchRef = useRef<HTMLInputElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
+  const [workspaceIdentityOverrides, setWorkspaceIdentityOverrides] =
+    useState<WorkspaceIdentityOverrideMap>({});
   const [isCompactViewport, setIsCompactViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth <= 720,
   );
@@ -77,6 +81,20 @@ export function MonitorApp() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    resolveWorkspaceIdentityOverrides(state.datasets).then((nextOverrides) => {
+      if (!cancelled) {
+        setWorkspaceIdentityOverrides(nextOverrides);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.datasets]);
 
   const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
     drawerTriggerRef.current =
@@ -114,6 +132,7 @@ export function MonitorApp() {
               onSelectRun={actions.selectRun}
               onOpenImport={() => openDrawer("import")}
               searchRef={searchRef}
+              workspaceIdentityOverrides={workspaceIdentityOverrides}
             />
           </div>
           <ResizeHandle

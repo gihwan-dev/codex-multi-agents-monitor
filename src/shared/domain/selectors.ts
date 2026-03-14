@@ -25,6 +25,7 @@ import type {
   WaterfallModel,
   WaterfallRow,
   WaterfallSegment,
+  WorkspaceIdentityOverrideMap,
   WorkspaceRunRow,
   WorkspaceThreadGroup,
   WorkspaceTreeItem,
@@ -422,6 +423,7 @@ export function buildWorkspaceTreeModel(
   datasets: RunDataset[],
   search: string,
   quickFilter: QuickFilterSummary["key"],
+  workspaceIdentityOverrides: WorkspaceIdentityOverrideMap = {},
 ): WorkspaceTreeModel {
   const referenceTimestamp = Math.max(...datasets.map((dataset) => latestActivityTimestamp(dataset)));
   const normalizedSearch = search.trim().toLowerCase();
@@ -449,7 +451,9 @@ export function buildWorkspaceTreeModel(
     .filter((dataset) => matchesQuickFilter(dataset, quickFilter))
     .forEach((dataset) => {
       const runRow = buildWorkspaceRunRow(dataset, referenceTimestamp);
+      const workspaceIdentity = resolveWorkspaceIdentity(dataset, workspaceIdentityOverrides);
       const searchTarget = [
+        workspaceIdentity.displayName,
         dataset.project.name,
         dataset.project.repoPath,
         dataset.project.badge ?? "",
@@ -465,11 +469,11 @@ export function buildWorkspaceTreeModel(
       }
 
       const workspace =
-        workspaceMap.get(dataset.project.projectId) ??
+        workspaceMap.get(workspaceIdentity.id) ??
         ({
-          id: dataset.project.projectId,
-          name: dataset.project.name,
-          repoPath: dataset.project.repoPath,
+          id: workspaceIdentity.id,
+          name: workspaceIdentity.displayName,
+          repoPath: workspaceIdentity.originPath,
           badge: dataset.project.badge ?? null,
           runCount: 0,
           threads: [],
@@ -490,7 +494,7 @@ export function buildWorkspaceTreeModel(
       thread.runs.push(runRow);
       thread.runs.sort((left, right) => right.relativeTime.localeCompare(left.relativeTime));
       workspace.runCount += 1;
-      workspaceMap.set(workspace.id, workspace);
+      workspaceMap.set(workspaceIdentity.id, workspace);
     });
 
   return {
@@ -506,6 +510,18 @@ export function buildWorkspaceTreeModel(
           .sort((left, right) => left.title.localeCompare(right.title)),
       }))
       .sort((left, right) => left.name.localeCompare(right.name)),
+  };
+}
+
+function resolveWorkspaceIdentity(
+  dataset: RunDataset,
+  workspaceIdentityOverrides: WorkspaceIdentityOverrideMap,
+) {
+  const workspaceIdentity = workspaceIdentityOverrides[dataset.project.repoPath];
+  return {
+    id: workspaceIdentity?.originPath ?? dataset.project.projectId,
+    displayName: workspaceIdentity?.displayName ?? dataset.project.name,
+    originPath: workspaceIdentity?.originPath ?? dataset.project.repoPath,
   };
 }
 

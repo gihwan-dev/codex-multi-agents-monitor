@@ -220,6 +220,14 @@ export interface QuickFilterSummary {
   count: number;
 }
 
+export interface WorkspaceIdentityOverride {
+  originPath: string;
+  displayName: string;
+  isWorktree: boolean;
+}
+
+export type WorkspaceIdentityOverrideMap = Record<string, WorkspaceIdentityOverride>;
+
 export interface WorkspaceRunRow {
   id: string;
   title: string;
