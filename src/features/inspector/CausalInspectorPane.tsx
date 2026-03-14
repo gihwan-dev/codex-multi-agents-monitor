@@ -19,9 +19,11 @@ interface CausalInspectorPaneProps {
   rawEnabled: boolean;
   onSelectJump: (selection: SelectionState) => void;
   onOpenDrawer: (tab: DrawerTab) => void;
+  onToggleOpen: () => void;
   onTogglePinned: () => void;
   pinned: boolean;
   open: boolean;
+  compact?: boolean;
 }
 
 export function CausalInspectorPane({
@@ -30,21 +32,30 @@ export function CausalInspectorPane({
   rawEnabled,
   onSelectJump,
   onOpenDrawer,
+  onToggleOpen,
   onTogglePinned,
   pinned,
   open,
+  compact = false,
 }: CausalInspectorPaneProps) {
   return (
     <Panel
       title="Inspector"
-      className={`inspector ${open ? "" : "inspector--closed"}`.trim()}
+      className={`inspector ${open ? "" : "inspector--closed"} ${compact ? "inspector--compact" : ""}`.trim()}
       actions={
-        <button type="button" className="button button--ghost" onClick={onTogglePinned}>
-          {pinned ? "Pinned" : "Pin"}
-        </button>
+        compact ? (
+          <button type="button" className="button button--ghost" onClick={onToggleOpen}>
+            {open ? "Close" : "Open"}
+          </button>
+        ) : (
+          <button type="button" className="button button--ghost" onClick={onTogglePinned}>
+            {pinned ? "Pinned" : "Pin"}
+          </button>
+        )
       }
     >
-      {!open ? <p className="inspector__empty">Inspector closed. Press I to reopen.</p> : null}
+      {!open && compact ? <CompactSummary selection={selection} rawEnabled={rawEnabled} /> : null}
+      {!open && !compact ? <p className="inspector__empty">Inspector closed. Press I to reopen.</p> : null}
       {open ? (
         <div className="inspector__content">
           <Section title="Summary">
@@ -82,6 +93,33 @@ export function CausalInspectorPane({
         </div>
       ) : null}
     </Panel>
+  );
+}
+
+function CompactSummary({
+  selection,
+  rawEnabled,
+}: {
+  selection: EventRecord | EdgeRecord | ArtifactRecord | null;
+  rawEnabled: boolean;
+}) {
+  const summary = summarizeSelection(selection, rawEnabled);
+
+  if (!summary) {
+    return <p className="inspector__empty">Select a row to preview the current cause chain.</p>;
+  }
+
+  return (
+    <div className="inspector__compact-summary">
+      <p className="inspector__compact-label">Selection summary</p>
+      <strong>{summary.title}</strong>
+      <p>{summary.preview}</p>
+      <div className="inspector__compact-meta">
+        {summary.meta.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -167,6 +205,49 @@ function Payload({
       </div>
     </>
   );
+}
+
+function summarizeSelection(
+  selection: EventRecord | EdgeRecord | ArtifactRecord | null,
+  rawEnabled: boolean,
+) {
+  if (!selection) {
+    return null;
+  }
+
+  if ("eventId" in selection) {
+    return {
+      title: selection.title,
+      preview: selection.outputPreview ?? selection.inputPreview ?? "n/a",
+      meta: [
+        selection.status,
+        formatDuration(selection.durationMs),
+        selection.waitReason ?? "reason unavailable",
+      ],
+    };
+  }
+
+  if ("edgeId" in selection) {
+    return {
+      title: selection.edgeType,
+      preview: selection.payloadPreview ?? "n/a",
+      meta: [
+        `from ${truncateId(selection.sourceEventId)}`,
+        `to ${truncateId(selection.targetEventId)}`,
+        selection.artifactId ? `artifact ${truncateId(selection.artifactId)}` : "no artifact",
+      ],
+    };
+  }
+
+  return {
+    title: selection.title,
+    preview: selection.preview,
+    meta: [
+      `artifact ${truncateId(selection.artifactId)}`,
+      `producer ${truncateId(selection.producerEventId)}`,
+      rawEnabled && selection.rawContent ? "raw available" : "raw redacted",
+    ],
+  };
 }
 
 function buildCause(dataset: RunDataset, selection: EventRecord | EdgeRecord | ArtifactRecord | null) {

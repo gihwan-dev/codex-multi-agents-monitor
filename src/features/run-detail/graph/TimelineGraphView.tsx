@@ -19,6 +19,9 @@ interface TimelineGraphViewProps {
 
 export function TimelineGraphView({ lanes, edges, selectedId, onSelect }: TimelineGraphViewProps) {
   const visibleLanes = lanes.filter((lane) => !lane.hiddenByDegradation);
+  const laneMinWidth =
+    visibleLanes.length >= 8 ? 132 : visibleLanes.length >= 5 ? 150 : 188;
+  const timeGutterWidth = visibleLanes.length >= 8 ? 76 : 92;
   const events = visibleLanes
     .flatMap((lane) => lane.items.flatMap((item) => (item.kind === "event" ? [item.event] : [])))
     .sort((left, right) => left.startTs - right.startTs);
@@ -34,12 +37,14 @@ export function TimelineGraphView({ lanes, edges, selectedId, onSelect }: Timeli
       ) : null}
       <div
         className="timeline-grid"
-        style={{ gridTemplateColumns: `120px repeat(${visibleLanes.length || 1}, minmax(220px, 1fr))` }}
+        style={{
+          gridTemplateColumns: `${timeGutterWidth}px repeat(${visibleLanes.length || 1}, minmax(${laneMinWidth}px, 1fr))`,
+        }}
       >
         <div className="timeline-grid__corner">Time</div>
         {visibleLanes.map((lane) => (
           <header key={lane.lane.laneId} className="timeline-grid__lane">
-            <strong>{lane.lane.name}</strong>
+            <strong title={lane.lane.name}>{lane.lane.name}</strong>
             <span>
               {lane.lane.role} · {lane.lane.model}
             </span>
@@ -79,6 +84,7 @@ export function TimelineGraphView({ lanes, edges, selectedId, onSelect }: Timeli
                     <button
                       type="button"
                       className="timeline-event__surface"
+                      title={laneEvent.event.title}
                       onClick={() => onSelect({ kind: "event", id: laneEvent.event.eventId })}
                     >
                       <div className="timeline-event__header">

@@ -112,7 +112,10 @@ function buildCollapsedGapIds(datasets: RunDataset[]) {
 
 export function createMonitorInitialState(): MonitorState {
   const activeRunId = "trace-fix-002";
-  const activeDataset = FIXTURE_DATASETS.find((item) => item.run.traceId === activeRunId) ?? FIXTURE_DATASETS[0];
+  const activeDataset =
+    FIXTURE_DATASETS.find((item) => item.run.traceId === activeRunId) ?? FIXTURE_DATASETS[0];
+  const compactViewport =
+    typeof window !== "undefined" ? window.innerWidth <= 720 : false;
   return {
     datasets: FIXTURE_DATASETS,
     activeRunId,
@@ -123,14 +126,14 @@ export function createMonitorInitialState(): MonitorState {
     inspectorTab: "summary",
     drawerTab: "artifacts",
     drawerOpen: false,
-    inspectorOpen: true,
+    inspectorOpen: !compactViewport,
     inspectorPinned: false,
     followLiveByRunId: buildFollowLiveMap(FIXTURE_DATASETS),
     liveConnectionByRunId: buildConnectionMap(FIXTURE_DATASETS),
     filtersByRunId: buildFilterMap(FIXTURE_DATASETS),
     collapsedGapIds: buildCollapsedGapIds(FIXTURE_DATASETS),
-    railWidth: 288,
-    inspectorWidth: 360,
+    railWidth: 236,
+    inspectorWidth: 288,
     importText: FIXTURE_IMPORT_TEXT,
     allowRawImport: false,
     noRawStorage: true,
@@ -487,12 +490,12 @@ export function useMonitorAppState() {
         dispatch({ type: "toggle-gap", traceId: activeDataset.run.traceId, gapId });
       },
       resizeRail(width: number) {
-        dispatch({ type: "set-rail-width", width: Math.min(Math.max(width, 240), 420) });
+        dispatch({ type: "set-rail-width", width: Math.min(Math.max(width, 220), 340) });
       },
       resizeInspector(width: number) {
         dispatch({
           type: "set-inspector-width",
-          width: Math.min(Math.max(width, 280), 480),
+          width: Math.min(Math.max(width, 256), 380),
         });
       },
       setImportText(value: string) {

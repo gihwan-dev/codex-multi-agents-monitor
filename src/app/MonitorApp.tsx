@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
 import { TimelineGraphView } from "../features/run-detail/graph/TimelineGraphView";
 import { MapView } from "../features/run-detail/map/MapView";
@@ -47,6 +47,9 @@ export function MonitorApp() {
   } = useMonitorAppState();
   const searchRef = useRef<HTMLInputElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
+  const [isCompactViewport, setIsCompactViewport] = useState(
+    () => typeof window !== "undefined" && window.innerWidth <= 720,
+  );
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -61,6 +64,16 @@ export function MonitorApp() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsCompactViewport(window.innerWidth <= 720);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
@@ -90,7 +103,7 @@ export function MonitorApp() {
         onToggleShortcuts={actions.toggleShortcuts}
       />
 
-      <div className="workspace">
+      <div className={`workspace ${isCompactViewport ? "workspace--stacked" : ""}`.trim()}>
         <aside className="workspace__rail" style={{ width: state.railWidth }}>
           <div className="workspace__rail-pane">
             <WorkspaceRunTree
@@ -136,6 +149,21 @@ export function MonitorApp() {
           ) : null}
           {state.viewMode === "map" ? <MapView nodes={mapNodes} /> : null}
 
+          {isCompactViewport ? (
+            <CausalInspectorPane
+              compact
+              dataset={activeDataset}
+              selection={selectionDetails}
+              rawEnabled={activeDataset.run.rawIncluded}
+              onSelectJump={actions.selectItem}
+              onOpenDrawer={(tab) => openDrawer(tab)}
+              onToggleOpen={actions.toggleInspector}
+              onTogglePinned={actions.togglePinned}
+              pinned={state.inspectorPinned}
+              open={state.inspectorOpen}
+            />
+          ) : null}
+
           <Drawer
             state={state}
             activeDataset={activeDataset}
@@ -149,25 +177,28 @@ export function MonitorApp() {
           />
         </main>
 
-        <aside className="workspace__inspector" style={{ width: state.inspectorWidth }}>
-          <ResizeHandle
-            label="Resize inspector"
-            reverse
-            onDrag={actions.resizeInspector}
-            onKeyboard={actions.resizeInspector}
-            position={state.inspectorWidth}
-          />
-          <CausalInspectorPane
-            dataset={activeDataset}
-            selection={selectionDetails}
-            rawEnabled={activeDataset.run.rawIncluded}
-            onSelectJump={actions.selectItem}
-            onOpenDrawer={(tab) => openDrawer(tab)}
-            onTogglePinned={actions.togglePinned}
-            pinned={state.inspectorPinned}
-            open={state.inspectorOpen}
-          />
-        </aside>
+        {!isCompactViewport ? (
+          <aside className="workspace__inspector" style={{ width: state.inspectorWidth }}>
+            <ResizeHandle
+              label="Resize inspector"
+              reverse
+              onDrag={actions.resizeInspector}
+              onKeyboard={actions.resizeInspector}
+              position={state.inspectorWidth}
+            />
+            <CausalInspectorPane
+              dataset={activeDataset}
+              selection={selectionDetails}
+              rawEnabled={activeDataset.run.rawIncluded}
+              onSelectJump={actions.selectItem}
+              onOpenDrawer={(tab) => openDrawer(tab)}
+              onToggleOpen={actions.toggleInspector}
+              onTogglePinned={actions.togglePinned}
+              pinned={state.inspectorPinned}
+              open={state.inspectorOpen}
+            />
+          </aside>
+        ) : null}
       </div>
 
       {state.shortcutHelpOpen ? (

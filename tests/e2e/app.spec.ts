@@ -129,6 +129,25 @@ test("mode switches preserve the active run title and inspector selection", asyn
   }
 });
 
+test("mobile starts with collapsed inspector and preserves selection when reopened", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openBuiltApp(page);
+
+  const compactInspector = page.locator(".inspector--compact");
+  await expect(compactInspector.getByRole("button", { name: "Open" })).toBeVisible();
+  await expect(compactInspector).toContainText("Planner blocked");
+
+  await compactInspector.getByRole("button", { name: "Open" }).click();
+  await expect(compactInspector.getByRole("button", { name: "Close" })).toBeVisible();
+  await expect(compactInspector).toContainText("Summary");
+
+  await page.keyboard.press("i");
+  await expect(compactInspector.getByRole("button", { name: "Open" })).toBeVisible();
+  await expect(compactInspector).toContainText("Planner blocked");
+});
+
 test("dense parallel run surfaces degradation copy without losing reachability", async ({
   page,
 }) => {
