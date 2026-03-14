@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    codex_multi_agent_monitor_lib::run()
+    helloworld_lib::run()
 }
