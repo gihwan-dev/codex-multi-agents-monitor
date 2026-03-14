@@ -96,7 +96,7 @@ describe("graphLayout", () => {
   });
 
   it("routes the waiting-chain fixture from more natural horizontal ports", () => {
-    const scene = buildFixtureScene("trace-fix-002", { kind: "event", id: "fix2-blocked" }, false);
+    const scene = buildFixtureScene("trace-fix-002", { kind: "event", id: "fix2-blocked" });
     const layout = buildGraphLayoutSnapshot(scene, 1240);
 
     expect(findRouteByPrimaryEdge(scene, layout, "edge-fix2-spawn")?.sourcePort.side).toBe("right");
@@ -108,7 +108,7 @@ describe("graphLayout", () => {
   });
 
   it("keeps dense fixtures at or above the minimum lane width", () => {
-    const scene = buildFixtureScene("trace-fix-004", { kind: "event", id: "fix4-lane-1-0" }, true);
+    const scene = buildFixtureScene("trace-fix-004", { kind: "event", id: "fix4-lane-1-0" });
     const layout = buildGraphLayoutSnapshot(scene, 900);
 
     expect(layout.laneMetrics.laneWidth).toBeGreaterThanOrEqual(192);
@@ -116,7 +116,7 @@ describe("graphLayout", () => {
   });
 
   it("keeps the waiting-chain fixture guide and card center on the same row axis", () => {
-    const scene = buildFixtureScene("trace-fix-002", { kind: "event", id: "fix2-blocked" }, false);
+    const scene = buildFixtureScene("trace-fix-002", { kind: "event", id: "fix2-blocked" });
     const layout = buildGraphLayoutSnapshot(scene, 1240);
 
     const waitingLayout = layout.eventById.get("fix2-wait");
@@ -139,7 +139,7 @@ describe("graphLayout", () => {
 
   it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
     const dataset = getFixtureDataset("trace-fix-002");
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" }, false);
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" });
     const markup = renderToStaticMarkup(
       createElement(CausalGraphView, {
         scene,
@@ -258,10 +258,9 @@ function makeEdgeBundle(
 function buildFixtureScene(
   traceId: string,
   selection: { kind: "event"; id: string },
-  pathOnly: boolean,
 ) {
   const dataset = getFixtureDataset(traceId);
-  return buildGraphSceneModel(dataset, DEFAULT_FILTERS, selection, pathOnly);
+  return buildGraphSceneModel(dataset, DEFAULT_FILTERS, selection);
 }
 
 function findRouteByPrimaryEdge(

@@ -575,7 +575,6 @@ function resolveWorkspaceIdentity(
 export function buildSummaryFacts(
   dataset: RunDataset,
   selectionPath: SelectionPath,
-  pathOnly: boolean,
 ): SummaryFact[] {
   const orderedEvents = sortEvents(dataset.events);
   const blockerEvent =
@@ -623,7 +622,6 @@ export function buildSummaryFacts(
     { label: "Last handoff", value: lastHandoffLabel, emphasis: lastHandoff ? "accent" : "default" },
     { label: "Longest gap", value: formatDuration(dataset.run.summaryMetrics.idleTimeMs), emphasis: "default" },
     { label: "First failure", value: firstFailure?.title ?? "None", emphasis: firstFailure ? "danger" : "default" },
-    { label: "Path only", value: pathOnly ? "On" : "Off", emphasis: pathOnly ? "accent" : "default" },
   ];
 }
 
@@ -653,14 +651,9 @@ function buildGraphVisibleEvents(
   dataset: RunDataset,
   filters: RunFilters,
   selectionPath: SelectionPath,
-  pathOnly: boolean,
 ) {
-  const effectivePathOnly = pathOnly && dataset.lanes.length > 1 && dataset.edges.length > 0;
   const pathEventIds = new Set(selectionPath.eventIds);
   return sortEvents(dataset.events).filter((event) => {
-    if (effectivePathOnly) {
-      return pathEventIds.has(event.eventId);
-    }
     return pathEventIds.has(event.eventId) || eventMatchesFilters(event, filters);
   });
 }
@@ -669,10 +662,9 @@ export function buildGraphSceneModel(
   dataset: RunDataset,
   filters: RunFilters,
   selection: SelectionState | null,
-  pathOnly: boolean,
 ): GraphSceneModel {
   const selectionPath = buildSelectionPath(dataset, selection);
-  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly);
+  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath);
   const hasMultiAgentTopology = dataset.lanes.length > 1 && dataset.edges.length > 0;
   const graphLanes = buildGraphLanes(dataset, selectionPath);
   const visibleLanes = graphLanes.lanes;
@@ -824,14 +816,13 @@ export function buildWaterfallModel(
   dataset: RunDataset,
   filters: RunFilters,
   selection: SelectionState | null,
-  pathOnly: boolean,
 ): WaterfallModel {
   const selectionPath = buildSelectionPath(dataset, selection);
   const graphLanes = buildGraphLanes(dataset, selectionPath);
   const laneIds = new Set(graphLanes.lanes.map((lane) => lane.laneId));
   const start = dataset.run.startTs;
   const totalDuration = Math.max(dataset.run.durationMs, 1);
-  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly).filter((event) =>
+  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath).filter((event) =>
     laneIds.has(event.laneId),
   );
   const rows: WaterfallRow[] = [];

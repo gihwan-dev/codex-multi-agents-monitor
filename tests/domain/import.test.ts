@@ -178,13 +178,11 @@ describe("normalization and selectors", () => {
       dataset,
       { agentId: null, eventType: "all", search: "", errorOnly: false },
       { kind: "event", id: "fix2-blocked" },
-      true,
     );
-    const facts = buildSummaryFacts(dataset, scene.selectionPath, true);
+    const facts = buildSummaryFacts(dataset, scene.selectionPath);
 
     expect(facts.find((fact) => fact.label === "Blocked by")?.value).toBe("Planner");
     expect(facts.find((fact) => fact.label === "Last handoff")?.value).toContain("Planner");
-    expect(facts.find((fact) => fact.label === "Path only")?.value).toBe("On");
   });
 
   it("derives causal inspector copy from the selected event", () => {

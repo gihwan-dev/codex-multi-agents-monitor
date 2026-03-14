@@ -43,7 +43,6 @@ export function MonitorApp() {
     activeFilters,
     activeFollowLive,
     activeLiveConnection,
-    activePathOnly,
     rawTabAvailable,
     graphScene,
     inspectorSummary,
@@ -187,12 +186,10 @@ export function MonitorApp() {
             dataset={activeDataset}
             filters={activeFilters}
             anomalyJumps={anomalyJumps}
-            pathOnly={activePathOnly}
             viewMode={state.viewMode}
             onJump={actions.selectItem}
             onSetFilter={actions.setFilter}
             onSetViewMode={actions.setViewMode}
-            onTogglePathOnly={actions.togglePathOnly}
           />
 
           {state.viewMode === "graph" ? (
@@ -278,7 +275,6 @@ export function MonitorApp() {
             <li>`G` graph mode</li>
             <li>`W` waterfall mode</li>
             <li>`M` map mode</li>
-            <li>`P` path only toggle</li>
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
             <li>`E` error only</li>
@@ -372,22 +368,18 @@ function GraphToolbar({
   dataset,
   filters,
   anomalyJumps,
-  pathOnly,
   viewMode,
   onJump,
   onSetFilter,
   onSetViewMode,
-  onTogglePathOnly,
 }: {
   dataset: ActiveDataset;
   filters: ActiveFilters;
   anomalyJumps: AnomalyJump[];
-  pathOnly: boolean;
   viewMode: ViewMode;
   onJump: (selection: { kind: "event" | "edge" | "artifact"; id: string }) => void;
   onSetFilter: MonitorAppState["actions"]["setFilter"];
   onSetViewMode: MonitorAppState["actions"]["setViewMode"];
-  onTogglePathOnly: () => void;
 }) {
   return (
     <section className="graph-toolbar graph-toolbar--split">
@@ -459,13 +451,6 @@ function GraphToolbar({
               />
               Error-only
             </label>
-            <button
-              type="button"
-              className={`button ${pathOnly ? "button--active" : "button--ghost"}`.trim()}
-              onClick={onTogglePathOnly}
-            >
-              Path only
-            </button>
           </div>
         </div>
 

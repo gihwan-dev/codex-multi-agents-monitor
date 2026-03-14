@@ -246,6 +246,5 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 
   await page.locator('.run-row[title="Dense parallel replay"]').click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Path only" })).toHaveClass(/button--active/);
   await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();
 });
