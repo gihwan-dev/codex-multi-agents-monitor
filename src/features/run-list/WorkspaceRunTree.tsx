@@ -55,14 +55,17 @@ export function WorkspaceRunTree({
       const nextExpanded = current.filter((workspaceId) =>
         model.workspaces.some((workspace) => workspace.id === workspaceId),
       );
-      return nextExpanded.length
-        ? nextExpanded
-        : model.workspaces.map((workspace) => workspace.id);
+      const fallbackExpanded = model.workspaces.map((workspace) => workspace.id);
+      const resolvedExpanded = nextExpanded.length ? nextExpanded : fallbackExpanded;
+
+      return areWorkspaceIdsEqual(current, resolvedExpanded) ? current : resolvedExpanded;
     });
-    setActiveTreeId(
-      findRunTreeId(model.workspaces, activeRunId) ??
-        buildWorkspaceTreeId(model.workspaces[0]?.id ?? ""),
-    );
+    setActiveTreeId((current) => {
+      const nextTreeId =
+        findRunTreeId(model.workspaces, activeRunId) ??
+        buildWorkspaceTreeId(model.workspaces[0]?.id ?? "");
+      return current === nextTreeId ? current : nextTreeId;
+    });
   }, [activeRunId, model.workspaces]);
 
   const flatItems = useMemo(
@@ -267,6 +270,10 @@ function flattenTree(workspaces: WorkspaceTreeItem[], expandedWorkspaceIds: stri
         }))
       : []),
   ]);
+}
+
+function areWorkspaceIdsEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function getWorkspaceRuns(workspace: WorkspaceTreeItem) {

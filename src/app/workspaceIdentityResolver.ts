@@ -3,14 +3,7 @@ import type {
   WorkspaceIdentityOverride,
   WorkspaceIdentityOverrideMap,
 } from "../shared/domain";
-
-declare global {
-  interface Window {
-    __TAURI_INTERNALS__?: {
-      invoke?: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-    };
-  }
-}
+import { invokeTauri } from "./tauri";
 
 const identityCache = new Map<string, WorkspaceIdentityOverride>();
 
@@ -21,26 +14,23 @@ export async function resolveWorkspaceIdentityOverrides(
   const repoPaths = Object.keys(fallbackMap).filter((repoPath) => !identityCache.has(repoPath));
 
   if (repoPaths.length && typeof window !== "undefined") {
-    const invoke = window.__TAURI_INTERNALS__?.invoke;
-    if (typeof invoke === "function") {
-      try {
-        const resolved = await invoke<Record<string, Partial<WorkspaceIdentityOverride>>>(
-          "resolve_workspace_identities",
-          {
-            repoPaths,
-          },
-        );
+    try {
+      const resolved = await invokeTauri<Record<string, Partial<WorkspaceIdentityOverride>>>(
+        "resolve_workspace_identities",
+        {
+          repoPaths,
+        },
+      );
 
-        Object.entries(resolved).forEach(([repoPath, identity]) => {
-          const fallback = fallbackMap[repoPath];
-          if (!fallback) {
-            return;
-          }
-          identityCache.set(repoPath, sanitizeWorkspaceIdentity(identity, fallback));
-        });
-      } catch {
-        // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.
-      }
+      Object.entries(resolved).forEach(([repoPath, identity]) => {
+        const fallback = fallbackMap[repoPath];
+        if (!fallback) {
+          return;
+        }
+        identityCache.set(repoPath, sanitizeWorkspaceIdentity(identity, fallback));
+      });
+    } catch {
+      // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.
     }
   }
 

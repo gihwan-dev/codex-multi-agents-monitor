@@ -17,6 +17,7 @@ import {
   type SelectionState,
   type ViewMode,
 } from "../shared/domain";
+import { loadSessionLogDatasets } from "./sessionLogLoader";
 
 export type LiveConnection = "live" | "stale" | "disconnected" | "reconnected" | "paused";
 
@@ -68,6 +69,7 @@ type Action =
   | { type: "set-export-text"; value: string; open?: boolean }
   | { type: "toggle-shortcuts" }
   | { type: "import-dataset"; dataset: RunDataset }
+  | { type: "replace-datasets"; datasets: RunDataset[] }
   | { type: "apply-live-frame" };
 
 function createDefaultFilters(): RunFilters {
@@ -312,6 +314,33 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         inspectorTab: hasRawPayload(action.dataset) ? state.inspectorTab : "summary",
       };
     }
+    case "replace-datasets": {
+      if (!action.datasets.length) {
+        return state;
+      }
+
+      const activeDataset =
+        action.datasets.find((item) => item.run.traceId === state.activeRunId) ?? action.datasets[0];
+
+      return {
+        ...state,
+        datasets: action.datasets,
+        activeRunId: activeDataset.run.traceId,
+        selection: activeDataset.run.selectedByDefaultId
+          ? { kind: "event", id: activeDataset.run.selectedByDefaultId }
+          : null,
+        pathOnlyByRunId: buildPathOnlyMap(action.datasets),
+        followLiveByRunId: buildFollowLiveMap(action.datasets),
+        liveConnectionByRunId: buildConnectionMap(action.datasets),
+        filtersByRunId: buildFilterMap(action.datasets),
+        collapsedGapIds: buildCollapsedGapIds(action.datasets),
+        inspectorTab:
+          activeDataset.run.rawIncluded || state.inspectorTab !== "raw" ? state.inspectorTab : "summary",
+        drawerTab:
+          activeDataset.run.rawIncluded || state.drawerTab !== "raw" ? state.drawerTab : "artifacts",
+        appliedLiveFrames: 0,
+      };
+    }
     case "apply-live-frame": {
       if (state.appliedLiveFrames >= LIVE_FIXTURE_FRAMES.length) {
         return state;
@@ -382,6 +411,29 @@ export function useMonitorAppState() {
   const mapNodes = buildMapNodes(activeDataset);
 
   useEffect(() => {
+    let cancelled = false;
+
+    loadSessionLogDatasets().then((datasets) => {
+      if (cancelled || !datasets?.length) {
+        return;
+      }
+
+      startTransition(() => {
+        dispatch({ type: "replace-datasets", datasets });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const liveFixtureRun = state.datasets.find((item) => item.run.traceId === "trace-fix-006");
+    if (!liveFixtureRun || liveFixtureRun.run.liveMode !== "live") {
+      return undefined;
+    }
+
     if (state.appliedLiveFrames >= LIVE_FIXTURE_FRAMES.length) {
       return undefined;
     }
@@ -392,7 +444,7 @@ export function useMonitorAppState() {
     }, frame.delayMs);
 
     return () => window.clearTimeout(timeout);
-  }, [state.appliedLiveFrames]);
+  }, [state.appliedLiveFrames, state.datasets]);
 
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
     const visibleEventIds =
