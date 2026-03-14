@@ -846,20 +846,6 @@ textarea {
   box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
-.graph-sequence__card--path::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: rgba(77, 163, 255, 0.55);
-}
-
-.graph-sequence__card--path.graph-sequence__card--selected::before {
-  background: rgba(77, 163, 255, 0.8);
-}
 
 .graph-sequence__card--path-dimmed,
 .graph-sequence__card--dimmed {
