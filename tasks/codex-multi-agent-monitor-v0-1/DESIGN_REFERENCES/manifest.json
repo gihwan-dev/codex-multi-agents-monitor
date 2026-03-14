@@ -1,0 +1,52 @@
+[
+  {
+    "file": "curated/gitkraken-graph-grammar-adopt.md",
+    "source_url": "https://www.gitkraken.com/features/commit-graph",
+    "captured_at": "2026-03-14T10:20:05Z",
+    "kind": "adopt",
+    "tags": ["graph-grammar", "three-pane", "dense-navigation"],
+    "adopt_reason": "세로 graph grammar와 left-panel -> graph -> detail 구조가 run-detail workbench와 잘 맞는다.",
+    "avoid_reason": "",
+    "notes": "Git metadata vocabulary는 버리고 graph relationship 읽기 방식과 contextual action만 채택한다."
+  },
+  {
+    "file": "curated/linear-calm-chrome-adopt.md",
+    "source_url": "https://linear.app/now/behind-the-latest-design-refresh",
+    "captured_at": "2026-03-14T10:20:05Z",
+    "kind": "adopt",
+    "tags": ["chrome", "sidebar", "keyboard-first"],
+    "adopt_reason": "calm chrome, dim sidebar, restrained motion을 app shell tone으로 차용한다.",
+    "avoid_reason": "",
+    "notes": "PM board 문법은 가져오지 않고 sidebar tone, command-first interaction만 채택한다."
+  },
+  {
+    "file": "curated/langfuse-timeline-adopt.md",
+    "source_url": "https://langfuse.com/changelog/2024-06-12-timeline-view",
+    "captured_at": "2026-03-14T10:20:05Z",
+    "kind": "adopt",
+    "tags": ["timeline", "parallelism", "latency"],
+    "adopt_reason": "parallelism과 latency bottleneck을 timeline으로 읽게 하는 mental model이 v0.1 summary strip과 gap folding 설계에 유효하다.",
+    "avoid_reason": "",
+    "notes": "Graph mode가 primary인 만큼 timeline은 secondary mode와 summary derivation 근거로만 사용한다."
+  },
+  {
+    "file": "curated/langfuse-agent-graph-adopt.md",
+    "source_url": "https://langfuse.com/docs/observability/features/agent-graphs",
+    "captured_at": "2026-03-14T10:20:05Z",
+    "kind": "adopt",
+    "tags": ["agent-graph", "handoff", "interaction-map"],
+    "adopt_reason": "multi-agent interaction을 node/edge 관계로 압축하는 map mode reference로 적합하다.",
+    "avoid_reason": "",
+    "notes": "Map mode는 primary graph를 대체하지 않고 overview lens로만 사용한다."
+  },
+  {
+    "file": "curated/starter-hero-avoid.md",
+    "source_url": "file:///Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/App.tsx",
+    "captured_at": "2026-03-14T10:20:05Z",
+    "kind": "avoid",
+    "tags": ["starter", "hero", "marketing-layout"],
+    "adopt_reason": "",
+    "avoid_reason": "single-card centered hero layout는 run debugging의 orientation, density, anomaly scanning 요구와 맞지 않는다.",
+    "notes": "현재 repo starter UI는 replace 대상이며 visual source of truth가 아니다."
+  }
+]

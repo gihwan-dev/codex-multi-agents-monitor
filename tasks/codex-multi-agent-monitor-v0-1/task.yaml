@@ -1,0 +1,50 @@
+task: codex-multi-agent-monitor-v0-1
+goal: One multi-agent run should be understandable within 30 seconds from spawn to finish, including delegation, waiting points, artifacts, and failure boundaries.
+success_criteria:
+  - A user can open a single run and identify agent count, current state split, last handoff, longest gap, first failure, and final artifact within 30 seconds.
+  - The run list surfaces live, waiting or blocked, failed, and recent completed runs with enough project context to pick the anomalous run in under 10 seconds.
+  - Waiting, blocked, and interrupted events always expose a `wait_reason`, and handoff and transfer edges remain visually distinct in the detail view.
+  - Completed-run import and live watch both preserve preview-first masking defaults with raw payload opt-in and raw-excluded export default.
+major_boundaries:
+  - Desktop app shell, project and run navigation, and run detail workbench surfaces
+  - Normalized trace domain model with project, session, run, lane, event, edge, and artifact boundaries
+  - Import and live-watch ingestion, redaction, and local persistence boundaries
+  - Graph, waterfall, and map rendering strategy with large-run degradation rules
+work_type: feature
+impact_flags:
+  - ui_surface_changed
+  - workflow_changed
+  - architecture_significant
+  - operability_changed
+required_docs:
+  - README.md
+  - EXECUTION_PLAN.md
+  - SPEC_VALIDATION.md
+  - STATUS.md
+  - PRD.md
+  - UX_SPEC.md
+  - UX_BEHAVIOR_ACCESSIBILITY.md
+  - DESIGN_REFERENCES/
+  - TECH_SPEC.md
+  - ACCEPTANCE.feature
+  - ADRs/
+source_of_truth:
+  product: PRD.md
+  ux: UX_SPEC.md
+  ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
+  design_references: DESIGN_REFERENCES/manifest.json
+  architecture: TECH_SPEC.md
+  execution: EXECUTION_PLAN.md
+  acceptance: ACCEPTANCE.feature
+  validation: SPEC_VALIDATION.md
+ids:
+  requirement_prefix: REQ
+  screen_prefix: SCR
+  flow_prefix: FLOW
+  adr_prefix: ADR
+  acceptance_prefix: AC
+  slice_prefix: SLICE
+  risk_prefix: RISK
+delivery_strategy: ui-first
+validation_gate: blocking
+current_phase: design
