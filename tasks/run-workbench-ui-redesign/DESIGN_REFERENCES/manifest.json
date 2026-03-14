@@ -1,0 +1,42 @@
+[
+  {
+    "file": "curated/gitkraken-graph-grammar-adopt.md",
+    "source_url": "https://www.gitkraken.com/features/commit-graph",
+    "captured_at": "2026-03-14T12:53:46Z",
+    "kind": "adopt",
+    "tags": ["graph-grammar", "row-flow", "three-pane"],
+    "adopt_reason": "세로 relation grammar와 left rail -> graph -> detail 읽기 흐름이 이번 row-based graph와 잘 맞는다.",
+    "avoid_reason": "",
+    "notes": "Git vocabulary는 버리고 graph reading order와 relation emphasis만 채택한다."
+  },
+  {
+    "file": "curated/linear-calm-chrome-adopt.md",
+    "source_url": "https://linear.app/now/behind-the-latest-design-refresh",
+    "captured_at": "2026-03-14T12:53:46Z",
+    "kind": "adopt",
+    "tags": ["chrome", "density", "desktop"],
+    "adopt_reason": "calm chrome, restrained border, dense sidebar tone이 observability workspace shell에 적합하다.",
+    "avoid_reason": "",
+    "notes": "board/product planning grammar는 가져오지 않고 chrome discipline만 채택한다."
+  },
+  {
+    "file": "curated/langfuse-timeline-density-adopt.md",
+    "source_url": "https://langfuse.com/changelog/2024-06-12-timeline-view",
+    "captured_at": "2026-03-14T12:53:46Z",
+    "kind": "adopt",
+    "tags": ["timeline", "trace", "bottleneck"],
+    "adopt_reason": "time-ordered trace reading, bottleneck scanning, dense event representation이 row graph 설계의 근거가 된다.",
+    "avoid_reason": "",
+    "notes": "timeline mental model을 primary graph의 time gutter와 gap row 설계에 반영한다."
+  },
+  {
+    "file": "curated/current-dashboard-shell-avoid.md",
+    "source_url": "file:///Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/src/app/MonitorApp.tsx",
+    "captured_at": "2026-03-14T12:53:46Z",
+    "kind": "avoid",
+    "tags": ["current-ui", "card-stack", "status-grouping"],
+    "adopt_reason": "",
+    "avoid_reason": "status-grouped run cards, stacked empty panels, detached edge pills, always-present drawer grammar가 graph-first workbench 목표와 충돌한다.",
+    "notes": "이번 task의 회피 기준을 명시하는 local implementation audit다."
+  }
+]

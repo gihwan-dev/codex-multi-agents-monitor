@@ -1,0 +1,52 @@
+task: run-workbench-ui-redesign
+goal: Redesign the current monitor UI into a workspace-grouped observability workbench with a readable row-based event graph and a causal inspector.
+success_criteria:
+  - A user can find the target run from a workspace-grouped tree with quick filters in under 10 seconds.
+  - A user can explain the selected run's current blocker, last handoff, first failure, and final artifact within 30 seconds from the compact strip, primary graph, and inspector without opening raw payload.
+  - Selecting a row, edge, or anomaly jump highlights the same causal path in the graph and the inspector with clear cause and impact context.
+  - Summary, anomaly jumps, filters, and the bottom drawer stay compact or hidden by default so the graph remains the primary surface at 1280px desktop width.
+major_boundaries:
+  - Left rail workspace tree, quick filters, and dense run row navigation
+  - Main workbench chrome, compact summary strip, and unified graph toolbar
+  - Row-based event graph, time gutter, selected-path emphasis, and gap folding/degradation rules
+  - Inspector cause and impact presentation, drawer reveal policy, and selection sync across panes
+  - UI state and selector refactor boundaries across app shell, run-list, graph, inspector, and shared primitives
+work_type: refactor
+impact_flags:
+  - ui_surface_changed
+  - workflow_changed
+  - architecture_significant
+  - high_user_risk
+required_docs:
+  - README.md
+  - EXECUTION_PLAN.md
+  - SPEC_VALIDATION.md
+  - STATUS.md
+  - CURRENT_STATE.md
+  - TARGET_STATE.md
+  - UX_SPEC.md
+  - UX_BEHAVIOR_ACCESSIBILITY.md
+  - DESIGN_REFERENCES/
+  - TECH_SPEC.md
+  - ACCEPTANCE.feature
+source_of_truth:
+  current_state: CURRENT_STATE.md
+  target_state: TARGET_STATE.md
+  ux: UX_SPEC.md
+  ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
+  design_references: DESIGN_REFERENCES/manifest.json
+  architecture: TECH_SPEC.md
+  execution: EXECUTION_PLAN.md
+  acceptance: ACCEPTANCE.feature
+  validation: SPEC_VALIDATION.md
+ids:
+  requirement_prefix: REQ
+  screen_prefix: SCR
+  flow_prefix: FLOW
+  adr_prefix: ADR
+  acceptance_prefix: AC
+  slice_prefix: SLICE
+  risk_prefix: RISK
+delivery_strategy: ui-first
+validation_gate: blocking
+current_phase: design
