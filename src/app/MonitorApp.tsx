@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
-import { InspectorPane } from "../features/inspector/InspectorPane";
-import { GraphView } from "../features/run-detail/graph/GraphView";
+import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
+import { TimelineGraphView } from "../features/run-detail/graph/TimelineGraphView";
 import { MapView } from "../features/run-detail/map/MapView";
 import { WaterfallView } from "../features/run-detail/waterfall/WaterfallView";
-import { RunListPane } from "../features/run-list/RunListPane";
+import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
 import {
   type AnomalyJump,
+  type DrawerTab,
   type EventType,
   formatCurrency,
   formatDuration,
   formatTokens,
-  groupRuns,
 } from "../shared/domain";
 import { MetricPill, Panel, StatusChip } from "../shared/ui";
 import { useMonitorAppState } from "./useMonitorAppState";
@@ -23,6 +23,12 @@ const eventFilterOptions: Array<EventType | "all"> = [
   "llm.finished",
   "error",
 ];
+
+type MonitorAppState = ReturnType<typeof useMonitorAppState>;
+type ActiveDataset = MonitorAppState["activeDataset"];
+type ActiveFilters = MonitorAppState["activeFilters"];
+type ViewMode = MonitorAppState["state"]["viewMode"];
+type LiveConnection = MonitorAppState["activeLiveConnection"];
 
 export function MonitorApp() {
   const {
@@ -37,11 +43,10 @@ export function MonitorApp() {
     anomalyJumps,
     waterfallSegments,
     mapNodes,
-    collapsedGapIds,
     actions,
   } = useMonitorAppState();
   const searchRef = useRef<HTMLInputElement>(null);
-  const runGroups = groupRuns(state.datasets);
+  const drawerTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -58,181 +63,72 @@ export function MonitorApp() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
+    drawerTriggerRef.current =
+      target ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    actions.setDrawerTab(tab, true);
+  };
+
+  const closeDrawer = () => {
+    actions.toggleDrawer();
+    window.requestAnimationFrame(() => {
+      drawerTriggerRef.current?.focus();
+    });
+  };
+
   return (
     <div className="monitor-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">Warm Graphite Observatory</p>
-          <h1>{activeDataset.run.title}</h1>
-          <p className="top-bar__breadcrumb">
-            {activeDataset.project.name} / {activeDataset.session.title}
-          </p>
-        </div>
-        <div className="top-bar__controls">
-          <StatusChip status={activeDataset.run.status} />
-          <span className="env-badge">
-            {activeDataset.run.liveMode === "live" ? "Live watch" : "Imported run"}
-          </span>
-          {activeDataset.run.liveMode === "live" ? (
-            <span className={`live-badge live-badge--${activeLiveConnection}`}>
-              {activeLiveConnection === "paused" ? "Following paused" : activeLiveConnection}
-            </span>
-          ) : null}
-          <input
-            ref={searchRef}
-            type="search"
-            className="search-input"
-            placeholder="Search /"
-            value={activeFilters.search}
-            onChange={(event) => actions.setFilter("search", event.target.value)}
-          />
-          <button type="button" className="button" onClick={() => actions.exportDataset(false)}>
-            Export
-          </button>
-          <button
-            type="button"
-            className="button button--ghost"
-            onClick={() => actions.setDrawerTab("import", true)}
-          >
-            Import
-          </button>
-          <button type="button" className="button button--ghost" onClick={actions.toggleShortcuts}>
-            ?
-          </button>
-        </div>
-      </header>
+      <TopBar
+        dataset={activeDataset}
+        followLive={activeFollowLive}
+        liveConnection={activeLiveConnection}
+        onExport={(target) => {
+          drawerTriggerRef.current = target;
+          actions.exportDataset(false);
+        }}
+        onToggleFollowLive={actions.toggleFollowLive}
+        onToggleShortcuts={actions.toggleShortcuts}
+      />
 
       <div className="workspace">
-        <div className="workspace__rail" style={{ width: state.railWidth }}>
-          <RunListPane
-            groups={runGroups}
-            activeRunId={state.activeRunId}
-            onSelectRun={actions.selectRun}
-          />
+        <aside className="workspace__rail" style={{ width: state.railWidth }}>
+          <div className="workspace__rail-pane">
+            <WorkspaceRunTree
+              datasets={state.datasets}
+              activeRunId={state.activeRunId}
+              onSelectRun={actions.selectRun}
+              onOpenImport={() => openDrawer("import")}
+              searchRef={searchRef}
+            />
+          </div>
           <ResizeHandle
             label="Resize run list"
             onDrag={actions.resizeRail}
             onKeyboard={actions.resizeRail}
             position={state.railWidth}
           />
-        </div>
+        </aside>
 
         <main className="workspace__main">
-          <Panel className="summary-strip" title="30-second checklist">
-            <div className="summary-strip__metrics">
-              <MetricPill
-                label="Agents"
-                value={`${activeDataset.run.summaryMetrics.agentCount}`}
-              />
-              <MetricPill
-                label="Current split"
-                value={`${activeDataset.lanes.filter((lane) => lane.laneStatus === "running").length} running`}
-              />
-              <MetricPill
-                label="Longest gap"
-                value={formatDuration(activeDataset.run.summaryMetrics.idleTimeMs)}
-              />
-              <MetricPill
-                label="First failure"
-                value={`${activeDataset.run.summaryMetrics.errorCount || 0}`}
-              />
-              <MetricPill
-                label="Tokens"
-                value={formatTokens(activeDataset.run.summaryMetrics.tokens)}
-              />
-              <MetricPill
-                label="Cost"
-                value={formatCurrency(activeDataset.run.summaryMetrics.costUsd)}
-              />
-            </div>
-          </Panel>
-
-          <Panel
-            className="jump-bar"
-            title="Anomaly jumps"
-            actions={
-              <div className="mode-tabs">
-                {(["graph", "waterfall", "map"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`button ${state.viewMode === mode ? "button--active" : "button--ghost"}`.trim()}
-                    onClick={() => actions.setViewMode(mode)}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-            }
-          >
-            <div className="jump-bar__content">
-              {anomalyJumps.map((jump) => (
-                <JumpButton key={jump.label} jump={jump} onJump={actions.selectItem} />
-              ))}
-            </div>
-          </Panel>
-
-          <Panel title="Filters" className="filters-panel">
-            <div className="filters-panel__grid">
-              <label>
-                Agent
-                <select
-                  value={activeFilters.agentId ?? ""}
-                  onChange={(event) =>
-                    actions.setFilter("agentId", event.target.value || null)
-                  }
-                >
-                  <option value="">All lanes</option>
-                  {activeDataset.lanes.map((lane) => (
-                    <option key={lane.laneId} value={lane.agentId}>
-                      {lane.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Event type
-                <select
-                  value={activeFilters.eventType}
-                  onChange={(event) =>
-                    actions.setFilter("eventType", event.target.value as EventType | "all")
-                  }
-                >
-                  {eventFilterOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={activeFilters.errorOnly}
-                  onChange={(event) => actions.setFilter("errorOnly", event.target.checked)}
-                />
-                Error-only
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={activeFollowLive}
-                  disabled={activeDataset.run.liveMode !== "live"}
-                  onChange={actions.toggleFollowLive}
-                />
-                Follow live
-              </label>
-            </div>
-          </Panel>
+          <SummaryStrip dataset={activeDataset} />
+          <GraphToolbar
+            dataset={activeDataset}
+            filters={activeFilters}
+            anomalyJumps={anomalyJumps}
+            rawTabAvailable={rawTabAvailable}
+            viewMode={state.viewMode}
+            onJump={actions.selectItem}
+            onOpenDrawer={openDrawer}
+            onSetFilter={actions.setFilter}
+            onSetViewMode={actions.setViewMode}
+          />
 
           {state.viewMode === "graph" ? (
-            <GraphView
+            <TimelineGraphView
               lanes={laneDisplays}
               edges={activeDataset.edges}
               selectedId={state.selection?.id ?? null}
               onSelect={actions.selectItem}
-              expandedGapIds={collapsedGapIds}
-              onToggleGap={actions.toggleGap}
             />
           ) : null}
           {state.viewMode === "waterfall" ? (
@@ -244,16 +140,16 @@ export function MonitorApp() {
             state={state}
             activeDataset={activeDataset}
             rawTabAvailable={rawTabAvailable}
-            onSetDrawerTab={actions.setDrawerTab}
+            onSetDrawerTab={openDrawer}
             onImport={actions.importPayload}
             onImportTextChange={actions.setImportText}
             onAllowRawChange={actions.setAllowRaw}
             onNoRawChange={actions.setNoRawStorage}
-            onToggleDrawer={actions.toggleDrawer}
+            onToggleDrawer={closeDrawer}
           />
         </main>
 
-        <div className="workspace__inspector" style={{ width: state.inspectorWidth }}>
+        <aside className="workspace__inspector" style={{ width: state.inspectorWidth }}>
           <ResizeHandle
             label="Resize inspector"
             reverse
@@ -261,23 +157,24 @@ export function MonitorApp() {
             onKeyboard={actions.resizeInspector}
             position={state.inspectorWidth}
           />
-          <InspectorPane
+          <CausalInspectorPane
+            dataset={activeDataset}
             selection={selectionDetails}
-            activeTab={state.inspectorTab}
             rawEnabled={activeDataset.run.rawIncluded}
-            showRawTab={rawTabAvailable}
-            onChangeTab={actions.setInspectorTab}
+            onSelectJump={actions.selectItem}
+            onOpenDrawer={(tab) => openDrawer(tab)}
             onTogglePinned={actions.togglePinned}
             pinned={state.inspectorPinned}
             open={state.inspectorOpen}
           />
-        </div>
+        </aside>
       </div>
 
       {state.shortcutHelpOpen ? (
         <dialog open className="shortcut-dialog">
           <h2>Shortcut help</h2>
           <ul>
+            <li>`/` search focus</li>
             <li>`G` graph mode</li>
             <li>`W` waterfall mode</li>
             <li>`M` map mode</li>
@@ -292,6 +189,234 @@ export function MonitorApp() {
         </dialog>
       ) : null}
     </div>
+  );
+}
+
+function TopBar({
+  dataset,
+  followLive,
+  liveConnection,
+  onExport,
+  onToggleFollowLive,
+  onToggleShortcuts,
+}: {
+  dataset: ActiveDataset;
+  followLive: boolean;
+  liveConnection: LiveConnection;
+  onExport: (target: HTMLElement) => void;
+  onToggleFollowLive: () => void;
+  onToggleShortcuts: () => void;
+}) {
+  return (
+    <header className="top-bar top-bar--compact">
+      <div className="top-bar__identity">
+        <p className="eyebrow">Warm Graphite Observatory</p>
+        <p className="top-bar__breadcrumb">
+          {dataset.project.name} / {dataset.session.title}
+        </p>
+        <div className="top-bar__title-row">
+          <h1>{dataset.run.title}</h1>
+          <StatusChip status={dataset.run.status} />
+          <span className="env-badge">
+            {dataset.run.liveMode === "live" ? "Live watch" : "Imported run"}
+          </span>
+          {dataset.run.liveMode === "live" ? (
+            <span className={`live-badge live-badge--${liveConnection}`}>
+              {liveConnection === "paused" ? "Following paused" : liveConnection}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="top-bar__controls">
+        <button
+          type="button"
+          className={`button ${followLive ? "button--active" : "button--ghost"}`.trim()}
+          disabled={dataset.run.liveMode !== "live"}
+          onClick={onToggleFollowLive}
+        >
+          Follow live
+        </button>
+        <button
+          type="button"
+          className="button"
+          onClick={(event) => onExport(event.currentTarget)}
+        >
+          Export
+        </button>
+        <button type="button" className="button button--ghost" onClick={onToggleShortcuts}>
+          Help
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function SummaryStrip({
+  dataset,
+}: {
+  dataset: ActiveDataset;
+}) {
+  return (
+    <section className="summary-strip summary-strip--compact">
+      <div className="summary-strip__heading">
+        <p className="summary-strip__eyebrow">30-second checklist</p>
+        <strong>Keep the graph centered and elevate only the blocker path.</strong>
+      </div>
+      <div className="summary-strip__metrics">
+        <MetricPill label="Agents" value={`${dataset.run.summaryMetrics.agentCount}`} />
+        <MetricPill
+          label="Current split"
+          value={`${dataset.lanes.filter((lane) => lane.laneStatus === "running").length} running`}
+        />
+        <MetricPill
+          label="Longest gap"
+          value={formatDuration(dataset.run.summaryMetrics.idleTimeMs)}
+        />
+        <MetricPill
+          label="First failure"
+          value={`${dataset.run.summaryMetrics.errorCount || 0}`}
+        />
+        <MetricPill
+          label="Tokens"
+          value={formatTokens(dataset.run.summaryMetrics.tokens)}
+        />
+        <MetricPill
+          label="Cost"
+          value={formatCurrency(dataset.run.summaryMetrics.costUsd)}
+        />
+      </div>
+    </section>
+  );
+}
+
+function GraphToolbar({
+  dataset,
+  filters,
+  anomalyJumps,
+  rawTabAvailable,
+  viewMode,
+  onJump,
+  onOpenDrawer,
+  onSetFilter,
+  onSetViewMode,
+}: {
+  dataset: ActiveDataset;
+  filters: ActiveFilters;
+  anomalyJumps: AnomalyJump[];
+  rawTabAvailable: boolean;
+  viewMode: ViewMode;
+  onJump: (selection: { kind: "event" | "edge" | "artifact"; id: string }) => void;
+  onOpenDrawer: (tab: DrawerTab, target?: HTMLElement | null) => void;
+  onSetFilter: MonitorAppState["actions"]["setFilter"];
+  onSetViewMode: MonitorAppState["actions"]["setViewMode"];
+}) {
+  return (
+    <section className="graph-toolbar">
+      <div className="graph-toolbar__row">
+        <div className="graph-toolbar__cluster">
+          <p className="graph-toolbar__label">Anomaly jumps</p>
+          <div className="jump-bar__content">
+            {anomalyJumps.map((jump) => (
+              <JumpButton key={jump.label} jump={jump} onJump={onJump} />
+            ))}
+          </div>
+        </div>
+
+        <div className="graph-toolbar__cluster graph-toolbar__cluster--modes">
+          <p className="graph-toolbar__label">Mode</p>
+          <div className="mode-tabs">
+            {(["graph", "waterfall", "map"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`button ${viewMode === mode ? "button--active" : "button--ghost"}`.trim()}
+                onClick={() => onSetViewMode(mode)}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="graph-toolbar__cluster graph-toolbar__cluster--drawer">
+          <p className="graph-toolbar__label">Drawer</p>
+          <div className="graph-toolbar__drawer-actions">
+            <DrawerButton label="Artifacts" tab="artifacts" onOpenDrawer={onOpenDrawer} />
+            <DrawerButton label="Log" tab="log" onOpenDrawer={onOpenDrawer} />
+            <DrawerButton
+              label="Raw"
+              tab="raw"
+              disabled={!rawTabAvailable}
+              onOpenDrawer={onOpenDrawer}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="graph-toolbar__filters">
+        <label>
+          Agent
+          <select
+            value={filters.agentId ?? ""}
+            onChange={(event) => onSetFilter("agentId", event.target.value || null)}
+          >
+            <option value="">All lanes</option>
+            {dataset.lanes.map((lane) => (
+              <option key={lane.laneId} value={lane.agentId}>
+                {lane.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Event type
+          <select
+            value={filters.eventType}
+            onChange={(event) =>
+              onSetFilter("eventType", event.target.value as EventType | "all")
+            }
+          >
+            {eventFilterOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={filters.errorOnly}
+            onChange={(event) => onSetFilter("errorOnly", event.target.checked)}
+          />
+          Error-only
+        </label>
+      </div>
+    </section>
+  );
+}
+
+function DrawerButton({
+  label,
+  tab,
+  disabled = false,
+  onOpenDrawer,
+}: {
+  label: string;
+  tab: DrawerTab;
+  disabled?: boolean;
+  onOpenDrawer: (tab: DrawerTab, target?: HTMLElement | null) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="button button--ghost"
+      disabled={disabled}
+      onClick={(event) => onOpenDrawer(tab, event.currentTarget)}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -368,23 +493,27 @@ function Drawer({
   onNoRawChange,
   onToggleDrawer,
 }: {
-  state: ReturnType<typeof useMonitorAppState>["state"];
-  activeDataset: ReturnType<typeof useMonitorAppState>["activeDataset"];
+  state: MonitorAppState["state"];
+  activeDataset: ActiveDataset;
   rawTabAvailable: boolean;
-  onSetDrawerTab: (tab: "artifacts" | "import" | "raw" | "log", open?: boolean) => void;
+  onSetDrawerTab: (tab: DrawerTab, target?: HTMLElement | null) => void;
   onImport: () => void;
   onImportTextChange: (value: string) => void;
   onAllowRawChange: (value: boolean) => void;
   onNoRawChange: (value: boolean) => void;
   onToggleDrawer: () => void;
 }) {
+  if (!state.drawerOpen) {
+    return <div className="drawer drawer--closed" aria-hidden="true" />;
+  }
+
   return (
     <Panel
       title="Bottom drawer"
-      className={`drawer ${state.drawerOpen ? "drawer--open" : "drawer--closed"}`.trim()}
+      className="drawer drawer--open"
       actions={
         <button type="button" className="button button--ghost" onClick={onToggleDrawer}>
-          {state.drawerOpen ? "Close" : "Open"}
+          Close
         </button>
       }
     >
@@ -396,7 +525,7 @@ function Drawer({
               key={tab}
               type="button"
               className={`tabs__pill ${state.drawerTab === tab ? "tabs__pill--active" : ""}`.trim()}
-              onClick={() => onSetDrawerTab(tab, true)}
+              onClick={(event) => onSetDrawerTab(tab, event.currentTarget)}
             >
               {tab}
             </button>
@@ -446,10 +575,14 @@ function Drawer({
       ) : null}
       {state.drawerTab === "raw" ? (
         <pre className="drawer__pre">
-          {activeDataset.run.rawIncluded ? JSON.stringify(activeDataset, null, 2) : "Raw payload hidden by default."}
+          {activeDataset.run.rawIncluded
+            ? JSON.stringify(activeDataset, null, 2)
+            : "Raw payload hidden by default."}
         </pre>
       ) : null}
-      {state.drawerTab === "log" ? <pre className="drawer__pre">{state.exportText || "No export generated yet."}</pre> : null}
+      {state.drawerTab === "log" ? (
+        <pre className="drawer__pre">{state.exportText || "No export generated yet."}</pre>
+      ) : null}
     </Panel>
   );
 }

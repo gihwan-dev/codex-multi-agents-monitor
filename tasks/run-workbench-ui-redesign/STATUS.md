@@ -1,23 +1,29 @@
 # Current slice
-Not started.
+Completed: `SLICE-1` to `SLICE-5`.
 
 # Done
-- `run-workbench-ui-redesign` task bundle을 생성했다.
-- continuity gate를 수행했고 기존 `codex-multi-agent-monitor-v0-1` bundle과 goal/boundary 차이로 `create-new`를 선택했다.
-- UI-first planning packet과 task-local reference pack을 작성했다.
+- `MonitorApp` shell을 compact top bar, summary strip, unified graph toolbar, hidden-by-default drawer 구조로 재배치했다.
+- rail을 `workspace -> thread -> run` dense tree UI로 교체하고 quick filter/search/import entry를 한 곳으로 정리했다.
+- graph primary view를 lane-card board 대신 row-based timeline renderer로 교체했다.
+- inspector primary UI를 `Summary`, `Cause`, `Impact`, `Payload` section 기반 causal inspector로 교체했다.
+- Storybook variants와 Playwright e2e를 추가해 drawer hidden-by-default, mode switch preservation, large-run degradation evidence를 남겼다.
 
 # Decisions made during implementation
-- 아직 구현은 시작하지 않았다.
-- 설계 기준으로 `workspace tree`, `compact strip + graph toolbar`, `row-based graph`, `causal inspector`, `hidden-by-default drawer`를 고정했다.
+- ingestion/schema/storage contract 변경 없이 새 UI는 composition layer와 새 renderer 컴포넌트로 도입했다.
+- persisted overwrite가 불안정했던 기존 파일은 대규모 재작성 대신 새 컴포넌트 파일을 만들고 `MonitorApp`에서 교체 연결했다.
+- legacy selector/state shape는 유지하되, 사용자에게 보이는 shell/rail/graph/inspector contract를 먼저 리디자인 완료했다.
 
 # Verification results
-- Read-only repo audit completed.
-- Existing task continuity comparison completed.
-- Required UI-first docs and reference pack completed.
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `pnpm storybook:build`
+- `pnpm test:e2e`
 
 # Known issues / residual risk
-- 현재 shell/state/css 파일이 이미 큰 편이라 구현 단계에서 중간 추출이 충분히 일어나지 않으면 giant diff로 번질 위험이 있다.
-- row-based graph는 selector/view model 추가 설계가 필요할 수 있다.
+- `useMonitorAppState`와 selector layer는 내부적으로 legacy state shape를 아직 유지한다. strict contract cleanup까지 요구되면 후속 refactor가 필요하다.
+- 기존 `RunListPane`, `GraphView`, `InspectorPane` 파일은 레포에 남아 있지만 현재 `MonitorApp`의 active composition path에서는 사용하지 않는다.
 
 # Next slice
-SLICE-1
+None. Closeout complete.
