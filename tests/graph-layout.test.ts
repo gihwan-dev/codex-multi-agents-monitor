@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { FIXTURE_DATASETS } from "../src/features/fixtures";
 import { CausalGraphView } from "../src/features/run-detail/graph/CausalGraphView";
 import {
+  buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
   choosePortPair,
   computeLaneMetrics,
+  computeRenderedContentHeight,
   TIME_GUTTER,
 } from "../src/features/run-detail/graph/graphLayout";
 import { buildGraphSceneModel, type GraphSceneModel, type RunFilters } from "../src/shared/domain";
@@ -72,9 +74,25 @@ describe("graphLayout", () => {
     layout.eventById.forEach((eventLayout, eventId) => {
       const cardCenterY = eventLayout.cardRect.y + eventLayout.cardRect.height / 2;
 
+      expect(eventLayout.cardRect.height).toBe(80);
       expect(eventLayout.rowAnchorY).toBe(cardCenterY);
       expect(layout.rowGuideYByEventId.get(eventId)).toBe(eventLayout.rowAnchorY);
     });
+  });
+
+  it("uses the larger of content height and available canvas height", () => {
+    expect(computeRenderedContentHeight(420, 360)).toBe(420);
+    expect(computeRenderedContentHeight(420, 600)).toBe(600);
+  });
+
+  it("builds continuation guides only below the real content height", () => {
+    const contentHeight = 420;
+    const renderedContentHeight = 760;
+    const guideYs = buildContinuationGuideYs(contentHeight, renderedContentHeight);
+
+    expect(guideYs[0]).toBe(contentHeight + 16 + 132 / 2);
+    expect(guideYs.every((guideY) => guideY > contentHeight)).toBe(true);
+    expect(guideYs.at(-1)).toBeLessThanOrEqual(renderedContentHeight);
   });
 
   it("routes the waiting-chain fixture from more natural horizontal ports", () => {
@@ -111,7 +129,7 @@ describe("graphLayout", () => {
     expect(waitingLayout.cardRect.y + waitingLayout.cardRect.height / 2).toBe(waitingLayout.rowAnchorY);
   });
 
-  it("renders route hitboxes without the old edge hotspot button", () => {
+  it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
     const dataset = getFixtureDataset("trace-fix-002");
     const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" }, false);
     const markup = renderToStaticMarkup(
@@ -121,15 +139,20 @@ describe("graphLayout", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
+        viewportHeightOverride: 1200,
+        laneHeaderHeightOverride: 80,
       }),
     );
 
     expect(markup).toContain("graph-sequence__route-hitbox");
     expect(markup).toContain("graph-sequence__row-guide");
+    expect(markup).toContain("graph-sequence__row-guide--continuation");
     expect(markup).toContain("graph-sequence__row-guide--selected");
     expect(markup).toContain("graph-sequence__row-guide--active");
     expect(markup).toContain("Interactive graph edge hit targets");
     expect(markup).not.toContain("graph-sequence__edge-hotspot");
+    expect(markup).not.toContain("Waiting for repo search completion");
+    expect(markup).not.toContain("wait_reason:");
   });
 });
 

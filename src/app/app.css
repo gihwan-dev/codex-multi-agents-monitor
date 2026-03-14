@@ -644,8 +644,15 @@ textarea {
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding-bottom: 8px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.graph-sequence__scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .graph-sequence__lane-strip {
@@ -749,6 +756,11 @@ textarea {
 
 .graph-sequence__row-guide--selected {
   stroke: rgba(77, 163, 255, 0.34);
+}
+
+.graph-sequence__row-guide--continuation {
+  stroke: rgba(166, 175, 189, 0.075);
+  stroke-dasharray: 2 7;
 }
 
 .graph-sequence__row-guide--dimmed {
@@ -872,11 +884,13 @@ textarea {
   position: absolute;
   left: 50%;
   width: var(--graph-card-width);
-  min-height: 88px;
+  height: 80px;
+  min-height: 80px;
   transform: translateX(-50%);
   display: grid;
-  gap: 6px;
-  padding: 12px 14px 12px;
+  align-content: center;
+  gap: 0;
+  padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(24, 29, 39, 1), rgba(16, 20, 29, 1));
@@ -914,37 +928,26 @@ textarea {
 }
 
 .graph-sequence__card-head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
 }
 
 .graph-sequence__card-head strong {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-height: 1.12;
   overflow: hidden;
 }
 
 .graph-sequence__card p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  display: none;
 }
 
 .graph-sequence__callout {
-  color: var(--color-waiting);
-  font-size: 0.76rem;
-  line-height: 1.25;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  overflow: hidden;
+  display: none;
 }
 
 .graph-sequence__gap-band {

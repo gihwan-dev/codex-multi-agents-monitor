@@ -9,7 +9,7 @@ const MIN_LANE_WIDTH = 192;
 const CARD_WIDTH_MIN = 176;
 const CARD_WIDTH_MAX = 208;
 const CARD_WIDTH_PADDING = 24;
-const CARD_HEIGHT = 88;
+const CARD_HEIGHT = 80;
 const PORT_SLOT_SPACING = 12;
 const PORT_EDGE_PADDING = 12;
 const PORT_STUB_LENGTH = 16;
@@ -82,6 +82,28 @@ export interface GraphLayoutSnapshot {
   eventById: Map<string, EventLayout>;
   rowGuideYByEventId: Map<string, number>;
   edgeRoutes: EdgeRouteLayout[];
+}
+
+export function computeRenderedContentHeight(
+  contentHeight: number,
+  availableCanvasHeight: number,
+): number {
+  return Math.max(contentHeight, Math.max(EVENT_ROW_HEIGHT, availableCanvasHeight));
+}
+
+export function buildContinuationGuideYs(
+  contentHeight: number,
+  renderedContentHeight: number,
+): number[] {
+  const guideYs: number[] = [];
+  const firstGuideY = contentHeight + ROW_GAP + EVENT_ROW_HEIGHT / 2;
+  const cadence = EVENT_ROW_HEIGHT + ROW_GAP;
+
+  for (let guideY = firstGuideY; guideY <= renderedContentHeight; guideY += cadence) {
+    guideYs.push(guideY);
+  }
+
+  return guideYs;
 }
 
 export function computeLaneMetrics(viewportWidth: number, laneCount: number): LaneMetrics {

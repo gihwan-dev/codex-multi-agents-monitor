@@ -2,7 +2,9 @@ import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useSt
 import type { GraphSceneModel, LiveMode, SelectionState } from "../../../shared/domain";
 import { Panel, StatusChip } from "../../../shared/ui";
 import {
+  buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
+  computeRenderedContentHeight,
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
   ROW_GAP,
@@ -15,6 +17,8 @@ interface CausalGraphViewProps {
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
+  viewportHeightOverride?: number;
+  laneHeaderHeightOverride?: number;
 }
 
 interface ActiveHighlight {
@@ -29,14 +33,32 @@ export function CausalGraphView({
   followLive,
   liveMode,
   onPauseFollowLive,
+  viewportHeightOverride,
+  laneHeaderHeightOverride,
 }: CausalGraphViewProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const laneStripRef = useRef<HTMLDivElement>(null);
   const [activeSelection, setActiveSelection] = useState<SelectionState | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(viewportHeightOverride ?? 0);
+  const [laneHeaderHeight, setLaneHeaderHeight] = useState(laneHeaderHeightOverride ?? 0);
   const layout = buildGraphLayoutSnapshot(scene, viewportWidth);
   const activeHighlight = buildActiveHighlight(scene, activeSelection);
   const routeMarkerId = useId();
   const bundleById = new Map(scene.edgeBundles.map((bundle) => [bundle.id, bundle]));
+  const availableCanvasHeight = Math.max(
+    0,
+    (viewportHeightOverride ?? viewportHeight) - (laneHeaderHeightOverride ?? laneHeaderHeight),
+  );
+  const renderedContentHeight = computeRenderedContentHeight(
+    layout.contentHeight,
+    availableCanvasHeight,
+  );
+  const continuationGuideYs = buildContinuationGuideYs(
+    layout.contentHeight,
+    renderedContentHeight,
+  );
 
   useEffect(() => {
     if (!followLive || liveMode !== "live" || !scene.latestVisibleEventId) {
@@ -55,31 +77,48 @@ export function CausalGraphView({
   }, [followLive, liveMode, scene.latestVisibleEventId]);
 
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) {
+    const viewportElement = viewportRef.current;
+    if (!viewportElement) {
       return;
     }
 
-    const updateViewportWidth = () => {
-      setViewportWidth(element.clientWidth);
+    const updateMeasurements = () => {
+      const nextViewportWidth = Math.round(viewportElement.clientWidth);
+      const nextViewportHeight = Math.round(viewportElement.clientHeight);
+      const nextLaneHeaderHeight = laneStripRef.current?.offsetHeight ?? 0;
+
+      setViewportWidth((current) => (current === nextViewportWidth ? current : nextViewportWidth));
+      if (viewportHeightOverride === undefined) {
+        setViewportHeight((current) =>
+          current === nextViewportHeight ? current : nextViewportHeight,
+        );
+      }
+      if (laneHeaderHeightOverride === undefined) {
+        setLaneHeaderHeight((current) =>
+          current === nextLaneHeaderHeight ? current : nextLaneHeaderHeight,
+        );
+      }
     };
 
-    updateViewportWidth();
+    updateMeasurements();
 
     if (typeof ResizeObserver === "undefined") {
       return undefined;
     }
 
     const observer = new ResizeObserver(() => {
-      updateViewportWidth();
+      updateMeasurements();
     });
 
-    observer.observe(element);
+    observer.observe(viewportElement);
+    if (laneStripRef.current) {
+      observer.observe(laneStripRef.current);
+    }
 
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [laneHeaderHeightOverride, viewportHeightOverride]);
 
   const handleScroll = () => {
     const element = scrollRef.current;
@@ -119,6 +158,7 @@ export function CausalGraphView({
         </p>
       ) : null}
       <div
+        ref={viewportRef}
         className="graph-sequence"
         style={
           {
@@ -132,7 +172,11 @@ export function CausalGraphView({
         }
       >
         <div ref={scrollRef} className="graph-sequence__scroll" onScroll={handleScroll}>
-          <div className="graph-sequence__lane-strip" style={{ gridTemplateColumns, width: layout.contentWidth }}>
+          <div
+            ref={laneStripRef}
+            className="graph-sequence__lane-strip"
+            style={{ gridTemplateColumns, width: layout.contentWidth }}
+          >
             <div className="graph-sequence__corner">Time</div>
             {scene.lanes.map((lane) => (
               <header
@@ -160,11 +204,11 @@ export function CausalGraphView({
 
           <div
             className="graph-sequence__content"
-            style={{ width: layout.contentWidth, minHeight: layout.contentHeight }}
+            style={{ width: layout.contentWidth, minHeight: renderedContentHeight }}
           >
             <svg
               className="graph-sequence__overlay graph-sequence__overlay--visible"
-              viewBox={`0 0 ${layout.contentWidth} ${layout.contentHeight}`}
+              viewBox={`0 0 ${layout.contentWidth} ${renderedContentHeight}`}
               preserveAspectRatio="none"
               aria-hidden="true"
             >
@@ -196,7 +240,7 @@ export function CausalGraphView({
                   x1={layout.laneCenterById.get(lane.laneId) ?? 0}
                   y1={0}
                   x2={layout.laneCenterById.get(lane.laneId) ?? 0}
-                  y2={layout.contentHeight}
+                  y2={renderedContentHeight}
                 />
               ))}
 
@@ -234,6 +278,17 @@ export function CausalGraphView({
                   />
                 );
               })}
+
+              {continuationGuideYs.map((guideY) => (
+                <line
+                  key={`continuation-guide-${guideY}`}
+                  className="graph-sequence__row-guide graph-sequence__row-guide--continuation"
+                  x1={TIME_GUTTER}
+                  y1={guideY}
+                  x2={layout.contentWidth}
+                  y2={guideY}
+                />
+              ))}
 
               {layout.edgeRoutes.map((route) => {
                 const bundle = bundleById.get(route.bundleId);
@@ -360,12 +415,6 @@ export function CausalGraphView({
                                 <strong>{row.title}</strong>
                                 <StatusChip status={row.status} subtle />
                               </div>
-                              <p>{row.summary}</p>
-                              {row.waitReason ? (
-                                <span className="graph-sequence__callout">
-                                  wait_reason: {row.waitReason}
-                                </span>
-                              ) : null}
                             </button>
                           ) : null}
                         </div>
@@ -378,7 +427,7 @@ export function CausalGraphView({
 
             <svg
               className="graph-sequence__overlay graph-sequence__overlay--interactive"
-              viewBox={`0 0 ${layout.contentWidth} ${layout.contentHeight}`}
+              viewBox={`0 0 ${layout.contentWidth} ${renderedContentHeight}`}
               preserveAspectRatio="none"
             >
               <title>Interactive graph edge hit targets</title>
