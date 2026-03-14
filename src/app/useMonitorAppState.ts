@@ -9,7 +9,6 @@ import {
   buildSummaryFacts,
   buildWaterfallModel,
   type DrawerTab,
-  defaultCollapsedGapIds,
   hasRawPayload,
   type InspectorTab,
   type RunDataset,
@@ -117,7 +116,7 @@ function buildFilterMap(datasets: RunDataset[]) {
 
 function buildCollapsedGapIds(datasets: RunDataset[]) {
   return Object.fromEntries(
-    datasets.map((dataset) => [dataset.run.traceId, Array.from(defaultCollapsedGapIds(dataset))]),
+    datasets.map((dataset) => [dataset.run.traceId, [] as string[]]),
   ) as Record<string, string[]>;
 }
 
@@ -295,7 +294,7 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
           : null,
         collapsedGapIds: {
           ...state.collapsedGapIds,
-          [action.dataset.run.traceId]: Array.from(defaultCollapsedGapIds(action.dataset)),
+          [action.dataset.run.traceId]: [],
         },
         followLiveByRunId: {
           ...state.followLiveByRunId,

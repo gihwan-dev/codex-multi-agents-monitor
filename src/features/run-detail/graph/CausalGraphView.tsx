@@ -1,6 +1,6 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { GraphSceneModel, LiveMode, SelectionState } from "../../../shared/domain";
-import { Panel, StatusChip } from "../../../shared/ui";
+import { GapChip, Panel, StatusChip } from "../../../shared/ui";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
@@ -17,6 +17,8 @@ interface CausalGraphViewProps {
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
+  expandedGapIds: Set<string>;
+  onToggleGap: (gapId: string) => void;
   viewportHeightOverride?: number;
   laneHeaderHeightOverride?: number;
 }
@@ -33,6 +35,8 @@ export function CausalGraphView({
   followLive,
   liveMode,
   onPauseFollowLive,
+  expandedGapIds,
+  onToggleGap,
   viewportHeightOverride,
   laneHeaderHeightOverride,
 }: CausalGraphViewProps) {
@@ -337,15 +341,23 @@ export function CausalGraphView({
                 row.kind === "gap" ? (
                   <div
                     key={row.id}
-                    className="graph-sequence__gap-row"
+                    className={`graph-sequence__gap-separator${expandedGapIds.has(row.id) ? " graph-sequence__gap-separator--expanded" : ""}`}
+                    role="separator"
+                    aria-label={`Gap: ${row.label}`}
                     style={{ gridTemplateColumns }}
                   >
-                    <div className="graph-sequence__time graph-sequence__time--gap">Gap</div>
+                    <div className="graph-sequence__time graph-sequence__time--gap" />
                     <div
-                      className="graph-sequence__gap-band"
+                      className="graph-sequence__gap-marker"
                       style={{ gridColumn: `2 / span ${scene.lanes.length || 1}` }}
                     >
-                      {row.label}
+                      <GapChip
+                        gapId={row.id}
+                        label={row.label}
+                        durationMs={row.durationMs}
+                        expanded={expandedGapIds.has(row.id)}
+                        onToggle={onToggleGap}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -471,6 +483,10 @@ function buildActiveHighlight(
   selection: SelectionState | null,
 ): ActiveHighlight | null {
   if (!selection) {
+    return null;
+  }
+
+  if (scene.lanes.length <= 1 || scene.edgeBundles.length === 0) {
     return null;
   }
 

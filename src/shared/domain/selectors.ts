@@ -32,7 +32,7 @@ import type {
   WorkspaceTreeModel,
 } from "./types.js";
 
-const GAP_THRESHOLD_MS = 90_000;
+const GAP_THRESHOLD_MS = 30_000;
 const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
@@ -633,9 +633,10 @@ function buildGraphVisibleEvents(
   selectionPath: SelectionPath,
   pathOnly: boolean,
 ) {
+  const effectivePathOnly = pathOnly && dataset.lanes.length > 1 && dataset.edges.length > 0;
   const pathEventIds = new Set(selectionPath.eventIds);
   return sortEvents(dataset.events).filter((event) => {
-    if (pathOnly) {
+    if (effectivePathOnly) {
       return pathEventIds.has(event.eventId);
     }
     return pathEventIds.has(event.eventId) || eventMatchesFilters(event, filters);
@@ -650,6 +651,7 @@ export function buildGraphSceneModel(
 ): GraphSceneModel {
   const selectionPath = buildSelectionPath(dataset, selection);
   const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath, pathOnly);
+  const hasMultiAgentTopology = dataset.lanes.length > 1 && dataset.edges.length > 0;
   const graphLanes = buildGraphLanes(dataset, selectionPath);
   const visibleLanes = graphLanes.lanes;
   const laneIds = new Set(visibleLanes.map((lane) => lane.laneId));
@@ -660,12 +662,19 @@ export function buildGraphSceneModel(
     const previous = visibleEvents[index - 1];
     const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
     const gap = previousEnd ? event.startTs - previousEnd : 0;
-    if (gap >= GAP_THRESHOLD_MS) {
+    if (gap >= GAP_THRESHOLD_MS && previousEnd !== null) {
+      const gapStart = previousEnd;
+      const gapEnd = event.startTs;
+      const hiddenEventIds = dataset.events
+        .filter((e) => e.startTs >= gapStart && e.startTs < gapEnd && !visibleEvents.includes(e))
+        .map((e) => e.eventId);
       rows.push({
         kind: "gap",
         id: `graph-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
         label: formatGapLabel(gap, visibleLanes.length || 1),
         idleLaneCount: visibleLanes.length || 1,
+        durationMs: gap,
+        hiddenEventIds,
       });
     }
 
@@ -686,9 +695,9 @@ export function buildGraphSceneModel(
       waitReason: event.waitReason,
       timeLabel: formatTimestamp(event.startTs),
       durationLabel: formatDuration(event.durationMs),
-      inPath: selectionPath.eventIds.includes(event.eventId),
+      inPath: hasMultiAgentTopology && selectionPath.eventIds.includes(event.eventId),
       selected: selection?.kind === "event" && selection.id === event.eventId,
-      dimmed: !selectionPath.eventIds.includes(event.eventId),
+      dimmed: hasMultiAgentTopology && !selectionPath.eventIds.includes(event.eventId),
     });
   });
 
@@ -743,10 +752,10 @@ export function buildGraphSceneModel(
         edgeType: edge.edgeType,
         label: edge.payloadPreview ?? edge.edgeType,
         bundleCount: 1,
-        inPath:
+        inPath: hasMultiAgentTopology && (
           selectionPath.edgeIds.includes(edge.edgeId) ||
           (selectionPath.eventIds.includes(edge.sourceEventId) &&
-            selectionPath.eventIds.includes(edge.targetEventId)),
+            selectionPath.eventIds.includes(edge.targetEventId))),
         selected: selection?.kind === "edge" && selection.id === edge.edgeId,
       });
     });
@@ -809,11 +818,18 @@ export function buildWaterfallModel(
     const previous = visibleEvents[index - 1];
     const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
     const gap = previousEnd ? event.startTs - previousEnd : 0;
-    if (gap >= GAP_THRESHOLD_MS) {
+    if (gap >= GAP_THRESHOLD_MS && previousEnd !== null) {
+      const gapStart = previousEnd;
+      const gapEnd = event.startTs;
+      const hiddenEventIds = dataset.events
+        .filter((e) => e.startTs >= gapStart && e.startTs < gapEnd && !visibleEvents.includes(e))
+        .map((e) => e.eventId);
       rows.push({
         kind: "gap",
         id: `waterfall-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
         label: formatGapLabel(gap, graphLanes.lanes.length || 1),
+        durationMs: gap,
+        hiddenEventIds,
       });
     }
     rows.push({

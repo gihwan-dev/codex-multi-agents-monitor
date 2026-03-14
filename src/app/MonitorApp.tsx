@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
+import { GapDetailSection } from "../features/run-detail/GapDetailSection";
 import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
 import { MapView } from "../features/run-detail/map/MapView";
 import { WaterfallView } from "../features/run-detail/waterfall/WaterfallView";
@@ -8,10 +9,13 @@ import {
   type AnomalyJump,
   type DrawerTab,
   type EventType,
+  type EventRecord,
   formatCurrency,
   formatTokens,
+  type GraphSceneRow,
   type SummaryFact,
   type ViewMode,
+  type WaterfallRow,
   type WorkspaceIdentityOverrideMap,
 } from "../shared/domain";
 import { MetricPill, Panel, StatusChip } from "../shared/ui";
@@ -56,6 +60,40 @@ export function MonitorApp() {
   const [isCompactViewport, setIsCompactViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth <= 720,
   );
+
+  const activeRows: GraphSceneRow[] | WaterfallRow[] =
+    state.viewMode === "waterfall" ? waterfallModel.rows : graphScene.rows;
+
+  // collapsedGapIds를 "사용자가 토글한 ID 집합"으로 재해석:
+  // 기본 all-collapsed, ID가 집합에 있으면 expanded
+  const expandedGapIds = useMemo(() => {
+    const toggled = new Set(state.collapsedGapIds[activeDataset.run.traceId] ?? []);
+    const set = new Set<string>();
+    for (const row of activeRows) {
+      if (row.kind === "gap" && toggled.has(row.id)) {
+        set.add(row.id);
+      }
+    }
+    return set;
+  }, [activeRows, state.collapsedGapIds, activeDataset.run.traceId]);
+
+  const eventsById = useMemo(
+    () => new Map(activeDataset.events.map((e) => [e.eventId, e])),
+    [activeDataset.events],
+  );
+
+  const expandedGaps = useMemo(() => {
+    const gaps: Array<{ gapId: string; label: string; hiddenEvents: EventRecord[] }> = [];
+    for (const row of activeRows) {
+      if (row.kind === "gap" && expandedGapIds.has(row.id)) {
+        const hiddenEvents = row.hiddenEventIds
+          .map((id) => eventsById.get(id))
+          .filter(Boolean) as EventRecord[];
+        gaps.push({ gapId: row.id, label: row.label, hiddenEvents });
+      }
+    }
+    return gaps;
+  }, [activeRows, expandedGapIds, eventsById]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -164,12 +202,25 @@ export function MonitorApp() {
               followLive={activeFollowLive}
               liveMode={activeDataset.run.liveMode}
               onPauseFollowLive={actions.pauseFollowLive}
+              expandedGapIds={expandedGapIds}
+              onToggleGap={actions.toggleGap}
             />
           ) : null}
           {state.viewMode === "waterfall" ? (
-            <WaterfallView model={waterfallModel} onSelect={actions.selectItem} />
+            <WaterfallView
+              model={waterfallModel}
+              onSelect={actions.selectItem}
+              expandedGapIds={expandedGapIds}
+              onToggleGap={actions.toggleGap}
+            />
           ) : null}
           {state.viewMode === "map" ? <MapView nodes={mapNodes} /> : null}
+
+          <GapDetailSection
+            expandedGaps={expandedGaps}
+            onSelect={actions.selectItem}
+            onCollapseGap={actions.toggleGap}
+          />
 
           {isCompactViewport ? (
             <CausalInspectorPane

@@ -714,18 +714,52 @@ textarea {
   z-index: 1;
 }
 
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .graph-sequence__event-row,
-.graph-sequence__gap-row {
+.graph-sequence__gap-separator {
   display: grid;
   align-items: start;
+  animation: row-enter 200ms ease both;
 }
 
 .graph-sequence__event-row {
   min-height: var(--graph-event-row-height);
 }
 
-.graph-sequence__gap-row {
+.graph-sequence__gap-separator {
   min-height: var(--graph-gap-row-height);
+  align-items: center;
+  position: relative;
+}
+
+.graph-sequence__gap-separator::before {
+  content: "";
+  position: absolute;
+  left: var(--graph-time-gutter);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 1px dashed rgba(255, 255, 255, 0.22);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
+.graph-sequence__gap-separator--expanded::before {
+  background: rgba(77, 163, 255, 0.10);
+  border-color: rgba(77, 163, 255, 0.34);
+}
+
+.graph-sequence__gap-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
 }
 
 .graph-sequence__time {
@@ -812,6 +846,21 @@ textarea {
   box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
+.graph-sequence__card--path::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: rgba(77, 163, 255, 0.55);
+}
+
+.graph-sequence__card--path.graph-sequence__card--selected::before {
+  background: rgba(77, 163, 255, 0.8);
+}
+
 .graph-sequence__card--path-dimmed,
 .graph-sequence__card--dimmed {
   opacity: 0.22;
@@ -840,18 +889,47 @@ textarea {
   display: none;
 }
 
-.graph-sequence__gap-band {
-  display: flex;
+.gap-chip {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: var(--graph-gap-row-height);
+  gap: 5px;
+  min-height: 28px;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border-radius: var(--radius-pill);
   padding: 0 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.025);
+  white-space: nowrap;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.gap-chip:hover,
+.gap-chip:focus-visible {
+  border-color: rgba(77, 163, 255, 0.48);
+  color: var(--color-text);
+  background: rgba(77, 163, 255, 0.12);
+}
+
+.gap-chip[aria-expanded="true"] {
+  border-style: solid;
+  border-color: rgba(77, 163, 255, 0.52);
+  background: rgba(77, 163, 255, 0.14);
+  color: var(--color-text);
+}
+
+.gap-chip__chevron {
+  width: 0;
+  height: 0;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  border-left: 5px solid currentColor;
+  transition: transform 180ms ease;
+}
+
+.gap-chip[aria-expanded="true"] .gap-chip__chevron {
+  transform: rotate(90deg);
 }
 
 .graph-sequence__route-hitbox {
@@ -862,11 +940,97 @@ textarea {
   cursor: pointer;
 }
 
+.gap-detail-section {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gap-detail-section__group {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.gap-detail-section__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.gap-detail-section__summary::-webkit-details-marker {
+  display: none;
+}
+
+.gap-detail-section__collapse {
+  flex-shrink: 0;
+  min-height: 24px;
+  font-size: 0.72rem;
+  padding: 0 8px;
+}
+
+.gap-detail-section__list {
+  display: grid;
+  gap: 2px;
+  padding: 0 8px 8px;
+  margin: 0;
+  list-style: none;
+}
+
+.gap-detail-section__event-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.gap-detail-section__event-button:hover,
+.gap-detail-section__event-button:focus-visible {
+  background: rgba(77, 163, 255, 0.08);
+}
+
+.gap-detail-section__event-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gap-detail-section__empty {
+  padding: 4px 12px 8px;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .graph-sequence__card,
   .graph-sequence__route,
-  .graph-sequence__lane-header {
+  .graph-sequence__lane-header,
+  .gap-chip,
+  .gap-chip__chevron {
     transition: none;
+  }
+
+  .graph-sequence__event-row,
+  .graph-sequence__gap-separator {
+    animation: none;
   }
 }
 
@@ -896,23 +1060,42 @@ textarea {
 }
 
 .waterfall-grid__event-row,
-.waterfall-grid__gap-row {
+.waterfall-grid__gap-separator {
   display: contents;
 }
 
-.waterfall-grid__gap-label,
-.waterfall-grid__gap-body {
+.waterfall-grid__gap-label {
   display: flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 24px;
   color: var(--color-text-secondary);
   font-size: 0.78rem;
 }
 
-.waterfall-grid__gap-body {
-  border: 1px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  padding: 0 10px;
+.waterfall-grid__gap-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  position: relative;
+}
+
+.waterfall-grid__gap-marker::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 1px dashed rgba(255, 255, 255, 0.22);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
+.waterfall-grid__gap-separator--expanded .waterfall-grid__gap-marker::before {
+  background: rgba(77, 163, 255, 0.10);
+  border-color: rgba(77, 163, 255, 0.34);
 }
 
 .waterfall-event {

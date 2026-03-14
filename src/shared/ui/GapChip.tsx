@@ -1,21 +1,24 @@
-import { formatDuration, type GapSegment } from "../domain";
+import { formatDuration } from "../domain";
 
 interface GapChipProps {
-  gap: GapSegment;
+  gapId: string;
+  label: string;
+  durationMs: number;
   expanded: boolean;
   onToggle: (gapId: string) => void;
 }
 
-export function GapChip({ gap, expanded, onToggle }: GapChipProps) {
+export function GapChip({ gapId, label, durationMs, expanded, onToggle }: GapChipProps) {
   return (
     <button
       type="button"
       className="gap-chip"
-      onClick={() => onToggle(gap.gapId)}
+      onClick={() => onToggle(gapId)}
       aria-expanded={expanded}
+      aria-label={`${expanded ? "Collapse" : "Expand"} gap: ${formatDuration(durationMs)}`}
     >
-      {expanded ? "Hide gap" : "Show gap"} · {"//"} {formatDuration(gap.durationMs)} hidden ·{" "}
-      {gap.idleLaneCount} lanes idle {"//"}
+      <span className="gap-chip__chevron" aria-hidden="true" />
+      {expanded ? "Hide" : "Show"} · {label}
     </button>
   );
 }

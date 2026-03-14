@@ -1,12 +1,14 @@
 import type { SelectionState, WaterfallModel } from "../../../shared/domain";
-import { Panel, StatusChip } from "../../../shared/ui";
+import { GapChip, Panel, StatusChip } from "../../../shared/ui";
 
 interface WaterfallViewProps {
   model: WaterfallModel;
   onSelect: (selection: SelectionState) => void;
+  expandedGapIds: Set<string>;
+  onToggleGap: (gapId: string) => void;
 }
 
-export function WaterfallView({ model, onSelect }: WaterfallViewProps) {
+export function WaterfallView({ model, onSelect, expandedGapIds, onToggleGap }: WaterfallViewProps) {
   return (
     <Panel title="Waterfall" className="canvas-panel waterfall-panel">
       <div
@@ -25,13 +27,24 @@ export function WaterfallView({ model, onSelect }: WaterfallViewProps) {
 
         {model.rows.map((row) =>
           row.kind === "gap" ? (
-            <div key={row.id} className="waterfall-grid__gap-row">
-              <div className="waterfall-grid__gap-label">Gap</div>
+            <div
+              key={row.id}
+              className={`waterfall-grid__gap-separator${expandedGapIds.has(row.id) ? " waterfall-grid__gap-separator--expanded" : ""}`}
+              role="separator"
+              aria-label={`Gap: ${row.label}`}
+            >
+              <div className="waterfall-grid__gap-label" />
               <div
-                className="waterfall-grid__gap-body"
+                className="waterfall-grid__gap-marker"
                 style={{ gridColumn: `span ${model.lanes.length}` }}
               >
-                {row.label}
+                <GapChip
+                  gapId={row.id}
+                  label={row.label}
+                  durationMs={row.durationMs}
+                  expanded={expandedGapIds.has(row.id)}
+                  onToggle={onToggleGap}
+                />
               </div>
             </div>
           ) : (

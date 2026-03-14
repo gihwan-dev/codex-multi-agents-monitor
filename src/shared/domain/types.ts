@@ -299,6 +299,8 @@ export interface GraphSceneRowGap {
   id: string;
   label: string;
   idleLaneCount: number;
+  durationMs: number;
+  hiddenEventIds: string[];
 }
 
 export type GraphSceneRow = GraphSceneRowEvent | GraphSceneRowGap;
@@ -348,6 +350,8 @@ export interface WaterfallRowGap {
   kind: "gap";
   id: string;
   label: string;
+  durationMs: number;
+  hiddenEventIds: string[];
 }
 
 export type WaterfallRow = WaterfallRowEvent | WaterfallRowGap;
