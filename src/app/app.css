@@ -38,17 +38,24 @@
 .top-bar__breadcrumb {
   color: var(--color-text-secondary);
   font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-bar__title-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .top-bar h1 {
   font-size: clamp(1.18rem, 2vw, 1.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .top-bar__controls {

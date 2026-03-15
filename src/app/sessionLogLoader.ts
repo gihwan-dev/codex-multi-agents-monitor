@@ -93,7 +93,8 @@ export function deriveSessionLogTitle(messages: SessionLogSnapshotMessage[]) {
   }
 
   const sanitizedTitle = sanitizeSessionText(firstMeaningfulUserMessage.text);
-  return sanitizedTitle.length > 0 ? sanitizedTitle : NEW_THREAD_TITLE;
+  if (sanitizedTitle.length === 0) return NEW_THREAD_TITLE;
+  return sanitizedTitle.length > 120 ? `${sanitizedTitle.slice(0, 117)}...` : sanitizedTitle;
 }
 
 export function deriveSessionLogStatus(messages: SessionLogSnapshotMessage[]): RunStatus {
