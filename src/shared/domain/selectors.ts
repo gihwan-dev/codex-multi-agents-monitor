@@ -33,7 +33,6 @@ import type {
 } from "./types.js";
 
 const GAP_THRESHOLD_MS = 30_000;
-const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
   return `// ${formatDuration(durationMs)} hidden · ${idleLaneCount} lanes idle //`;
@@ -625,17 +624,9 @@ export function buildSummaryFacts(
   ];
 }
 
-function buildGraphLanes(dataset: RunDataset, selectionPath: SelectionPath) {
-  const pathLaneIds = new Set(selectionPath.laneIds);
-  const visibleLanes = dataset.lanes.filter(
-    (lane, index) =>
-      pathLaneIds.has(lane.laneId) ||
-      index < LARGE_RUN_LANE_THRESHOLD ||
-      lane.laneStatus !== "done",
-  );
-
+function buildGraphLanes(dataset: RunDataset) {
   return {
-    lanes: visibleLanes.map((lane) => ({
+    lanes: dataset.lanes.map((lane) => ({
       laneId: lane.laneId,
       name: lane.name,
       role: lane.role,
@@ -643,7 +634,7 @@ function buildGraphLanes(dataset: RunDataset, selectionPath: SelectionPath) {
       badge: lane.badge,
       status: lane.laneStatus,
     })),
-    hiddenLaneCount: Math.max(dataset.lanes.length - visibleLanes.length, 0),
+    hiddenLaneCount: 0,
   };
 }
 
@@ -666,7 +657,7 @@ export function buildGraphSceneModel(
   const selectionPath = buildSelectionPath(dataset, selection);
   const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath);
   const hasMultiAgentTopology = dataset.lanes.length > 1 && dataset.edges.length > 0;
-  const graphLanes = buildGraphLanes(dataset, selectionPath);
+  const graphLanes = buildGraphLanes(dataset);
   const visibleLanes = graphLanes.lanes;
   const laneIds = new Set(visibleLanes.map((lane) => lane.laneId));
   const rows: GraphSceneRow[] = [];
@@ -818,7 +809,7 @@ export function buildWaterfallModel(
   selection: SelectionState | null,
 ): WaterfallModel {
   const selectionPath = buildSelectionPath(dataset, selection);
-  const graphLanes = buildGraphLanes(dataset, selectionPath);
+  const graphLanes = buildGraphLanes(dataset);
   const laneIds = new Set(graphLanes.lanes.map((lane) => lane.laneId));
   const start = dataset.run.startTs;
   const totalDuration = Math.max(dataset.run.durationMs, 1);
