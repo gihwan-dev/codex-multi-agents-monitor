@@ -86,6 +86,7 @@ export interface RunRecord {
   selectedByDefaultId: string | null;
   rawIncluded: boolean;
   noRawStorage: boolean;
+  isArchived: boolean;
 }
 
 export interface AgentLane {
@@ -458,6 +459,24 @@ export interface RawImportPayload {
   events: RawImportEvent[];
   edges: EdgeRecord[];
   artifacts: ArtifactRecord[];
+}
+
+export interface ArchivedSessionIndexItem {
+  sessionId: string;
+  workspacePath: string;
+  originPath: string;
+  displayName: string;
+  startedAt: string;
+  updatedAt: string;
+  model: string | null;
+  messageCount: number;
+  filePath: string;
+}
+
+export interface ArchivedSessionIndexResult {
+  items: ArchivedSessionIndexItem[];
+  total: number;
+  hasMore: boolean;
 }
 
 export interface SelectionState {

@@ -67,6 +67,7 @@ export function normalizeImportPayload(
       },
       rawIncluded: options.allowRaw && !options.noRawStorage,
       noRawStorage: options.noRawStorage,
+      isArchived: false,
     },
     lanes: payload.lanes,
     events,

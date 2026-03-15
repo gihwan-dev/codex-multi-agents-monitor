@@ -2,6 +2,8 @@ import { startTransition, useEffect, useEffectEvent, useReducer } from "react";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT, LIVE_FIXTURE_FRAMES } from "../features/fixtures";
 import { applyLiveFrame, buildExportPayload, normalizeImportPayload, parseCompletedRunPayload } from "../features/ingestion";
 import {
+  type ArchivedSessionIndexItem,
+  type ArchivedSessionIndexResult,
   buildAnomalyJumps,
   buildGraphSceneModel,
   buildInspectorCausalSummary,
@@ -16,7 +18,11 @@ import {
   type SelectionState,
   type ViewMode,
 } from "../shared/domain";
-import { loadSessionLogDatasets } from "./sessionLogLoader";
+import {
+  loadArchivedSessionIndex,
+  loadArchivedSessionSnapshot,
+  loadSessionLogDatasets,
+} from "./sessionLogLoader";
 
 export type LiveConnection = "live" | "stale" | "disconnected" | "reconnected" | "paused";
 
@@ -42,6 +48,12 @@ export interface MonitorState {
   exportText: string;
   shortcutHelpOpen: boolean;
   appliedLiveFrames: number;
+  archivedIndex: ArchivedSessionIndexItem[];
+  archivedTotal: number;
+  archivedHasMore: boolean;
+  archivedSearch: string;
+  archivedLoading: boolean;
+  archiveSectionOpen: boolean;
 }
 
 type Action =
@@ -67,7 +79,12 @@ type Action =
   | { type: "toggle-shortcuts" }
   | { type: "import-dataset"; dataset: RunDataset }
   | { type: "replace-datasets"; datasets: RunDataset[] }
-  | { type: "apply-live-frame" };
+  | { type: "apply-live-frame" }
+  | { type: "set-archived-index"; result: ArchivedSessionIndexResult; append: boolean }
+  | { type: "set-archived-search"; value: string }
+  | { type: "set-archived-loading"; value: boolean }
+  | { type: "toggle-archive-section" }
+  | { type: "load-archived-dataset"; dataset: RunDataset };
 
 function createDefaultFilters(): RunFilters {
   return {
@@ -142,6 +159,12 @@ export function createMonitorInitialState(): MonitorState {
     exportText: "",
     shortcutHelpOpen: false,
     appliedLiveFrames: 0,
+    archivedIndex: [],
+    archivedTotal: 0,
+    archivedHasMore: false,
+    archivedSearch: "",
+    archivedLoading: false,
+    archiveSectionOpen: false,
   };
 }
 
@@ -347,6 +370,53 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         appliedLiveFrames: state.appliedLiveFrames + 1,
       };
     }
+    case "set-archived-index": {
+      const items = action.append
+        ? [...state.archivedIndex, ...action.result.items]
+        : action.result.items;
+      return {
+        ...state,
+        archivedIndex: items,
+        archivedTotal: action.result.total,
+        archivedHasMore: action.result.hasMore,
+        archivedLoading: false,
+      };
+    }
+    case "set-archived-search":
+      return { ...state, archivedSearch: action.value };
+    case "set-archived-loading":
+      return { ...state, archivedLoading: action.value };
+    case "toggle-archive-section":
+      return { ...state, archiveSectionOpen: !state.archiveSectionOpen };
+    case "load-archived-dataset": {
+      const datasets = [
+        action.dataset,
+        ...state.datasets.filter(
+          (item) => item.run.traceId !== action.dataset.run.traceId,
+        ),
+      ];
+      return {
+        ...state,
+        datasets,
+        activeRunId: action.dataset.run.traceId,
+        selection: action.dataset.run.selectedByDefaultId
+          ? { kind: "event", id: action.dataset.run.selectedByDefaultId }
+          : null,
+        collapsedGapIds: {
+          ...state.collapsedGapIds,
+          [action.dataset.run.traceId]: [],
+        },
+        followLiveByRunId: {
+          ...state.followLiveByRunId,
+          [action.dataset.run.traceId]: false,
+        },
+        filtersByRunId: {
+          ...state.filtersByRunId,
+          [action.dataset.run.traceId]: createDefaultFilters(),
+        },
+        inspectorTab: hasRawPayload(action.dataset) ? state.inspectorTab : "summary",
+      };
+    }
     default:
       return state;
   }
@@ -488,6 +558,17 @@ export function useMonitorAppState() {
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    loadArchivedSessionIndex(0, 50).then((result) => {
+      if (cancelled || !result) return;
+      startTransition(() => {
+        dispatch({ type: "set-archived-index", result, append: false });
+      });
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   return {
     state,
     activeDataset,
@@ -603,6 +684,47 @@ export function useMonitorAppState() {
       },
       toggleShortcuts() {
         dispatch({ type: "toggle-shortcuts" });
+      },
+      toggleArchiveSection() {
+        dispatch({ type: "toggle-archive-section" });
+      },
+      loadArchiveIndex(append: boolean) {
+        const offset = append ? state.archivedIndex.length : 0;
+        dispatch({ type: "set-archived-loading", value: true });
+        loadArchivedSessionIndex(offset, 50, state.archivedSearch || undefined).then(
+          (result) => {
+            if (!result) {
+              dispatch({ type: "set-archived-loading", value: false });
+              return;
+            }
+            startTransition(() => {
+              dispatch({ type: "set-archived-index", result, append });
+            });
+          },
+        );
+      },
+      searchArchive(query: string) {
+        dispatch({ type: "set-archived-search", value: query });
+        dispatch({ type: "set-archived-loading", value: true });
+        loadArchivedSessionIndex(0, 50, query || undefined).then((result) => {
+          if (!result) {
+            dispatch({ type: "set-archived-loading", value: false });
+            return;
+          }
+          startTransition(() => {
+            dispatch({ type: "set-archived-index", result, append: false });
+          });
+        });
+      },
+      selectArchivedSession(filePath: string) {
+        dispatch({ type: "set-archived-loading", value: true });
+        loadArchivedSessionSnapshot(filePath).then((dataset) => {
+          dispatch({ type: "set-archived-loading", value: false });
+          if (!dataset) return;
+          startTransition(() => {
+            dispatch({ type: "load-archived-dataset", dataset });
+          });
+        });
       },
     },
   };

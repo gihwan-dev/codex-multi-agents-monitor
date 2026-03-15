@@ -170,6 +170,16 @@ export function MonitorApp() {
               onOpenImport={() => openDrawer("import")}
               searchRef={searchRef}
               workspaceIdentityOverrides={workspaceIdentityOverrides}
+              archivedIndex={state.archivedIndex}
+              archivedTotal={state.archivedTotal}
+              archivedHasMore={state.archivedHasMore}
+              archivedLoading={state.archivedLoading}
+              archivedSearch={state.archivedSearch}
+              archiveSectionOpen={state.archiveSectionOpen}
+              onToggleArchiveSection={actions.toggleArchiveSection}
+              onArchiveSearch={actions.searchArchive}
+              onArchiveLoadMore={() => actions.loadArchiveIndex(true)}
+              onArchiveSelect={actions.selectArchivedSession}
             />
           </div>
           <ResizeHandle
@@ -317,6 +327,9 @@ function TopBar({
           <span className="env-badge">
             {dataset.run.liveMode === "live" ? "Live watch" : "Imported run"}
           </span>
+          {dataset.run.isArchived ? (
+            <span className="env-badge env-badge--archived">Archived</span>
+          ) : null}
           {dataset.run.liveMode === "live" ? (
             <span className={`live-badge live-badge--${liveConnection}`}>
               {liveConnection === "paused" ? "Following paused" : liveConnection}

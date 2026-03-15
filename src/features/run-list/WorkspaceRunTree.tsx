@@ -7,12 +7,14 @@ import {
   useState,
 } from "react";
 import {
+  type ArchivedSessionIndexItem,
   buildWorkspaceTreeModel,
   type RunDataset,
   type WorkspaceIdentityOverrideMap,
   type WorkspaceTreeItem,
 } from "../../shared/domain";
 import { Panel, StatusChip } from "../../shared/ui";
+import { ArchivedSessionList } from "./ArchivedSessionList";
 
 interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
@@ -21,6 +23,16 @@ interface WorkspaceRunTreeProps {
   onOpenImport: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
+  archivedIndex: ArchivedSessionIndexItem[];
+  archivedTotal: number;
+  archivedHasMore: boolean;
+  archivedLoading: boolean;
+  archivedSearch: string;
+  archiveSectionOpen: boolean;
+  onToggleArchiveSection: () => void;
+  onArchiveSearch: (query: string) => void;
+  onArchiveLoadMore: () => void;
+  onArchiveSelect: (filePath: string) => void;
 }
 
 interface FlatTreeItem {
@@ -37,6 +49,16 @@ export function WorkspaceRunTree({
   onOpenImport,
   searchRef,
   workspaceIdentityOverrides,
+  archivedIndex,
+  archivedTotal,
+  archivedHasMore,
+  archivedLoading,
+  archivedSearch,
+  archiveSectionOpen,
+  onToggleArchiveSection,
+  onArchiveSearch,
+  onArchiveLoadMore,
+  onArchiveSelect,
 }: WorkspaceRunTreeProps) {
   const [search, setSearch] = useState("");
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([]);
@@ -259,6 +281,37 @@ export function WorkspaceRunTree({
           );
         })}
       </div>
+
+      {archivedTotal > 0 || archivedIndex.length > 0 ? (
+        <section className="archive-section">
+          <button
+            type="button"
+            className="archive-section__header"
+            onClick={onToggleArchiveSection}
+            aria-expanded={archiveSectionOpen}
+          >
+            <span
+              className={`run-list__disclosure${archiveSectionOpen ? " run-list__disclosure--open" : ""}`}
+              aria-hidden="true"
+            />
+            <span className="archive-section__title">Archive</span>
+            <span className="run-list__workspace-count">{archivedTotal}</span>
+          </button>
+
+          {archiveSectionOpen ? (
+            <ArchivedSessionList
+              items={archivedIndex}
+              total={archivedTotal}
+              hasMore={archivedHasMore}
+              loading={archivedLoading}
+              search={archivedSearch}
+              onSearch={onArchiveSearch}
+              onLoadMore={onArchiveLoadMore}
+              onSelect={onArchiveSelect}
+            />
+          ) : null}
+        </section>
+      ) : null}
     </Panel>
   );
 }

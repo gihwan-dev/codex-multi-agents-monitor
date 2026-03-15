@@ -6,6 +6,7 @@ use std::{
     fs::{self, File},
     io::{self, BufRead, BufReader},
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 const MAX_RECENT_WORKSPACES: usize = 4;
@@ -52,7 +53,32 @@ struct SessionLogSnapshot {
     model: Option<String>,
     messages: Vec<SessionMessageSnapshot>,
     subagents: Vec<SubagentSnapshot>,
+    is_archived: bool,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArchivedSessionIndex {
+    session_id: String,
+    workspace_path: String,
+    origin_path: String,
+    display_name: String,
+    started_at: String,
+    updated_at: String,
+    model: Option<String>,
+    message_count: u32,
+    file_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArchivedSessionIndexResult {
+    items: Vec<ArchivedSessionIndex>,
+    total: usize,
+    has_more: bool,
+}
+
+struct ArchivedIndexCache(Mutex<Option<Vec<ArchivedSessionIndex>>>);
 
 #[tauri::command]
 fn resolve_workspace_identities(repo_paths: Vec<String>) -> HashMap<String, WorkspaceIdentity> {
@@ -364,6 +390,7 @@ fn read_session_snapshot(
         model,
         messages,
         subagents: Vec::new(),
+        is_archived: false,
     }))
 }
 
@@ -531,12 +558,289 @@ fn resolve_common_dir(git_dir: &Path) -> io::Result<PathBuf> {
     normalize_path(&git_dir.join(commondir_value))
 }
 
+#[tauri::command]
+fn load_archived_session_index(
+    offset: usize,
+    limit: usize,
+    search: Option<String>,
+    cache: tauri::State<'_, ArchivedIndexCache>,
+) -> ArchivedSessionIndexResult {
+    let mut guard = cache.0.lock().unwrap_or_else(|e| e.into_inner());
+
+    if guard.is_none() {
+        *guard = Some(build_archived_index().unwrap_or_default());
+    }
+
+    let index = guard.as_ref().unwrap();
+    let filtered: Vec<&ArchivedSessionIndex> = match &search {
+        Some(query) if !query.trim().is_empty() => {
+            let lower_query = query.to_lowercase();
+            index
+                .iter()
+                .filter(|entry| {
+                    entry.display_name.to_lowercase().contains(&lower_query)
+                        || entry.workspace_path.to_lowercase().contains(&lower_query)
+                })
+                .collect()
+        }
+        _ => index.iter().collect(),
+    };
+
+    let total = filtered.len();
+    let items: Vec<ArchivedSessionIndex> = filtered
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect();
+    let has_more = offset + items.len() < total;
+
+    ArchivedSessionIndexResult {
+        items,
+        total,
+        has_more,
+    }
+}
+
+#[tauri::command]
+fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapshot> {
+    let codex_home = resolve_codex_home().ok()?;
+    let archived_root = codex_home.join("archived_sessions");
+    let path = Path::new(&file_path);
+
+    let canonical_path = fs::canonicalize(path).ok()?;
+    let canonical_root = fs::canonicalize(&archived_root).ok()?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return None;
+    }
+
+    read_archived_session_full(path).ok().flatten()
+}
+
+#[tauri::command]
+fn refresh_archived_session_index(cache: tauri::State<'_, ArchivedIndexCache>) {
+    let mut guard = cache.0.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
+}
+
+fn build_archived_index() -> io::Result<Vec<ArchivedSessionIndex>> {
+    let codex_home = resolve_codex_home()?;
+    let archived_root = codex_home.join("archived_sessions");
+    let mut archived_files = Vec::new();
+    collect_jsonl_files(&archived_root, &mut archived_files)?;
+    archived_files.sort_by(|left, right| right.cmp(left));
+
+    let mut entries = Vec::new();
+    for file_path in &archived_files {
+        if let Ok(Some(entry)) = read_archived_index_entry(file_path) {
+            entries.push(entry);
+        }
+    }
+    Ok(entries)
+}
+
+fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedSessionIndex>> {
+    let file = File::open(session_file)?;
+    let mut reader = BufReader::new(file);
+    let mut first_line = String::new();
+    if reader.read_line(&mut first_line)? == 0 {
+        return Ok(None);
+    }
+
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let payload = match session_meta.get("payload").and_then(Value::as_object) {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    if payload
+        .get("source")
+        .and_then(|s| s.get("subagent"))
+        .is_some()
+    {
+        return Ok(None);
+    }
+    if payload.get("source").and_then(Value::as_str).is_none() {
+        return Ok(None);
+    }
+
+    let workspace_path = payload
+        .get("cwd")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_default()
+        .to_owned();
+    let session_id = payload
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| session_file.display().to_string());
+    let started_at = payload
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_owned();
+    let display_name = Path::new(&workspace_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    let mut model: Option<String> = None;
+    for line in reader.lines().take(20) {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Ok(entry) = serde_json::from_str::<Value>(&line) {
+            if entry.get("type").and_then(Value::as_str) == Some("turn_context") {
+                model = entry
+                    .get("payload")
+                    .and_then(|p| p.get("model"))
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.trim().is_empty())
+                    .map(ToOwned::to_owned);
+                break;
+            }
+        }
+    }
+
+    Ok(Some(ArchivedSessionIndex {
+        session_id,
+        workspace_path: workspace_path.clone(),
+        origin_path: workspace_path,
+        display_name,
+        started_at: started_at.clone(),
+        updated_at: started_at,
+        model,
+        message_count: 0,
+        file_path: session_file.display().to_string(),
+    }))
+}
+
+fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionLogSnapshot>> {
+    let file = File::open(session_file)?;
+    let mut reader = BufReader::new(file);
+    let mut first_line = String::new();
+    if reader.read_line(&mut first_line)? == 0 {
+        return Ok(None);
+    }
+
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let payload = session_meta
+        .get("payload")
+        .and_then(Value::as_object)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "payload missing"))?;
+
+    if payload.get("source").and_then(Value::as_str).is_none() {
+        return Ok(None);
+    }
+
+    let workspace_path = payload
+        .get("cwd")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_default();
+    let started_at = payload
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_owned();
+    let session_id = payload
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| session_file.display().to_string());
+
+    let (origin_path, display_name) = resolve_archived_workspace_identity(workspace_path);
+
+    let mut messages = Vec::new();
+    let mut updated_at = started_at.clone();
+    let mut model: Option<String> = None;
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let entry = match serde_json::from_str::<Value>(&line) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+
+        if model.is_none() {
+            if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
+                model = entry
+                    .get("payload")
+                    .and_then(|p| p.get("model"))
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.trim().is_empty())
+                    .map(ToOwned::to_owned);
+            }
+        }
+
+        let Some(message) = extract_message_snapshot(&entry) else {
+            continue;
+        };
+
+        updated_at = message.timestamp.clone();
+        messages.push(message);
+    }
+
+    Ok(Some(SessionLogSnapshot {
+        session_id,
+        workspace_path: workspace_path.to_owned(),
+        origin_path,
+        display_name,
+        started_at,
+        updated_at,
+        model,
+        messages,
+        subagents: Vec::new(),
+        is_archived: true,
+    }))
+}
+
+fn resolve_archived_workspace_identity(workspace_path: &str) -> (String, String) {
+    let path = Path::new(workspace_path);
+
+    if let Ok(projects_root) = resolve_projects_root() {
+        if let Ok(identity) = resolve_session_workspace_identity(path, &projects_root) {
+            return (identity.origin_path, identity.display_name);
+        }
+    }
+
+    let display_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    (workspace_path.to_owned(), display_name)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(ArchivedIndexCache(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             load_recent_session_snapshots,
-            resolve_workspace_identities
+            resolve_workspace_identities,
+            load_archived_session_index,
+            load_archived_session_snapshot,
+            refresh_archived_session_index,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

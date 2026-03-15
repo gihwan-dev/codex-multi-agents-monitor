@@ -1,5 +1,6 @@
 import {
   type AgentLane,
+  type ArchivedSessionIndexResult,
   calculateSummaryMetrics,
   type EdgeRecord,
   type EventRecord,
@@ -36,6 +37,7 @@ export interface SessionLogSnapshot {
   model: string | null;
   messages: SessionLogSnapshotMessage[];
   subagents?: SubagentSnapshot[];
+  isArchived?: boolean;
 }
 
 export const NEW_THREAD_TITLE = "새 스레드";
@@ -312,6 +314,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       selectedByDefaultId,
       rawIncluded: false,
       noRawStorage: true,
+      isArchived: snapshot.isArchived ?? false,
     },
     lanes: allLanes,
     events: allEvents,
@@ -526,4 +529,34 @@ function sanitizeSessionText(value: string) {
 function parseTimestamp(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+export async function loadArchivedSessionIndex(
+  offset: number,
+  limit: number,
+  search?: string,
+): Promise<ArchivedSessionIndexResult | null> {
+  try {
+    return await invokeTauri<ArchivedSessionIndexResult>(
+      "load_archived_session_index",
+      { offset, limit, search: search || null },
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function loadArchivedSessionSnapshot(
+  filePath: string,
+): Promise<RunDataset | null> {
+  try {
+    const snapshot = await invokeTauri<SessionLogSnapshot | null>(
+      "load_archived_session_snapshot",
+      { filePath },
+    );
+    if (!snapshot) return null;
+    return buildDatasetFromSessionLog(snapshot);
+  } catch {
+    return null;
+  }
 }
