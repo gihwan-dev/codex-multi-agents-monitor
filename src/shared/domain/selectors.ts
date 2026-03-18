@@ -33,6 +33,7 @@ import type {
 } from "./types.js";
 
 const GAP_THRESHOLD_MS = 30_000;
+const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
   return `// ${formatDuration(durationMs)} hidden · ${idleLaneCount} lanes idle //`;
@@ -625,8 +626,13 @@ export function buildSummaryFacts(
 }
 
 function buildGraphLanes(dataset: RunDataset) {
+  const visibleLanes = dataset.lanes.filter(
+    (lane, index) =>
+      index < LARGE_RUN_LANE_THRESHOLD || lane.laneStatus !== "done",
+  );
+
   return {
-    lanes: dataset.lanes.map((lane) => ({
+    lanes: visibleLanes.map((lane) => ({
       laneId: lane.laneId,
       name: lane.name,
       role: lane.role,
@@ -634,7 +640,7 @@ function buildGraphLanes(dataset: RunDataset) {
       badge: lane.badge,
       status: lane.laneStatus,
     })),
-    hiddenLaneCount: 0,
+    hiddenLaneCount: Math.max(dataset.lanes.length - visibleLanes.length, 0),
   };
 }
 
