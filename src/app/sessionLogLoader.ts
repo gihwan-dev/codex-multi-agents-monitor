@@ -239,19 +239,58 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
 
   const subagents = snapshot.subagents ?? [];
 
-  // spawn_agent 도구 이벤트를 시간순 추출 → 서브에이전트와 1:1 매핑
-  const spawnToolEvents = parentEvents
-    .filter((e) => e.toolName === "spawn_agent")
-    .sort((a, b) => a.startTs - b.startTs);
+  // Build call_id → eventId map for spawn_agent function_call entries
+  const spawnCallIdToEventId = new Map<string, string>();
+  for (let i = 0; i < snapshot.entries.length; i++) {
+    const entry = snapshot.entries[i];
+    if (entry.entryType === "function_call" && entry.functionName === "spawn_agent" && entry.functionCallId) {
+      const eventId = `${snapshot.sessionId}:${entry.timestamp}:${entry.entryType}:${i}`;
+      spawnCallIdToEventId.set(entry.functionCallId, eventId);
+    }
+  }
 
-  const sortedSubagents = [...subagents].sort(
-    (a, b) => parseTimestamp(a.startedAt) - parseTimestamp(b.startedAt),
-  );
-
+  // Build call_id pairing: spawn_agent output → sessionId, then map to spawn event
   const subagentToSpawnSource = new Map<string, string>();
-  for (let i = 0; i < sortedSubagents.length; i++) {
-    if (i < spawnToolEvents.length) {
-      subagentToSpawnSource.set(sortedSubagents[i].sessionId, spawnToolEvents[i].eventId);
+  for (const entry of snapshot.entries) {
+    if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
+    const spawnEventId = spawnCallIdToEventId.get(entry.functionCallId);
+    if (!spawnEventId || !entry.text) continue;
+    try {
+      const parsed = JSON.parse(entry.text);
+      const agentId = parsed.agent_id ?? parsed.agentId;
+      const nickname = parsed.nickname ?? parsed.agent_nickname;
+      if (agentId) {
+        // Direct match: agent_id = sessionId (Codex)
+        const directMatch = subagents.find((s) => s.sessionId === agentId);
+        if (directMatch) {
+          subagentToSpawnSource.set(directMatch.sessionId, spawnEventId);
+          continue;
+        }
+        // Fallback: nickname match
+        if (nickname) {
+          const nicknameMatch = subagents.find((s) => s.agentNickname === nickname);
+          if (nicknameMatch) {
+            subagentToSpawnSource.set(nicknameMatch.sessionId, spawnEventId);
+          }
+        }
+      }
+    } catch {
+      // Non-JSON spawn output, skip
+    }
+  }
+
+  // Fallback: chronological ordering for subagents without call_id mapping
+  if (subagentToSpawnSource.size < subagents.length) {
+    const spawnToolEvents = parentEvents
+      .filter((e) => e.toolName === "spawn_agent")
+      .sort((a, b) => a.startTs - b.startTs);
+    const sortedSubagents = [...subagents].sort(
+      (a, b) => parseTimestamp(a.startedAt) - parseTimestamp(b.startedAt),
+    );
+    for (let i = 0; i < sortedSubagents.length; i++) {
+      if (!subagentToSpawnSource.has(sortedSubagents[i].sessionId) && i < spawnToolEvents.length) {
+        subagentToSpawnSource.set(sortedSubagents[i].sessionId, spawnToolEvents[i].eventId);
+      }
     }
   }
 
@@ -377,10 +416,17 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       const parsed = JSON.parse(entry.text);
       const agentId = parsed.agent_id ?? parsed.agentId;
       const nickname = parsed.nickname ?? parsed.agent_nickname;
-      if (agentId && nickname) {
-        const matchingSub = subagents.find((s) => s.agentNickname === nickname);
-        if (matchingSub) {
-          codexAgentIdToSessionId.set(agentId, matchingSub.sessionId);
+      if (agentId) {
+        // Direct match: Codex uses agent_id = sessionId
+        const directMatch = subagents.find((s) => s.sessionId === agentId);
+        if (directMatch) {
+          codexAgentIdToSessionId.set(agentId, directMatch.sessionId);
+        } else if (nickname) {
+          // Fallback: match by nickname
+          const matchingSub = subagents.find((s) => s.agentNickname === nickname);
+          if (matchingSub) {
+            codexAgentIdToSessionId.set(agentId, matchingSub.sessionId);
+          }
         }
       }
     } catch {
@@ -397,13 +443,18 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     return subLaneEvents[0]?.eventId ?? null;
   };
 
+  // Resolve codex agent_id to subagent sessionId with direct match fallback
+  const resolveSessionId = (agentId: string): string | undefined =>
+    codexAgentIdToSessionId.get(agentId)
+    ?? (subagents.some((s) => s.sessionId === agentId) ? agentId : undefined);
+
   // Generate merge edges from close_agent events
   for (const evt of parentEvents) {
     if (evt.toolName !== "close_agent" || !evt.inputPreview) continue;
     try {
       const args = JSON.parse(evt.inputPreview);
       const agentId = args.id;
-      const sessionId = agentId ? codexAgentIdToSessionId.get(agentId) : undefined;
+      const sessionId = agentId ? resolveSessionId(agentId) : undefined;
       if (!sessionId) continue;
       const lastEventId = findLastSubagentEventId(sessionId);
       if (!lastEventId) continue;
@@ -431,7 +482,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       const args = JSON.parse(evt.inputPreview);
       const ids: string[] = args.ids ?? [];
       for (const agentId of ids) {
-        const sessionId = codexAgentIdToSessionId.get(agentId);
+        const sessionId = resolveSessionId(agentId);
         if (!sessionId) continue;
         const lastEventId = findLastSubagentEventId(sessionId);
         if (!lastEventId) continue;

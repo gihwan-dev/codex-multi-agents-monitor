@@ -566,10 +566,14 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .get("call_id")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
+            let args_limit = match name.as_str() {
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" => 2000,
+                _ => 200,
+            };
             let arguments = payload
                 .get("arguments")
                 .and_then(Value::as_str)
-                .map(|args| truncate_utf8_safe(args, 200));
+                .map(|args| truncate_utf8_safe(args, args_limit));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call".to_owned(),
@@ -609,11 +613,15 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .get("call_id")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
+            let args_limit = match name.as_str() {
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" => 2000,
+                _ => 200,
+            };
             let arguments = payload
                 .get("arguments")
                 .and_then(Value::as_str)
                 .or_else(|| payload.get("input").and_then(Value::as_str))
-                .map(|args| truncate_utf8_safe(args, 200));
+                .map(|args| truncate_utf8_safe(args, args_limit));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call".to_owned(),
