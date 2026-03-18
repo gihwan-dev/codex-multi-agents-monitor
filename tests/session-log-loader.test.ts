@@ -815,3 +815,468 @@ describe("multi-agent data pipeline", () => {
     expect(extraEdge!.sourceEventId).toBeTruthy();
   });
 });
+
+describe("merge edge generation", () => {
+  function makeFunctionCallEntry(
+    timestamp: string,
+    functionName: string,
+    callId: string,
+    args: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call",
+      role: null,
+      text: null,
+      functionName,
+      functionCallId: callId,
+      functionArgumentsPreview: args,
+    };
+  }
+
+  function makeFunctionCallOutputEntry(
+    timestamp: string,
+    callId: string,
+    output: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call_output",
+      role: null,
+      text: output,
+      functionName: null,
+      functionCallId: callId,
+      functionArgumentsPreview: null,
+    };
+  }
+
+  function buildCloseAgentSnapshot(): SessionLogSnapshot {
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-alpha",
+        parentThreadId: "merge-session-1",
+        depth: 1,
+        agentNickname: "Alpha",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-18T10:02:00.000Z",
+        updatedAt: "2026-03-18T10:15:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-18T10:02:05.000Z", "assistant", "작업 완료."),
+        ],
+      },
+      {
+        sessionId: "sub-beta",
+        parentThreadId: "merge-session-1",
+        depth: 1,
+        agentNickname: "Beta",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-18T10:02:30.000Z",
+        updatedAt: "2026-03-18T10:20:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-18T10:02:35.000Z", "assistant", "분석 완료."),
+        ],
+      },
+    ];
+
+    return {
+      sessionId: "merge-session-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "merge-test",
+      startedAt: "2026-03-18T10:00:00.000Z",
+      updatedAt: "2026-03-18T10:30:00.000Z",
+      model: "claude-opus-4-6",
+      entries: [
+        makeMessageEntry("2026-03-18T10:00:05.000Z", "user", "큰 작업을 해줘"),
+        makeFunctionCallEntry(
+          "2026-03-18T10:01:00.000Z",
+          "spawn_agent",
+          "call_spawn_a",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:01:05.000Z",
+          "call_spawn_a",
+          '{"agent_id":"codex-id-alpha","nickname":"Alpha"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T10:01:10.000Z",
+          "spawn_agent",
+          "call_spawn_b",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:01:15.000Z",
+          "call_spawn_b",
+          '{"agent_id":"codex-id-beta","nickname":"Beta"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T10:20:00.000Z",
+          "close_agent",
+          "call_close_a",
+          '{"id":"codex-id-alpha"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:20:05.000Z",
+          "call_close_a",
+          '{"status":{"completed":"작업 완료."}}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T10:21:00.000Z",
+          "close_agent",
+          "call_close_b",
+          '{"id":"codex-id-beta"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:21:05.000Z",
+          "call_close_b",
+          '{"status":{"completed":"분석 완료."}}',
+        ),
+      ],
+      subagents,
+    };
+  }
+
+  it("generates merge edges from close_agent function calls", () => {
+    const dataset = buildDatasetFromSessionLog(buildCloseAgentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges).toHaveLength(2);
+
+    // Each merge edge goes from subagent → parent
+    for (const edge of mergeEdges) {
+      expect(edge.sourceAgentId).toMatch(/^sub-(alpha|beta):sub$/);
+      expect(edge.targetAgentId).toBe("merge-session-1:main");
+    }
+
+    // Source events should be from subagent lanes
+    const sourceEvents = mergeEdges.map((e) =>
+      dataset.events.find((ev) => ev.eventId === e.sourceEventId),
+    );
+    expect(sourceEvents.every((ev) => ev?.laneId.endsWith(":sub"))).toBe(true);
+
+    // Target events should be close_agent events in main lane
+    const targetEvents = mergeEdges.map((e) =>
+      dataset.events.find((ev) => ev.eventId === e.targetEventId),
+    );
+    expect(targetEvents.every((ev) => ev?.toolName === "close_agent")).toBe(true);
+  });
+
+  it("generates merge edges from wait_agent function calls", () => {
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-gamma",
+        parentThreadId: "wait-session-1",
+        depth: 1,
+        agentNickname: "Gamma",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-18T11:02:00.000Z",
+        updatedAt: "2026-03-18T11:10:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-18T11:02:05.000Z", "assistant", "완료."),
+        ],
+      },
+      {
+        sessionId: "sub-delta",
+        parentThreadId: "wait-session-1",
+        depth: 1,
+        agentNickname: "Delta",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-18T11:02:30.000Z",
+        updatedAt: "2026-03-18T11:12:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-18T11:02:35.000Z", "assistant", "완료."),
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "wait-session-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "wait-test",
+      startedAt: "2026-03-18T11:00:00.000Z",
+      updatedAt: "2026-03-18T11:30:00.000Z",
+      model: "claude-opus-4-6",
+      entries: [
+        makeMessageEntry("2026-03-18T11:00:05.000Z", "user", "병렬 처리해줘"),
+        makeFunctionCallEntry(
+          "2026-03-18T11:01:00.000Z",
+          "spawn_agent",
+          "call_sp_g",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T11:01:05.000Z",
+          "call_sp_g",
+          '{"agent_id":"cid-gamma","nickname":"Gamma"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T11:01:10.000Z",
+          "spawn_agent",
+          "call_sp_d",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T11:01:15.000Z",
+          "call_sp_d",
+          '{"agent_id":"cid-delta","nickname":"Delta"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T11:15:00.000Z",
+          "wait_agent",
+          "call_wait_1",
+          '{"ids":["cid-gamma","cid-delta"],"timeout_ms":120000}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T11:15:05.000Z",
+          "call_wait_1",
+          '{"status":{"cid-gamma":"completed","cid-delta":"completed"}}',
+        ),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges).toHaveLength(2);
+
+    // Both merge edges should target the wait_agent event
+    const targetEvents = mergeEdges.map((e) =>
+      dataset.events.find((ev) => ev.eventId === e.targetEventId),
+    );
+    expect(targetEvents.every((ev) => ev?.toolName === "wait_agent")).toBe(true);
+  });
+
+  it("generates merge edges from old-style wait function calls", () => {
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-old",
+        parentThreadId: "old-session-1",
+        depth: 1,
+        agentNickname: "OldAgent",
+        agentRole: "worker",
+        model: "gpt-5",
+        startedAt: "2026-02-23T10:02:00.000Z",
+        updatedAt: "2026-02-23T10:10:00.000Z",
+        entries: [
+          makeMessageEntry("2026-02-23T10:02:05.000Z", "assistant", "완료."),
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "old-session-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "old-wait-test",
+      startedAt: "2026-02-23T10:00:00.000Z",
+      updatedAt: "2026-02-23T10:30:00.000Z",
+      model: "gpt-5",
+      entries: [
+        makeMessageEntry("2026-02-23T10:00:05.000Z", "user", "작업 시작"),
+        makeFunctionCallEntry(
+          "2026-02-23T10:01:00.000Z",
+          "spawn_agent",
+          "call_sp_old",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-02-23T10:01:05.000Z",
+          "call_sp_old",
+          '{"agent_id":"cid-old","nickname":"OldAgent"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-02-23T10:12:00.000Z",
+          "wait",
+          "call_wait_old",
+          '{"ids":["cid-old"],"timeout":120}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-02-23T10:12:05.000Z",
+          "call_wait_old",
+          "null",
+        ),
+        makeFunctionCallEntry(
+          "2026-02-23T10:13:00.000Z",
+          "close_agent",
+          "call_close_old",
+          '{"id":"cid-old"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-02-23T10:13:05.000Z",
+          "call_close_old",
+          '{"status":{"completed":"완료."}}',
+        ),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    // 1 from wait + 1 from close_agent = 2 merge edges
+    expect(mergeEdges).toHaveLength(2);
+
+    const waitMerge = mergeEdges.find((e) => e.edgeId.includes("wait"));
+    const closeMerge = mergeEdges.find((e) => e.edgeId.includes("close"));
+    expect(waitMerge).toBeDefined();
+    expect(closeMerge).toBeDefined();
+  });
+
+  it("handles wait/wait_agent as tool.started with waiting for agents title", () => {
+    const snapshot = buildCloseAgentSnapshot();
+    // Add a wait_agent entry
+    snapshot.entries.push(
+      makeFunctionCallEntry(
+        "2026-03-18T10:22:00.000Z",
+        "wait_agent",
+        "call_wait_final",
+        '{"ids":["codex-id-alpha"],"timeout_ms":60000}',
+      ),
+    );
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const waitEvents = dataset.events.filter(
+      (e) => e.toolName === "wait_agent",
+    );
+    expect(waitEvents.length).toBeGreaterThanOrEqual(1);
+    expect(waitEvents[0].title).toBe("Waiting for agents");
+    expect(waitEvents[0].waitReason).toBe("awaiting agents");
+    expect(waitEvents[0].eventType).toBe("tool.started");
+  });
+
+  it("handles agent_reasoning entries as note events", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-18T10:00:00.000Z", "user", "분석해줘"),
+        {
+          timestamp: "2026-03-18T10:01:00.000Z",
+          entryType: "agent_reasoning",
+          role: null,
+          text: "이 코드를 분석하면...",
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const reasoningEvents = dataset.events.filter(
+      (e) => e.title === "Agent reasoning",
+    );
+    expect(reasoningEvents).toHaveLength(1);
+    expect(reasoningEvents[0].eventType).toBe("note");
+    expect(reasoningEvents[0].outputPreview).toContain("이 코드를 분석하면");
+  });
+
+  it("filters permissions instructions as system boilerplate", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-18T10:00:00.000Z", "user", "작업 시작"),
+        makeMessageEntry(
+          "2026-03-18T10:01:00.000Z",
+          "user",
+          "<permissions instructions>sandbox policy here</permissions instructions>",
+        ),
+        makeMessageEntry(
+          "2026-03-18T10:02:00.000Z",
+          "assistant",
+          "알겠습니다.",
+        ),
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const userPrompts = dataset.events.filter(
+      (e) => e.eventType === "user.prompt",
+    );
+    // Only 1 user prompt (permissions one filtered)
+    expect(userPrompts).toHaveLength(1);
+    expect(
+      userPrompts.every(
+        (e) => !e.inputPreview?.includes("<permissions"),
+      ),
+    ).toBe(true);
+  });
+
+  it("skips merge edges when spawn_agent output is not JSON", () => {
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-nojson",
+        parentThreadId: "nojson-session",
+        depth: 1,
+        agentNickname: "NoJson",
+        agentRole: "worker",
+        model: "gpt-5",
+        startedAt: "2026-03-18T12:02:00.000Z",
+        updatedAt: "2026-03-18T12:10:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-18T12:02:05.000Z", "assistant", "완료."),
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "nojson-session",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "nojson-test",
+      startedAt: "2026-03-18T12:00:00.000Z",
+      updatedAt: "2026-03-18T12:30:00.000Z",
+      model: "gpt-5",
+      entries: [
+        makeMessageEntry("2026-03-18T12:00:05.000Z", "user", "작업 시작"),
+        makeFunctionCallEntry(
+          "2026-03-18T12:01:00.000Z",
+          "spawn_agent",
+          "call_sp_nj",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T12:01:05.000Z",
+          "call_sp_nj",
+          "Agent spawned successfully",
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T12:12:00.000Z",
+          "close_agent",
+          "call_cl_nj",
+          '{"id":"some-unknown-id"}',
+        ),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    // No merge edges since spawn output wasn't JSON
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges).toHaveLength(0);
+
+    // Spawn edges should still exist
+    const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
+    expect(spawnEdges).toHaveLength(1);
+  });
+});

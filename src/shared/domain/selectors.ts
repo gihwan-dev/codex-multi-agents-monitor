@@ -403,6 +403,17 @@ export function buildSelectionPath(
     }
   });
 
+  // Always include merge topology in the selection path.
+  // Merge edges represent join points where subagent results flow back
+  // to the parent, completing the fork-join causal graph.
+  dataset.edges
+    .filter((edge) => edge.edgeType === "merge")
+    .forEach((edge) => {
+      edgeIds.add(edge.edgeId);
+      eventIds.add(edge.sourceEventId);
+      eventIds.add(edge.targetEventId);
+    });
+
   dataset.events
     .filter((event) => eventIds.has(event.eventId))
     .forEach((event) => {

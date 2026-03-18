@@ -287,3 +287,133 @@ describe("multi-agent scene model", () => {
     expect(range.endIndex).toBe(scene.rows.length);
   });
 });
+
+describe("merge edge scene integration", () => {
+  function makeFunctionCallEntry(
+    timestamp: string,
+    functionName: string,
+    callId: string,
+    args: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call",
+      role: null,
+      text: null,
+      functionName,
+      functionCallId: callId,
+      functionArgumentsPreview: args,
+    };
+  }
+
+  function makeFunctionCallOutputEntry(
+    timestamp: string,
+    callId: string,
+    output: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call_output",
+      role: null,
+      text: output,
+      functionName: null,
+      functionCallId: callId,
+      functionArgumentsPreview: null,
+    };
+  }
+
+  function buildMergeEdgeDataset() {
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "merge-scene-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "merge-scene",
+      startedAt: "2026-03-18T10:00:00.000Z",
+      updatedAt: "2026-03-18T10:30:00.000Z",
+      model: "claude-opus-4-6",
+      entries: [
+        makeMessageEntry("2026-03-18T10:00:05.000Z", "user", "병렬 작업 실행"),
+        makeFunctionCallEntry(
+          "2026-03-18T10:01:00.000Z",
+          "spawn_agent",
+          "sp1",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:01:05.000Z",
+          "sp1",
+          '{"agent_id":"cid-x","nickname":"AgentX"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-18T10:15:00.000Z",
+          "close_agent",
+          "cl1",
+          '{"id":"cid-x"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-18T10:15:05.000Z",
+          "cl1",
+          '{"status":{"completed":"결과"}}',
+        ),
+      ],
+      subagents: [
+        {
+          sessionId: "sub-x",
+          parentThreadId: "merge-scene-1",
+          depth: 1,
+          agentNickname: "AgentX",
+          agentRole: "worker",
+          model: "claude-sonnet-4-6",
+          startedAt: "2026-03-18T10:02:00.000Z",
+          updatedAt: "2026-03-18T10:14:00.000Z",
+          entries: [
+            makeMessageEntry("2026-03-18T10:02:05.000Z", "assistant", "작업 완료."),
+          ],
+        },
+      ],
+    };
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    if (!dataset) throw new Error("merge edge dataset build failed");
+    return dataset;
+  }
+
+  it("includes merge edges in the graph scene edge bundles", () => {
+    const dataset = buildMergeEdgeDataset();
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+
+    const mergeBundles = scene.edgeBundles.filter(
+      (b) => b.edgeType === "merge",
+    );
+    expect(mergeBundles.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("includes merge edge endpoints in selection path", () => {
+    const dataset = buildMergeEdgeDataset();
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges.length).toBeGreaterThanOrEqual(1);
+
+    for (const edge of mergeEdges) {
+      expect(scene.selectionPath.edgeIds).toContain(edge.edgeId);
+      expect(scene.selectionPath.eventIds).toContain(edge.sourceEventId);
+      expect(scene.selectionPath.eventIds).toContain(edge.targetEventId);
+    }
+  });
+
+  it("merge and spawn edges coexist for the same subagent", () => {
+    const dataset = buildMergeEdgeDataset();
+
+    const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+
+    expect(spawnEdges).toHaveLength(1);
+    expect(mergeEdges).toHaveLength(1);
+
+    // Spawn goes parent→sub, merge goes sub→parent
+    expect(spawnEdges[0].sourceAgentId).toBe("merge-scene-1:main");
+    expect(spawnEdges[0].targetAgentId).toBe("sub-x:sub");
+    expect(mergeEdges[0].sourceAgentId).toBe("sub-x:sub");
+    expect(mergeEdges[0].targetAgentId).toBe("merge-scene-1:main");
+  });
+});

@@ -299,7 +299,7 @@ export function buildGraphLayoutSnapshot(
   const pendingRoutes = scene.edgeBundles.flatMap((bundle) => {
     const source = eventById.get(bundle.sourceEventId);
     const target = eventById.get(bundle.targetEventId);
-    if (!source || !target || bundle.sourceLaneId === bundle.targetLaneId) {
+    if (!source || !target) {
       return [];
     }
 

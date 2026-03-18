@@ -360,6 +360,98 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     }
   }
 
+  // Build codex agent_id → subagent sessionId mapping from spawn_agent outputs
+  const parentCallIdToName = new Map<string, string>();
+  for (const entry of snapshot.entries) {
+    if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
+      parentCallIdToName.set(entry.functionCallId, entry.functionName);
+    }
+  }
+
+  const codexAgentIdToSessionId = new Map<string, string>();
+  for (const entry of snapshot.entries) {
+    if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
+    const pairedName = parentCallIdToName.get(entry.functionCallId);
+    if (pairedName !== "spawn_agent" || !entry.text) continue;
+    try {
+      const parsed = JSON.parse(entry.text);
+      const agentId = parsed.agent_id ?? parsed.agentId;
+      const nickname = parsed.nickname ?? parsed.agent_nickname;
+      if (agentId && nickname) {
+        const matchingSub = subagents.find((s) => s.agentNickname === nickname);
+        if (matchingSub) {
+          codexAgentIdToSessionId.set(agentId, matchingSub.sessionId);
+        }
+      }
+    } catch {
+      // Non-JSON spawn output, skip
+    }
+  }
+
+  // Find the last event in a subagent lane
+  const findLastSubagentEventId = (sessionId: string): string | null => {
+    const subLaneId = `${sessionId}:sub`;
+    const subLaneEvents = allEvents
+      .filter((e) => e.laneId === subLaneId)
+      .sort((a, b) => b.startTs - a.startTs);
+    return subLaneEvents[0]?.eventId ?? null;
+  };
+
+  // Generate merge edges from close_agent events
+  for (const evt of parentEvents) {
+    if (evt.toolName !== "close_agent" || !evt.inputPreview) continue;
+    try {
+      const args = JSON.parse(evt.inputPreview);
+      const agentId = args.id;
+      const sessionId = agentId ? codexAgentIdToSessionId.get(agentId) : undefined;
+      if (!sessionId) continue;
+      const lastEventId = findLastSubagentEventId(sessionId);
+      if (!lastEventId) continue;
+      const sub = subagents.find((s) => s.sessionId === sessionId);
+      allEdges.push({
+        edgeId: `merge:close:${sessionId}`,
+        edgeType: "merge",
+        sourceAgentId: `${sessionId}:sub`,
+        targetAgentId: mainLane.agentId,
+        sourceEventId: lastEventId,
+        targetEventId: evt.eventId,
+        payloadPreview: `${sub?.agentNickname ?? "Agent"} result`,
+        artifactId: null,
+      });
+    } catch {
+      // Argument parse error, skip
+    }
+  }
+
+  // Generate merge edges from wait/wait_agent events
+  for (const evt of parentEvents) {
+    if (evt.toolName !== "wait" && evt.toolName !== "wait_agent") continue;
+    if (!evt.inputPreview) continue;
+    try {
+      const args = JSON.parse(evt.inputPreview);
+      const ids: string[] = args.ids ?? [];
+      for (const agentId of ids) {
+        const sessionId = codexAgentIdToSessionId.get(agentId);
+        if (!sessionId) continue;
+        const lastEventId = findLastSubagentEventId(sessionId);
+        if (!lastEventId) continue;
+        const sub = subagents.find((s) => s.sessionId === sessionId);
+        allEdges.push({
+          edgeId: `merge:wait:${sessionId}:${evt.eventId}`,
+          edgeType: "merge",
+          sourceAgentId: `${sessionId}:sub`,
+          targetAgentId: mainLane.agentId,
+          sourceEventId: lastEventId,
+          targetEventId: evt.eventId,
+          payloadPreview: `${sub?.agentNickname ?? "Agent"} joined`,
+          artifactId: null,
+        });
+      }
+    } catch {
+      // Argument parse error, skip
+    }
+  }
+
   const selectedByDefaultId =
     parentEvents[parentEvents.length - 1]?.eventId ?? runStartEvent.eventId;
 
@@ -557,6 +649,16 @@ function buildLaneEventsFromEntries({
             waitReason: "awaiting user",
             toolName: functionName,
           }));
+        } else if (functionName === "wait" || functionName === "wait_agent") {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "tool.started",
+            title: "Waiting for agents",
+            inputPreview: entry.functionArgumentsPreview,
+            outputPreview: null,
+            waitReason: "awaiting agents",
+            toolName: functionName,
+          }));
         } else {
           events.push(buildEntryEvent({
             entry, lane, startTs, safeEndTs, isLatest, status, model, index,
@@ -600,6 +702,16 @@ function buildLaneEventsFromEntries({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
           eventType: "note",
           title: "Commentary",
+          inputPreview: null,
+          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
+        }));
+        break;
+
+      case "agent_reasoning":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "note",
+          title: "Agent reasoning",
           inputPreview: null,
           outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
         }));
@@ -799,6 +911,7 @@ function isSystemBoilerplate(value: string, skipImplementPlan = false): boolean 
     isAutomationEnvelope(trimmed) ||
     trimmed.startsWith("<skill>") ||
     trimmed.startsWith("<subagent_notification>") ||
+    trimmed.startsWith("<permissions") ||
     trimmed.startsWith("<turn_aborted>") ||
     (!skipImplementPlan && IMPLEMENT_PLAN_PATTERN.test(trimmed))
   );

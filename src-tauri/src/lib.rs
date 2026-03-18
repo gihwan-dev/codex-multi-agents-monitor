@@ -522,13 +522,27 @@ fn extract_message_text(content: &Value) -> Option<String> {
 
 fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
     let timestamp = entry.get("timestamp")?.as_str()?.to_owned();
+
+    // Handle top-level "compacted" type which has no payload.type
+    if entry.get("type").and_then(Value::as_str) == Some("compacted") {
+        return Some(SessionEntrySnapshot {
+            timestamp,
+            entry_type: "context_compacted".to_owned(),
+            role: None,
+            text: None,
+            function_name: None,
+            function_call_id: None,
+            function_arguments_preview: None,
+        });
+    }
+
     let payload = entry.get("payload")?.as_object()?;
     let payload_type = payload.get("type").and_then(Value::as_str)?;
 
     match payload_type {
         "message" => {
             let role = payload.get("role")?.as_str()?;
-            if role != "user" && role != "assistant" && role != "developer" {
+            if role != "user" && role != "assistant" {
                 return None;
             }
             let text = extract_message_text(payload.get("content")?);
@@ -711,6 +725,37 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 function_arguments_preview: None,
             })
         }
+        "agent_reasoning" => {
+            let text = payload
+                .get("text")
+                .and_then(Value::as_str)
+                .map(|t| truncate_utf8_safe(t, 1000));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "agent_reasoning".to_owned(),
+                role: None,
+                text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        "item_completed" => {
+            let item_text = payload
+                .get("item")
+                .and_then(|item| item.get("text"))
+                .and_then(Value::as_str)
+                .map(|t| truncate_utf8_safe(t, 1000));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "agent_message".to_owned(),
+                role: None,
+                text: item_text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
         _ => None,
     }
 }
@@ -847,7 +892,29 @@ fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapsho
         return None;
     }
 
-    read_archived_session_full(path).ok().flatten()
+    let mut snapshot = read_archived_session_full(path).ok()??;
+
+    // Scan same directory for subagent JSONLs
+    if let Some(parent_dir) = path.parent() {
+        if let Ok(dir_entries) = fs::read_dir(parent_dir) {
+            for entry in dir_entries.flatten() {
+                let sub_path = entry.path();
+                if sub_path == canonical_path {
+                    continue;
+                }
+                if sub_path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                if let Ok(Some(sub)) = read_subagent_snapshot(&sub_path) {
+                    if sub.parent_thread_id == snapshot.session_id {
+                        snapshot.subagents.push(sub);
+                    }
+                }
+            }
+        }
+    }
+
+    Some(snapshot)
 }
 
 #[tauri::command]
