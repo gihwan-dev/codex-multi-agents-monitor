@@ -502,6 +502,33 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
         "assistant",
         "작업을 분석하고 3개의 서브에이전트를 생성하겠습니다.",
       ),
+      {
+        timestamp: "2026-03-15T10:01:55.000Z",
+        entryType: "function_call",
+        role: null,
+        text: null,
+        functionName: "spawn_agent",
+        functionCallId: "call_spawn_1",
+        functionArgumentsPreview: '{"agent_type":"researcher"}',
+      },
+      {
+        timestamp: "2026-03-15T10:02:25.000Z",
+        entryType: "function_call",
+        role: null,
+        text: null,
+        functionName: "spawn_agent",
+        functionCallId: "call_spawn_2",
+        functionArgumentsPreview: '{"agent_type":"implementer"}',
+      },
+      {
+        timestamp: "2026-03-15T10:02:55.000Z",
+        entryType: "function_call",
+        role: null,
+        text: null,
+        functionName: "spawn_agent",
+        functionCallId: "call_spawn_3",
+        functionArgumentsPreview: '{"agent_type":"tester"}',
+      },
     ],
     subagents,
   };
@@ -706,5 +733,85 @@ describe("multi-agent data pipeline", () => {
     const emptyLane = dataset.lanes.find((l) => l.laneId === "sub-empty:sub");
     expect(emptyLane).toBeDefined();
     expect(emptyLane!.laneStatus).toBe("running");
+  });
+
+  it("maps each spawn_agent function_call 1:1 to its corresponding subagent edge", () => {
+    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
+    expect(spawnEdges).toHaveLength(3);
+
+    // 모든 spawn 엣지의 sourceEventId가 유니크해야 함
+    const sourceIds = spawnEdges.map((e) => e.sourceEventId);
+    expect(new Set(sourceIds).size).toBe(3);
+
+    // 각 sourceEventId가 toolName === "spawn_agent"인 tool.started 이벤트여야 함
+    for (const sourceId of sourceIds) {
+      const evt = dataset.events.find((e) => e.eventId === sourceId);
+      expect(evt).toBeDefined();
+      expect(evt!.eventType).toBe("tool.started");
+      expect(evt!.toolName).toBe("spawn_agent");
+    }
+  });
+
+  it("classifies spawn_agent function_calls as tool.started, not agent.spawned", () => {
+    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mainLaneId = "multi-session-1:main";
+
+    // Main lane에 agent.spawned 이벤트가 없어야 함
+    const mainSpawned = dataset.events.filter(
+      (e) => e.laneId === mainLaneId && e.eventType === "agent.spawned",
+    );
+    expect(mainSpawned).toHaveLength(0);
+
+    // spawn_agent toolName을 가진 tool.started 이벤트가 3개여야 함
+    const spawnTools = dataset.events.filter(
+      (e) => e.laneId === mainLaneId && e.eventType === "tool.started" && e.toolName === "spawn_agent",
+    );
+    expect(spawnTools).toHaveLength(3);
+  });
+
+  it("falls back to findClosestParentEvent when spawn count mismatches", () => {
+    const snapshot = buildMultiAgentSnapshot();
+    // 서브에이전트 4개, spawn_agent function_call 3개인 상황
+    const extraSub: SubagentSnapshot = {
+      sessionId: "sub-extra",
+      parentThreadId: "multi-session-1",
+      depth: 1,
+      agentNickname: "ExtraAgent",
+      agentRole: "worker",
+      model: "claude-sonnet-4-6",
+      startedAt: "2026-03-15T10:04:00.000Z",
+      updatedAt: "2026-03-15T10:05:00.000Z",
+      entries: [
+        makeMessageEntry("2026-03-15T10:04:05.000Z", "assistant", "작업 완료."),
+      ],
+    };
+    snapshot.subagents = [...(snapshot.subagents ?? []), extraSub];
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
+    expect(spawnEdges).toHaveLength(4);
+
+    // 처음 3개는 1:1 매핑 → sourceEventId가 spawn_agent tool.started
+    const mappedSources = spawnEdges
+      .slice(0, 3)
+      .map((e) => dataset.events.find((ev) => ev.eventId === e.sourceEventId));
+    for (const src of mappedSources) {
+      expect(src?.toolName).toBe("spawn_agent");
+    }
+
+    // 4번째는 fallback → sourceEventId가 존재하지만 spawn_agent가 아닐 수 있음
+    const extraEdge = spawnEdges.find((e) => e.targetAgentId === "sub-extra:sub");
+    expect(extraEdge).toBeDefined();
+    expect(extraEdge!.sourceEventId).toBeTruthy();
   });
 });

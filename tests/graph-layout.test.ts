@@ -455,6 +455,33 @@ describe("multi-agent rendering diagnostic", () => {
       entries: [
         makeEntry("2026-03-15T10:00:05.000Z", "user", "큰 작업을 해줘"),
         makeEntry("2026-03-15T10:01:00.000Z", "assistant", "서브에이전트를 생성합니다."),
+        {
+          timestamp: "2026-03-15T10:01:55.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "spawn_agent",
+          functionCallId: "call_spawn_1",
+          functionArgumentsPreview: '{"agent_type":"researcher"}',
+        },
+        {
+          timestamp: "2026-03-15T10:02:25.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "spawn_agent",
+          functionCallId: "call_spawn_2",
+          functionArgumentsPreview: '{"agent_type":"implementer"}',
+        },
+        {
+          timestamp: "2026-03-15T10:02:55.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "spawn_agent",
+          functionCallId: "call_spawn_3",
+          functionArgumentsPreview: '{"agent_type":"tester"}',
+        },
       ],
       subagents,
     };

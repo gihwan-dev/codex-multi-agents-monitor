@@ -238,6 +238,23 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   const allEdges: EdgeRecord[] = [];
 
   const subagents = snapshot.subagents ?? [];
+
+  // spawn_agent 도구 이벤트를 시간순 추출 → 서브에이전트와 1:1 매핑
+  const spawnToolEvents = parentEvents
+    .filter((e) => e.toolName === "spawn_agent")
+    .sort((a, b) => a.startTs - b.startTs);
+
+  const sortedSubagents = [...subagents].sort(
+    (a, b) => parseTimestamp(a.startedAt) - parseTimestamp(b.startedAt),
+  );
+
+  const subagentToSpawnSource = new Map<string, string>();
+  for (let i = 0; i < sortedSubagents.length; i++) {
+    if (i < spawnToolEvents.length) {
+      subagentToSpawnSource.set(sortedSubagents[i].sessionId, spawnToolEvents[i].eventId);
+    }
+  }
+
   for (const sub of subagents) {
     const subLaneId = `${sub.sessionId}:sub`;
     const subModel = sub.model ?? resolvedModel;
@@ -319,10 +336,9 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
 
     allEvents.push(spawnEvent, ...subEvents, ...(subEndEvent ? [subEndEvent] : []));
 
-    const sourceEventId = findClosestParentEvent(
-      [runStartEvent, ...parentEvents],
-      subStartTs,
-    );
+    const sourceEventId =
+      subagentToSpawnSource.get(sub.sessionId) ??
+      findClosestParentEvent([runStartEvent, ...parentEvents], subStartTs);
     allEdges.push({
       edgeId: `spawn:${sub.sessionId}`,
       edgeType: "spawn",
@@ -333,6 +349,15 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       payloadPreview: `${sub.agentNickname} (${sub.agentRole})`,
       artifactId: null,
     });
+  }
+
+  // 매칭된 spawn_agent 이벤트 제목에 서브에이전트 닉네임 보강
+  for (const [sessionId, eventId] of subagentToSpawnSource) {
+    const sub = subagents.find((s) => s.sessionId === sessionId);
+    const evt = allEvents.find((e) => e.eventId === eventId);
+    if (sub && evt) {
+      evt.title = `spawn_agent (${sub.agentNickname})`;
+    }
   }
 
   const selectedByDefaultId =
@@ -498,8 +523,8 @@ function buildLaneEventsFromEntries({
         if (functionName === "spawn_agent") {
           events.push(buildEntryEvent({
             entry, lane, startTs, safeEndTs, isLatest, status, model, index,
-            eventType: "agent.spawned",
-            title: "Agent spawned",
+            eventType: "tool.started",
+            title: "spawn_agent",
             inputPreview: entry.functionArgumentsPreview,
             outputPreview: null,
             toolName: functionName,
