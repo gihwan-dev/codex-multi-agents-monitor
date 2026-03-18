@@ -270,6 +270,7 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
     let mut error: Option<String> = None;
+    let mut has_fork_context = false;
 
     for line in reader.lines() {
         let line = line?;
@@ -281,6 +282,12 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             Ok(entry) => entry,
             Err(_) => continue,
         };
+
+        // Detect forked context: a second session_meta line from the parent session
+        if entry.get("type").and_then(Value::as_str) == Some("session_meta") {
+            has_fork_context = true;
+            continue;
+        }
 
         if model.is_none() {
             if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
@@ -298,6 +305,14 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             entries.push(snapshot_entry);
         } else if error.is_none() {
             error = extract_error_hint(&entry);
+        }
+    }
+
+    // Strip forked context: entries with timestamps clustered at the start (within 200ms)
+    if has_fork_context && entries.len() > 1 {
+        let fork_end = find_fork_context_boundary(&entries);
+        if fork_end > 0 && fork_end < entries.len() {
+            entries = entries.split_off(fork_end);
         }
     }
 
@@ -452,6 +467,52 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     } else {
         None
     }
+}
+
+/// Find the boundary between forked context entries and actual subagent work.
+/// Forked entries have timestamps clustered within a few milliseconds at the start.
+/// Returns the index of the first actual entry, or 0 if no boundary is found.
+fn find_fork_context_boundary(entries: &[SessionEntrySnapshot]) -> usize {
+    if entries.len() < 2 {
+        return 0;
+    }
+
+    // Parse milliseconds from ISO 8601 timestamp for gap detection.
+    // Compare consecutive entry timestamps: the first gap > 200ms marks the boundary.
+    let parse_ms = |ts: &str| -> u64 {
+        // Format: "2026-03-18T00:14:09.101Z" — extract seconds and millis
+        let parts: Vec<&str> = ts.split('T').collect();
+        if parts.len() < 2 {
+            return 0;
+        }
+        let time_part = parts[1].trim_end_matches('Z');
+        let time_parts: Vec<&str> = time_part.split(':').collect();
+        if time_parts.len() < 3 {
+            return 0;
+        }
+        let hours: u64 = time_parts[0].parse().unwrap_or(0);
+        let minutes: u64 = time_parts[1].parse().unwrap_or(0);
+        let sec_parts: Vec<&str> = time_parts[2].split('.').collect();
+        let seconds: u64 = sec_parts[0].parse().unwrap_or(0);
+        let millis: u64 = if sec_parts.len() > 1 {
+            let frac = sec_parts[1];
+            let padded = format!("{:0<3}", &frac[..frac.len().min(3)]);
+            padded.parse().unwrap_or(0)
+        } else {
+            0
+        };
+        ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
+    };
+
+    let first_ms = parse_ms(&entries[0].timestamp);
+    for i in 1..entries.len() {
+        let curr_ms = parse_ms(&entries[i].timestamp);
+        if curr_ms.saturating_sub(first_ms) > 200 {
+            return i;
+        }
+    }
+
+    0
 }
 
 fn is_system_boilerplate_text(text: &str) -> bool {
