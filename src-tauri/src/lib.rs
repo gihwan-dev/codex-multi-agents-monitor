@@ -289,14 +289,16 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             continue;
         }
 
-        if model.is_none() {
-            if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
-                model = entry
-                    .get("payload")
-                    .and_then(|p| p.get("model"))
-                    .and_then(Value::as_str)
-                    .filter(|v| !v.trim().is_empty())
-                    .map(ToOwned::to_owned);
+        if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
+            // Always take the latest model — forked context may carry the parent's model,
+            // but the subagent's own turn_context (which comes last) has the actual model.
+            if let Some(m) = entry
+                .get("payload")
+                .and_then(|p| p.get("model"))
+                .and_then(Value::as_str)
+                .filter(|v| !v.trim().is_empty())
+            {
+                model = Some(m.to_owned());
             }
         }
 
