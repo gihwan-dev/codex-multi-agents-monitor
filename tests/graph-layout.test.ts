@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildDatasetFromSessionLog, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader";
+import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader";
 import { FIXTURE_DATASETS } from "../src/features/fixtures";
 import { CausalGraphView } from "../src/features/run-detail/graph/CausalGraphView";
 import {
@@ -395,6 +395,10 @@ function getFixtureDataset(traceId: string) {
 }
 
 describe("multi-agent rendering diagnostic", () => {
+  function makeEntry(timestamp: string, role: "user" | "assistant", text: string): SessionEntrySnapshot {
+    return { timestamp, entryType: "message", role, text, functionName: null, functionCallId: null, functionArgumentsPreview: null };
+  }
+
   function buildMultiAgentRenderSnapshot(): SessionLogSnapshot {
     const subagents: SubagentSnapshot[] = [
       {
@@ -406,9 +410,9 @@ describe("multi-agent rendering diagnostic", () => {
         model: "claude-sonnet-4-6",
         startedAt: "2026-03-15T10:02:00.000Z",
         updatedAt: "2026-03-15T10:15:00.000Z",
-        messages: [
-          { timestamp: "2026-03-15T10:02:05.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Research" },
-          { timestamp: "2026-03-15T10:10:00.000Z", role: "assistant", text: "연구 완료." },
+        entries: [
+          makeEntry("2026-03-15T10:02:05.000Z", "user", "PLEASE IMPLEMENT THIS PLAN: Research"),
+          makeEntry("2026-03-15T10:10:00.000Z", "assistant", "연구 완료."),
         ],
       },
       {
@@ -420,9 +424,9 @@ describe("multi-agent rendering diagnostic", () => {
         model: "claude-sonnet-4-6",
         startedAt: "2026-03-15T10:02:30.000Z",
         updatedAt: "2026-03-15T10:20:00.000Z",
-        messages: [
-          { timestamp: "2026-03-15T10:02:35.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Implement" },
-          { timestamp: "2026-03-15T10:18:00.000Z", role: "assistant", text: "구현 완료." },
+        entries: [
+          makeEntry("2026-03-15T10:02:35.000Z", "user", "PLEASE IMPLEMENT THIS PLAN: Implement"),
+          makeEntry("2026-03-15T10:18:00.000Z", "assistant", "구현 완료."),
         ],
       },
       {
@@ -434,8 +438,8 @@ describe("multi-agent rendering diagnostic", () => {
         model: "claude-sonnet-4-6",
         startedAt: "2026-03-15T10:03:00.000Z",
         updatedAt: "2026-03-15T10:03:30.000Z",
-        messages: [
-          { timestamp: "2026-03-15T10:03:05.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Test" },
+        entries: [
+          makeEntry("2026-03-15T10:03:05.000Z", "user", "PLEASE IMPLEMENT THIS PLAN: Test"),
         ],
       },
     ];
@@ -448,9 +452,9 @@ describe("multi-agent rendering diagnostic", () => {
       startedAt: "2026-03-15T10:00:00.000Z",
       updatedAt: "2026-03-15T10:30:00.000Z",
       model: "claude-opus-4-6",
-      messages: [
-        { timestamp: "2026-03-15T10:00:05.000Z", role: "user", text: "큰 작업을 해줘" },
-        { timestamp: "2026-03-15T10:01:00.000Z", role: "assistant", text: "서브에이전트를 생성합니다." },
+      entries: [
+        makeEntry("2026-03-15T10:00:05.000Z", "user", "큰 작업을 해줘"),
+        makeEntry("2026-03-15T10:01:00.000Z", "assistant", "서브에이전트를 생성합니다."),
       ],
       subagents,
     };

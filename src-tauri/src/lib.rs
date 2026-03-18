@@ -21,10 +21,14 @@ struct WorkspaceIdentity {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SessionMessageSnapshot {
+struct SessionEntrySnapshot {
     timestamp: String,
-    role: String,
-    text: String,
+    entry_type: String,
+    role: Option<String>,
+    text: Option<String>,
+    function_name: Option<String>,
+    function_call_id: Option<String>,
+    function_arguments_preview: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -38,7 +42,7 @@ struct SubagentSnapshot {
     model: Option<String>,
     started_at: String,
     updated_at: String,
-    messages: Vec<SessionMessageSnapshot>,
+    entries: Vec<SessionEntrySnapshot>,
     error: Option<String>,
 }
 
@@ -52,7 +56,7 @@ struct SessionLogSnapshot {
     started_at: String,
     updated_at: String,
     model: Option<String>,
-    messages: Vec<SessionMessageSnapshot>,
+    entries: Vec<SessionEntrySnapshot>,
     subagents: Vec<SubagentSnapshot>,
     is_archived: bool,
 }
@@ -69,6 +73,7 @@ struct ArchivedSessionIndex {
     model: Option<String>,
     message_count: u32,
     file_path: String,
+    first_user_message: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -254,7 +259,7 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
         .unwrap_or_default()
         .to_owned();
 
-    let mut messages = Vec::new();
+    let mut entries = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
     let mut error: Option<String> = None;
@@ -281,9 +286,9 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             }
         }
 
-        if let Some(message) = extract_message_snapshot(&entry) {
-            updated_at = message.timestamp.clone();
-            messages.push(message);
+        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+            updated_at = snapshot_entry.timestamp.clone();
+            entries.push(snapshot_entry);
         } else if error.is_none() {
             error = extract_error_hint(&entry);
         }
@@ -298,7 +303,7 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
         model,
         started_at,
         updated_at,
-        messages,
+        entries,
         error,
     }))
 }
@@ -349,7 +354,7 @@ fn read_session_snapshot(
         return Ok(None);
     };
 
-    let mut messages = Vec::new();
+    let mut entries = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
 
@@ -375,12 +380,10 @@ fn read_session_snapshot(
             }
         }
 
-        let Some(message) = extract_message_snapshot(&entry) else {
-            continue;
-        };
-
-        updated_at = message.timestamp.clone();
-        messages.push(message);
+        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+            updated_at = snapshot_entry.timestamp.clone();
+            entries.push(snapshot_entry);
+        }
     }
 
     Ok(Some(SessionLogSnapshot {
@@ -391,7 +394,7 @@ fn read_session_snapshot(
         started_at,
         updated_at,
         model,
-        messages,
+        entries,
         subagents: Vec::new(),
         is_archived: false,
     }))
@@ -438,6 +441,28 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     }
 }
 
+fn is_system_boilerplate_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.starts_with("# AGENTS.md instructions")
+        || trimmed.starts_with("Automation:")
+        || trimmed.starts_with("<skill>")
+        || trimmed.starts_with("<subagent_notification>")
+        || trimmed.starts_with("<turn_aborted>")
+        || trimmed
+            .get(..26)
+            .map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN"))
+            .unwrap_or(false)
+}
+
+fn truncate_utf8_safe(text: &str, max_chars: usize) -> String {
+    let trimmed = text.trim();
+    if trimmed.chars().count() <= max_chars {
+        return trimmed.to_owned();
+    }
+    let truncated: String = trimmed.chars().take(max_chars).collect();
+    truncated
+}
+
 fn extract_error_hint(entry: &Value) -> Option<String> {
     let payload = entry.get("payload")?.as_object()?;
     let payload_type = payload.get("type").and_then(Value::as_str)?;
@@ -462,27 +487,6 @@ fn extract_error_hint(entry: &Value) -> Option<String> {
             .or(Some("Turn aborted".to_owned()));
     }
     None
-}
-
-fn extract_message_snapshot(entry: &Value) -> Option<SessionMessageSnapshot> {
-    let payload = entry.get("payload")?.as_object()?;
-    if payload.get("type")?.as_str()? != "message" {
-        return None;
-    }
-
-    let role = payload.get("role")?.as_str()?;
-    if role != "user" && role != "assistant" {
-        return None;
-    }
-
-    let timestamp = entry.get("timestamp")?.as_str()?.to_owned();
-    let text = extract_message_text(payload.get("content")?)?;
-
-    Some(SessionMessageSnapshot {
-        timestamp,
-        role: role.to_owned(),
-        text,
-    })
 }
 
 fn extract_message_text(content: &Value) -> Option<String> {
@@ -513,6 +517,201 @@ fn extract_message_text(content: &Value) -> Option<String> {
         None
     } else {
         Some(parts.join("\n"))
+    }
+}
+
+fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
+    let timestamp = entry.get("timestamp")?.as_str()?.to_owned();
+    let payload = entry.get("payload")?.as_object()?;
+    let payload_type = payload.get("type").and_then(Value::as_str)?;
+
+    match payload_type {
+        "message" => {
+            let role = payload.get("role")?.as_str()?;
+            if role != "user" && role != "assistant" && role != "developer" {
+                return None;
+            }
+            let text = extract_message_text(payload.get("content")?);
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "message".to_owned(),
+                role: Some(role.to_owned()),
+                text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        "function_call" => {
+            let name = payload
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_owned();
+            let call_id = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let arguments = payload
+                .get("arguments")
+                .and_then(Value::as_str)
+                .map(|args| truncate_utf8_safe(args, 200));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "function_call".to_owned(),
+                role: None,
+                text: None,
+                function_name: Some(name),
+                function_call_id: call_id,
+                function_arguments_preview: arguments,
+            })
+        }
+        "function_call_output" => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let output = payload
+                .get("output")
+                .and_then(Value::as_str)
+                .map(|o| truncate_utf8_safe(o, 1000));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "function_call_output".to_owned(),
+                role: None,
+                text: output,
+                function_name: None,
+                function_call_id: call_id,
+                function_arguments_preview: None,
+            })
+        }
+        "custom_tool_call" => {
+            let name = payload
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("custom_tool")
+                .to_owned();
+            let call_id = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let arguments = payload
+                .get("arguments")
+                .and_then(Value::as_str)
+                .or_else(|| payload.get("input").and_then(Value::as_str))
+                .map(|args| truncate_utf8_safe(args, 200));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "function_call".to_owned(),
+                role: None,
+                text: None,
+                function_name: Some(name),
+                function_call_id: call_id,
+                function_arguments_preview: arguments,
+            })
+        }
+        "custom_tool_call_output" => {
+            let call_id = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            let output = payload
+                .get("output")
+                .and_then(Value::as_str)
+                .map(|o| truncate_utf8_safe(o, 1000));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "function_call_output".to_owned(),
+                role: None,
+                text: output,
+                function_name: None,
+                function_call_id: call_id,
+                function_arguments_preview: None,
+            })
+        }
+        "reasoning" => Some(SessionEntrySnapshot {
+            timestamp,
+            entry_type: "reasoning".to_owned(),
+            role: None,
+            text: None,
+            function_name: None,
+            function_call_id: None,
+            function_arguments_preview: None,
+        }),
+        "task_started" => Some(SessionEntrySnapshot {
+            timestamp,
+            entry_type: "task_started".to_owned(),
+            role: None,
+            text: None,
+            function_name: None,
+            function_call_id: None,
+            function_arguments_preview: None,
+        }),
+        "task_complete" => Some(SessionEntrySnapshot {
+            timestamp,
+            entry_type: "task_complete".to_owned(),
+            role: None,
+            text: None,
+            function_name: None,
+            function_call_id: None,
+            function_arguments_preview: None,
+        }),
+        "agent_message" => {
+            let text = payload
+                .get("message")
+                .and_then(Value::as_str)
+                .or_else(|| payload.get("text").and_then(Value::as_str))
+                .map(|t| truncate_utf8_safe(t, 1000));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "agent_message".to_owned(),
+                role: None,
+                text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        "context_compacted" => Some(SessionEntrySnapshot {
+            timestamp,
+            entry_type: "context_compacted".to_owned(),
+            role: None,
+            text: None,
+            function_name: None,
+            function_call_id: None,
+            function_arguments_preview: None,
+        }),
+        "turn_aborted" => {
+            let reason = payload
+                .get("reason")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "turn_aborted".to_owned(),
+                role: None,
+                text: reason,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        "thread_rolled_back" => {
+            let reason = payload
+                .get("reason")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "thread_rolled_back".to_owned(),
+                role: None,
+                text: reason,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        _ => None,
     }
 }
 
@@ -609,6 +808,11 @@ fn load_archived_session_index(
                 .filter(|entry| {
                     entry.display_name.to_lowercase().contains(&lower_query)
                         || entry.workspace_path.to_lowercase().contains(&lower_query)
+                        || entry
+                            .first_user_message
+                            .as_ref()
+                            .map(|m| m.to_lowercase().contains(&lower_query))
+                            .unwrap_or(false)
                 })
                 .collect()
         }
@@ -720,7 +924,8 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         .to_owned();
 
     let mut model: Option<String> = None;
-    for line in reader.lines().take(20) {
+    let mut first_user_message: Option<String> = None;
+    for line in reader.lines().take(50) {
         let line = match line {
             Ok(l) => l,
             Err(_) => break,
@@ -728,7 +933,12 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         if line.trim().is_empty() {
             continue;
         }
-        if let Ok(entry) = serde_json::from_str::<Value>(&line) {
+        let entry = match serde_json::from_str::<Value>(&line) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        if model.is_none() {
             if entry.get("type").and_then(Value::as_str) == Some("turn_context") {
                 model = entry
                     .get("payload")
@@ -736,8 +946,25 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
                     .and_then(Value::as_str)
                     .filter(|v| !v.trim().is_empty())
                     .map(ToOwned::to_owned);
-                break;
             }
+        }
+
+        if first_user_message.is_none() {
+            if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+                if snapshot_entry.entry_type == "message"
+                    && snapshot_entry.role.as_deref() == Some("user")
+                {
+                    if let Some(ref text) = snapshot_entry.text {
+                        if !is_system_boilerplate_text(text) {
+                            first_user_message = Some(truncate_utf8_safe(text, 200));
+                        }
+                    }
+                }
+            }
+        }
+
+        if model.is_some() && first_user_message.is_some() {
+            break;
         }
     }
 
@@ -751,6 +978,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         model,
         message_count: 0,
         file_path: session_file.display().to_string(),
+        first_user_message,
     }))
 }
 
@@ -793,7 +1021,7 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
 
     let (origin_path, display_name) = resolve_archived_workspace_identity(workspace_path);
 
-    let mut messages = Vec::new();
+    let mut entries = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
 
@@ -819,12 +1047,10 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
             }
         }
 
-        let Some(message) = extract_message_snapshot(&entry) else {
-            continue;
-        };
-
-        updated_at = message.timestamp.clone();
-        messages.push(message);
+        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+            updated_at = snapshot_entry.timestamp.clone();
+            entries.push(snapshot_entry);
+        }
     }
 
     Ok(Some(SessionLogSnapshot {
@@ -835,7 +1061,7 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         started_at,
         updated_at,
         model,
-        messages,
+        entries,
         subagents: Vec::new(),
         is_archived: true,
     }))

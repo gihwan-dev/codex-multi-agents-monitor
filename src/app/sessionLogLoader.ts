@@ -4,15 +4,20 @@ import {
   calculateSummaryMetrics,
   type EdgeRecord,
   type EventRecord,
+  type EventType,
   type RunDataset,
   type RunStatus,
 } from "../shared/domain";
 import { invokeTauri } from "./tauri";
 
-export interface SessionLogSnapshotMessage {
+export interface SessionEntrySnapshot {
   timestamp: string;
-  role: "user" | "assistant";
-  text: string;
+  entryType: string;
+  role: string | null;
+  text: string | null;
+  functionName: string | null;
+  functionCallId: string | null;
+  functionArgumentsPreview: string | null;
 }
 
 export interface SubagentSnapshot {
@@ -24,7 +29,7 @@ export interface SubagentSnapshot {
   model: string | null;
   startedAt: string;
   updatedAt: string;
-  messages: SessionLogSnapshotMessage[];
+  entries: SessionEntrySnapshot[];
   error?: string | null;
 }
 
@@ -36,7 +41,7 @@ export interface SessionLogSnapshot {
   startedAt: string;
   updatedAt: string;
   model: string | null;
-  messages: SessionLogSnapshotMessage[];
+  entries: SessionEntrySnapshot[];
   subagents?: SubagentSnapshot[];
   isArchived?: boolean;
 }
@@ -84,12 +89,16 @@ function normalizeSessionLogDatasets(snapshots: SessionLogSnapshot[] | null | un
   return datasets.length > 0 ? datasets : null;
 }
 
-export function deriveSessionLogTitle(messages: SessionLogSnapshotMessage[]) {
-  const firstMeaningfulUserMessage = messages.find(
-    (message) => message.role === "user" && isMeaningfulTitleMessage(message.text),
+export function deriveSessionLogTitle(entries: SessionEntrySnapshot[]) {
+  const firstMeaningfulUserMessage = entries.find(
+    (entry) =>
+      entry.entryType === "message" &&
+      entry.role === "user" &&
+      entry.text != null &&
+      isMeaningfulTitleMessage(entry.text),
   );
 
-  if (!firstMeaningfulUserMessage) {
+  if (!firstMeaningfulUserMessage?.text) {
     return NEW_THREAD_TITLE;
   }
 
@@ -99,22 +108,40 @@ export function deriveSessionLogTitle(messages: SessionLogSnapshotMessage[]) {
 }
 
 export function deriveSessionLogStatus(
-  messages: SessionLogSnapshotMessage[],
+  entries: SessionEntrySnapshot[],
   skipImplementPlan = false,
 ): RunStatus {
-  const latestMessage = [...messages]
-    .reverse()
-    .find((message) => {
-      const trimmed = message.text.trim();
-      return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
-    });
+  const hasAbort = entries.some(
+    (entry) => entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
+  );
+
+  const messageEntries = entries.filter(
+    (entry) => entry.entryType === "message" && entry.text != null,
+  );
+
+  const latestMessage = [...messageEntries].reverse().find((entry) => {
+    const trimmed = entry.text?.trim() ?? "";
+    return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
+  });
 
   if (!latestMessage) {
+    if (hasAbort) return "interrupted";
     return "done";
   }
 
-  if (latestMessage.text.includes("<turn_aborted>")) {
+  if (latestMessage.text?.includes("<turn_aborted>")) {
     return "interrupted";
+  }
+
+  if (hasAbort) {
+    const lastAbortEntry = [...entries].reverse().find(
+      (entry) => entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
+    );
+    if (lastAbortEntry) {
+      const abortTs = parseTimestamp(lastAbortEntry.timestamp);
+      const msgTs = parseTimestamp(latestMessage.timestamp);
+      if (abortTs >= msgTs) return "interrupted";
+    }
   }
 
   return latestMessage.role === "user" ? "running" : "done";
@@ -127,13 +154,27 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     return null;
   }
 
-  const displayTitle = deriveSessionLogTitle(snapshot.messages);
-  const status = deriveSessionLogStatus(snapshot.messages);
-  const laneId = `${snapshot.sessionId}:main`;
+  const displayTitle = deriveSessionLogTitle(snapshot.entries);
+  const status = deriveSessionLogStatus(snapshot.entries);
+  const mainLaneId = `${snapshot.sessionId}:main`;
+  const userLaneId = `${snapshot.sessionId}:user`;
   const resolvedModel = snapshot.model ?? "unknown";
-  const lane: AgentLane = {
-    laneId,
-    agentId: laneId,
+
+  const userLane: AgentLane = {
+    laneId: userLaneId,
+    agentId: userLaneId,
+    threadId: snapshot.sessionId,
+    name: "User",
+    role: "user",
+    model: "human",
+    provider: "Human",
+    badge: "User",
+    laneStatus: "done",
+  };
+
+  const mainLane: AgentLane = {
+    laneId: mainLaneId,
+    agentId: mainLaneId,
     threadId: snapshot.sessionId,
     name: "Main thread",
     role: "session",
@@ -143,23 +184,26 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     laneStatus: status,
   };
 
-  const parentEvents = buildLaneEvents({
-    displayTitle,
-    messages: snapshot.messages,
-    lane,
+  const parentEvents = buildLaneEventsFromEntries({
+    entries: snapshot.entries,
+    lane: mainLane,
+    userLane,
     updatedAt: snapshot.updatedAt,
     status,
     model: resolvedModel,
+    displayTitle,
   });
+
+  const hasUserEvents = parentEvents.some((e) => e.laneId === userLaneId);
 
   const firstEventTs = parentEvents[0]?.startTs ?? updatedTs;
   const runStartEvent: EventRecord = {
     eventId: `${snapshot.sessionId}:run-start`,
     parentId: null,
     linkIds: [],
-    laneId: lane.laneId,
-    agentId: lane.agentId,
-    threadId: lane.threadId,
+    laneId: mainLane.laneId,
+    agentId: mainLane.agentId,
+    threadId: mainLane.threadId,
     eventType: "run.started",
     status:
       parentEvents.length === 0 && status === "running" ? "running" : "done",
@@ -187,9 +231,9 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     rawOutput: null,
   };
 
-  const runEndEvent = buildRunEndEvent(snapshot.sessionId, lane, updatedTs, status, resolvedModel);
+  const runEndEvent = buildRunEndEvent(snapshot.sessionId, mainLane, updatedTs, status, resolvedModel);
 
-  const allLanes: AgentLane[] = [lane];
+  const allLanes: AgentLane[] = hasUserEvents ? [userLane, mainLane] : [mainLane];
   const allEvents: EventRecord[] = [runStartEvent, ...parentEvents, ...(runEndEvent ? [runEndEvent] : [])];
   const allEdges: EdgeRecord[] = [];
 
@@ -197,12 +241,12 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   for (const sub of subagents) {
     const subLaneId = `${sub.sessionId}:sub`;
     const subModel = sub.model ?? resolvedModel;
-    let subStatus = deriveSessionLogStatus(sub.messages, true);
+    let subStatus = deriveSessionLogStatus(sub.entries, true);
 
     if (sub.error && subStatus === "done") {
       subStatus = "interrupted";
     }
-    if (sub.messages.length === 0 && !sub.error && subStatus === "done") {
+    if (sub.entries.length === 0 && !sub.error && subStatus === "done") {
       subStatus = "running";
     }
 
@@ -219,13 +263,14 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     };
     allLanes.push(subLane);
 
-    const subEvents = buildLaneEvents({
-      displayTitle: sub.agentNickname,
-      messages: sub.messages,
+    const subEvents = buildLaneEventsFromEntries({
+      entries: sub.entries,
       lane: subLane,
+      userLane: null,
       updatedAt: sub.updatedAt,
       status: subStatus,
       model: subModel,
+      displayTitle: sub.agentNickname,
       isSubagent: true,
     });
 
@@ -281,7 +326,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     allEdges.push({
       edgeId: `spawn:${sub.sessionId}`,
       edgeType: "spawn",
-      sourceAgentId: lane.agentId,
+      sourceAgentId: mainLane.agentId,
       targetAgentId: subLane.agentId,
       sourceEventId,
       targetEventId: spawnEvent.eventId,
@@ -348,42 +393,302 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   };
 }
 
-function buildLaneEvents({
-  displayTitle,
-  messages,
+function buildLaneEventsFromEntries({
+  entries,
   lane,
+  userLane,
   updatedAt,
   status,
   model,
+  displayTitle,
   isSubagent,
 }: {
-  displayTitle: string;
-  messages: SessionLogSnapshotMessage[];
+  entries: SessionEntrySnapshot[];
   lane: AgentLane;
+  userLane: AgentLane | null;
   updatedAt: string;
   status: RunStatus;
   model: string;
+  displayTitle: string;
   isSubagent?: boolean;
 }): EventRecord[] {
-  const timelineMessages = messages.filter(
-    (message) => !isSystemBoilerplate(message.text, isSubagent),
-  );
-  const firstUserMessageIndex = timelineMessages.findIndex(
-    (message) => message.role === "user",
-  );
-  return timelineMessages.map((message, index) =>
-    buildMessageEvent({
-      displayTitle,
-      message,
-      lane,
-      nextTimestamp: timelineMessages[index + 1]?.timestamp ?? updatedAt,
-      useDisplayTitle: index === firstUserMessageIndex,
-      isLatest: index === timelineMessages.length - 1,
-      runStatus: status,
-      model,
-      messageIndex: index,
-    }),
-  );
+  const events: EventRecord[] = [];
+
+  const callIdToName = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
+      callIdToName.set(entry.functionCallId, entry.functionName);
+    }
+  }
+
+  let firstUserPromptSeen = false;
+
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    const nextEntry = entries[index + 1];
+    const startTs = parseTimestamp(entry.timestamp);
+    const nextTs = nextEntry ? parseTimestamp(nextEntry.timestamp) : parseTimestamp(updatedAt);
+    const safeEndTs = Number.isFinite(nextTs) && nextTs > startTs ? nextTs : startTs + 1_000;
+    const isLatest = index === entries.length - 1;
+
+    if (entry.entryType === "message" && entry.text) {
+      const trimmedText = entry.text.trim();
+
+      if (isSubagent && IMPLEMENT_PLAN_PATTERN.test(trimmedText)) {
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "note",
+          title: "System instruction",
+          inputPreview: null,
+          outputPreview: sanitizeMessagePreview(entry.text),
+        }));
+        continue;
+      }
+
+      if (isSystemBoilerplate(trimmedText, isSubagent)) {
+        continue;
+      }
+    }
+
+    switch (entry.entryType) {
+      case "message": {
+        if (!entry.text) continue;
+        const isUser = entry.role === "user";
+        const preview = sanitizeMessagePreview(entry.text);
+        const targetLane = isUser && userLane ? userLane : lane;
+
+        let inputPreview: string | null = null;
+        if (isUser) {
+          if (!firstUserPromptSeen) {
+            inputPreview = displayTitle;
+            firstUserPromptSeen = true;
+          } else {
+            inputPreview = preview;
+          }
+        }
+
+        events.push(buildEntryEvent({
+          entry,
+          lane: targetLane,
+          startTs, safeEndTs, isLatest, status, model, index,
+          eventType: isUser ? "user.prompt" : "note",
+          title: isUser ? "User prompt" : "Assistant",
+          inputPreview: isUser ? inputPreview : null,
+          outputPreview: isUser ? null : preview,
+        }));
+        break;
+      }
+
+      case "function_call": {
+        const functionName = entry.functionName ?? "unknown";
+
+        if (functionName === "spawn_agent") {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "agent.spawned",
+            title: "Agent spawned",
+            inputPreview: entry.functionArgumentsPreview,
+            outputPreview: null,
+            toolName: functionName,
+          }));
+        } else if (functionName === "close_agent") {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "agent.finished",
+            title: "Agent closed",
+            inputPreview: entry.functionArgumentsPreview,
+            outputPreview: null,
+            toolName: functionName,
+          }));
+        } else if (functionName === "update_plan") {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "note",
+            title: "Plan updated",
+            inputPreview: null,
+            outputPreview: entry.functionArgumentsPreview,
+            toolName: functionName,
+          }));
+        } else if (functionName === "request_user_input") {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "tool.started",
+            title: "User input requested",
+            inputPreview: entry.functionArgumentsPreview,
+            outputPreview: null,
+            waitReason: "awaiting user",
+            toolName: functionName,
+          }));
+        } else {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "tool.started",
+            title: functionName,
+            inputPreview: entry.functionArgumentsPreview,
+            outputPreview: null,
+            toolName: functionName,
+          }));
+        }
+        break;
+      }
+
+      case "function_call_output": {
+        const pairedName = entry.functionCallId ? callIdToName.get(entry.functionCallId) : null;
+        const toolName = pairedName ?? "unknown";
+
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "tool.finished",
+          title: toolName === "request_user_input" ? "User responded" : `${toolName} result`,
+          inputPreview: null,
+          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
+          toolName,
+        }));
+        break;
+      }
+
+      case "reasoning":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "llm.started",
+          title: "Reasoning",
+          inputPreview: null,
+          outputPreview: null,
+        }));
+        break;
+
+      case "agent_message":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "note",
+          title: "Commentary",
+          inputPreview: null,
+          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
+        }));
+        break;
+
+      case "task_started":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "turn.started",
+          title: "Turn started",
+          inputPreview: null,
+          outputPreview: null,
+        }));
+        break;
+
+      case "task_complete":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "turn.finished",
+          title: "Turn finished",
+          inputPreview: null,
+          outputPreview: null,
+        }));
+        break;
+
+      case "context_compacted":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "note",
+          title: "Context compacted",
+          inputPreview: null,
+          outputPreview: null,
+        }));
+        break;
+
+      case "turn_aborted":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "error",
+          title: "Turn aborted",
+          inputPreview: null,
+          outputPreview: null,
+          errorMessage: entry.text ?? "Turn aborted",
+        }));
+        break;
+
+      case "thread_rolled_back":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "error",
+          title: "Thread rolled back",
+          inputPreview: null,
+          outputPreview: null,
+          errorMessage: entry.text ?? "Thread rolled back",
+        }));
+        break;
+    }
+  }
+
+  return events;
+}
+
+function buildEntryEvent({
+  entry,
+  lane,
+  startTs,
+  safeEndTs,
+  isLatest,
+  status,
+  model,
+  index,
+  eventType,
+  title,
+  inputPreview,
+  outputPreview,
+  toolName,
+  waitReason,
+  errorMessage,
+}: {
+  entry: SessionEntrySnapshot;
+  lane: AgentLane;
+  startTs: number;
+  safeEndTs: number;
+  isLatest: boolean;
+  status: RunStatus;
+  model: string;
+  index: number;
+  eventType: EventType;
+  title: string;
+  inputPreview: string | null;
+  outputPreview: string | null;
+  toolName?: string;
+  waitReason?: string;
+  errorMessage?: string;
+}): EventRecord {
+  return {
+    eventId: `${lane.threadId}:${entry.timestamp}:${entry.entryType}:${index}`,
+    parentId: null,
+    linkIds: [],
+    laneId: lane.laneId,
+    agentId: lane.agentId,
+    threadId: lane.threadId,
+    eventType,
+    status: isLatest ? status : "done",
+    waitReason: waitReason ?? null,
+    retryCount: 0,
+    startTs,
+    endTs: safeEndTs,
+    durationMs: Math.max(safeEndTs - startTs, 1_000),
+    title,
+    inputPreview,
+    outputPreview,
+    artifactId: null,
+    errorCode: null,
+    errorMessage: errorMessage ?? null,
+    provider: "OpenAI",
+    model,
+    toolName: toolName ?? null,
+    tokensIn: 0,
+    tokensOut: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costUsd: 0,
+    finishReason: null,
+    rawInput: null,
+    rawOutput: null,
+  };
 }
 
 function findClosestParentEvent(
@@ -401,67 +706,6 @@ function findClosestParentEvent(
     }
   }
   return best.eventId;
-}
-
-function buildMessageEvent({
-  displayTitle,
-  message,
-  lane,
-  nextTimestamp,
-  useDisplayTitle,
-  isLatest,
-  runStatus,
-  model,
-  messageIndex,
-}: {
-  displayTitle: string;
-  message: SessionLogSnapshotMessage;
-  lane: AgentLane;
-  nextTimestamp: string;
-  useDisplayTitle: boolean;
-  isLatest: boolean;
-  runStatus: RunStatus;
-  model: string;
-  messageIndex: number;
-}): EventRecord {
-  const startTs = parseTimestamp(message.timestamp);
-  const nextTs = parseTimestamp(nextTimestamp);
-  const safeEndTs = Number.isFinite(nextTs) && nextTs > startTs ? nextTs : startTs + 1_000;
-  const preview = sanitizeMessagePreview(message.text);
-  const isUserMessage = message.role === "user";
-
-  return {
-    eventId: `${lane.threadId}:${message.timestamp}:${message.role}:${messageIndex}`,
-    parentId: null,
-    linkIds: [],
-    laneId: lane.laneId,
-    agentId: lane.agentId,
-    threadId: lane.threadId,
-    eventType: "note",
-    status: isLatest ? runStatus : "done",
-    waitReason: null,
-    retryCount: 0,
-    startTs,
-    endTs: safeEndTs,
-    durationMs: Math.max(safeEndTs - startTs, 1_000),
-    title: isUserMessage ? "User prompt" : "Assistant update",
-    inputPreview: isUserMessage ? (useDisplayTitle ? displayTitle : preview) : null,
-    outputPreview: isUserMessage ? null : preview,
-    artifactId: null,
-    errorCode: null,
-    errorMessage: null,
-    provider: "OpenAI",
-    model,
-    toolName: null,
-    tokensIn: 0,
-    tokensOut: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
-  };
 }
 
 function buildRunEndEvent(
@@ -543,13 +787,20 @@ function sanitizeMessagePreview(value: string) {
   return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
 }
 
-function sanitizeSessionText(value: string) {
+export function sanitizeSessionText(value: string) {
   return value
     .replace(MARKDOWN_LINK_PATTERN, "$1")
     .replace(/\$([A-Za-z0-9-]+)/g, "$1")
     .replace(IMAGE_TAG_PATTERN, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function deriveArchiveIndexTitle(firstUserMessage: string | null): string | null {
+  if (!firstUserMessage) return null;
+  const sanitized = sanitizeSessionText(firstUserMessage);
+  if (sanitized.length === 0) return null;
+  return sanitized.length > 120 ? `${sanitized.slice(0, 117)}...` : sanitized;
 }
 
 function parseTimestamp(value: string) {

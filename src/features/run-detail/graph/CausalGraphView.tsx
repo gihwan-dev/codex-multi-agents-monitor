@@ -386,6 +386,7 @@ export function CausalGraphView({
                               type="button"
                               className={[
                                 "graph-sequence__card",
+                                `graph-sequence__card--${row.eventType.replace(".", "-")}`,
                                 row.selected ? "graph-sequence__card--selected" : "",
                                 row.inPath ? "graph-sequence__card--path" : "",
                               ]
@@ -404,6 +405,7 @@ export function CausalGraphView({
                             >
                               <div className="graph-sequence__card-head">
                                 <strong>{row.title}</strong>
+                                {row.toolName ? <span className="graph-sequence__tool-badge">{row.toolName}</span> : null}
                                 <StatusChip status={row.status} subtle />
                               </div>
                             </button>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { deriveArchiveIndexTitle } from "../../app/sessionLogLoader";
 import type { ArchivedSessionIndexItem } from "../../shared/domain";
 
 interface ArchivedWorkspaceGroup {
@@ -122,12 +123,13 @@ export function ArchivedSessionList({
                       title={session.workspacePath}
                     >
                       <div className="run-row__title">
-                        <span>{formatArchiveDate(session.startedAt)}</span>
+                        <span>{deriveArchiveItemTitle(session)}</span>
                         {session.model ? (
                           <span className="archive-list__model-badge">{session.model}</span>
                         ) : null}
                       </div>
                       <div className="run-row__sub">
+                        <span className="run-row__meta">{formatArchiveDate(session.startedAt)}</span>
                         <span className="run-row__meta">{session.sessionId.slice(0, 8)}</span>
                       </div>
                     </button>
@@ -178,6 +180,10 @@ function groupByWorkspace(items: ArchivedSessionIndexItem[]): ArchivedWorkspaceG
     }
   }
   return Array.from(map, ([displayName, sessions]) => ({ displayName, sessions }));
+}
+
+function deriveArchiveItemTitle(session: ArchivedSessionIndexItem): string {
+  return deriveArchiveIndexTitle(session.firstUserMessage) ?? formatArchiveDate(session.startedAt);
 }
 
 function formatArchiveDate(isoString: string): string {

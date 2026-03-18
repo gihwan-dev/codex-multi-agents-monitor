@@ -628,7 +628,7 @@ export function buildSummaryFacts(
 function buildGraphLanes(dataset: RunDataset) {
   const visibleLanes = dataset.lanes.filter(
     (lane, index) =>
-      index < LARGE_RUN_LANE_THRESHOLD || lane.laneStatus !== "done",
+      lane.role === "user" || index < LARGE_RUN_LANE_THRESHOLD || lane.laneStatus !== "done",
   );
 
   return {
@@ -714,6 +714,8 @@ export function buildGraphSceneModel(
       durationLabel: formatDuration(event.durationMs),
       inPath: hasMultiAgentTopology && selectionPath.eventIds.includes(event.eventId),
       selected: selection?.kind === "event" && selection.id === event.eventId,
+      eventType: event.eventType,
+      toolName: event.toolName,
     });
   });
 

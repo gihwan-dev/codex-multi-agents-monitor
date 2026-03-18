@@ -1456,6 +1456,64 @@ textarea {
   }
 }
 
+/* Event type card styles */
+.graph-sequence__card--user-prompt {
+  border-left: 3px solid var(--color-active);
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.06), rgba(16, 20, 29, 1));
+}
+
+.graph-sequence__card--tool-started,
+.graph-sequence__card--tool-finished {
+  border-radius: 8px;
+}
+
+.graph-sequence__card--tool-started {
+  border-left: 3px solid var(--color-transfer);
+}
+
+.graph-sequence__card--tool-finished {
+  border-left: 3px solid var(--color-success);
+}
+
+.graph-sequence__card--llm-started {
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  opacity: 0.8;
+}
+
+.graph-sequence__card--agent-spawned {
+  border-left: 3px solid var(--color-active);
+}
+
+.graph-sequence__card--agent-finished {
+  border-left: 3px solid rgba(166, 175, 189, 0.4);
+}
+
+.graph-sequence__card--error {
+  border-left: 3px solid var(--color-failed);
+  background: linear-gradient(180deg, rgba(255, 107, 107, 0.06), rgba(16, 20, 29, 1));
+}
+
+.graph-sequence__card--turn-started,
+.graph-sequence__card--turn-finished {
+  border: 1px dashed rgba(255, 255, 255, 0.10);
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.graph-sequence__tool-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 @media (max-width: 720px) {
   .monitor-shell {
     height: auto;

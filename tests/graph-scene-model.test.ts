@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDatasetFromSessionLog, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader.js";
+import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader.js";
 import { FIXTURE_DATASETS } from "../src/features/fixtures";
 import {
   buildEventRects,
@@ -66,6 +66,22 @@ describe("buildGraphSceneModel", () => {
   });
 });
 
+function makeMessageEntry(
+  timestamp: string,
+  role: "user" | "assistant",
+  text: string,
+): SessionEntrySnapshot {
+  return {
+    timestamp,
+    entryType: "message",
+    role,
+    text,
+    functionName: null,
+    functionCallId: null,
+    functionArgumentsPreview: null,
+  };
+}
+
 function buildMultiAgentSnapshot(): SessionLogSnapshot {
   const subagents: SubagentSnapshot[] = [
     {
@@ -77,17 +93,17 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
       model: "claude-sonnet-4-6",
       startedAt: "2026-03-15T10:02:00.000Z",
       updatedAt: "2026-03-15T10:15:00.000Z",
-      messages: [
-        {
-          timestamp: "2026-03-15T10:02:05.000Z",
-          role: "user",
-          text: "PLEASE IMPLEMENT THIS PLAN: Research the historical context of the project",
-        },
-        {
-          timestamp: "2026-03-15T10:10:00.000Z",
-          role: "assistant",
-          text: "연구 결과를 정리했습니다.",
-        },
+      entries: [
+        makeMessageEntry(
+          "2026-03-15T10:02:05.000Z",
+          "user",
+          "PLEASE IMPLEMENT THIS PLAN: Research the historical context of the project",
+        ),
+        makeMessageEntry(
+          "2026-03-15T10:10:00.000Z",
+          "assistant",
+          "연구 결과를 정리했습니다.",
+        ),
       ],
     },
     {
@@ -99,17 +115,17 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
       model: "claude-sonnet-4-6",
       startedAt: "2026-03-15T10:02:30.000Z",
       updatedAt: "2026-03-15T10:20:00.000Z",
-      messages: [
-        {
-          timestamp: "2026-03-15T10:02:35.000Z",
-          role: "user",
-          text: "PLEASE IMPLEMENT THIS PLAN: Implement the API layer for the new feature",
-        },
-        {
-          timestamp: "2026-03-15T10:18:00.000Z",
-          role: "assistant",
-          text: "API 레이어 구현을 완료했습니다.",
-        },
+      entries: [
+        makeMessageEntry(
+          "2026-03-15T10:02:35.000Z",
+          "user",
+          "PLEASE IMPLEMENT THIS PLAN: Implement the API layer for the new feature",
+        ),
+        makeMessageEntry(
+          "2026-03-15T10:18:00.000Z",
+          "assistant",
+          "API 레이어 구현을 완료했습니다.",
+        ),
       ],
     },
     {
@@ -121,12 +137,12 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
       model: "claude-sonnet-4-6",
       startedAt: "2026-03-15T10:03:00.000Z",
       updatedAt: "2026-03-15T10:03:30.000Z",
-      messages: [
-        {
-          timestamp: "2026-03-15T10:03:05.000Z",
-          role: "user",
-          text: "PLEASE IMPLEMENT THIS PLAN: Write comprehensive tests for the new feature",
-        },
+      entries: [
+        makeMessageEntry(
+          "2026-03-15T10:03:05.000Z",
+          "user",
+          "PLEASE IMPLEMENT THIS PLAN: Write comprehensive tests for the new feature",
+        ),
       ],
     },
   ];
@@ -139,17 +155,17 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
     startedAt: "2026-03-15T10:00:00.000Z",
     updatedAt: "2026-03-15T10:30:00.000Z",
     model: "claude-opus-4-6",
-    messages: [
-      {
-        timestamp: "2026-03-15T10:00:05.000Z",
-        role: "user",
-        text: "만약 너가 엄청나게 큰 작업을 받게 된다면 서브에이전트를 생성해서 병렬로 처리해.",
-      },
-      {
-        timestamp: "2026-03-15T10:01:00.000Z",
-        role: "assistant",
-        text: "작업을 분석하고 3개의 서브에이전트를 생성하겠습니다.",
-      },
+    entries: [
+      makeMessageEntry(
+        "2026-03-15T10:00:05.000Z",
+        "user",
+        "만약 너가 엄청나게 큰 작업을 받게 된다면 서브에이전트를 생성해서 병렬로 처리해.",
+      ),
+      makeMessageEntry(
+        "2026-03-15T10:01:00.000Z",
+        "assistant",
+        "작업을 분석하고 3개의 서브에이전트를 생성하겠습니다.",
+      ),
     ],
     subagents,
   };

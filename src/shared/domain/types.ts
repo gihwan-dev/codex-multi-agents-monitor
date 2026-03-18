@@ -27,6 +27,9 @@ export const EVENT_TYPES = [
   "transfer",
   "error",
   "note",
+  "user.prompt",
+  "turn.started",
+  "turn.finished",
 ] as const;
 
 export const VIEW_MODES = ["graph", "waterfall", "map"] as const;
@@ -292,6 +295,8 @@ export interface GraphSceneRowEvent {
   durationLabel: string;
   inPath: boolean;
   selected: boolean;
+  eventType: EventType;
+  toolName: string | null;
 }
 
 export interface GraphSceneRowGap {
@@ -470,6 +475,7 @@ export interface ArchivedSessionIndexItem {
   model: string | null;
   messageCount: number;
   filePath: string;
+  firstUserMessage: string | null;
 }
 
 export interface ArchivedSessionIndexResult {
