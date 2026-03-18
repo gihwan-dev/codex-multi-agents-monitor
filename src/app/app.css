@@ -836,7 +836,14 @@ textarea {
   gap: 10px;
 }
 
-.graph-sequence__card-head strong {
+.graph-sequence__card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.graph-sequence__card-title strong {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

@@ -1,4 +1,5 @@
 export * from "./EventRow";
+export * from "./EventTypeGlyph";
 export * from "./GapChip";
 export * from "./InspectorTabs";
 export * from "./LaneHeader";

@@ -166,6 +166,26 @@ ul {
   background: var(--color-disconnected);
 }
 
+/* ── Event type icon colors ── */
+.event-icon--user-prompt        { color: var(--color-active); }
+.event-icon--tool-started       { color: var(--color-transfer); }
+.event-icon--tool-finished      { color: var(--color-success); }
+.event-icon--llm-started        { color: var(--color-text-secondary); }
+.event-icon--llm-finished       { color: var(--color-text-secondary); }
+.event-icon--note               { color: var(--color-text-tertiary); }
+.event-icon--agent-spawned      { color: var(--color-active); }
+.event-icon--agent-state-changed { color: var(--color-handoff); }
+.event-icon--agent-finished     { color: var(--color-text-secondary); }
+.event-icon--error              { color: var(--color-failed); }
+.event-icon--handoff            { color: var(--color-handoff); }
+.event-icon--transfer           { color: var(--color-transfer); }
+.event-icon--turn-started       { color: var(--color-text-tertiary); }
+.event-icon--turn-finished      { color: var(--color-text-tertiary); }
+.event-icon--run-started        { color: var(--color-active); }
+.event-icon--run-finished       { color: var(--color-success); }
+.event-icon--run-failed         { color: var(--color-failed); }
+.event-icon--run-cancelled      { color: var(--color-text-tertiary); }
+
 .metric-pill {
   display: grid;
   gap: 4px;

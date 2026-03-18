@@ -33,7 +33,7 @@
 - UI implementation baseline: repo-local CSS layers plus repo-local primitives under `src/shared/ui/`
 - State and selectors baseline: feature-local React state, reducer, context, and selector modules
 
-No optional state, cache, UI-kit, or styling library is approved yet.
+- Icon library: `lucide-react` (deferred trigger met — 18 event types require semantic icons beyond CSS-only shapes)
 
 # Deferred Decisions and Trigger
 
@@ -45,8 +45,9 @@ No optional state, cache, UI-kit, or styling library is approved yet.
   - Trigger: `SLICE-3` import persistence or `SLICE-4` shared live dataset handling becomes too coupled with local React state.
 - Live transport helper
   - Trigger: reconnect, stale, or backpressure logic in `SLICE-4` cannot be expressed cleanly with a thin adapter.
-- Animation or icon helper
-  - Trigger: required status shapes, reduced-motion behavior, or minimal motion tokens cannot be maintained with repo-local assets.
+- Animation or motion helper
+  - Trigger: minimal motion tokens cannot be maintained with repo-local assets.
+  - Icon helper trigger met: `lucide-react` adopted for 18 event-type semantic icons.
 
 When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md` and this file before adopting the library.
 

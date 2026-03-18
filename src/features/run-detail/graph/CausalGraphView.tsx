@@ -1,6 +1,6 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { GraphSceneModel, LiveMode, SelectionState } from "../../../shared/domain";
-import { GapChip, Panel, StatusChip } from "../../../shared/ui";
+import { EventTypeGlyph, GapChip, Panel, StatusChip } from "../../../shared/ui";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
@@ -404,7 +404,10 @@ export function CausalGraphView({
                               aria-label={`${row.title} ${row.status}`}
                             >
                               <div className="graph-sequence__card-head">
-                                <strong>{row.title}</strong>
+                                <span className="graph-sequence__card-title">
+                                  <EventTypeGlyph eventType={row.eventType} />
+                                  <strong>{row.title}</strong>
+                                </span>
                                 {row.toolName ? <span className="graph-sequence__tool-badge">{row.toolName}</span> : null}
                                 <StatusChip status={row.status} subtle />
                               </div>

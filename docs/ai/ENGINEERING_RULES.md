@@ -63,6 +63,7 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Validation and screenshot stack: `Biome`, `Vitest`, `Playwright`, `Storybook`
 - State and data baseline: React local state, reducer, context, selectors
 - Styling baseline: CSS token files under `src/theme/*` and repo-local primitives under `src/shared/ui/`
+- Icon library: `lucide-react` (tree-shaking, currentColor support, React 19 optimized) — deferred trigger met: 18 event types require accessibility-safe semantic icons beyond CSS-only shapes
 
 ## Deferred
 
@@ -82,10 +83,10 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
   - Why deferred: live watch protocol shape is not implemented yet.
   - Trigger: `SLICE-4` reconnect, stale, and stream recovery logic cannot be expressed cleanly with a thin repo-local adapter.
   - Needed input: chosen watch source format and reconnect semantics.
-- Animation or icon helper
-  - Why deferred: motion and iconography scope is intentionally narrow in v0.1.
-  - Trigger: accessibility-safe status shapes and minimal motion cannot be maintained with repo-local assets alone.
-  - Needed input: concrete icon set gaps or motion requirements that exceed the documented token contract.
+- Animation or motion helper
+  - Why deferred: motion scope is intentionally narrow in v0.1.
+  - Trigger: minimal motion tokens cannot be maintained with repo-local assets alone.
+  - Needed input: concrete motion requirements that exceed the documented token contract.
 
 ## Banned/Avoid
 
