@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { buildDatasetFromSessionLog, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader";
 import { FIXTURE_DATASETS } from "../src/features/fixtures";
 import { CausalGraphView } from "../src/features/run-detail/graph/CausalGraphView";
 import {
@@ -234,6 +235,8 @@ describe("graphLayout", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
+        expandedGapIds: new Set<string>(),
+        onToggleGap: () => undefined,
         viewportHeightOverride: 1200,
         laneHeaderHeightOverride: 80,
       }),
@@ -390,3 +393,98 @@ function getFixtureDataset(traceId: string) {
   }
   return dataset;
 }
+
+describe("multi-agent rendering diagnostic", () => {
+  function buildMultiAgentRenderSnapshot(): SessionLogSnapshot {
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-hume",
+        parentThreadId: "render-session-1",
+        depth: 1,
+        agentNickname: "Hume",
+        agentRole: "researcher",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-15T10:02:00.000Z",
+        updatedAt: "2026-03-15T10:15:00.000Z",
+        messages: [
+          { timestamp: "2026-03-15T10:02:05.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Research" },
+          { timestamp: "2026-03-15T10:10:00.000Z", role: "assistant", text: "연구 완료." },
+        ],
+      },
+      {
+        sessionId: "sub-pasteur",
+        parentThreadId: "render-session-1",
+        depth: 1,
+        agentNickname: "Pasteur",
+        agentRole: "implementer",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-15T10:02:30.000Z",
+        updatedAt: "2026-03-15T10:20:00.000Z",
+        messages: [
+          { timestamp: "2026-03-15T10:02:35.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Implement" },
+          { timestamp: "2026-03-15T10:18:00.000Z", role: "assistant", text: "구현 완료." },
+        ],
+      },
+      {
+        sessionId: "sub-gibbs",
+        parentThreadId: "render-session-1",
+        depth: 1,
+        agentNickname: "Gibbs",
+        agentRole: "tester",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-15T10:03:00.000Z",
+        updatedAt: "2026-03-15T10:03:30.000Z",
+        messages: [
+          { timestamp: "2026-03-15T10:03:05.000Z", role: "user", text: "PLEASE IMPLEMENT THIS PLAN: Test" },
+        ],
+      },
+    ];
+
+    return {
+      sessionId: "render-session-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "multi-agent-render",
+      startedAt: "2026-03-15T10:00:00.000Z",
+      updatedAt: "2026-03-15T10:30:00.000Z",
+      model: "claude-opus-4-6",
+      messages: [
+        { timestamp: "2026-03-15T10:00:05.000Z", role: "user", text: "큰 작업을 해줘" },
+        { timestamp: "2026-03-15T10:01:00.000Z", role: "assistant", text: "서브에이전트를 생성합니다." },
+      ],
+      subagents,
+    };
+  }
+
+  it("renders spawn cards for all subagents in multi-agent scene", () => {
+    const dataset = buildDatasetFromSessionLog(buildMultiAgentRenderSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, {
+      kind: "event",
+      id: dataset.run.selectedByDefaultId,
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(CausalGraphView, {
+        scene,
+        onSelect: () => undefined,
+        followLive: false,
+        liveMode: dataset.run.liveMode,
+        onPauseFollowLive: () => undefined,
+        expandedGapIds: new Set<string>(),
+        onToggleGap: () => undefined,
+        viewportHeightOverride: 2400,
+        laneHeaderHeightOverride: 80,
+      }),
+    );
+
+    expect(markup).toContain("Hume spawned");
+    expect(markup).toContain("Pasteur spawned");
+    expect(markup).toContain("Gibbs spawned");
+
+    const occupiedCount = (markup.match(/lane-cell--occupied/g) ?? []).length;
+    expect(occupiedCount).toBeGreaterThanOrEqual(3);
+  });
+});

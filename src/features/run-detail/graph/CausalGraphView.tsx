@@ -61,7 +61,7 @@ export function CausalGraphView({
     renderedContentHeight,
   );
   const visibleRange = computeVisibleRowRange(
-    layout.rowPositions, scrollTop, availableCanvasHeight, 3,
+    layout.rowPositions, scrollTop, availableCanvasHeight, 4,
   );
   const visibleRows = scene.rows.slice(visibleRange.startIndex, visibleRange.endIndex);
   const visibleRowPositions = layout.rowPositions.slice(visibleRange.startIndex, visibleRange.endIndex);
@@ -388,7 +388,6 @@ export function CausalGraphView({
                                 "graph-sequence__card",
                                 row.selected ? "graph-sequence__card--selected" : "",
                                 row.inPath ? "graph-sequence__card--path" : "",
-                                row.dimmed ? "graph-sequence__card--path-dimmed" : "",
                               ]
                                 .filter(Boolean)
                                 .join(" ")}

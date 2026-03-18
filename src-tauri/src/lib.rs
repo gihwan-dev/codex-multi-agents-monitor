@@ -39,6 +39,7 @@ struct SubagentSnapshot {
     started_at: String,
     updated_at: String,
     messages: Vec<SessionMessageSnapshot>,
+    error: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -256,6 +257,7 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
     let mut messages = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
+    let mut error: Option<String> = None;
 
     for line in reader.lines() {
         let line = line?;
@@ -279,12 +281,12 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             }
         }
 
-        let Some(message) = extract_message_snapshot(&entry) else {
-            continue;
-        };
-
-        updated_at = message.timestamp.clone();
-        messages.push(message);
+        if let Some(message) = extract_message_snapshot(&entry) {
+            updated_at = message.timestamp.clone();
+            messages.push(message);
+        } else if error.is_none() {
+            error = extract_error_hint(&entry);
+        }
     }
 
     Ok(Some(SubagentSnapshot {
@@ -297,6 +299,7 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
         started_at,
         updated_at,
         messages,
+        error,
     }))
 }
 
@@ -433,6 +436,32 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     } else {
         None
     }
+}
+
+fn extract_error_hint(entry: &Value) -> Option<String> {
+    let payload = entry.get("payload")?.as_object()?;
+    let payload_type = payload.get("type").and_then(Value::as_str)?;
+
+    if payload_type == "error" {
+        return payload
+            .get("message")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                payload
+                    .get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(Value::as_str)
+            })
+            .map(ToOwned::to_owned);
+    }
+    if payload_type == "turn_aborted" {
+        return payload
+            .get("reason")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .or(Some("Turn aborted".to_owned()));
+    }
+    None
 }
 
 fn extract_message_snapshot(entry: &Value) -> Option<SessionMessageSnapshot> {

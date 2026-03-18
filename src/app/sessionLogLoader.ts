@@ -25,6 +25,7 @@ export interface SubagentSnapshot {
   startedAt: string;
   updatedAt: string;
   messages: SessionLogSnapshotMessage[];
+  error?: string | null;
 }
 
 export interface SessionLogSnapshot {
@@ -97,10 +98,16 @@ export function deriveSessionLogTitle(messages: SessionLogSnapshotMessage[]) {
   return sanitizedTitle.length > 120 ? `${sanitizedTitle.slice(0, 117)}...` : sanitizedTitle;
 }
 
-export function deriveSessionLogStatus(messages: SessionLogSnapshotMessage[]): RunStatus {
+export function deriveSessionLogStatus(
+  messages: SessionLogSnapshotMessage[],
+  skipImplementPlan = false,
+): RunStatus {
   const latestMessage = [...messages]
     .reverse()
-    .find((message) => !isAgentsInstruction(message.text));
+    .find((message) => {
+      const trimmed = message.text.trim();
+      return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
+    });
 
   if (!latestMessage) {
     return "done";
@@ -190,7 +197,15 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   for (const sub of subagents) {
     const subLaneId = `${sub.sessionId}:sub`;
     const subModel = sub.model ?? resolvedModel;
-    const subStatus = deriveSessionLogStatus(sub.messages);
+    let subStatus = deriveSessionLogStatus(sub.messages, true);
+
+    if (sub.error && subStatus === "done") {
+      subStatus = "interrupted";
+    }
+    if (sub.messages.length === 0 && !sub.error && subStatus === "done") {
+      subStatus = "running";
+    }
+
     const subLane: AgentLane = {
       laneId: subLaneId,
       agentId: subLaneId,
@@ -211,6 +226,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       updatedAt: sub.updatedAt,
       status: subStatus,
       model: subModel,
+      isSubagent: true,
     });
 
     const subStartTs = parseTimestamp(sub.startedAt);
@@ -223,7 +239,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       agentId: subLane.agentId,
       threadId: subLane.threadId,
       eventType: "agent.spawned",
-      status: "done",
+      status: sub.error ? "failed" : "done",
       waitReason: null,
       retryCount: 0,
       startTs: subStartTs,
@@ -234,7 +250,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       outputPreview: null,
       artifactId: null,
       errorCode: null,
-      errorMessage: null,
+      errorMessage: sub.error ?? null,
       provider: "OpenAI",
       model: subModel,
       toolName: null,
@@ -339,6 +355,7 @@ function buildLaneEvents({
   updatedAt,
   status,
   model,
+  isSubagent,
 }: {
   displayTitle: string;
   messages: SessionLogSnapshotMessage[];
@@ -346,9 +363,10 @@ function buildLaneEvents({
   updatedAt: string;
   status: RunStatus;
   model: string;
+  isSubagent?: boolean;
 }): EventRecord[] {
   const timelineMessages = messages.filter(
-    (message) => !isAgentsInstruction(message.text),
+    (message) => !isSystemBoilerplate(message.text, isSubagent),
   );
   const firstUserMessageIndex = timelineMessages.findIndex(
     (message) => message.role === "user",
@@ -363,6 +381,7 @@ function buildLaneEvents({
       isLatest: index === timelineMessages.length - 1,
       runStatus: status,
       model,
+      messageIndex: index,
     }),
   );
 }
@@ -393,6 +412,7 @@ function buildMessageEvent({
   isLatest,
   runStatus,
   model,
+  messageIndex,
 }: {
   displayTitle: string;
   message: SessionLogSnapshotMessage;
@@ -402,6 +422,7 @@ function buildMessageEvent({
   isLatest: boolean;
   runStatus: RunStatus;
   model: string;
+  messageIndex: number;
 }): EventRecord {
   const startTs = parseTimestamp(message.timestamp);
   const nextTs = parseTimestamp(nextTimestamp);
@@ -410,7 +431,7 @@ function buildMessageEvent({
   const isUserMessage = message.role === "user";
 
   return {
-    eventId: `${lane.threadId}:${message.timestamp}:${message.role}`,
+    eventId: `${lane.threadId}:${message.timestamp}:${message.role}:${messageIndex}`,
     parentId: null,
     linkIds: [],
     laneId: lane.laneId,
@@ -489,20 +510,24 @@ function buildRunEndEvent(
   } satisfies EventRecord;
 }
 
-function isMeaningfulTitleMessage(value: string) {
+function isSystemBoilerplate(value: string, skipImplementPlan = false): boolean {
   const trimmed = value.trim();
-  if (!trimmed.length) {
-    return false;
-  }
-
-  return !(
+  return (
     isAgentsInstruction(trimmed) ||
     isAutomationEnvelope(trimmed) ||
     trimmed.startsWith("<skill>") ||
     trimmed.startsWith("<subagent_notification>") ||
     trimmed.startsWith("<turn_aborted>") ||
-    IMPLEMENT_PLAN_PATTERN.test(trimmed)
+    (!skipImplementPlan && IMPLEMENT_PLAN_PATTERN.test(trimmed))
   );
+}
+
+function isMeaningfulTitleMessage(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed.length) {
+    return false;
+  }
+  return !isSystemBoilerplate(trimmed);
 }
 
 function isAgentsInstruction(value: string) {
