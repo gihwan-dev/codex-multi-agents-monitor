@@ -50,6 +50,7 @@ struct SubagentSnapshot {
 #[serde(rename_all = "camelCase")]
 struct SessionLogSnapshot {
     session_id: String,
+    forked_from_id: Option<String>,
     workspace_path: String,
     origin_path: String,
     display_name: String,
@@ -168,7 +169,13 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     for parent in &mut parent_snapshots {
         let matched: Vec<SubagentSnapshot> = subagent_snapshots
             .iter()
-            .filter(|sub| sub.parent_thread_id == parent.session_id)
+            .filter(|sub| {
+                sub.parent_thread_id == parent.session_id
+                    || parent
+                        .forked_from_id
+                        .as_ref()
+                        .map_or(false, |fid| sub.parent_thread_id == *fid)
+            })
             .cloned()
             .collect();
         parent.subagents = matched;
@@ -347,6 +354,11 @@ fn read_session_snapshot(
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| session_file.display().to_string());
+    let forked_from_id = payload
+        .get("forked_from_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned);
 
     let workspace_identity =
         resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
@@ -388,6 +400,7 @@ fn read_session_snapshot(
 
     Ok(Some(SessionLogSnapshot {
         session_id,
+        forked_from_id,
         workspace_path: workspace_path.to_owned(),
         origin_path: workspace_identity.origin_path,
         display_name: workspace_identity.display_name,
@@ -1130,6 +1143,7 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
 
     Ok(Some(SessionLogSnapshot {
         session_id,
+        forked_from_id: None,
         workspace_path: workspace_path.to_owned(),
         origin_path,
         display_name,
