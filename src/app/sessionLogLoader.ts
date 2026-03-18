@@ -455,6 +455,19 @@ function buildLaneEventsFromEntries({
         if (!entry.text) continue;
         const isUser = entry.role === "user";
         const preview = sanitizeMessagePreview(entry.text);
+
+        // 서브에이전트의 role:"user" 메시지는 위임된 컨텍스트 (직접적인 사용자 입력 아님)
+        if (isSubagent && isUser) {
+          events.push(buildEntryEvent({
+            entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+            eventType: "note",
+            title: "Delegated prompt",
+            inputPreview: null,
+            outputPreview: preview,
+          }));
+          break;
+        }
+
         const targetLane = isUser && userLane ? userLane : lane;
 
         let inputPreview: string | null = null;

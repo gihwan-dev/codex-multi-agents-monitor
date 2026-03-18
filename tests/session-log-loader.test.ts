@@ -618,6 +618,72 @@ describe("multi-agent data pipeline", () => {
     expect(spawnEvent!.errorMessage).toBe("Rate limit exceeded: too many requests");
   });
 
+  it("classifies subagent user messages as delegated prompt, not user.prompt", () => {
+    const snapshot = buildMultiAgentSnapshot();
+    // 일반 user 메시지를 가진 서브에이전트 추가 (IMPLEMENT_PLAN 패턴 아님)
+    const delegatedSub: SubagentSnapshot = {
+      sessionId: "sub-delegate",
+      parentThreadId: "multi-session-1",
+      depth: 1,
+      agentNickname: "Delegate",
+      agentRole: "worker",
+      model: "claude-sonnet-4-6",
+      startedAt: "2026-03-15T10:06:00.000Z",
+      updatedAt: "2026-03-15T10:10:00.000Z",
+      entries: [
+        makeMessageEntry(
+          "2026-03-15T10:06:05.000Z",
+          "user",
+          "사이드바 UI 개선해주라. 이미지 처럼 단순한 그냥 트리 구조로.",
+        ),
+        makeMessageEntry(
+          "2026-03-15T10:08:00.000Z",
+          "assistant",
+          "작업을 완료했습니다.",
+        ),
+      ],
+    };
+    snapshot.subagents = [...(snapshot.subagents ?? []), delegatedSub];
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const subLaneId = "sub-delegate:sub";
+
+    // 서브에이전트 레인에 user.prompt 이벤트가 없어야 함
+    const subUserPrompts = dataset.events.filter(
+      (e) => e.laneId === subLaneId && e.eventType === "user.prompt",
+    );
+    expect(subUserPrompts).toHaveLength(0);
+
+    // "Delegated prompt" note로 분류되어야 함
+    const delegatedNotes = dataset.events.filter(
+      (e) => e.laneId === subLaneId && e.title === "Delegated prompt",
+    );
+    expect(delegatedNotes).toHaveLength(1);
+    expect(delegatedNotes[0].eventType).toBe("note");
+    expect(delegatedNotes[0].outputPreview).toContain("사이드바 UI 개선해주라");
+  });
+
+  it("ensures no user.prompt events exist in any subagent lane", () => {
+    const snapshot = buildMultiAgentSnapshot();
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const subLaneIds = new Set(
+      dataset.lanes
+        .filter((l) => l.badge === "Subagent")
+        .map((l) => l.laneId),
+    );
+
+    const subUserPrompts = dataset.events.filter(
+      (e) => subLaneIds.has(e.laneId) && e.eventType === "user.prompt",
+    );
+    expect(subUserPrompts).toHaveLength(0);
+  });
+
   it("marks subagent with no entries and no error as running", () => {
     const snapshot = buildMultiAgentSnapshot();
     const emptySub: SubagentSnapshot = {
