@@ -548,12 +548,6 @@ textarea {
   transition: opacity 180ms ease;
 }
 
-.graph-sequence__lane-header--dimmed,
-.graph-sequence__lifeline--dimmed,
-.graph-sequence__lane-cell--dimmed {
-  opacity: 0.35;
-}
-
 .graph-sequence__lane-title {
   position: relative;
   display: flex;
@@ -632,10 +626,6 @@ textarea {
   stroke-dasharray: 2 7;
 }
 
-.graph-sequence__row-guide--dimmed {
-  stroke-opacity: 0.38;
-}
-
 .graph-sequence__route {
   color: rgba(166, 175, 189, 0.34);
   transition: opacity 180ms ease;
@@ -692,8 +682,7 @@ textarea {
 }
 
 .graph-sequence__route--path,
-.graph-sequence__route--selected,
-.graph-sequence__route--active {
+.graph-sequence__route--selected {
   opacity: 1;
 }
 
@@ -703,14 +692,8 @@ textarea {
 }
 
 .graph-sequence__route--selected path,
-.graph-sequence__route--selected circle,
-.graph-sequence__route--active path,
-.graph-sequence__route--active circle {
+.graph-sequence__route--selected circle {
   stroke-width: 3.5;
-}
-
-.graph-sequence__route--dimmed {
-  opacity: 0.12;
 }
 
 .graph-sequence__rows {
@@ -841,15 +824,12 @@ textarea {
   box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.12), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
-.graph-sequence__card--selected,
-.graph-sequence__card--active {
+.graph-sequence__card--selected {
   border-color: rgba(77, 163, 255, 0.58);
   box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
-
-.graph-sequence__card--path-dimmed,
-.graph-sequence__card--dimmed {
+.graph-sequence__card--path-dimmed {
   opacity: 0.22;
 }
 

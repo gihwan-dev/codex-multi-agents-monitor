@@ -25,12 +25,6 @@ interface CausalGraphViewProps {
   laneHeaderHeightOverride?: number;
 }
 
-interface ActiveHighlight {
-  eventIds: Set<string>;
-  bundleIds: Set<string>;
-  laneIds: Set<string>;
-}
-
 export function CausalGraphView({
   scene,
   onSelect,
@@ -45,7 +39,6 @@ export function CausalGraphView({
   const viewportRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const laneStripRef = useRef<HTMLDivElement>(null);
-  const [activeSelection, setActiveSelection] = useState<SelectionState | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(viewportHeightOverride ?? 0);
   const [laneHeaderHeight, setLaneHeaderHeight] = useState(laneHeaderHeightOverride ?? 0);
@@ -53,7 +46,6 @@ export function CausalGraphView({
   const scrollTopRef = useRef(0);
   const rafRef = useRef(0);
   const layout = buildGraphLayoutSnapshot(scene, viewportWidth);
-  const activeHighlight = buildActiveHighlight(scene, activeSelection);
   const routeMarkerId = useId();
   const bundleById = new Map(scene.edgeBundles.map((bundle) => [bundle.id, bundle]));
   const availableCanvasHeight = Math.max(
@@ -216,14 +208,7 @@ export function CausalGraphView({
             {scene.lanes.map((lane) => (
               <header
                 key={lane.laneId}
-                className={[
-                  "graph-sequence__lane-header",
-                  activeHighlight && !activeHighlight.laneIds.has(lane.laneId)
-                    ? "graph-sequence__lane-header--dimmed"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+                className="graph-sequence__lane-header"
               >
                 <div className="graph-sequence__lane-title">
                   <strong>{lane.name}</strong>
@@ -263,14 +248,7 @@ export function CausalGraphView({
               {scene.lanes.map((lane) => (
                 <line
                   key={lane.laneId}
-                  className={[
-                    "graph-sequence__lifeline",
-                    activeHighlight && !activeHighlight.laneIds.has(lane.laneId)
-                      ? "graph-sequence__lifeline--dimmed"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  className="graph-sequence__lifeline"
                   x1={layout.laneCenterById.get(lane.laneId) ?? 0}
                   y1={0}
                   x2={layout.laneCenterById.get(lane.laneId) ?? 0}
@@ -288,20 +266,13 @@ export function CausalGraphView({
                   return null;
                 }
 
-                const active =
-                  activeHighlight?.eventIds.has(row.eventId) ??
-                  false;
-                const dimmed =
-                  activeHighlight !== null && !active;
-
                 return (
                   <line
                     key={`guide-${row.eventId}`}
                     className={[
                       "graph-sequence__row-guide",
                       row.selected ? "graph-sequence__row-guide--selected" : "",
-                      row.inPath || active ? "graph-sequence__row-guide--active" : "",
-                      dimmed ? "graph-sequence__row-guide--dimmed" : "",
+                      row.inPath ? "graph-sequence__row-guide--active" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -332,11 +303,6 @@ export function CausalGraphView({
                   return null;
                 }
 
-                const active =
-                  activeHighlight?.bundleIds.has(bundle.id) ?? false;
-                const dimmed =
-                  activeHighlight !== null && !activeHighlight.bundleIds.has(bundle.id);
-
                 return (
                   <g
                     key={bundle.id}
@@ -345,8 +311,6 @@ export function CausalGraphView({
                       `graph-sequence__route--${bundle.edgeType}`,
                       bundle.inPath ? "graph-sequence__route--path" : "",
                       bundle.selected ? "graph-sequence__route--selected" : "",
-                      active ? "graph-sequence__route--active" : "",
-                      dimmed ? "graph-sequence__route--dimmed" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -405,12 +369,6 @@ export function CausalGraphView({
                       </div>
                     </div>
                     {scene.lanes.map((lane) => {
-                      const active =
-                        activeHighlight?.eventIds.has(row.eventId) ??
-                        false;
-                      const laneActive =
-                        activeHighlight?.laneIds.has(lane.laneId) ??
-                        false;
                       const eventLayout = layout.eventById.get(row.eventId);
 
                       return (
@@ -419,7 +377,6 @@ export function CausalGraphView({
                           className={[
                             "graph-sequence__lane-cell",
                             lane.laneId === row.laneId ? "graph-sequence__lane-cell--occupied" : "",
-                            activeHighlight && !laneActive ? "graph-sequence__lane-cell--dimmed" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -432,8 +389,6 @@ export function CausalGraphView({
                                 row.selected ? "graph-sequence__card--selected" : "",
                                 row.inPath ? "graph-sequence__card--path" : "",
                                 row.dimmed ? "graph-sequence__card--path-dimmed" : "",
-                                active ? "graph-sequence__card--active" : "",
-                                activeHighlight && !active ? "graph-sequence__card--dimmed" : "",
                               ]
                                 .filter(Boolean)
                                 .join(" ")}
@@ -446,12 +401,6 @@ export function CausalGraphView({
                                   : undefined
                               }
                               onClick={() => onSelect({ kind: "event", id: row.eventId })}
-                              onMouseEnter={() =>
-                                setActiveSelection({ kind: "event", id: row.eventId })
-                              }
-                              onMouseLeave={() => setActiveSelection(null)}
-                              onFocus={() => setActiveSelection({ kind: "event", id: row.eventId })}
-                              onBlur={() => setActiveSelection(null)}
                               aria-label={`${row.title} ${row.status}`}
                             >
                               <div className="graph-sequence__card-head">
@@ -490,12 +439,6 @@ export function CausalGraphView({
                       selectEdge(bundle.primaryEdgeId);
                     }}
                     onKeyDown={(event) => handleEdgeKeyDown(event, bundle.primaryEdgeId)}
-                    onMouseEnter={() =>
-                      setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })
-                    }
-                    onMouseLeave={() => setActiveSelection(null)}
-                    onFocus={() => setActiveSelection({ kind: "edge", id: bundle.primaryEdgeId })}
-                    onBlur={() => setActiveSelection(null)}
                   >
                     <title>{bundle.edgeType}: {bundle.label}</title>
                     <path className="graph-sequence__route-hitbox" d={route.path} />
@@ -508,92 +451,4 @@ export function CausalGraphView({
       </div>
     </Panel>
   );
-}
-
-function buildActiveHighlight(
-  scene: GraphSceneModel,
-  selection: SelectionState | null,
-): ActiveHighlight | null {
-  if (!selection) {
-    return null;
-  }
-
-  if (scene.lanes.length <= 1 || scene.edgeBundles.length === 0) {
-    return null;
-  }
-
-  const eventIds = new Set<string>();
-  const bundleIds = new Set<string>();
-  const laneIds = new Set<string>();
-  const rowsByEventId = new Map(
-    scene.rows
-      .filter((row) => row.kind === "event")
-      .map((row) => [row.eventId, row]),
-  );
-  const orderedEventIdsByLane = new Map<string, string[]>();
-
-  scene.rows.forEach((row) => {
-    if (row.kind !== "event") {
-      return;
-    }
-    orderedEventIdsByLane.set(row.laneId, [
-      ...(orderedEventIdsByLane.get(row.laneId) ?? []),
-      row.eventId,
-    ]);
-  });
-
-  const activateEvent = (eventId: string) => {
-    const row = rowsByEventId.get(eventId);
-    if (!row) {
-      return;
-    }
-
-    eventIds.add(eventId);
-    laneIds.add(row.laneId);
-
-    const laneEvents = orderedEventIdsByLane.get(row.laneId) ?? [];
-    const eventIndex = laneEvents.indexOf(eventId);
-    const previousEventId = eventIndex > 0 ? laneEvents[eventIndex - 1] : null;
-    const nextEventId =
-      eventIndex >= 0 && eventIndex < laneEvents.length - 1 ? laneEvents[eventIndex + 1] : null;
-    if (previousEventId) {
-      eventIds.add(previousEventId);
-    }
-    if (nextEventId) {
-      eventIds.add(nextEventId);
-    }
-
-    scene.edgeBundles.forEach((bundle) => {
-      if (bundle.sourceEventId !== eventId && bundle.targetEventId !== eventId) {
-        return;
-      }
-
-      bundleIds.add(bundle.id);
-      eventIds.add(bundle.sourceEventId);
-      eventIds.add(bundle.targetEventId);
-      laneIds.add(bundle.sourceLaneId);
-      laneIds.add(bundle.targetLaneId);
-    });
-  };
-
-  if (selection.kind === "event") {
-    activateEvent(selection.id);
-    return { eventIds, bundleIds, laneIds };
-  }
-
-  if (selection.kind === "edge") {
-    const bundle = scene.edgeBundles.find(
-      (item) => item.primaryEdgeId === selection.id || item.edgeIds.includes(selection.id),
-    );
-    if (!bundle) {
-      return null;
-    }
-
-    bundleIds.add(bundle.id);
-    activateEvent(bundle.sourceEventId);
-    activateEvent(bundle.targetEventId);
-    return { eventIds, bundleIds, laneIds };
-  }
-
-  return null;
 }
