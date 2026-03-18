@@ -314,7 +314,6 @@ function makeEventRow(eventId: string, laneId: string, title: string): GraphScen
     durationLabel: "1s",
     inPath: false,
     selected: false,
-    dimmed: false,
   };
 }
 

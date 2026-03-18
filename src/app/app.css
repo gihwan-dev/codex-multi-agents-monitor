@@ -829,10 +829,6 @@ textarea {
   box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
 }
 
-.graph-sequence__card--path-dimmed {
-  opacity: 0.22;
-}
-
 .graph-sequence__card-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -668,6 +668,7 @@ export function buildGraphSceneModel(
   const laneIds = new Set(visibleLanes.map((lane) => lane.laneId));
   const rows: GraphSceneRow[] = [];
   const visibleRowsByEventId = new Map<string, string>();
+  const seenEventIds = new Set<string>();
 
   visibleEvents.forEach((event, index) => {
     const previous = visibleEvents[index - 1];
@@ -693,6 +694,11 @@ export function buildGraphSceneModel(
       return;
     }
 
+    if (seenEventIds.has(event.eventId)) {
+      return;
+    }
+    seenEventIds.add(event.eventId);
+
     const rowId = `graph-row-${event.eventId}`;
     visibleRowsByEventId.set(event.eventId, rowId);
     rows.push({
@@ -708,7 +714,6 @@ export function buildGraphSceneModel(
       durationLabel: formatDuration(event.durationMs),
       inPath: hasMultiAgentTopology && selectionPath.eventIds.includes(event.eventId),
       selected: selection?.kind === "event" && selection.id === event.eventId,
-      dimmed: hasMultiAgentTopology && !selectionPath.eventIds.includes(event.eventId),
     });
   });
 

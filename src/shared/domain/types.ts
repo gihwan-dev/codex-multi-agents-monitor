@@ -292,7 +292,6 @@ export interface GraphSceneRowEvent {
   durationLabel: string;
   inPath: boolean;
   selected: boolean;
-  dimmed: boolean;
 }
 
 export interface GraphSceneRowGap {
