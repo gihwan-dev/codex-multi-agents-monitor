@@ -58,26 +58,21 @@ export function formatRelativeTime(
   timestamp: number,
   referenceTimestamp = Date.now(),
 ): string {
-  const formatter = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
   const deltaSeconds = Math.round((timestamp - referenceTimestamp) / 1000);
   const absoluteSeconds = Math.abs(deltaSeconds);
 
-  if (absoluteSeconds < 60) {
-    return formatter.format(deltaSeconds, "second");
-  }
+  if (absoluteSeconds < 10) return "now";
 
-  const deltaMinutes = Math.round(deltaSeconds / 60);
-  if (Math.abs(deltaMinutes) < 60) {
-    return formatter.format(deltaMinutes, "minute");
-  }
+  if (absoluteSeconds < 60) return `${absoluteSeconds}s`;
 
-  const deltaHours = Math.round(deltaMinutes / 60);
-  if (Math.abs(deltaHours) < 24) {
-    return formatter.format(deltaHours, "hour");
-  }
+  const absoluteMinutes = Math.round(absoluteSeconds / 60);
+  if (absoluteMinutes < 60) return `${absoluteMinutes}m`;
 
-  const deltaDays = Math.round(deltaHours / 24);
-  return formatter.format(deltaDays, "day");
+  const absoluteHours = Math.round(absoluteMinutes / 60);
+  if (absoluteHours < 24) return `${absoluteHours}h`;
+
+  const absoluteDays = Math.round(absoluteHours / 24);
+  return `${absoluteDays}d`;
 }
 
 export function truncateId(value: string): string {
