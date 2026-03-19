@@ -76,7 +76,7 @@ textarea {
 }
 
 .search-input {
-  min-width: 220px;
+  min-width: 0;
 }
 
 .env-badge,
@@ -1145,6 +1145,8 @@ textarea {
 }
 
 .drawer__body {
+  display: flex;
+  flex-direction: column;
   overflow: auto;
 }
 
@@ -1258,12 +1260,6 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
-.drawer-trigger {
-  display: flex;
-  gap: 4px;
-  padding: 4px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
 
 .drawer--closed {
   height: 0;
@@ -1315,6 +1311,7 @@ textarea {
 .drawer__pre {
   width: 100%;
   min-height: 180px;
+  flex: 1 1 0;
   font-family: var(--font-mono);
   font-size: 0.78rem;
 }

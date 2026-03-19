@@ -197,7 +197,7 @@ test("drawer stays hidden until an explicit drawer action", async ({ page }) => 
   await openBuiltApp(page);
 
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "Artifacts" }).click();
+  await page.locator("aside.workspace__inspector").getByRole("button", { name: "Artifacts" }).click();
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
