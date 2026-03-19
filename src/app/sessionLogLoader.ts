@@ -880,13 +880,16 @@ function buildLaneEventsFromEntries({
       case "function_call_output": {
         const pairedName = entry.functionCallId ? callIdToName.get(entry.functionCallId) : null;
         const toolName = pairedName ?? "unknown";
+        const outputText = entry.text
+          ? sanitizeMessagePreview(extractToolOutputPreview(toolName, entry.text))
+          : null;
 
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
           eventType: "tool.finished",
           title: toolName === "request_user_input" ? "User responded" : `${toolName} result`,
           inputPreview: null,
-          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
+          outputPreview: outputText,
           toolName,
         }));
         break;
@@ -1182,6 +1185,17 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
     } catch { /* not JSON, fall through */ }
   }
   return rawPreview;
+}
+
+function extractToolOutputPreview(toolName: string, rawOutput: string): string {
+  if (toolName === "exec_command") {
+    const outputMarker = rawOutput.indexOf("Output:\n");
+    if (outputMarker !== -1) {
+      const content = rawOutput.slice(outputMarker + "Output:\n".length).trim();
+      return content || rawOutput;
+    }
+  }
+  return rawOutput;
 }
 
 function sanitizeMessagePreview(value: string) {

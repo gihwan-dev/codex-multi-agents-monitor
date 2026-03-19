@@ -1708,4 +1708,50 @@ describe("tool input preview extraction", () => {
     expect(toolEvent).toBeDefined();
     expect(toolEvent!.inputPreview).toBe("not-json");
   });
+
+  it("strips exec_command output boilerplate and shows actual content", () => {
+    const boilerplateOutput = [
+      "Command: /bin/zsh -lc 'git status'",
+      "Chunk ID: abc123",
+      "Wall time: 0.0100 seconds",
+      "Process exited with code 0",
+      "Original token count: 42",
+      "Output:",
+      "## branch main",
+      "M src/app.ts",
+    ].join("\n");
+
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check status"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "exec_command",
+          functionCallId: "call_exec_out",
+          functionArgumentsPreview: '{"cmd":"git status"}',
+        },
+        {
+          timestamp: "2026-03-19T10:00:06.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: boilerplateOutput,
+          functionName: null,
+          functionCallId: "call_exec_out",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "exec_command");
+    expect(resultEvent).toBeDefined();
+    // Should show the content after "Output:" not the boilerplate
+    expect(resultEvent!.outputPreview).toContain("branch main");
+    expect(resultEvent!.outputPreview).not.toContain("Chunk ID");
+  });
 });
