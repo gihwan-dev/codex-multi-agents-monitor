@@ -40,6 +40,26 @@ export function createMonitorArchiveActions({
     dispatch({ type: "finish-archived-snapshot-request", requestId });
   }
 
+  async function loadArchiveSnapshot(filePath: string, requestId: number) {
+    try {
+      const dataset = await loadArchivedSessionSnapshot(filePath);
+      if (!dataset) {
+        finishSnapshotRequest(requestId);
+        return;
+      }
+
+      startTransition(() => {
+        dispatch({
+          type: "resolve-archived-snapshot-request",
+          requestId,
+          dataset,
+        });
+      });
+    } catch {
+      finishSnapshotRequest(requestId);
+    }
+  }
+
   return {
     loadArchiveIndex(append: boolean) {
       const offset = append ? archivedIndexLength : 0;
@@ -51,25 +71,7 @@ export function createMonitorArchiveActions({
     },
     selectArchivedSession(filePath: string) {
       const requestId = startSnapshotRequest();
-
-      loadArchivedSessionSnapshot(filePath)
-        .then((dataset) => {
-          if (!dataset) {
-            finishSnapshotRequest(requestId);
-            return;
-          }
-
-          startTransition(() => {
-            dispatch({
-              type: "resolve-archived-snapshot-request",
-              requestId,
-              dataset,
-            });
-          });
-        })
-        .catch(() => {
-          finishSnapshotRequest(requestId);
-        });
+      void loadArchiveSnapshot(filePath, requestId);
     },
   };
 }

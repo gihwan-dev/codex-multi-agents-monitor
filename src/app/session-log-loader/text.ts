@@ -118,7 +118,7 @@ export function sanitizeMessagePreview(value: string) {
   return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
 }
 
-export function sanitizeSessionText(value: string) {
+function sanitizeSessionText(value: string) {
   return value
     .replace(MARKDOWN_LINK_PATTERN, "$1")
     .replace(/\$([A-Za-z0-9-]+)/g, "$1")

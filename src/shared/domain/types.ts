@@ -156,33 +156,20 @@ export interface ArtifactRecord {
   rawContent: string | null;
 }
 
-export interface GapSegment {
-  gapId: string;
-  laneId: string;
-  startTs: number;
-  endTs: number;
-  durationMs: number;
-  hiddenCount: number;
-  idleLaneCount: number;
-}
-
-export const PROMPT_LAYER_TYPES = [
-  "system",
-  "permissions",
-  "app-context",
-  "collaboration-mode",
-  "apps",
-  "skills-catalog",
-  "agents",
-  "environment",
-  "automation",
-  "delegated",
-  "user",
-  "skill",
-  "subagent-notification",
-] as const;
-
-export type PromptLayerType = (typeof PROMPT_LAYER_TYPES)[number];
+export type PromptLayerType =
+  | "system"
+  | "permissions"
+  | "app-context"
+  | "collaboration-mode"
+  | "apps"
+  | "skills-catalog"
+  | "agents"
+  | "environment"
+  | "automation"
+  | "delegated"
+  | "user"
+  | "skill"
+  | "subagent-notification";
 
 export interface PromptLayer {
   layerId: string;

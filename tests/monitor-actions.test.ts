@@ -10,14 +10,19 @@ vi.mock("../src/app/sessionLogLoader.js", () => ({
 
 const mockedLoadArchivedSessionSnapshot = vi.mocked(loadArchivedSessionSnapshot);
 
-function requireLiveDataset() {
-  const dataset = createMonitorInitialState().datasets.find(
-    (item) => item.run.liveMode === "live",
-  );
-  if (!dataset) {
-    throw new Error("live dataset missing");
+function expectDefined<T>(value: T | null | undefined, message: string): T {
+  expect(value).toBeDefined();
+  if (value == null) {
+    throw new Error(message);
   }
-  return dataset;
+  return value;
+}
+
+function requireLiveDataset() {
+  return expectDefined(
+    createMonitorInitialState().datasets.find((item) => item.run.liveMode === "live"),
+    "live dataset missing",
+  );
 }
 
 describe("createMonitorViewActions", () => {
@@ -31,12 +36,7 @@ describe("createMonitorViewActions", () => {
       activeDataset,
       activeFollowLive: true,
     });
-    const staleEventId = activeDataset.events[0]?.eventId;
-
-    expect(staleEventId).toBe(activeDataset.events[0]?.eventId);
-    if (!staleEventId) {
-      throw new Error("stale event missing");
-    }
+    const staleEventId = expectDefined(activeDataset.events[0]?.eventId, "stale event missing");
 
     actions.selectItem({ kind: "event", id: staleEventId });
 
@@ -61,12 +61,10 @@ describe("createMonitorViewActions", () => {
       activeDataset,
       activeFollowLive: false,
     });
-    const latestEventId = activeDataset.events[activeDataset.events.length - 1]?.eventId;
-
-    expect(latestEventId).toBe(activeDataset.events[activeDataset.events.length - 1]?.eventId);
-    if (!latestEventId) {
-      throw new Error("latest event missing");
-    }
+    const latestEventId = expectDefined(
+      activeDataset.events[activeDataset.events.length - 1]?.eventId,
+      "latest event missing",
+    );
 
     actions.toggleFollowLive();
 
@@ -169,10 +167,7 @@ describe("createMonitorArchiveActions", () => {
       archiveSnapshotRequestIdRef,
     });
 
-    expect(dataset).toBe(createMonitorInitialState().datasets[0]);
-    if (!dataset) {
-      throw new Error("dataset missing");
-    }
+    expectDefined(dataset, "dataset missing");
     mockedLoadArchivedSessionSnapshot.mockResolvedValueOnce(dataset);
 
     actions.selectArchivedSession("/tmp/archive.json");
