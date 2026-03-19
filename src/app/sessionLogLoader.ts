@@ -1187,7 +1187,16 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
       const q = args.questions[0];
       return typeof q.question === "string" ? q.question : null;
     }
+    if (toolName === "view_image" && typeof args.path === "string") return args.path;
+    if (toolName === "write_stdin" && typeof args.input === "string") return args.input;
   } catch { /* not JSON, fall through */ }
+
+  // apply_patch from custom_tool_call: extract file paths from raw patch text
+  if (toolName === "apply_patch") {
+    const fileMatch = rawPreview.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
+    if (fileMatch) return fileMatch[1].trim();
+  }
+
   return rawPreview;
 }
 

@@ -1780,6 +1780,78 @@ describe("tool input preview extraction", () => {
     expect(toolEvent!.inputPreview).toBe("[interrupt] Stop and report status");
   });
 
+  it("extracts path from view_image JSON arguments", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Show me the image"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "view_image",
+          functionCallId: "call_img",
+          functionArgumentsPreview: '{"path":"/tmp/screenshot.png"}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "view_image");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("/tmp/screenshot.png");
+  });
+
+  it("extracts input from write_stdin JSON arguments", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Confirm"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "write_stdin",
+          functionCallId: "call_stdin",
+          functionArgumentsPreview: '{"input":"y\\n"}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "write_stdin");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("y\n");
+  });
+
+  it("extracts file path from apply_patch raw patch text", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Patch it"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "apply_patch",
+          functionCallId: "call_raw_patch",
+          functionArgumentsPreview: "*** Begin Patch\n*** Update File: src/utils/helper.ts\n+export function greet() {}",
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "apply_patch");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("src/utils/helper.ts");
+  });
+
   it("strips exec_command output boilerplate and shows actual content", () => {
     const boilerplateOutput = [
       "Command: /bin/zsh -lc 'git status'",
