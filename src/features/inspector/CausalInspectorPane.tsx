@@ -2,6 +2,19 @@ import type { ReactNode } from "react";
 import type { DrawerTab, InspectorCausalSummary, SelectionState } from "../../shared/domain";
 import { Panel } from "../../shared/ui";
 
+const PAYLOAD_ACTIONS: Array<{ tab: DrawerTab; label: string }> = [
+  { tab: "artifacts", label: "Artifacts" },
+  { tab: "context", label: "Context" },
+  { tab: "log", label: "Log" },
+  { tab: "raw", label: "Raw" },
+];
+
+interface InspectorSectionConfig {
+  key: string;
+  title: string;
+  content: ReactNode;
+}
+
 interface CausalInspectorPaneProps {
   summary: InspectorCausalSummary | null;
   onSelectJump: (selection: SelectionState) => void;
@@ -23,10 +36,101 @@ export function CausalInspectorPane({
   open,
   compact = false,
 }: CausalInspectorPaneProps) {
-  const showDirectCause = Boolean(summary?.whyBlocked);
-  const showUpstream = Boolean(summary?.upstream.length);
-  const showDownstream = Boolean(summary?.downstream.length);
-  const showSuggestedNext = Boolean(summary?.nextAction);
+  const firstUpstream = summary?.upstream[0] ?? null;
+  const sections: InspectorSectionConfig[] = [
+    {
+      key: "summary",
+      title: "Summary",
+      content: <SummarySection summary={summary} />,
+    },
+    ...(summary?.whyBlocked
+      ? [
+          {
+            key: "direct-cause",
+            title: "Direct cause",
+            content: (
+              <>
+                <p>{summary.whyBlocked}</p>
+                {firstUpstream ? (
+                  <JumpButton
+                    label={firstUpstream.label}
+                    description={firstUpstream.description}
+                    onClick={() => onSelectJump(firstUpstream.selection)}
+                  />
+                ) : null}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(summary?.upstream.length
+      ? [
+          {
+            key: "upstream-chain",
+            title: "Upstream chain",
+            content: (
+              <>
+                {summary.upstream.map((item) => (
+                  <JumpButton
+                    key={`${item.label}:${item.selection.id}`}
+                    label={item.label}
+                    description={item.description}
+                    onClick={() => onSelectJump(item.selection)}
+                  />
+                ))}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(summary?.downstream.length
+      ? [
+          {
+            key: "downstream-impact",
+            title: "Downstream impact",
+            content: (
+              <>
+                {summary.affectedAgentCount ? (
+                  <p className="inspector__affected-count">
+                    {summary.affectedAgentCount} agent
+                    {summary.affectedAgentCount !== 1 ? "s" : ""} affected
+                    {summary.downstreamWaitingCount
+                      ? ` · ${summary.downstreamWaitingCount} waiting`
+                      : ""}
+                  </p>
+                ) : null}
+                {summary.downstream.map((item) => (
+                  <JumpButton
+                    key={`${item.label}:${item.selection.id}`}
+                    label={item.label}
+                    description={item.description}
+                    onClick={() => onSelectJump(item.selection)}
+                  />
+                ))}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(summary?.nextAction
+      ? [
+          {
+            key: "suggested-next",
+            title: "Suggested next",
+            content: (
+              <div className="inspector__suggested-action">
+                <p>{summary.nextAction}</p>
+              </div>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "payload",
+      title: "Payload",
+      content: <PayloadSection summary={summary} onOpenDrawer={onOpenDrawer} />,
+    },
+  ];
 
   return (
     <Panel
@@ -50,63 +154,11 @@ export function CausalInspectorPane({
       ) : null}
       {open ? (
         <div className="inspector__content">
-          <Section title="Summary">
-            <SummarySection summary={summary} />
-          </Section>
-          {showDirectCause ? (
-            <Section title="Direct cause">
-              <p>{summary?.whyBlocked}</p>
-              {summary?.upstream[0] ? (
-                <JumpButton
-                  label={summary.upstream[0].label}
-                  description={summary.upstream[0].description}
-                  onClick={() => onSelectJump(summary.upstream[0].selection)}
-                />
-              ) : null}
+          {sections.map((section) => (
+            <Section key={section.key} title={section.title}>
+              {section.content}
             </Section>
-          ) : null}
-          {showUpstream ? (
-            <Section title="Upstream chain">
-              {summary?.upstream.map((item) => (
-                <JumpButton
-                  key={`${item.label}:${item.selection.id}`}
-                  label={item.label}
-                  description={item.description}
-                  onClick={() => onSelectJump(item.selection)}
-                />
-              ))}
-            </Section>
-          ) : null}
-          {showDownstream ? (
-            <Section title="Downstream impact">
-              {summary?.affectedAgentCount ? (
-                <p className="inspector__affected-count">
-                  {summary.affectedAgentCount} agent{summary.affectedAgentCount !== 1 ? "s" : ""} affected
-                  {summary.downstreamWaitingCount
-                    ? ` · ${summary.downstreamWaitingCount} waiting`
-                    : ""}
-                </p>
-              ) : null}
-              {summary?.downstream.map((item) => (
-                <JumpButton
-                  key={`${item.label}:${item.selection.id}`}
-                  label={item.label}
-                  description={item.description}
-                  onClick={() => onSelectJump(item.selection)}
-                />
-              ))}
-            </Section>
-          ) : null}
-          {showSuggestedNext ? (
-            <Section title="Suggested next">
-              <div className="inspector__suggested-action">
-                <p>{summary?.nextAction}</p>
-              </div>
-            </Section>
-          ) : null}
-          <Section title="Payload">
-            <PayloadSection summary={summary} onOpenDrawer={onOpenDrawer} />
-          </Section>
+          ))}
         </div>
       ) : null}
     </Panel>
@@ -173,18 +225,16 @@ function PayloadSection({
       <p>{summary.payloadPreview}</p>
       <span className="inspector__payload-copy">{summary.rawStatusLabel}</span>
       <div className="inspector__payload-actions">
-        <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("artifacts")}>
-          Artifacts
-        </button>
-        <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("context")}>
-          Context
-        </button>
-        <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("log")}>
-          Log
-        </button>
-        <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("raw")}>
-          Raw
-        </button>
+        {PAYLOAD_ACTIONS.map((action) => (
+          <button
+            key={action.tab}
+            type="button"
+            className="button button--ghost"
+            onClick={() => onOpenDrawer(action.tab)}
+          >
+            {action.label}
+          </button>
+        ))}
       </div>
     </>
   );
