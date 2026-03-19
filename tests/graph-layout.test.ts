@@ -249,7 +249,7 @@ describe("graphLayout", () => {
     expect(markup).toContain("graph-sequence__row-guide--active");
     expect(markup).toContain("Interactive graph edge hit targets");
     expect(markup).not.toContain("graph-sequence__edge-hotspot");
-    expect(markup).not.toContain("Waiting for repo search completion");
+    expect(markup).toContain("graph-sequence__card-summary");
     expect(markup).not.toContain("wait_reason:");
   });
 });
@@ -517,5 +517,109 @@ describe("multi-agent rendering diagnostic", () => {
 
     const occupiedCount = (markup.match(/lane-cell--occupied/g) ?? []).length;
     expect(occupiedCount).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("errored subagent rendering", () => {
+  function makeEntry(timestamp: string, role: "user" | "assistant", text: string): SessionEntrySnapshot {
+    return { timestamp, entryType: "message", role, text, functionName: null, functionCallId: null, functionArgumentsPreview: null };
+  }
+  function makeFnCall(timestamp: string, name: string, callId: string, args: string): SessionEntrySnapshot {
+    return { timestamp, entryType: "function_call", role: null, text: null, functionName: name, functionCallId: callId, functionArgumentsPreview: args };
+  }
+  function makeFnOutput(timestamp: string, callId: string, output: string): SessionEntrySnapshot {
+    return { timestamp, entryType: "function_call_output", role: null, text: output, functionName: null, functionCallId: callId, functionArgumentsPreview: null };
+  }
+
+  function buildErroredSubagentSnapshot(): SessionLogSnapshot {
+    return {
+      sessionId: "err-render-1",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "errored-render-test",
+      startedAt: "2026-03-19T10:00:00.000Z",
+      updatedAt: "2026-03-19T10:05:10.000Z",
+      model: "gpt-5.3",
+      entries: [
+        makeEntry("2026-03-19T10:00:05.000Z", "user", "Run parallel tasks"),
+        makeEntry("2026-03-19T10:00:30.000Z", "assistant", "Spawning agents."),
+        makeFnCall("2026-03-19T10:01:00.000Z", "spawn_agent", "sp-g", '{"agent_type":"explorer"}'),
+        makeFnCall("2026-03-19T10:01:01.000Z", "spawn_agent", "sp-p", '{"agent_type":"explorer"}'),
+        makeFnCall("2026-03-19T10:01:02.000Z", "spawn_agent", "sp-h", '{"agent_type":"explorer"}'),
+        makeFnOutput("2026-03-19T10:01:05.000Z", "sp-g", '{"agent_id":"sub-g","nickname":"Gibbs"}'),
+        makeFnOutput("2026-03-19T10:01:06.000Z", "sp-p", '{"agent_id":"sub-p","nickname":"Pasteur"}'),
+        makeFnOutput("2026-03-19T10:01:07.000Z", "sp-h", '{"agent_id":"sub-h","nickname":"Hume"}'),
+        makeFnCall("2026-03-19T10:02:00.000Z", "wait_agent", "w1", '{"ids":["sub-g","sub-p","sub-h"]}'),
+        makeFnOutput("2026-03-19T10:02:30.000Z", "w1", '{"status":{"sub-g":{"errored":"limit"}}}'),
+        makeFnCall("2026-03-19T10:02:35.000Z", "wait_agent", "w2", '{"ids":["sub-p","sub-h"]}'),
+        makeFnOutput("2026-03-19T10:02:40.000Z", "w2", '{"status":{"sub-p":{"completed":null},"sub-h":{"completed":null}}}'),
+        makeFnCall("2026-03-19T10:03:30.000Z", "exec_command", "ex1", '{"command":"cat results"}'),
+        makeFnOutput("2026-03-19T10:03:35.000Z", "ex1", "results output"),
+        { timestamp: "2026-03-19T10:05:10.000Z", entryType: "task_complete", role: null, text: null, functionName: null, functionCallId: null, functionArgumentsPreview: null },
+      ],
+      subagents: [
+        { sessionId: "sub-g", parentThreadId: "err-render-1", depth: 1, agentNickname: "Gibbs", agentRole: "explorer", model: "gpt-5.4", startedAt: "2026-03-19T10:01:08.000Z", updatedAt: "2026-03-19T10:02:00.000Z", entries: [] },
+        { sessionId: "sub-p", parentThreadId: "err-render-1", depth: 1, agentNickname: "Pasteur", agentRole: "explorer", model: "gpt-5.4", startedAt: "2026-03-19T10:01:09.000Z", updatedAt: "2026-03-19T10:02:00.000Z", entries: [] },
+        { sessionId: "sub-h", parentThreadId: "err-render-1", depth: 1, agentNickname: "Hume", agentRole: "explorer", model: "gpt-5.4", startedAt: "2026-03-19T10:01:10.000Z", updatedAt: "2026-03-19T10:02:00.000Z", entries: [] },
+      ],
+    };
+  }
+
+  it("renders non-empty graph with spawn edges and merge edges for errored subagents", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const markup = renderToStaticMarkup(
+      createElement(CausalGraphView, {
+        scene,
+        onSelect: () => undefined,
+        followLive: false,
+        liveMode: dataset.run.liveMode,
+        onPauseFollowLive: () => undefined,
+        expandedGapIds: new Set<string>(),
+        onToggleGap: () => undefined,
+        viewportHeightOverride: 3000,
+        laneHeaderHeightOverride: 80,
+      }),
+    );
+
+    // Graph must NOT be empty — event cards should render
+    const occupiedCells = (markup.match(/lane-cell--occupied/g) ?? []).length;
+    expect(occupiedCells).toBeGreaterThan(5);
+
+    // Spawn edges must be visible (3 subagents)
+    const spawnRoutes = (markup.match(/route--spawn/g) ?? []).length;
+    expect(spawnRoutes).toBeGreaterThanOrEqual(3);
+
+    // Subagent spawned cards must be visible
+    expect(markup).toContain("Gibbs spawned");
+    expect(markup).toContain("Pasteur spawned");
+    expect(markup).toContain("Hume spawned");
+
+    // All 5 lane headers should render
+    expect(markup).toContain("Main thread");
+    expect(markup).toContain("Gibbs");
+    expect(markup).toContain("Pasteur");
+    expect(markup).toContain("Hume");
+
+    // Merge edges should exist (from wait_agent)
+    const mergeRoutes = (markup.match(/route--merge/g) ?? []).length;
+    expect(mergeRoutes).toBeGreaterThanOrEqual(1);
+  });
+
+  it("all rendered edge routes flow downward (source.y <= target.y)", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const layout = buildGraphLayoutSnapshot(scene, 1400);
+
+    for (const route of layout.edgeRoutes) {
+      // Source port Y should be at or above target port Y (downward flow)
+      expect(route.sourcePort.y).toBeLessThanOrEqual(route.targetPort.y);
+    }
   });
 });

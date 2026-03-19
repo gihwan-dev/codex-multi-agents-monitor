@@ -411,6 +411,9 @@ export function CausalGraphView({
                                 {row.toolName ? <span className="graph-sequence__tool-badge">{row.toolName}</span> : null}
                                 <StatusChip status={row.status} subtle />
                               </div>
+                              {row.summary !== "n/a" ? (
+                                <p className="graph-sequence__card-summary">{row.summary}</p>
+                              ) : null}
                             </button>
                           ) : null}
                         </div>
@@ -444,7 +447,7 @@ export function CausalGraphView({
                     }}
                     onKeyDown={(event) => handleEdgeKeyDown(event, bundle.primaryEdgeId)}
                   >
-                    <title>{bundle.edgeType}: {bundle.label}</title>
+                    <title>{`${bundle.edgeType}: ${bundle.label}`}</title>
                     <path className="graph-sequence__route-hitbox" d={route.path} />
                   </a>
                 );
