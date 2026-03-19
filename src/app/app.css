@@ -141,7 +141,6 @@ textarea {
 }
 
 .panel.run-list,
-.panel.waterfall-panel,
 .panel.inspector,
 .panel.drawer,
 .panel.canvas-panel {
@@ -264,7 +263,6 @@ textarea {
 
 .jump-bar__content,
 .graph-toolbar__drawer-actions,
-.mode-tabs,
 .graph-toolbar__filters {
   display: flex;
   flex-wrap: wrap;
@@ -444,9 +442,7 @@ textarea {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.run-row__title,
-.map-card__header,
-.waterfall-event__head {
+.run-row__title {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -462,22 +458,11 @@ textarea {
   white-space: nowrap;
 }
 
-.graph-panel__collapsed-copy,
-.map-view__cluster-copy {
+.graph-panel__collapsed-copy {
   color: var(--color-text-secondary);
   font-size: 0.8rem;
 }
 
-.waterfall-grid__time {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-}
-
-.waterfall-event__content p,
 .artifact-card p {
   color: var(--color-text-secondary);
   line-height: 1.35;
@@ -1097,161 +1082,6 @@ textarea {
   }
 }
 
-.waterfall-grid {
-  display: grid;
-  grid-template-columns: 92px repeat(var(--waterfall-lanes, 4), minmax(160px, 1fr));
-  gap: 8px 10px;
-}
-
-.waterfall-grid__corner,
-.waterfall-grid__lane {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-bottom: 4px;
-  background: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(22, 27, 37, 0.72));
-}
-
-.waterfall-grid__lane {
-  display: grid;
-  gap: 2px;
-}
-
-.waterfall-grid__lane span {
-  color: var(--color-text-secondary);
-  font-size: 0.76rem;
-}
-
-.waterfall-grid__event-row,
-.waterfall-grid__gap-separator {
-  display: contents;
-}
-
-.waterfall-grid__gap-label {
-  display: flex;
-  align-items: center;
-  min-height: 24px;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-}
-
-.waterfall-grid__gap-marker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  position: relative;
-}
-
-.waterfall-grid__gap-marker::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border-top: 1px dashed rgba(255, 255, 255, 0.22);
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.22);
-  pointer-events: none;
-}
-
-.waterfall-grid__gap-separator--expanded .waterfall-grid__gap-marker::before {
-  background: rgba(77, 163, 255, 0.10);
-  border-color: rgba(77, 163, 255, 0.34);
-}
-
-.waterfall-event {
-  position: relative;
-  min-height: 84px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text);
-  text-align: left;
-}
-
-.waterfall-event--empty {
-  border-style: dashed;
-  background: transparent;
-}
-
-.waterfall-event--path {
-  border-color: rgba(77, 163, 255, 0.28);
-}
-
-.waterfall-event--selected {
-  border-color: rgba(77, 163, 255, 0.52);
-}
-
-.waterfall-event__bar {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  border-radius: 999px;
-  opacity: 0.28;
-}
-
-.waterfall-event__bar--done {
-  background: var(--color-success);
-}
-
-.waterfall-event__bar--running {
-  background: var(--color-active);
-}
-
-.waterfall-event__bar--waiting {
-  background: var(--color-waiting);
-}
-
-.waterfall-event__bar--blocked {
-  background: var(--color-blocked);
-}
-
-.waterfall-event__bar--interrupted {
-  background: var(--color-transfer);
-}
-
-.waterfall-event__bar--failed {
-  background: var(--color-failed);
-}
-
-.waterfall-event__content {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-}
-
-.map-view {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.map-card {
-  display: grid;
-  gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.map-card p,
-.map-card__stats {
-  color: var(--color-text-secondary);
-  font-size: 0.82rem;
-}
-
-.map-card__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .inspector {
   display: flex;
   flex-direction: column;
@@ -1571,12 +1401,4 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .waterfall-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .waterfall-grid__corner,
-  .waterfall-grid__lane {
-    position: static;
-  }
 }

@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
 import { GapDetailSection } from "../features/run-detail/GapDetailSection";
 import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
-import { MapView } from "../features/run-detail/map/MapView";
-import { WaterfallView } from "../features/run-detail/waterfall/WaterfallView";
 import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
 import {
   type AnomalyJump,
@@ -14,8 +12,6 @@ import {
   formatTokens,
   type GraphSceneRow,
   type SummaryFact,
-  type ViewMode,
-  type WaterfallRow,
   type WorkspaceIdentityOverrideMap,
 } from "../shared/domain";
 import { MetricPill, Panel, StatusChip } from "../shared/ui";
@@ -48,8 +44,6 @@ export function MonitorApp() {
     inspectorSummary,
     summaryFacts,
     anomalyJumps,
-    waterfallModel,
-    mapNodes,
     actions,
   } = useMonitorAppState();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -60,8 +54,7 @@ export function MonitorApp() {
     () => typeof window !== "undefined" && window.innerWidth <= 720,
   );
 
-  const activeRows: GraphSceneRow[] | WaterfallRow[] =
-    state.viewMode === "waterfall" ? waterfallModel.rows : graphScene.rows;
+  const activeRows: GraphSceneRow[] = graphScene.rows;
 
   // collapsedGapIds를 "사용자가 토글한 ID 집합"으로 재해석:
   // 기본 all-collapsed, ID가 집합에 있으면 expanded
@@ -196,32 +189,19 @@ export function MonitorApp() {
             dataset={activeDataset}
             filters={activeFilters}
             anomalyJumps={anomalyJumps}
-            viewMode={state.viewMode}
             onJump={actions.selectItem}
             onSetFilter={actions.setFilter}
-            onSetViewMode={actions.setViewMode}
           />
 
-          {state.viewMode === "graph" ? (
-            <CausalGraphView
-              scene={graphScene}
-              onSelect={actions.selectItem}
-              followLive={activeFollowLive}
-              liveMode={activeDataset.run.liveMode}
-              onPauseFollowLive={actions.pauseFollowLive}
-              expandedGapIds={expandedGapIds}
-              onToggleGap={actions.toggleGap}
-            />
-          ) : null}
-          {state.viewMode === "waterfall" ? (
-            <WaterfallView
-              model={waterfallModel}
-              onSelect={actions.selectItem}
-              expandedGapIds={expandedGapIds}
-              onToggleGap={actions.toggleGap}
-            />
-          ) : null}
-          {state.viewMode === "map" ? <MapView nodes={mapNodes} /> : null}
+          <CausalGraphView
+            scene={graphScene}
+            onSelect={actions.selectItem}
+            followLive={activeFollowLive}
+            liveMode={activeDataset.run.liveMode}
+            onPauseFollowLive={actions.pauseFollowLive}
+            expandedGapIds={expandedGapIds}
+            onToggleGap={actions.toggleGap}
+          />
 
           <GapDetailSection
             expandedGaps={expandedGaps}
@@ -282,9 +262,6 @@ export function MonitorApp() {
           <h2>Shortcut help</h2>
           <ul>
             <li>`/` search focus</li>
-            <li>`G` graph mode</li>
-            <li>`W` waterfall mode</li>
-            <li>`M` map mode</li>
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
             <li>`E` error only</li>
@@ -381,18 +358,14 @@ function GraphToolbar({
   dataset,
   filters,
   anomalyJumps,
-  viewMode,
   onJump,
   onSetFilter,
-  onSetViewMode,
 }: {
   dataset: ActiveDataset;
   filters: ActiveFilters;
   anomalyJumps: AnomalyJump[];
-  viewMode: ViewMode;
   onJump: (selection: { kind: "event" | "edge" | "artifact"; id: string }) => void;
   onSetFilter: MonitorAppState["actions"]["setFilter"];
-  onSetViewMode: MonitorAppState["actions"]["setViewMode"];
 }) {
   return (
     <section className="graph-toolbar graph-toolbar--split">
@@ -406,21 +379,6 @@ function GraphToolbar({
           </div>
         </div>
 
-        <div className="graph-toolbar__cluster graph-toolbar__cluster--modes">
-          <p className="graph-toolbar__label">Visualization</p>
-          <div className="mode-tabs">
-            {(["graph", "waterfall", "map"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`button ${viewMode === mode ? "button--active" : "button--ghost"}`.trim()}
-                onClick={() => onSetViewMode(mode)}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="graph-toolbar__row graph-toolbar__row--secondary">

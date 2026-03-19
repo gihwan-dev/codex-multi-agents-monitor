@@ -32,7 +32,6 @@ export const EVENT_TYPES = [
   "turn.finished",
 ] as const;
 
-export const VIEW_MODES = ["graph", "waterfall", "map"] as const;
 export const INSPECTOR_TABS = ["summary", "input", "output", "trace", "raw"] as const;
 export const DRAWER_TABS = ["artifacts", "import", "raw", "log"] as const;
 export const EDGE_TYPES = ["spawn", "handoff", "transfer", "merge"] as const;
@@ -41,7 +40,6 @@ export const LIVE_MODES = ["imported", "live"] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
 export type EventType = (typeof EVENT_TYPES)[number];
-export type ViewMode = (typeof VIEW_MODES)[number];
 export type InspectorTab = (typeof INSPECTOR_TABS)[number];
 export type DrawerTab = (typeof DRAWER_TABS)[number];
 export type EdgeType = (typeof EDGE_TYPES)[number];
@@ -332,61 +330,6 @@ export interface GraphSceneModel {
   selectionPath: SelectionPath;
   hiddenLaneCount: number;
   latestVisibleEventId: string | null;
-}
-
-export interface WaterfallSegment {
-  eventId: string;
-  laneId: string;
-  title: string;
-  leftPercent: number;
-  widthPercent: number;
-  status: RunStatus;
-}
-
-export interface WaterfallRowEvent {
-  kind: "event";
-  id: string;
-  eventId: string;
-  startLabel: string;
-  durationLabel: string;
-}
-
-export interface WaterfallRowGap {
-  kind: "gap";
-  id: string;
-  label: string;
-  durationMs: number;
-  hiddenEventIds: string[];
-}
-
-export type WaterfallRow = WaterfallRowEvent | WaterfallRowGap;
-
-export interface WaterfallCell {
-  eventId: string;
-  laneId: string;
-  title: string;
-  summary: string;
-  status: RunStatus;
-  waitReason: string | null;
-  leftPercent: number;
-  widthPercent: number;
-  selected: boolean;
-  inPath: boolean;
-}
-
-export interface WaterfallModel {
-  lanes: GraphSceneLane[];
-  rows: WaterfallRow[];
-  cells: WaterfallCell[];
-  selectionPath: SelectionPath;
-}
-
-export interface MapNode {
-  lane: AgentLane;
-  statusCount: number;
-  blockedCount: number;
-  waitingCount: number;
-  doneCount: number;
 }
 
 export interface LiveWatchFrame {

@@ -13,7 +13,6 @@ import type {
   GraphSceneRow,
   InspectorCausalSummary,
   InspectorJump,
-  MapNode,
   QuickFilterSummary,
   RunDataset,
   RunFilters,
@@ -21,10 +20,6 @@ import type {
   SelectionState,
   SummaryFact,
   SummaryMetrics,
-  WaterfallCell,
-  WaterfallModel,
-  WaterfallRow,
-  WaterfallSegment,
   WorkspaceIdentityOverrideMap,
   WorkspaceRunRow,
   WorkspaceThreadGroup,
@@ -593,11 +588,12 @@ export function buildSummaryFacts(
     orderedEvents.find((event) => event.status === "waiting") ??
     orderedEvents.find((event) => event.status === "interrupted") ??
     null;
+  const selectionEventIdSet = new Set(selectionPath.eventIds);
   const affectedLaneIds = new Set(
     orderedEvents
       .filter(
         (event) =>
-          selectionPath.eventIds.includes(event.eventId) &&
+          selectionEventIdSet.has(event.eventId) &&
           ["waiting", "blocked", "interrupted", "failed"].includes(event.status),
       )
       .map((event) => event.laneId),
@@ -672,6 +668,8 @@ export function buildGraphSceneModel(
   selection: SelectionState | null,
 ): GraphSceneModel {
   const selectionPath = buildSelectionPath(dataset, selection);
+  const selectionPathEventIds = new Set(selectionPath.eventIds);
+  const selectionPathEdgeIds = new Set(selectionPath.edgeIds);
   const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath);
   const hasMultiAgentTopology = dataset.lanes.length > 1 && dataset.edges.length > 0;
   const graphLanes = buildGraphLanes(dataset);
@@ -680,6 +678,7 @@ export function buildGraphSceneModel(
   const rows: GraphSceneRow[] = [];
   const visibleRowsByEventId = new Map<string, string>();
   const seenEventIds = new Set<string>();
+  const visibleEventIdSet = new Set(visibleEvents.map((e) => e.eventId));
 
   visibleEvents.forEach((event, index) => {
     const previous = visibleEvents[index - 1];
@@ -689,7 +688,7 @@ export function buildGraphSceneModel(
       const gapStart = previousEnd;
       const gapEnd = event.startTs;
       const hiddenEventIds = dataset.events
-        .filter((e) => e.startTs >= gapStart && e.startTs < gapEnd && !visibleEvents.includes(e))
+        .filter((e) => e.startTs >= gapStart && e.startTs < gapEnd && !visibleEventIdSet.has(e.eventId))
         .map((e) => e.eventId);
       rows.push({
         kind: "gap",
@@ -723,7 +722,7 @@ export function buildGraphSceneModel(
       waitReason: event.waitReason,
       timeLabel: formatTimestamp(event.startTs),
       durationLabel: formatDuration(event.durationMs),
-      inPath: hasMultiAgentTopology && selectionPath.eventIds.includes(event.eventId),
+      inPath: hasMultiAgentTopology && selectionPathEventIds.has(event.eventId),
       selected: selection?.kind === "event" && selection.id === event.eventId,
       eventType: event.eventType,
       toolName: event.toolName,
@@ -782,9 +781,9 @@ export function buildGraphSceneModel(
         label: edge.payloadPreview ?? edge.edgeType,
         bundleCount: 1,
         inPath: hasMultiAgentTopology && (
-          selectionPath.edgeIds.includes(edge.edgeId) ||
-          (selectionPath.eventIds.includes(edge.sourceEventId) &&
-            selectionPath.eventIds.includes(edge.targetEventId))),
+          selectionPathEdgeIds.has(edge.edgeId) ||
+          (selectionPathEventIds.has(edge.sourceEventId) &&
+            selectionPathEventIds.has(edge.targetEventId))),
         selected: selection?.kind === "edge" && selection.id === edge.edgeId,
       });
     });
@@ -811,96 +810,6 @@ export function buildGraphSceneModel(
         .find((row) => row.kind === "event")
         ?.eventId ?? null,
   };
-}
-
-export function buildWaterfallSegments(dataset: RunDataset): WaterfallSegment[] {
-  const start = dataset.run.startTs;
-  const totalDuration = Math.max(dataset.run.durationMs, 1);
-
-  return dataset.events.map((event) => ({
-    eventId: event.eventId,
-    laneId: event.laneId,
-    title: event.title,
-    leftPercent: ((event.startTs - start) / totalDuration) * 100,
-    widthPercent: Math.max((event.durationMs / totalDuration) * 100, 2),
-    status: event.status,
-  }));
-}
-
-export function buildWaterfallModel(
-  dataset: RunDataset,
-  filters: RunFilters,
-  selection: SelectionState | null,
-): WaterfallModel {
-  const selectionPath = buildSelectionPath(dataset, selection);
-  const graphLanes = buildGraphLanes(dataset);
-  const laneIds = new Set(graphLanes.lanes.map((lane) => lane.laneId));
-  const start = dataset.run.startTs;
-  const totalDuration = Math.max(dataset.run.durationMs, 1);
-  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPath).filter((event) =>
-    laneIds.has(event.laneId),
-  );
-  const rows: WaterfallRow[] = [];
-
-  visibleEvents.forEach((event, index) => {
-    const previous = visibleEvents[index - 1];
-    const previousEnd = previous ? previous.endTs ?? previous.startTs : null;
-    const gap = previousEnd ? event.startTs - previousEnd : 0;
-    if (gap >= GAP_THRESHOLD_MS && previousEnd !== null) {
-      const gapStart = previousEnd;
-      const gapEnd = event.startTs;
-      const hiddenEventIds = dataset.events
-        .filter((e) => e.startTs >= gapStart && e.startTs < gapEnd && !visibleEvents.includes(e))
-        .map((e) => e.eventId);
-      rows.push({
-        kind: "gap",
-        id: `waterfall-gap-${previous?.eventId ?? "start"}-${event.eventId}`,
-        label: formatGapLabel(gap, graphLanes.lanes.length || 1),
-        durationMs: gap,
-        hiddenEventIds,
-      });
-    }
-    rows.push({
-      kind: "event",
-      id: `waterfall-row-${event.eventId}`,
-      eventId: event.eventId,
-      startLabel: formatTimestamp(event.startTs),
-      durationLabel: formatDuration(event.durationMs),
-    });
-  });
-
-  const cells: WaterfallCell[] = visibleEvents.map((event) => ({
-    eventId: event.eventId,
-    laneId: event.laneId,
-    title: event.title,
-    summary: event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a",
-    status: event.status,
-    waitReason: event.waitReason,
-    leftPercent: ((event.startTs - start) / totalDuration) * 100,
-    widthPercent: Math.max((event.durationMs / totalDuration) * 100, 2),
-    selected: selection?.kind === "event" && selection.id === event.eventId,
-    inPath: selectionPath.eventIds.includes(event.eventId),
-  }));
-
-  return {
-    lanes: graphLanes.lanes,
-    rows,
-    cells,
-    selectionPath,
-  };
-}
-
-export function buildMapNodes(dataset: RunDataset): MapNode[] {
-  return dataset.lanes.map((lane) => {
-    const laneEvents = dataset.events.filter((event) => event.laneId === lane.laneId);
-    return {
-      lane,
-      statusCount: laneEvents.length,
-      blockedCount: laneEvents.filter((event) => event.status === "blocked").length,
-      waitingCount: laneEvents.filter((event) => event.status === "waiting").length,
-      doneCount: laneEvents.filter((event) => event.status === "done").length,
-    };
-  });
 }
 
 export function findSelectionDetails(

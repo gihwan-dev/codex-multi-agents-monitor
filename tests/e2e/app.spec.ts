@@ -203,23 +203,6 @@ test("drawer stays hidden until an explicit drawer action", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
 });
 
-test("mode switches preserve the active run title and inspector selection", async ({ page }) => {
-  await openBuiltApp(page);
-
-  await expect(page.getByRole("heading", { name: "Planner blocked" })).toBeVisible();
-
-  for (const [key, mode] of [
-    ["w", "waterfall"],
-    ["m", "map"],
-    ["g", "graph"],
-  ] as const) {
-    await page.keyboard.press(key);
-    await expect(page.getByRole("heading", { name: "FIX-002 Waiting chain run" })).toBeVisible();
-    await expect(page.getByRole("button", { name: mode })).toHaveClass(/button--active/);
-    await expect(page.getByRole("heading", { name: "Planner blocked" })).toBeVisible();
-  }
-});
-
 test("mobile starts with collapsed inspector and preserves selection when reopened", async ({
   page,
 }) => {

@@ -7,16 +7,13 @@ import {
   buildAnomalyJumps,
   buildGraphSceneModel,
   buildInspectorCausalSummary,
-  buildMapNodes,
   buildSummaryFacts,
-  buildWaterfallModel,
   type DrawerTab,
   hasRawPayload,
   type InspectorTab,
   type RunDataset,
   type RunFilters,
   type SelectionState,
-  type ViewMode,
 } from "../shared/domain";
 import {
   loadArchivedSessionIndex,
@@ -30,7 +27,6 @@ export interface MonitorState {
   datasets: RunDataset[];
   activeRunId: string;
   selection: SelectionState | null;
-  viewMode: ViewMode;
   inspectorTab: InspectorTab;
   drawerTab: DrawerTab;
   drawerOpen: boolean;
@@ -59,7 +55,6 @@ export interface MonitorState {
 type Action =
   | { type: "set-active-run"; traceId: string }
   | { type: "set-selection"; selection: SelectionState | null }
-  | { type: "set-view"; viewMode: ViewMode }
   | { type: "set-inspector-tab"; tab: InspectorTab }
   | { type: "set-drawer-tab"; tab: DrawerTab; open?: boolean }
   | { type: "toggle-drawer" }
@@ -141,7 +136,6 @@ export function createMonitorInitialState(): MonitorState {
     selection: activeDataset.run.selectedByDefaultId
       ? { kind: "event", id: activeDataset.run.selectedByDefaultId }
       : null,
-    viewMode: "graph",
     inspectorTab: "summary",
     drawerTab: "artifacts",
     drawerOpen: false,
@@ -190,8 +184,6 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
     }
     case "set-selection":
       return { ...state, selection: action.selection };
-    case "set-view":
-      return { ...state, viewMode: action.viewMode };
     case "set-inspector-tab":
       return { ...state, inspectorTab: action.tab };
     case "set-drawer-tab":
@@ -446,13 +438,6 @@ export function useMonitorAppState() {
     graphScene.selectionPath,
   );
   const anomalyJumps = buildAnomalyJumps(activeDataset);
-  const waterfallModel = buildWaterfallModel(
-    activeDataset,
-    activeFilters,
-    state.selection,
-  );
-  const mapNodes = buildMapNodes(activeDataset);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -491,9 +476,7 @@ export function useMonitorAppState() {
 
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
     const visibleEventIds =
-      state.viewMode === "waterfall"
-        ? waterfallModel.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []))
-        : graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []));
+      graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : []));
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
@@ -502,15 +485,6 @@ export function useMonitorAppState() {
     }
 
     switch (event.key.toLowerCase()) {
-      case "g":
-        dispatch({ type: "set-view", viewMode: "graph" });
-        break;
-      case "w":
-        dispatch({ type: "set-view", viewMode: "waterfall" });
-        break;
-      case "m":
-        dispatch({ type: "set-view", viewMode: "map" });
-        break;
       case "i":
         dispatch({ type: "toggle-inspector" });
         break;
@@ -580,8 +554,6 @@ export function useMonitorAppState() {
     inspectorSummary,
     summaryFacts,
     anomalyJumps,
-    waterfallModel,
-    mapNodes,
     actions: {
       selectRun(traceId: string) {
         dispatch({ type: "set-active-run", traceId });
@@ -596,9 +568,6 @@ export function useMonitorAppState() {
         ) {
           dispatch({ type: "set-follow-live", traceId: activeDataset.run.traceId, value: false });
         }
-      },
-      setViewMode(viewMode: ViewMode) {
-        dispatch({ type: "set-view", viewMode });
       },
       setInspectorTab(tab: InspectorTab) {
         dispatch({ type: "set-inspector-tab", tab });
