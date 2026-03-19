@@ -1,14 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
 import { GapDetailSection } from "../features/run-detail/GapDetailSection";
 import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
 import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
-import type {
-  DrawerTab,
-  EventRecord,
-  GraphSceneRow,
-  WorkspaceIdentityOverrideMap,
-} from "../shared/domain";
+import type { DrawerTab } from "../shared/domain";
 import {
   MonitorGraphToolbar,
   MonitorSummaryStrip,
@@ -16,9 +11,11 @@ import {
   ResizeHandle,
 } from "./components/MonitorChrome";
 import { MonitorDrawer } from "./components/MonitorDrawer";
-import { isEditableKeyboardTarget } from "./keyboardTarget";
+import { buildExpandedGapIds, buildExpandedGaps } from "./monitorView";
+import { useCompactViewport } from "./useCompactViewport";
 import { useMonitorAppState } from "./useMonitorAppState";
-import { resolveWorkspaceIdentityOverrides } from "./workspaceIdentityResolver";
+import { useSearchFocusShortcut } from "./useSearchFocusShortcut";
+import { useWorkspaceIdentityOverrides } from "./useWorkspaceIdentityOverrides";
 
 export function MonitorApp() {
   const {
@@ -37,79 +34,19 @@ export function MonitorApp() {
   } = useMonitorAppState();
   const searchRef = useRef<HTMLInputElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
-  const [workspaceIdentityOverrides, setWorkspaceIdentityOverrides] =
-    useState<WorkspaceIdentityOverrideMap>({});
-  const [isCompactViewport, setIsCompactViewport] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= 720,
+  const isCompactViewport = useCompactViewport();
+  const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
+  const expandedGapIds = buildExpandedGapIds(
+    graphScene.rows,
+    state.collapsedGapIds[activeDataset.run.traceId] ?? [],
+  );
+  const expandedGaps = buildExpandedGaps(
+    graphScene.rows,
+    expandedGapIds,
+    activeDataset.events,
   );
 
-  const activeRows: GraphSceneRow[] = graphScene.rows;
-
-  // collapsedGapIds를 "사용자가 토글한 ID 집합"으로 재해석:
-  // 기본 all-collapsed, ID가 집합에 있으면 expanded
-  const expandedGapIds = useMemo(() => {
-    const toggled = new Set(state.collapsedGapIds[activeDataset.run.traceId] ?? []);
-    const set = new Set<string>();
-    for (const row of activeRows) {
-      if (row.kind === "gap" && toggled.has(row.id)) {
-        set.add(row.id);
-      }
-    }
-    return set;
-  }, [activeRows, state.collapsedGapIds, activeDataset.run.traceId]);
-
-  const eventsById = useMemo(
-    () => new Map(activeDataset.events.map((e) => [e.eventId, e])),
-    [activeDataset.events],
-  );
-
-  const expandedGaps = useMemo(() => {
-    const gaps: Array<{ gapId: string; label: string; hiddenEvents: EventRecord[] }> = [];
-    for (const row of activeRows) {
-      if (row.kind === "gap" && expandedGapIds.has(row.id)) {
-        const hiddenEvents = row.hiddenEventIds
-          .map((id) => eventsById.get(id))
-          .filter(Boolean) as EventRecord[];
-        gaps.push({ gapId: row.id, label: row.label, hiddenEvents });
-      }
-    }
-    return gaps;
-  }, [activeRows, expandedGapIds, eventsById]);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "/" && !isEditableKeyboardTarget(event.target)) {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsCompactViewport(window.innerWidth <= 720);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    resolveWorkspaceIdentityOverrides(state.datasets).then((nextOverrides) => {
-      if (!cancelled) {
-        setWorkspaceIdentityOverrides(nextOverrides);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state.datasets]);
+  useSearchFocusShortcut(searchRef);
 
   const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
     drawerTriggerRef.current =
@@ -118,7 +55,7 @@ export function MonitorApp() {
   };
 
   const closeDrawer = () => {
-    actions.toggleDrawer();
+    actions.setDrawerOpen(false);
     window.requestAnimationFrame(() => {
       drawerTriggerRef.current?.focus();
     });
@@ -214,7 +151,7 @@ export function MonitorApp() {
             onImportTextChange={actions.setImportText}
             onAllowRawChange={actions.setAllowRaw}
             onNoRawChange={actions.setNoRawStorage}
-            onToggleDrawer={closeDrawer}
+            onCloseDrawer={closeDrawer}
           />
         </main>
 
