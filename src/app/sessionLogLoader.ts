@@ -18,6 +18,11 @@ export { NEW_THREAD_TITLE } from "./session-log-loader/types";
 
 const WEB_SESSION_SNAPSHOT_URL = "/__codex/session-snapshots.json";
 
+function normalizeArchivedSearch(search?: string) {
+  const normalized = search?.trim();
+  return normalized ? normalized : null;
+}
+
 export async function loadSessionLogDatasets(): Promise<RunDataset[] | null> {
   try {
     return normalizeSessionLogDatasets(
@@ -66,7 +71,7 @@ export async function loadArchivedSessionIndex(
   try {
     return await invokeTauri<ArchivedSessionIndexResult>(
       "load_archived_session_index",
-      { offset, limit, search: search || null },
+      { offset, limit, search: normalizeArchivedSearch(search) },
     );
   } catch {
     return null;

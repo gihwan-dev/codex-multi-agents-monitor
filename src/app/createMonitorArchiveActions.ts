@@ -19,7 +19,8 @@ interface CreateMonitorArchiveActionsOptions {
 }
 
 function toOptionalSearch(value: string) {
-  return value || undefined;
+  const normalized = value.trim();
+  return normalized || undefined;
 }
 
 export function createMonitorArchiveActions({
