@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDatasetFromSessionLog } from "../src/app/sessionLogLoader";
 import type { SessionLogSnapshot } from "../src/app/sessionLogLoader";
+import { buildDatasetFromSessionLog } from "../src/app/sessionLogLoader";
 
 function makeSnapshot(overrides: Partial<SessionLogSnapshot> = {}): SessionLogSnapshot {
   return {
@@ -72,9 +72,11 @@ describe("promptAssembly mapping", () => {
 
     const dataset = buildDatasetFromSessionLog(snapshot);
     expect(dataset).not.toBeNull();
-    expect(dataset!.promptAssembly).toBeDefined();
+    if (!dataset?.promptAssembly) {
+      throw new Error("promptAssembly should be present");
+    }
 
-    const assembly = dataset!.promptAssembly!;
+    const assembly = dataset.promptAssembly;
     expect(assembly.layers).toHaveLength(4);
     expect(assembly.totalContentLength).toBe(15000 + 362 + 5200 + 100);
 
@@ -94,13 +96,13 @@ describe("promptAssembly mapping", () => {
     const snapshot = makeSnapshot({ promptAssembly: [] });
     const dataset = buildDatasetFromSessionLog(snapshot);
     expect(dataset).not.toBeNull();
-    expect(dataset!.promptAssembly).toBeUndefined();
+    expect(dataset?.promptAssembly).toBeUndefined();
   });
 
   it("returns undefined promptAssembly when field is absent", () => {
     const snapshot = makeSnapshot();
     const dataset = buildDatasetFromSessionLog(snapshot);
     expect(dataset).not.toBeNull();
-    expect(dataset!.promptAssembly).toBeUndefined();
+    expect(dataset?.promptAssembly).toBeUndefined();
   });
 });

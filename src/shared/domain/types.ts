@@ -269,6 +269,7 @@ export interface WorkspaceRunRow {
   title: string;
   status: RunStatus;
   lastEventSummary: string;
+  lastActivityTs: number;
   relativeTime: string;
   liveMode: LiveMode;
 }

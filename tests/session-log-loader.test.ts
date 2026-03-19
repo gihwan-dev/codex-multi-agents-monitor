@@ -196,6 +196,25 @@ describe("sessionLogLoader", () => {
     expect(uniqueIds.size).toBe(eventIds.length);
   });
 
+  it("rejects snapshots with invalid root timestamps instead of coercing them to epoch time", () => {
+    const snapshot = buildSnapshot([
+      makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "hello"),
+    ]);
+
+    expect(
+      buildDatasetFromSessionLog({
+        ...snapshot,
+        startedAt: "not-a-real-date",
+      }),
+    ).toBeNull();
+    expect(
+      buildDatasetFromSessionLog({
+        ...snapshot,
+        updatedAt: "still-not-a-date",
+      }),
+    ).toBeNull();
+  });
+
   it("skips turn_aborted entries and detects interrupted status", () => {
     const status = deriveSessionLogStatus([
       makeMessageEntry(

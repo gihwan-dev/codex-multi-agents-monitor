@@ -210,7 +210,10 @@ export function CausalGraphView({
                 key={lane.laneId}
                 className="graph-sequence__lane-header"
               >
-                <span className={`graph-sequence__lane-corner graph-sequence__lane-corner--${lane.status}`} aria-label={lane.status} />
+                <span
+                  className={`graph-sequence__lane-corner graph-sequence__lane-corner--${lane.status}`}
+                  aria-hidden="true"
+                />
                 <div className="graph-sequence__lane-title">
                   <strong>{lane.name}</strong>
                   {lane.role !== "session" && lane.role !== "user" ? (

@@ -306,7 +306,7 @@ function TopBar({
   onToggleShortcuts: () => void;
 }) {
   return (
-    <header className="top-bar top-bar--compact" aria-label="Run overview">
+    <header className="top-bar top-bar--compact">
       <div className="top-bar__identity">
         <p className="eyebrow">Graph-first run workbench</p>
         <p className="top-bar__breadcrumb">
@@ -478,12 +478,8 @@ function ResizeHandle({
   return (
     <button
       type="button"
-      role="separator"
       aria-label={label}
-      aria-valuenow={Math.round(position)}
-      aria-valuemin={220}
-      aria-valuemax={600}
-      aria-orientation="vertical"
+      title={label}
       className="resize-handle"
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {

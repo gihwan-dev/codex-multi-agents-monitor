@@ -55,17 +55,10 @@ export function PromptAssemblyView({
             key={layer.layerId}
             className={`layer-card layer-card--${cssType} ${isDynamic ? "layer-card--dynamic" : "layer-card--static"}`}
           >
-            <div
+            <button
+              type="button"
               className="layer-card__header"
               onClick={() => toggleLayer(layer.layerId)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleLayer(layer.layerId);
-                }
-              }}
-              role="button"
-              tabIndex={0}
               aria-expanded={isExpanded}
             >
               <span
@@ -76,7 +69,7 @@ export function PromptAssemblyView({
               </span>
               <span className="layer-card__label">{layer.label}</span>
               <span className="layer-card__badge">{formatBytes(layer.contentLength)}</span>
-            </div>
+            </button>
 
             <div className="layer-card__preview">{layer.preview}</div>
 

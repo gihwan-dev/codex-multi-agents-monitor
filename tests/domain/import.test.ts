@@ -342,6 +342,56 @@ describe("normalization and selectors", () => {
     expect(model.workspaces).toHaveLength(1);
     expect(model.workspaces[0]?.threads[0]?.runs[0]?.title).toBe("outline migration plan");
   });
+
+  it("orders runs within a thread by latest activity instead of alphabetical title order", () => {
+    const source = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-005");
+    expect(source).toBeDefined();
+    if (!source) {
+      throw new Error("fixture for workspace ordering test missing");
+    }
+
+    const shiftDataset = (traceId: string, title: string, offsetMs: number) => ({
+      ...source,
+      session: {
+        ...source.session,
+        sessionId: "thread-order-test",
+        title,
+      },
+      run: {
+        ...source.run,
+        traceId,
+        title,
+        startTs: source.run.startTs + offsetMs,
+        endTs: source.run.endTs ? source.run.endTs + offsetMs : source.run.endTs,
+      },
+      events: source.events.map((event) => ({
+        ...event,
+        eventId: `${traceId}:${event.eventId}`,
+        startTs: event.startTs + offsetMs,
+        endTs: event.endTs ? event.endTs + offsetMs : event.endTs,
+        inputPreview: null,
+      })),
+      edges: source.edges.map((edge) => ({
+        ...edge,
+        edgeId: `${traceId}:${edge.edgeId}`,
+        sourceEventId: `${traceId}:${edge.sourceEventId}`,
+        targetEventId: `${traceId}:${edge.targetEventId}`,
+      })),
+      artifacts: source.artifacts.map((artifact) => ({
+        ...artifact,
+        artifactId: `${traceId}:${artifact.artifactId}`,
+        producerEventId: `${traceId}:${artifact.producerEventId}`,
+      })),
+    });
+
+    const olderRun = shiftDataset("trace-order-old", "Alpha older run", 0);
+    const newerRun = shiftDataset("trace-order-new", "Zulu newer run", 60_000);
+    const model = buildWorkspaceTreeModel([olderRun, newerRun], "", "all");
+    const runs = model.workspaces[0]?.threads[0]?.runs;
+
+    expect(runs).toBeDefined();
+    expect(runs?.map((run) => run.title)).toEqual(["Zulu newer run", "Alpha older run"]);
+  });
 });
 
 describe("monitor state contracts", () => {

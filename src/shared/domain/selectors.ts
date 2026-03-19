@@ -456,6 +456,7 @@ function matchesQuickFilter(dataset: RunDataset, filter: QuickFilterSummary["key
 function buildWorkspaceRunRow(dataset: RunDataset, referenceTimestamp: number): WorkspaceRunRow {
   const orderedEvents = sortEvents(dataset.events);
   const latestEvent = orderedEvents[orderedEvents.length - 1] ?? null;
+  const lastActivityTs = latestActivityTimestamp(dataset);
 
   return {
     id: dataset.run.traceId,
@@ -467,7 +468,8 @@ function buildWorkspaceRunRow(dataset: RunDataset, referenceTimestamp: number): 
       latestEvent?.inputPreview ??
       latestEvent?.title ??
       "No event summary yet.",
-    relativeTime: formatRelativeTime(latestActivityTimestamp(dataset), referenceTimestamp),
+    lastActivityTs,
+    relativeTime: formatRelativeTime(lastActivityTs, referenceTimestamp),
     liveMode: dataset.run.liveMode,
   };
 }
@@ -546,7 +548,6 @@ export function buildWorkspaceTreeModel(
       }
 
       thread.runs.push(runRow);
-      thread.runs.sort((left, right) => right.relativeTime.localeCompare(left.relativeTime));
       workspace.runCount += 1;
       workspaceMap.set(workspaceIdentity.id, workspace);
     });
@@ -559,9 +560,15 @@ export function buildWorkspaceTreeModel(
         threads: workspace.threads
           .map((thread) => ({
             ...thread,
-            runs: [...thread.runs].sort((left, right) => right.title.localeCompare(left.title)),
+            runs: [...thread.runs].sort(
+              (left, right) => right.lastActivityTs - left.lastActivityTs,
+            ),
           }))
-          .sort((left, right) => left.title.localeCompare(right.title)),
+          .sort((left, right) => {
+            const rightLatest = right.runs[0]?.lastActivityTs ?? 0;
+            const leftLatest = left.runs[0]?.lastActivityTs ?? 0;
+            return rightLatest - leftLatest;
+          }),
       }))
       .sort((left, right) => left.name.localeCompare(right.name)),
   };

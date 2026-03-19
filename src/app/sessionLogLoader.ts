@@ -171,11 +171,12 @@ export function deriveSessionLogStatus(
 }
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
-  const startTs = parseTimestamp(snapshot.startedAt);
-  const updatedTs = Math.max(parseTimestamp(snapshot.updatedAt), startTs);
-  if (!Number.isFinite(startTs) || !Number.isFinite(updatedTs)) {
+  const startTs = parseRequiredTimestamp(snapshot.startedAt);
+  const updatedAtTs = parseRequiredTimestamp(snapshot.updatedAt);
+  if (startTs === null || updatedAtTs === null) {
     return null;
   }
+  const updatedTs = Math.max(updatedAtTs, startTs);
 
   const displayTitle = deriveSessionLogTitle(snapshot.entries);
   const status = deriveSessionLogStatus(snapshot.entries);
@@ -1392,6 +1393,11 @@ export function deriveArchiveIndexTitle(firstUserMessage: string | null): string
 function parseTimestamp(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function parseRequiredTimestamp(value: string): number | null {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 export async function loadArchivedSessionIndex(

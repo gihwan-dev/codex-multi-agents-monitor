@@ -124,6 +124,34 @@ function buildCollapsedGapIds(datasets: RunDataset[]) {
   ) as Record<string, string[]>;
 }
 
+function defaultSelectionForDataset(dataset: RunDataset): SelectionState | null {
+  return dataset.run.selectedByDefaultId
+    ? { kind: "event", id: dataset.run.selectedByDefaultId }
+    : null;
+}
+
+function buildDatasetActivationPatch(state: MonitorState, dataset: RunDataset) {
+  return {
+    activeRunId: dataset.run.traceId,
+    selection: defaultSelectionForDataset(dataset),
+    collapsedGapIds: {
+      ...state.collapsedGapIds,
+      [dataset.run.traceId]: [],
+    },
+    followLiveByRunId: {
+      ...state.followLiveByRunId,
+      [dataset.run.traceId]: false,
+    },
+    filtersByRunId: {
+      ...state.filtersByRunId,
+      [dataset.run.traceId]: createDefaultFilters(),
+    },
+    inspectorTab: hasRawPayload(dataset) ? state.inspectorTab : "summary",
+    drawerTab:
+      hasRawPayload(dataset) || state.drawerTab !== "raw" ? state.drawerTab : "artifacts",
+  };
+}
+
 export function createMonitorInitialState(): MonitorState {
   const activeRunId = "trace-fix-002";
   const activeDataset =
@@ -133,9 +161,7 @@ export function createMonitorInitialState(): MonitorState {
   return {
     datasets: FIXTURE_DATASETS,
     activeRunId,
-    selection: activeDataset.run.selectedByDefaultId
-      ? { kind: "event", id: activeDataset.run.selectedByDefaultId }
-      : null,
+    selection: defaultSelectionForDataset(activeDataset),
     inspectorTab: "summary",
     drawerTab: "artifacts",
     drawerOpen: false,
@@ -169,9 +195,7 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
       return {
         ...state,
         activeRunId: action.traceId,
-        selection: dataset?.run.selectedByDefaultId
-          ? { kind: "event", id: dataset.run.selectedByDefaultId }
-          : null,
+        selection: dataset ? defaultSelectionForDataset(dataset) : null,
         inspectorTab:
           dataset && !hasRawPayload(dataset) && state.inspectorTab === "raw"
             ? "summary"
@@ -286,25 +310,9 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
       return {
         ...state,
         datasets,
-        activeRunId: action.dataset.run.traceId,
-        selection: action.dataset.run.selectedByDefaultId
-          ? { kind: "event", id: action.dataset.run.selectedByDefaultId }
-          : null,
-        collapsedGapIds: {
-          ...state.collapsedGapIds,
-          [action.dataset.run.traceId]: [],
-        },
-        followLiveByRunId: {
-          ...state.followLiveByRunId,
-          [action.dataset.run.traceId]: false,
-        },
-        filtersByRunId: {
-          ...state.filtersByRunId,
-          [action.dataset.run.traceId]: createDefaultFilters(),
-        },
+        ...buildDatasetActivationPatch(state, action.dataset),
         drawerTab: "artifacts",
         drawerOpen: true,
-        inspectorTab: hasRawPayload(action.dataset) ? state.inspectorTab : "summary",
       };
     }
     case "replace-datasets": {
@@ -319,9 +327,7 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         ...state,
         datasets: action.datasets,
         activeRunId: activeDataset.run.traceId,
-        selection: activeDataset.run.selectedByDefaultId
-          ? { kind: "event", id: activeDataset.run.selectedByDefaultId }
-          : null,
+        selection: defaultSelectionForDataset(activeDataset),
         followLiveByRunId: buildFollowLiveMap(action.datasets),
         liveConnectionByRunId: buildConnectionMap(action.datasets),
         filtersByRunId: buildFilterMap(action.datasets),
@@ -390,23 +396,7 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
       return {
         ...state,
         datasets,
-        activeRunId: action.dataset.run.traceId,
-        selection: action.dataset.run.selectedByDefaultId
-          ? { kind: "event", id: action.dataset.run.selectedByDefaultId }
-          : null,
-        collapsedGapIds: {
-          ...state.collapsedGapIds,
-          [action.dataset.run.traceId]: [],
-        },
-        followLiveByRunId: {
-          ...state.followLiveByRunId,
-          [action.dataset.run.traceId]: false,
-        },
-        filtersByRunId: {
-          ...state.filtersByRunId,
-          [action.dataset.run.traceId]: createDefaultFilters(),
-        },
-        inspectorTab: hasRawPayload(action.dataset) ? state.inspectorTab : "summary",
+        ...buildDatasetActivationPatch(state, action.dataset),
       };
     }
     default:
