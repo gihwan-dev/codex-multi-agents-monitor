@@ -450,6 +450,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   // backward-flowing arrows when the parent initiates wait/close before
   // the subagent actually finishes.
   const callEventToOutputEvent = new Map<string, string>();
+  const parentFunctionArgsByEventId = new Map<string, string | null>();
   {
     const tempCallIdToEventId = new Map<string, string>();
     for (let i = 0; i < snapshot.entries.length; i++) {
@@ -458,8 +459,11 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
         continue;
       }
       const eventId = buildEntryEventId(snapshot.sessionId, entry, i);
-      if (entry.entryType === "function_call" && entry.functionCallId) {
-        tempCallIdToEventId.set(entry.functionCallId, eventId);
+      if (entry.entryType === "function_call") {
+        parentFunctionArgsByEventId.set(eventId, entry.functionArgumentsPreview);
+        if (entry.functionCallId) {
+          tempCallIdToEventId.set(entry.functionCallId, eventId);
+        }
       } else if (entry.entryType === "function_call_output" && entry.functionCallId) {
         const callEventId = tempCallIdToEventId.get(entry.functionCallId);
         if (callEventId) {
@@ -468,6 +472,9 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       }
     }
   }
+
+  const parseParentFunctionArgs = (event: EventRecord) =>
+    parseJsonRecord(parentFunctionArgsByEventId.get(event.eventId) ?? event.inputPreview);
 
   // Collect candidate merge edges from close_agent and wait/wait_agent events.
   // A subagent may be referenced by multiple wait calls (polling with timeouts)
@@ -486,7 +493,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   // Generate merge edges from close_agent events
   for (const evt of parentEvents) {
     if (evt.toolName !== "close_agent") continue;
-    const args = parseJsonRecord(evt.inputPreview);
+    const args = parseParentFunctionArgs(evt);
     const agentId = typeof args?.id === "string" ? args.id : null;
     const sessionId = agentId ? resolveSessionId(agentId) : undefined;
     if (!sessionId) continue;
@@ -509,7 +516,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   // Generate merge edges from wait/wait_agent events
   for (const evt of parentEvents) {
     if (evt.toolName !== "wait" && evt.toolName !== "wait_agent") continue;
-    for (const agentId of readStringArray(parseJsonRecord(evt.inputPreview), "ids")) {
+    for (const agentId of readStringArray(parseParentFunctionArgs(evt), "ids")) {
       const sessionId = resolveSessionId(agentId);
       if (!sessionId) continue;
       const sub = subagents.find((subagent) => subagent.sessionId === sessionId);
@@ -537,7 +544,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   // resume_agent, send_input, close_agent, wait, wait_agent all reference
   // subagent IDs in their arguments — showing the nickname is far more readable.
   for (const evt of allEvents) {
-    const args = parseJsonRecord(evt.inputPreview);
+    const args = parseParentFunctionArgs(evt);
     if (!args) continue;
     if (evt.toolName === "resume_agent" || evt.toolName === "send_input") {
       const sessionId = typeof args.id === "string" ? resolveSessionId(args.id) : undefined;

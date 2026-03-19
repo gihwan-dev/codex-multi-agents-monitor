@@ -1474,6 +1474,41 @@ describe("merge edge generation", () => {
     expect(waitEvents[0].eventType).toBe("tool.started");
   });
 
+  it("enriches resume_agent and send_input titles using raw function args", () => {
+    const snapshot = buildCloseAgentSnapshot();
+    snapshot.entries.push(
+      makeFunctionCallEntry(
+        "2026-03-18T10:19:00.000Z",
+        "resume_agent",
+        "call_resume_alpha",
+        '{"id":"codex-id-alpha"}',
+      ),
+      makeFunctionCallEntry(
+        "2026-03-18T10:19:30.000Z",
+        "send_input",
+        "call_send_beta",
+        '{"id":"codex-id-beta","interrupt":true,"message":"추가 확인해줘"}',
+      ),
+    );
+
+    const dataset = expectDataset(snapshot);
+
+    const resumeEvent = expectEvent(
+      dataset,
+      (event) => event.toolName === "resume_agent",
+      "expected resume_agent event",
+    );
+    expect(resumeEvent.title).toBe("Resume (Alpha)");
+
+    const sendEvent = expectEvent(
+      dataset,
+      (event) => event.toolName === "send_input",
+      "expected send_input event",
+    );
+    expect(sendEvent.title).toBe("Send to Beta");
+    expect(sendEvent.inputPreview).toBe("[interrupt] 추가 확인해줘");
+  });
+
   it("handles agent_reasoning entries as note events", () => {
     const dataset = expectDataset(
       buildSnapshot([
