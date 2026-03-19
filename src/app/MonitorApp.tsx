@@ -20,12 +20,25 @@ import { resolveWorkspaceIdentityOverrides } from "./workspaceIdentityResolver";
 
 const eventFilterOptions: Array<EventType | "all"> = [
   "all",
-  "handoff",
-  "transfer",
+  "note",
+  "user.prompt",
   "tool.finished",
   "llm.finished",
   "error",
+  "handoff",
+  "transfer",
 ];
+
+const EVENT_FILTER_LABELS: Record<string, string> = {
+  all: "All",
+  note: "Messages",
+  "user.prompt": "User prompts",
+  "tool.finished": "Tool results",
+  "llm.finished": "LLM calls",
+  error: "Errors",
+  handoff: "Handoff",
+  transfer: "Transfer",
+};
 
 type MonitorAppState = ReturnType<typeof useMonitorAppState>;
 type ActiveDataset = MonitorAppState["activeDataset"];
@@ -409,7 +422,7 @@ function GraphToolbar({
               >
                 {eventFilterOptions.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {EVENT_FILTER_LABELS[item] ?? item}
                   </option>
                 ))}
               </select>
