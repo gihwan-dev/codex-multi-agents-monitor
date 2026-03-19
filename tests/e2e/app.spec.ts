@@ -162,7 +162,7 @@ test("left rail preserves hierarchy and single-line run titles", async ({ page }
 test("rail and inspector resize beyond the previous width caps", async ({ page }) => {
   await openBuiltApp(page);
 
-  const railHandle = page.getByRole("separator", { name: "Resize run list" });
+  const railHandle = page.getByRole("button", { name: "Resize run list" });
   await railHandle.focus();
   for (let index = 0; index < 8; index += 1) {
     await page.keyboard.press("ArrowRight");
@@ -177,7 +177,7 @@ test("rail and inspector resize beyond the previous width caps", async ({ page }
     )
     .toBeGreaterThan(340);
 
-  const inspectorHandle = page.getByRole("separator", { name: "Resize inspector" });
+  const inspectorHandle = page.getByRole("button", { name: "Resize inspector" });
   await inspectorHandle.focus();
   for (let index = 0; index < 8; index += 1) {
     await page.keyboard.press("ArrowLeft");
