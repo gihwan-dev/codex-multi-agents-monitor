@@ -8,8 +8,10 @@
   --color-surface-muted: #202635;
   --color-border: rgba(166, 175, 189, 0.18);
   --color-text: #f3f6fb;
+  --color-text-primary: #f3f6fb;
   --color-text-secondary: #a6afbd;
-  --color-text-tertiary: #737b88;
+  --color-text-tertiary: #8891a0;
+  --color-text-muted: rgba(255, 255, 255, 0.55);
   --color-active: #4da3ff;
   --color-success: #34d399;
   --color-waiting: #f5c451;
@@ -19,6 +21,7 @@
   --color-transfer: #67e8f9;
   --color-stale: #fb7185;
   --color-disconnected: #94a3b8;
+  --color-surface-raised: rgba(255, 255, 255, 0.06);
   --shadow-panel: 0 24px 72px rgba(5, 8, 12, 0.42);
   --space-1: 4px;
   --space-2: 8px;
@@ -41,6 +44,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  line-height: 1.5;
   color: var(--color-text);
   background:
     radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 28%),
