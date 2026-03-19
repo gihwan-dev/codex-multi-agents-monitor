@@ -1251,7 +1251,11 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
       const prefix = args.interrupt ? "[interrupt] " : "";
       return `${prefix}${args.message}`;
     }
-    if (toolName === "spawn_agent" && typeof args.message === "string") return args.message;
+    if (toolName === "spawn_agent" && typeof args.message === "string") {
+      const agentType = args.type ?? args.agent_type;
+      const prefix = typeof agentType === "string" ? `[${agentType}] ` : "";
+      return `${prefix}${args.message}`;
+    }
     if (toolName === "update_plan" && typeof args.explanation === "string") return args.explanation;
     if (toolName === "request_user_input" && Array.isArray(args.questions) && args.questions[0]) {
       const q = args.questions[0];

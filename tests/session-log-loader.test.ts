@@ -1757,7 +1757,7 @@ describe("tool input preview extraction", () => {
 
     const spawnEvent = dataset.events.find((e) => e.toolName === "spawn_agent");
     expect(spawnEvent).toBeDefined();
-    expect(spawnEvent!.inputPreview).toBe("코드 품질 리뷰해주세요");
+    expect(spawnEvent!.inputPreview).toBe("[code-quality-reviewer] 코드 품질 리뷰해주세요");
   });
 
   it("extracts explanation from update_plan JSON arguments", () => {
