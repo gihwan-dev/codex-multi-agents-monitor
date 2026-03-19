@@ -2,6 +2,7 @@ import {
   formatDuration,
   formatRelativeTime,
   formatTimestamp,
+  formatTokens,
   truncateId,
 } from "./format.js";
 import type {
@@ -924,11 +925,7 @@ export function buildInspectorCausalSummary(
     return {
       title: details.title,
       preview: details.outputPreview ?? details.inputPreview ?? "n/a",
-      facts: [
-        { label: "Status", value: details.status },
-        { label: "Started", value: formatTimestamp(details.startTs) },
-        { label: "Duration", value: formatDuration(details.durationMs) },
-      ],
+      facts: buildEventFacts(details),
       whyBlocked,
       upstream,
       downstream,
@@ -985,6 +982,37 @@ export function buildInspectorCausalSummary(
     affectedAgentCount: 0,
     downstreamWaitingCount: 0,
   };
+}
+
+function buildEventFacts(event: EventRecord): SummaryFact[] {
+  const facts: SummaryFact[] = [
+    { label: "Status", value: event.status },
+    { label: "Started", value: formatTimestamp(event.startTs) },
+    { label: "Duration", value: formatDuration(event.durationMs) },
+  ];
+
+  if (event.toolName) {
+    facts.push({ label: "Tool", value: event.toolName });
+  }
+
+  if (event.model && event.eventType.startsWith("llm.")) {
+    facts.push({ label: "Model", value: event.model });
+  }
+
+  const totalTokens = event.tokensIn + event.tokensOut;
+  if (totalTokens > 0) {
+    facts.push({ label: "Tokens", value: `${formatTokens(event.tokensIn)} in / ${formatTokens(event.tokensOut)} out` });
+  }
+
+  if (event.errorMessage) {
+    facts.push({ label: "Error", value: event.errorMessage, emphasis: "danger" });
+  }
+
+  if (event.finishReason && event.finishReason !== "stop") {
+    facts.push({ label: "Finish", value: event.finishReason, emphasis: "warning" });
+  }
+
+  return facts;
 }
 
 export function defaultCollapsedGapIds(dataset: RunDataset): Set<string> {
