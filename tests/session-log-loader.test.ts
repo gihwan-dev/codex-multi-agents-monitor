@@ -376,6 +376,82 @@ describe("sessionLogLoader", () => {
     expect(reasoning[0].title).toBe("Reasoning");
   });
 
+  it("context_compacted shows descriptive output preview", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "context_compacted",
+          role: null,
+          text: null,
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const compacted = dataset.events.find((e) => e.title === "Context compacted");
+    expect(compacted).toBeDefined();
+    expect(compacted!.eventType).toBe("note");
+    expect(compacted!.outputPreview).toBe("Context reduced to fit within the model window");
+  });
+
+  it("turn_aborted shows reason in both outputPreview and errorMessage", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "turn_aborted",
+          role: null,
+          text: "interrupted",
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const aborted = dataset.events.find((e) => e.title === "Turn aborted");
+    expect(aborted).toBeDefined();
+    expect(aborted!.eventType).toBe("error");
+    expect(aborted!.outputPreview).toBe("interrupted");
+    expect(aborted!.errorMessage).toBe("interrupted");
+  });
+
+  it("thread_rolled_back shows reason in outputPreview", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "thread_rolled_back",
+          role: null,
+          text: null,
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const rolledBack = dataset.events.find((e) => e.title === "Thread rolled back");
+    expect(rolledBack).toBeDefined();
+    expect(rolledBack!.outputPreview).toBe("Thread rolled back");
+    expect(rolledBack!.errorMessage).toBe("Thread rolled back");
+  });
+
   it("creates user lane and assigns user.prompt events", () => {
     const dataset = buildDatasetFromSessionLog(
       buildSnapshot([

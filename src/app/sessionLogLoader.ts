@@ -952,31 +952,35 @@ function buildLaneEventsFromEntries({
           eventType: "note",
           title: "Context compacted",
           inputPreview: null,
-          outputPreview: null,
+          outputPreview: "Context reduced to fit within the model window",
         }));
         break;
 
-      case "turn_aborted":
+      case "turn_aborted": {
+        const reason = entry.text ?? "Turn aborted";
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
           eventType: "error",
           title: "Turn aborted",
           inputPreview: null,
-          outputPreview: null,
-          errorMessage: entry.text ?? "Turn aborted",
+          outputPreview: reason,
+          errorMessage: reason,
         }));
         break;
+      }
 
-      case "thread_rolled_back":
+      case "thread_rolled_back": {
+        const reason = entry.text ?? "Thread rolled back";
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
           eventType: "error",
           title: "Thread rolled back",
           inputPreview: null,
-          outputPreview: null,
-          errorMessage: entry.text ?? "Thread rolled back",
+          outputPreview: reason,
+          errorMessage: reason,
         }));
         break;
+      }
 
       case "token_count": {
         if (!entry.text) break;
