@@ -34,3 +34,4 @@ review-shots-pass3/
 *.njsproj
 *.sln
 *.sw?
+.claude/
