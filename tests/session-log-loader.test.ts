@@ -1635,3 +1635,77 @@ describe("token_count enrichment", () => {
     expect(nonLifecycleEvents.every((e) => e.title !== "token_count")).toBe(true);
   });
 });
+
+describe("tool input preview extraction", () => {
+  it("extracts cmd from exec_command JSON arguments", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check status"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "exec_command",
+          functionCallId: "call_exec",
+          functionArgumentsPreview: '{"cmd":"git status --short","workdir":"/tmp/test"}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "exec_command");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("git status --short");
+  });
+
+  it("extracts path from apply_patch JSON arguments", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Fix the file"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "apply_patch",
+          functionCallId: "call_patch",
+          functionArgumentsPreview: '{"path":"src/app/main.ts","patch":"..."}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "apply_patch");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("src/app/main.ts");
+  });
+
+  it("falls back to raw preview when JSON parsing fails", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Run it"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "exec_command",
+          functionCallId: "call_raw",
+          functionArgumentsPreview: "not-json",
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "exec_command");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("not-json");
+  });
+});

@@ -869,7 +869,7 @@ function buildLaneEventsFromEntries({
             entry, lane, startTs, safeEndTs, isLatest, status, model, index,
             eventType: "tool.started",
             title: functionName,
-            inputPreview: entry.functionArgumentsPreview,
+            inputPreview: extractToolInputPreview(functionName, entry.functionArgumentsPreview),
             outputPreview: null,
             toolName: functionName,
           }));
@@ -1165,6 +1165,23 @@ function isAgentsInstruction(value: string) {
 
 function isAutomationEnvelope(value: string) {
   return /^Automation:/i.test(value.trim());
+}
+
+function extractToolInputPreview(toolName: string, rawPreview: string | null): string | null {
+  if (!rawPreview) return null;
+  if (toolName === "exec_command") {
+    try {
+      const args = JSON.parse(rawPreview);
+      if (typeof args.cmd === "string") return args.cmd;
+    } catch { /* not JSON, fall through */ }
+  }
+  if (toolName === "apply_patch") {
+    try {
+      const args = JSON.parse(rawPreview);
+      if (typeof args.path === "string") return args.path;
+    } catch { /* not JSON, fall through */ }
+  }
+  return rawPreview;
 }
 
 function sanitizeMessagePreview(value: string) {
