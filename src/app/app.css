@@ -136,6 +136,10 @@ textarea {
   min-width: 0;
 }
 
+.workspace__main {
+  position: relative;
+}
+
 .workspace__main > * + * {
   margin-top: -1px;
 }
@@ -1122,6 +1126,10 @@ textarea {
   overflow: auto;
 }
 
+.drawer__body {
+  overflow: auto;
+}
+
 .inspector__empty {
   color: var(--color-text-secondary);
 }
@@ -1221,6 +1229,16 @@ textarea {
 
 .drawer--closed {
   height: 0;
+  overflow: hidden;
+}
+
+.drawer--open {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 50%;
+  z-index: 10;
   overflow: hidden;
 }
 
