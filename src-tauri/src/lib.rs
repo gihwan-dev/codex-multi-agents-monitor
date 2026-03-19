@@ -955,11 +955,25 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
             })
         }
         "web_search_call" => {
-            let query = payload
-                .get("action")
-                .and_then(|a| a.get("query"))
-                .and_then(Value::as_str)
-                .map(|q| truncate_utf8_safe(q, 200));
+            let action = payload.get("action");
+            let preview = action
+                .and_then(|a| a.get("queries"))
+                .and_then(Value::as_array)
+                .filter(|arr| !arr.is_empty())
+                .map(|arr| {
+                    let joined: String = arr
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+                    truncate_utf8_safe(&joined, 500)
+                })
+                .or_else(|| {
+                    action
+                        .and_then(|a| a.get("query"))
+                        .and_then(Value::as_str)
+                        .map(|q| truncate_utf8_safe(q, 200))
+                });
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call".to_owned(),
@@ -967,7 +981,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 text: None,
                 function_name: Some("web_search".to_owned()),
                 function_call_id: None,
-                function_arguments_preview: query,
+                function_arguments_preview: preview,
             })
         }
         "token_count" => {
