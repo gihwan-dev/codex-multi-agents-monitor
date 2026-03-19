@@ -212,6 +212,9 @@ export function CausalGraphView({
               >
                 <div className="graph-sequence__lane-title">
                   <strong>{lane.name}</strong>
+                  {lane.role !== "session" && lane.role !== "user" ? (
+                    <span className="graph-sequence__role-badge">{lane.role}</span>
+                  ) : null}
                   <span className="graph-sequence__model-badge">{lane.model}</span>
                   <span className="graph-sequence__lane-status">
                     <StatusChip status={lane.status} subtle />
