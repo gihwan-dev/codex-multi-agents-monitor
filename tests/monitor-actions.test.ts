@@ -157,4 +157,31 @@ describe("createMonitorArchiveActions", () => {
     });
     expect(requestArchiveIndex).not.toHaveBeenCalled();
   });
+
+  it("archive snapshot 로드가 실패해도 loading 상태를 종료한다", async () => {
+    const dispatch = vi.fn();
+    const requestArchiveIndex = vi.fn();
+    const actions = createMonitorArchiveActions({
+      archivedIndexLength: 0,
+      archivedSearch: "",
+      dispatch,
+      requestArchiveIndex,
+      archiveSnapshotRequestIdRef: { current: 1 },
+    });
+    mockedLoadArchivedSessionSnapshot.mockRejectedValueOnce(new Error("archive down"));
+
+    actions.selectArchivedSession("/tmp/archive.json");
+    await vi.waitFor(() => {
+      expect(dispatch).toHaveBeenNthCalledWith(2, {
+        type: "finish-archived-snapshot-request",
+        requestId: 2,
+      });
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "begin-archived-snapshot-request",
+      requestId: 2,
+    });
+    expect(requestArchiveIndex).not.toHaveBeenCalled();
+  });
 });

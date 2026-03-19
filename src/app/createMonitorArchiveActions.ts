@@ -39,20 +39,24 @@ export function createMonitorArchiveActions({
       archiveSnapshotRequestIdRef.current = requestId;
       dispatch({ type: "begin-archived-snapshot-request", requestId });
 
-      loadArchivedSessionSnapshot(filePath).then((dataset) => {
-        if (!dataset) {
-          dispatch({ type: "finish-archived-snapshot-request", requestId });
-          return;
-        }
+      loadArchivedSessionSnapshot(filePath)
+        .then((dataset) => {
+          if (!dataset) {
+            dispatch({ type: "finish-archived-snapshot-request", requestId });
+            return;
+          }
 
-        startTransition(() => {
-          dispatch({
-            type: "resolve-archived-snapshot-request",
-            requestId,
-            dataset,
+          startTransition(() => {
+            dispatch({
+              type: "resolve-archived-snapshot-request",
+              requestId,
+              dataset,
+            });
           });
+        })
+        .catch(() => {
+          dispatch({ type: "finish-archived-snapshot-request", requestId });
         });
-      });
     },
   };
 }
