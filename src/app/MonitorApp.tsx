@@ -168,7 +168,7 @@ export function MonitorApp() {
       />
 
       <div className={`workspace ${isCompactViewport ? "workspace--stacked" : ""}`.trim()}>
-        <aside className="workspace__rail" style={{ width: state.railWidth }}>
+        <aside className="workspace__rail" aria-label="Run list" style={{ width: state.railWidth }}>
           <div className="workspace__rail-pane">
             <WorkspaceRunTree
               datasets={state.datasets}
@@ -197,7 +197,7 @@ export function MonitorApp() {
           />
         </aside>
 
-        <main className="workspace__main">
+        <main className="workspace__main" aria-label="Graph canvas">
           <SummaryStrip facts={summaryFacts} activeFocus={inspectorSummary?.title ?? null} />
           <GraphToolbar
             dataset={activeDataset}
@@ -258,7 +258,7 @@ export function MonitorApp() {
         </main>
 
         {!isCompactViewport ? (
-          <aside className="workspace__inspector" style={{ width: state.inspectorWidth }}>
+          <aside className="workspace__inspector" aria-label="Inspector" style={{ width: state.inspectorWidth }}>
             <ResizeHandle
               label="Resize inspector"
               reverse
@@ -280,7 +280,7 @@ export function MonitorApp() {
       </div>
 
       {state.shortcutHelpOpen ? (
-        <dialog open className="shortcut-dialog">
+        <dialog open aria-modal="true" aria-label="Keyboard shortcuts" className="shortcut-dialog">
           <h2>Shortcut help</h2>
           <ul>
             <li>`/` search focus</li>
@@ -314,7 +314,7 @@ function TopBar({
   onToggleShortcuts: () => void;
 }) {
   return (
-    <header className="top-bar top-bar--compact">
+    <header className="top-bar top-bar--compact" aria-label="Run overview">
       <div className="top-bar__identity">
         <p className="eyebrow">Graph-first run workbench</p>
         <p className="top-bar__breadcrumb">
@@ -486,7 +486,12 @@ function ResizeHandle({
   return (
     <button
       type="button"
+      role="separator"
       aria-label={label}
+      aria-valuenow={Math.round(position)}
+      aria-valuemin={220}
+      aria-valuemax={600}
+      aria-orientation="vertical"
       className="resize-handle"
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {
@@ -542,7 +547,7 @@ function Drawer({
   return (
     <Panel
       title="Bottom drawer"
-      className={`drawer drawer--open ${state.drawerTab === "context" ? "drawer--fullheight" : ""}`.trim()}
+      className="drawer drawer--open"
       actions={
         <button type="button" className="button button--ghost" onClick={onToggleDrawer}>
           Close
@@ -597,6 +602,7 @@ function Drawer({
           </label>
           <textarea
             className="import-textarea"
+            aria-label="JSON payload to import"
             value={state.importText}
             onChange={(event) => onImportTextChange(event.target.value)}
           />

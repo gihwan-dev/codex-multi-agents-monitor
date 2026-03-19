@@ -4,7 +4,7 @@
   height: 100vh;
   min-height: 100vh;
   gap: 0;
-  padding: 18px;
+  padding: 16px;
 }
 
 .top-bar {
@@ -244,6 +244,7 @@ textarea {
 
 .summary-strip .metric-pill__value {
   font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .graph-toolbar__row {
@@ -560,7 +561,7 @@ textarea {
 }
 
 .graph-sequence__role-badge {
-  color: var(--color-text-muted, rgba(255, 255, 255, 0.55));
+  color: var(--color-text-muted);
   font-size: 0.68rem;
   font-weight: 500;
   white-space: nowrap;
@@ -760,6 +761,7 @@ textarea {
   align-items: baseline;
   gap: 6px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .graph-sequence__time-stack span {
@@ -858,7 +860,7 @@ textarea {
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.3;
-  color: var(--color-text-muted, rgba(255, 255, 255, 0.55));
+  color: var(--color-text-muted);
 }
 
 .graph-sequence__callout {
@@ -1093,13 +1095,29 @@ textarea {
   padding: 0 4px;
 }
 
+/* ── :active press feedback ── */
+
+.button:active,
+.jump-button:active,
+.gap-chip:active,
+.run-row:active,
+.run-list__workspace-row:active,
+.archive-section__header:active,
+.tabs__pill:active,
+.graph-sequence__card:active {
+  opacity: 0.75;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .graph-sequence__card,
   .graph-sequence__route,
   .graph-sequence__lane-header,
   .gap-chip,
-  .gap-chip__chevron {
+  .gap-chip__chevron,
+  .run-list__disclosure,
+  .archive-list__skeleton {
     transition: none;
+    animation: none;
   }
 }
 
@@ -1237,6 +1255,7 @@ textarea {
   justify-content: flex-end;
   color: var(--color-text-secondary);
   font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .drawer-trigger {
@@ -1256,14 +1275,10 @@ textarea {
   bottom: 0;
   left: 0;
   right: 0;
-  max-height: 50%;
+  top: 0;
+  max-height: 100%;
   z-index: 10;
   overflow: hidden;
-}
-
-.drawer--open.drawer--fullheight {
-  max-height: 100%;
-  top: 0;
 }
 
 .tabs {
