@@ -32,11 +32,15 @@ export function useWorkspaceTreeState({
   const [activeTreeId, setActiveTreeId] = useState("");
   const treeRef = useRef<HTMLDivElement>(null);
   const deferredSearch = useDeferredValue(search);
-  const model = buildWorkspaceTreeModel(
-    datasets,
-    deferredSearch,
-    "all",
-    workspaceIdentityOverrides,
+  const model = useMemo(
+    () =>
+      buildWorkspaceTreeModel(
+        datasets,
+        deferredSearch,
+        "all",
+        workspaceIdentityOverrides,
+      ),
+    [datasets, deferredSearch, workspaceIdentityOverrides],
   );
   const flatItems = useMemo(
     () => flattenTree(model.workspaces, expandedWorkspaceIds),
@@ -44,19 +48,16 @@ export function useWorkspaceTreeState({
   );
 
   useEffect(() => {
-    const nextExpanded = resolveExpandedWorkspaceIds(
-      model.workspaces,
-      expandedWorkspaceIds,
-    );
-    if (!areWorkspaceIdsEqual(expandedWorkspaceIds, nextExpanded)) {
-      setExpandedWorkspaceIds(nextExpanded);
-    }
+    setExpandedWorkspaceIds((current) => {
+      const nextExpanded = resolveExpandedWorkspaceIds(model.workspaces, current);
+      return areWorkspaceIdsEqual(current, nextExpanded) ? current : nextExpanded;
+    });
 
-    const nextTreeId = resolveActiveTreeId(model.workspaces, activeRunId);
-    if (activeTreeId !== nextTreeId) {
-      setActiveTreeId(nextTreeId);
-    }
-  }, [activeRunId, activeTreeId, expandedWorkspaceIds, model.workspaces]);
+    setActiveTreeId((current) => {
+      const nextTreeId = resolveActiveTreeId(model.workspaces, activeRunId);
+      return current === nextTreeId ? current : nextTreeId;
+    });
+  }, [activeRunId, model.workspaces]);
 
   const focusTreeItem = (itemId: string) => {
     const target = treeRef.current?.querySelector<HTMLElement>(`[data-tree-id="${itemId}"]`);
