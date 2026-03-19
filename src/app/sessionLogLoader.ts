@@ -954,6 +954,16 @@ function buildLaneEventsFromEntries({
         }));
         break;
 
+      case "item_completed":
+        events.push(buildEntryEvent({
+          entry, lane, startTs, safeEndTs, isLatest, status, model, index,
+          eventType: "note",
+          title: "Plan",
+          inputPreview: null,
+          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
+        }));
+        break;
+
       case "task_started":
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,

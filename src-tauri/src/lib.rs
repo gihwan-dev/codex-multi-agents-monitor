@@ -946,7 +946,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .map(|t| truncate_utf8_safe(t, 1000));
             Some(SessionEntrySnapshot {
                 timestamp,
-                entry_type: "agent_message".to_owned(),
+                entry_type: "item_completed".to_owned(),
                 role: None,
                 text: item_text,
                 function_name: None,
