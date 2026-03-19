@@ -1290,7 +1290,7 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
 }
 
 function extractToolOutputPreview(toolName: string, rawOutput: string): string {
-  if (toolName === "exec_command") {
+  if (toolName === "exec_command" || toolName === "write_stdin") {
     const outputMarker = rawOutput.indexOf("Output:\n");
     if (outputMarker !== -1) {
       const content = rawOutput.slice(outputMarker + "Output:\n".length).trim();
