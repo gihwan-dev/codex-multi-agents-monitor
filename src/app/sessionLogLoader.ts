@@ -5,6 +5,8 @@ import {
   type EdgeRecord,
   type EventRecord,
   type EventType,
+  type PromptAssembly,
+  type PromptLayerType,
   type RunDataset,
   type RunStatus,
 } from "../shared/domain";
@@ -33,6 +35,14 @@ export interface SubagentSnapshot {
   error?: string | null;
 }
 
+export interface PromptAssemblyLayerSnapshot {
+  layerType: string;
+  label: string;
+  contentLength: number;
+  preview: string;
+  rawContent: string;
+}
+
 export interface SessionLogSnapshot {
   sessionId: string;
   workspacePath: string;
@@ -44,6 +54,7 @@ export interface SessionLogSnapshot {
   entries: SessionEntrySnapshot[];
   subagents?: SubagentSnapshot[];
   isArchived?: boolean;
+  promptAssembly?: PromptAssemblyLayerSnapshot[];
 }
 
 export const NEW_THREAD_TITLE = "새 스레드";
@@ -705,6 +716,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     events: allEvents,
     edges: allEdges,
     artifacts: [],
+    promptAssembly: buildPromptAssembly(snapshot),
   };
 
   return {
@@ -713,6 +725,22 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       ...dataset.run,
       summaryMetrics: calculateSummaryMetrics(dataset),
     },
+  };
+}
+
+function buildPromptAssembly(snapshot: SessionLogSnapshot): PromptAssembly | undefined {
+  const layers = snapshot.promptAssembly;
+  if (!layers || layers.length === 0) return undefined;
+  return {
+    layers: layers.map((layer, i) => ({
+      layerId: `${snapshot.sessionId}:layer:${i}`,
+      layerType: layer.layerType as PromptLayerType,
+      label: layer.label,
+      preview: layer.preview,
+      contentLength: layer.contentLength,
+      rawContent: layer.rawContent,
+    })),
+    totalContentLength: layers.reduce((sum, l) => sum + l.contentLength, 0),
   };
 }
 

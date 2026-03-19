@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CausalInspectorPane } from "../features/inspector/CausalInspectorPane";
+import { PromptAssemblyView } from "../features/inspector/PromptAssemblyView";
 import { GapDetailSection } from "../features/run-detail/GapDetailSection";
 import { CausalGraphView } from "../features/run-detail/graph/CausalGraphView";
 import { WorkspaceRunTree } from "../features/run-list/WorkspaceRunTree";
@@ -533,7 +534,7 @@ function Drawer({
   return (
     <Panel
       title="Bottom drawer"
-      className="drawer drawer--open"
+      className={`drawer drawer--open ${state.drawerTab === "context" ? "drawer--fullheight" : ""}`.trim()}
       actions={
         <button type="button" className="button button--ghost" onClick={onToggleDrawer}>
           Close
@@ -541,7 +542,7 @@ function Drawer({
       }
     >
       <div className="tabs">
-        {(["artifacts", "import", "raw", "log"] as const)
+        {(["artifacts", "import", "context", "raw", "log"] as const)
           .filter((tab) => rawTabAvailable || tab !== "raw")
           .map((tab) => (
             <button
@@ -594,6 +595,15 @@ function Drawer({
           <button type="button" className="button" onClick={onImport}>
             Parse and import
           </button>
+        </div>
+      ) : null}
+      {state.drawerTab === "context" ? (
+        <div className="drawer__body">
+          {activeDataset.promptAssembly ? (
+            <PromptAssemblyView assembly={activeDataset.promptAssembly} />
+          ) : (
+            <p className="drawer__empty">No prompt assembly data available.</p>
+          )}
         </div>
       ) : null}
       {state.drawerTab === "raw" ? (

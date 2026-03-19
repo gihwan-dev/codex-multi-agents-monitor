@@ -176,6 +176,9 @@ function PayloadSection({
         <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("artifacts")}>
           Artifacts
         </button>
+        <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("context")}>
+          Context
+        </button>
         <button type="button" className="button button--ghost" onClick={() => onOpenDrawer("log")}>
           Log
         </button>

@@ -1242,6 +1242,11 @@ textarea {
   overflow: hidden;
 }
 
+.drawer--open.drawer--fullheight {
+  max-height: 100%;
+  top: 0;
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;

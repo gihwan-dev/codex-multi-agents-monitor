@@ -33,7 +33,7 @@ export const EVENT_TYPES = [
 ] as const;
 
 export const INSPECTOR_TABS = ["summary", "input", "output", "trace", "raw"] as const;
-export const DRAWER_TABS = ["artifacts", "import", "raw", "log"] as const;
+export const DRAWER_TABS = ["artifacts", "import", "context", "raw", "log"] as const;
 export const EDGE_TYPES = ["spawn", "handoff", "transfer", "merge"] as const;
 export const RUN_ENVIRONMENTS = ["Desktop", "Import", "Live"] as const;
 export const LIVE_MODES = ["imported", "live"] as const;
@@ -166,6 +166,38 @@ export interface GapSegment {
   idleLaneCount: number;
 }
 
+export const PROMPT_LAYER_TYPES = [
+  "system",
+  "permissions",
+  "app-context",
+  "collaboration-mode",
+  "apps",
+  "skills-catalog",
+  "agents",
+  "environment",
+  "automation",
+  "delegated",
+  "user",
+  "skill",
+  "subagent-notification",
+] as const;
+
+export type PromptLayerType = (typeof PROMPT_LAYER_TYPES)[number];
+
+export interface PromptLayer {
+  layerId: string;
+  layerType: PromptLayerType;
+  label: string;
+  preview: string;
+  contentLength: number;
+  rawContent: string;
+}
+
+export interface PromptAssembly {
+  layers: PromptLayer[];
+  totalContentLength: number;
+}
+
 export interface RunDataset {
   project: Project;
   session: Session;
@@ -174,6 +206,7 @@ export interface RunDataset {
   events: EventRecord[];
   edges: EdgeRecord[];
   artifacts: ArtifactRecord[];
+  promptAssembly?: PromptAssembly;
 }
 
 export interface RunFilters {

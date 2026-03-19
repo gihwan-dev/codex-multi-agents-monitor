@@ -60,6 +60,17 @@ struct SessionLogSnapshot {
     entries: Vec<SessionEntrySnapshot>,
     subagents: Vec<SubagentSnapshot>,
     is_archived: bool,
+    prompt_assembly: Vec<PromptAssemblyLayer>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PromptAssemblyLayer {
+    layer_type: String,
+    label: String,
+    content_length: usize,
+    preview: String,
+    raw_content: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -397,6 +408,22 @@ fn read_session_snapshot(
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned);
 
+    let mut prompt_assembly = Vec::new();
+
+    // Extract base_instructions from session_meta
+    if let Some(bi_text) = payload.get("base_instructions")
+        .and_then(|bi| bi.get("text"))
+        .and_then(Value::as_str)
+    {
+        prompt_assembly.push(PromptAssemblyLayer {
+            layer_type: "system".to_owned(),
+            label: "Base Instructions".to_owned(),
+            content_length: bi_text.len(),
+            preview: truncate_utf8_safe(bi_text, 120),
+            raw_content: bi_text.to_owned(),
+        });
+    }
+
     let workspace_identity =
         resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
     let Some(workspace_identity) = workspace_identity else {
@@ -406,6 +433,7 @@ fn read_session_snapshot(
     let mut entries = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
+    let mut prompt_assembly_done = false;
 
     for line in reader.lines() {
         let line = line?;
@@ -429,6 +457,21 @@ fn read_session_snapshot(
             }
         }
 
+        // Stop extracting prompt assembly after first task_complete (end of first turn)
+        if !prompt_assembly_done {
+            if let Some(payload) = entry.get("payload").and_then(Value::as_object) {
+                if payload.get("type").and_then(Value::as_str) == Some("task_complete") {
+                    prompt_assembly_done = true;
+                }
+            }
+        }
+
+        if !prompt_assembly_done {
+            if entry.get("type").and_then(Value::as_str) == Some("response_item") {
+                extract_prompt_layers(&entry, &mut prompt_assembly);
+            }
+        }
+
         if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
             updated_at = snapshot_entry.timestamp.clone();
             entries.push(snapshot_entry);
@@ -447,6 +490,7 @@ fn read_session_snapshot(
         entries,
         subagents: Vec::new(),
         is_archived: false,
+        prompt_assembly,
     }))
 }
 
@@ -491,6 +535,93 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     }
 }
 
+
+fn classify_developer_content(text: &str) -> (String, String) {
+    if text.starts_with("<permissions") {
+        ("permissions".into(), "Permissions & Sandbox".into())
+    } else if text.starts_with("<app-context>") {
+        ("app-context".into(), "App Context".into())
+    } else if text.starts_with("<collaboration_mode>") {
+        ("collaboration-mode".into(), "Collaboration Mode".into())
+    } else if text.starts_with("<apps_instructions>") {
+        ("apps".into(), "Apps / Connectors".into())
+    } else if text.starts_with("<skills_instructions>") {
+        ("skills-catalog".into(), "Skills Catalog".into())
+    } else {
+        ("system".into(), "Developer Instructions".into())
+    }
+}
+
+fn classify_user_context(text: &str) -> (String, String) {
+    let trimmed = text.trim();
+    if trimmed.starts_with("# AGENTS.md instructions") {
+        ("agents".into(), "AGENTS.md".into())
+    } else if trimmed.starts_with("<environment_context>") {
+        ("environment".into(), "Environment Context".into())
+    } else if trimmed.starts_with("Automation:") {
+        ("automation".into(), "Automation Envelope".into())
+    } else if trimmed.get(..26).map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN")).unwrap_or(false) {
+        ("delegated".into(), "Delegated Plan".into())
+    } else if trimmed.starts_with("<skill>") {
+        let name = extract_skill_name(trimmed);
+        ("skill".into(), format!("Skill: {}", name))
+    } else if trimmed.starts_with("<subagent_notification>") {
+        ("subagent-notification".into(), "Subagent Notification".into())
+    } else if trimmed.starts_with("<turn_aborted>") {
+        ("system".into(), "Turn Aborted".into())
+    } else {
+        ("user".into(), "User Prompt".into())
+    }
+}
+
+fn extract_skill_name(text: &str) -> String {
+    if let Some(start) = text.find("<name>") {
+        let after = &text[start + 6..];
+        if let Some(end) = after.find("</name>") {
+            return after[..end].to_owned();
+        }
+    }
+    "unknown".to_owned()
+}
+
+fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemblyLayer>) {
+    let payload = match entry.get("payload").and_then(Value::as_object) {
+        Some(p) => p,
+        None => return,
+    };
+    let role = payload.get("role").and_then(Value::as_str).unwrap_or("");
+    let content = match payload.get("content").and_then(Value::as_array) {
+        Some(c) => c,
+        None => return,
+    };
+
+    for item in content {
+        let text = match item.get("text").and_then(Value::as_str) {
+            Some(t) if !t.trim().is_empty() => t,
+            _ => continue,
+        };
+        let trimmed = text.trim();
+
+        let (layer_type, label) = match role {
+            "developer" => classify_developer_content(trimmed),
+            "user" => classify_user_context(trimmed),
+            _ => continue,
+        };
+
+        // Skip per-turn data: user prompts, skills, subagent notifications
+        if matches!(layer_type.as_str(), "user" | "skill" | "subagent-notification") {
+            continue;
+        }
+
+        layers.push(PromptAssemblyLayer {
+            layer_type,
+            label,
+            content_length: text.len(),
+            preview: truncate_utf8_safe(text, 120),
+            raw_content: text.to_owned(),
+        });
+    }
+}
 
 fn is_system_boilerplate_text(text: &str) -> bool {
     let trimmed = text.trim();
@@ -1204,11 +1335,28 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         .filter(|v| !v.trim().is_empty())
         .map(ToOwned::to_owned);
 
+    let mut prompt_assembly = Vec::new();
+
+    // Extract base_instructions from session_meta
+    if let Some(bi_text) = payload.get("base_instructions")
+        .and_then(|bi| bi.get("text"))
+        .and_then(Value::as_str)
+    {
+        prompt_assembly.push(PromptAssemblyLayer {
+            layer_type: "system".to_owned(),
+            label: "Base Instructions".to_owned(),
+            content_length: bi_text.len(),
+            preview: truncate_utf8_safe(bi_text, 120),
+            raw_content: bi_text.to_owned(),
+        });
+    }
+
     let (origin_path, display_name) = resolve_archived_workspace_identity(workspace_path);
 
     let mut entries = Vec::new();
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
+    let mut prompt_assembly_done = false;
 
     for line in reader.lines() {
         let line = line?;
@@ -1232,6 +1380,21 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
             }
         }
 
+        // Stop extracting prompt assembly after first task_complete (end of first turn)
+        if !prompt_assembly_done {
+            if let Some(payload) = entry.get("payload").and_then(Value::as_object) {
+                if payload.get("type").and_then(Value::as_str) == Some("task_complete") {
+                    prompt_assembly_done = true;
+                }
+            }
+        }
+
+        if !prompt_assembly_done {
+            if entry.get("type").and_then(Value::as_str) == Some("response_item") {
+                extract_prompt_layers(&entry, &mut prompt_assembly);
+            }
+        }
+
         if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
             updated_at = snapshot_entry.timestamp.clone();
             entries.push(snapshot_entry);
@@ -1250,6 +1413,7 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         entries,
         subagents: Vec::new(),
         is_archived: true,
+        prompt_assembly,
     }))
 }
 

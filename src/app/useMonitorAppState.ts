@@ -499,6 +499,9 @@ export function useMonitorAppState() {
           value: !activeFilters.errorOnly,
         });
         break;
+      case "c":
+        dispatch({ type: "set-drawer-tab", tab: "context", open: true });
+        break;
       case "?":
         dispatch({ type: "toggle-shortcuts" });
         break;
