@@ -2,7 +2,6 @@ import { LIVE_FIXTURE_FRAMES } from "../../features/fixtures";
 import { applyLiveFrame } from "../../features/ingestion";
 import {
   buildCollapsedGapIds,
-  buildConnectionMap,
   buildDatasetActivationPatch,
   buildFilterMap,
   buildFollowLiveMap,
@@ -10,10 +9,10 @@ import {
   defaultSelectionForDataset,
   LIVE_FIXTURE_TRACE_ID,
   resolveDatasetDrawerTab,
-  resolveVisibleLiveConnection,
   toggleGapIds,
   upsertDataset,
 } from "./helpers";
+import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import type { MonitorAction, MonitorState } from "./types";
 
 function replaceDatasets(state: MonitorState, datasets: MonitorState["datasets"]) {
@@ -43,9 +42,8 @@ function applyFixtureFrame(state: MonitorState) {
     return state;
   }
 
-  const dataset = state.datasets.find(
-    (item) => item.run.traceId === LIVE_FIXTURE_TRACE_ID,
-  );
+  const traceId = LIVE_FIXTURE_TRACE_ID;
+  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
   if (!dataset) {
     return state;
   }
@@ -55,24 +53,23 @@ function applyFixtureFrame(state: MonitorState) {
     LIVE_FIXTURE_FRAMES[state.appliedLiveFrames],
   );
   const latestEvent = snapshot.dataset.events[snapshot.dataset.events.length - 1];
+  const followLive = state.followLiveByRunId[traceId] ?? false;
 
   return {
     ...state,
     datasets: state.datasets.map((item) =>
-      item.run.traceId === LIVE_FIXTURE_TRACE_ID ? snapshot.dataset : item,
+      item.run.traceId === traceId ? snapshot.dataset : item,
     ),
-    liveConnectionByRunId: {
-      ...state.liveConnectionByRunId,
-      [LIVE_FIXTURE_TRACE_ID]: resolveVisibleLiveConnection(
-        snapshot.dataset,
-        state.followLiveByRunId[LIVE_FIXTURE_TRACE_ID] ?? false,
-        state.liveConnectionByRunId[LIVE_FIXTURE_TRACE_ID],
-        snapshot.connection,
-      ),
-    },
+    liveConnectionByRunId: updateLiveConnectionMap(
+      state.liveConnectionByRunId,
+      traceId,
+      snapshot.dataset,
+      followLive,
+      snapshot.connection,
+    ),
     selection:
-      state.followLiveByRunId[LIVE_FIXTURE_TRACE_ID] &&
-      state.activeRunId === LIVE_FIXTURE_TRACE_ID &&
+      followLive &&
+      state.activeRunId === traceId &&
       latestEvent
         ? { kind: "event" as const, id: latestEvent.eventId }
         : state.selection,
@@ -127,14 +124,12 @@ export function monitorStateReducer(
           ...state.followLiveByRunId,
           [action.traceId]: nextFollow,
         },
-        liveConnectionByRunId: {
-          ...state.liveConnectionByRunId,
-          [action.traceId]: resolveVisibleLiveConnection(
-            dataset,
-            nextFollow,
-            state.liveConnectionByRunId[action.traceId],
-          ),
-        },
+        liveConnectionByRunId: updateLiveConnectionMap(
+          state.liveConnectionByRunId,
+          action.traceId,
+          dataset,
+          nextFollow,
+        ),
       };
     }
     case "set-follow-live": {
@@ -145,18 +140,17 @@ export function monitorStateReducer(
           ...state.followLiveByRunId,
           [action.traceId]: action.value,
         },
-        liveConnectionByRunId: {
-          ...state.liveConnectionByRunId,
-          [action.traceId]: dataset
-            ? resolveVisibleLiveConnection(
-                dataset,
-                action.value,
-                state.liveConnectionByRunId[action.traceId],
-              )
-            : action.value
-              ? "live"
-              : "paused",
-        },
+        liveConnectionByRunId: dataset
+          ? updateLiveConnectionMap(
+              state.liveConnectionByRunId,
+              action.traceId,
+              dataset,
+              action.value,
+            )
+          : {
+              ...state.liveConnectionByRunId,
+              [action.traceId]: action.value ? "live" : "paused",
+            },
       };
     }
     case "set-filter":
