@@ -3,11 +3,12 @@ import {
   type MutableRefObject,
   startTransition,
 } from "react";
-import type { MonitorAction, MonitorState } from "./monitorState";
+import type { MonitorAction } from "./monitorState";
 import { loadArchivedSessionSnapshot } from "./sessionLogLoader";
 
 interface CreateMonitorArchiveActionsOptions {
-  state: MonitorState;
+  archivedIndexLength: number;
+  archivedSearch: string;
   dispatch: Dispatch<MonitorAction>;
   requestArchiveIndex: (
     offset: number,
@@ -18,15 +19,16 @@ interface CreateMonitorArchiveActionsOptions {
 }
 
 export function createMonitorArchiveActions({
-  state,
+  archivedIndexLength,
+  archivedSearch,
   dispatch,
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
 }: CreateMonitorArchiveActionsOptions) {
   return {
     loadArchiveIndex(append: boolean) {
-      const offset = append ? state.archivedIndex.length : 0;
-      requestArchiveIndex(offset, append, state.archivedSearch || undefined);
+      const offset = append ? archivedIndexLength : 0;
+      requestArchiveIndex(offset, append, archivedSearch || undefined);
     },
     searchArchive(query: string) {
       dispatch({ type: "set-archived-search", value: query });
