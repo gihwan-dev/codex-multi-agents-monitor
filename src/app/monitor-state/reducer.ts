@@ -9,7 +9,7 @@ import {
   createDefaultFilters,
   defaultSelectionForDataset,
   LIVE_FIXTURE_TRACE_ID,
-  resolveDatasetTabs,
+  resolveDatasetDrawerTab,
   toggleGapIds,
   upsertDataset,
 } from "./helpers";
@@ -32,7 +32,7 @@ function replaceDatasets(state: MonitorState, datasets: MonitorState["datasets"]
     liveConnectionByRunId: buildConnectionMap(datasets),
     filtersByRunId: buildFilterMap(datasets),
     collapsedGapIds: buildCollapsedGapIds(datasets),
-    ...resolveDatasetTabs(state, activeDataset),
+    ...resolveDatasetDrawerTab(state, activeDataset),
     appliedLiveFrames: 0,
   };
 }
@@ -95,7 +95,7 @@ export function monitorStateReducer(
         ...state,
         activeRunId: action.traceId,
         selection: defaultSelectionForDataset(dataset),
-        ...resolveDatasetTabs(state, dataset),
+        ...resolveDatasetDrawerTab(state, dataset),
       };
     }
     case "set-selection":
@@ -110,8 +110,6 @@ export function monitorStateReducer(
       return { ...state, drawerOpen: !state.drawerOpen };
     case "toggle-inspector":
       return { ...state, inspectorOpen: !state.inspectorOpen };
-    case "toggle-pin":
-      return { ...state, inspectorPinned: !state.inspectorPinned };
     case "toggle-follow-live": {
       const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
       if (!dataset || dataset.run.liveMode !== "live") {

@@ -57,8 +57,6 @@ function renderInspector(
       onSelectJump: noop,
       onOpenDrawer: (_tab: DrawerTab) => noop(),
       onToggleOpen: noop,
-      onTogglePinned: noop,
-      pinned: false,
       open: true,
       compact: false,
       ...props,
@@ -81,6 +79,7 @@ describe("CausalInspectorPane", () => {
     expect(markup).toContain("Context");
     expect(markup).toContain("Log");
     expect(markup).toContain("Raw");
+    expect(markup).toContain("Close");
   });
 
   it("compact로 닫힌 inspector는 요약과 상위 세 개 fact만 미리보기로 보여준다", () => {

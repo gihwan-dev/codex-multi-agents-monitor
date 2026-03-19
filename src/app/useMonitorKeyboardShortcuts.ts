@@ -5,6 +5,7 @@ import type {
   RunFilters,
   SelectionState,
 } from "../shared/domain";
+import { isEditableKeyboardTarget } from "./keyboardTarget";
 import type { MonitorAction } from "./monitorState";
 
 function collectVisibleEventIds(rows: GraphSceneRow[]) {
@@ -45,6 +46,10 @@ export function useMonitorKeyboardShortcuts({
   graphRows,
 }: UseMonitorKeyboardShortcutsOptions) {
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
+    if (isEditableKeyboardTarget(event.target)) {
+      return;
+    }
+
     const visibleEventIds = collectVisibleEventIds(graphRows);
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {

@@ -32,7 +32,6 @@ export const EVENT_TYPES = [
   "turn.finished",
 ] as const;
 
-export const INSPECTOR_TABS = ["summary", "input", "output", "trace", "raw"] as const;
 export const DRAWER_TABS = ["artifacts", "import", "context", "raw", "log"] as const;
 export const EDGE_TYPES = ["spawn", "handoff", "transfer", "merge"] as const;
 export const RUN_ENVIRONMENTS = ["Desktop", "Import", "Live"] as const;
@@ -40,7 +39,6 @@ export const LIVE_MODES = ["imported", "live"] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
 export type EventType = (typeof EVENT_TYPES)[number];
-export type InspectorTab = (typeof INSPECTOR_TABS)[number];
 export type DrawerTab = (typeof DRAWER_TABS)[number];
 export type EdgeType = (typeof EDGE_TYPES)[number];
 export type RunEnvironment = (typeof RUN_ENVIRONMENTS)[number];

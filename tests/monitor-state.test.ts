@@ -226,7 +226,7 @@ describe("archive 요청 상태", () => {
     expect(currentFinished.archivedSnapshotLoading).toBe(false);
   });
 
-  it("dataset 교체는 run별 UI 상태를 재초기화하고 raw 탭 fallback을 적용한다", () => {
+  it("dataset 교체는 run별 UI 상태를 재초기화하고 raw drawer fallback을 적용한다", () => {
     const replacementDataset = {
       ...requireDataset("trace-fix-005"),
       run: {
@@ -237,7 +237,6 @@ describe("archive 요청 상태", () => {
     const stateWithRawTab = {
       ...createMonitorInitialState(),
       activeRunId: "trace-fix-999",
-      inspectorTab: "raw" as const,
       drawerTab: "raw" as const,
       appliedLiveFrames: 3,
       filtersByRunId: {
@@ -259,7 +258,6 @@ describe("archive 요청 상태", () => {
     });
 
     expect(nextState.activeRunId).toBe(replacementDataset.run.traceId);
-    expect(nextState.inspectorTab).toBe("summary");
     expect(nextState.drawerTab).toBe("artifacts");
     expect(nextState.appliedLiveFrames).toBe(0);
     expect(nextState.filtersByRunId).toEqual({

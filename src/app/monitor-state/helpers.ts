@@ -68,15 +68,13 @@ export function defaultSelectionForDataset(
     : null;
 }
 
-export function resolveDatasetTabs(
+export function resolveDatasetDrawerTab(
   state: MonitorState,
   dataset: RunDataset,
 ) {
-  const rawTabAvailable = dataset.run.rawIncluded;
   return {
-    inspectorTab: rawTabAvailable ? state.inspectorTab : "summary",
     drawerTab:
-      rawTabAvailable || state.drawerTab !== "raw"
+      dataset.run.rawIncluded || state.drawerTab !== "raw"
         ? state.drawerTab
         : "artifacts",
   };
@@ -101,7 +99,7 @@ export function buildDatasetActivationPatch(
       ...state.filtersByRunId,
       [dataset.run.traceId]: createDefaultFilters(),
     },
-    ...resolveDatasetTabs(state, dataset),
+    ...resolveDatasetDrawerTab(state, dataset),
   };
 }
 
@@ -146,11 +144,9 @@ export function createMonitorInitialState(): MonitorState {
     datasets: FIXTURE_DATASETS,
     activeRunId: activeDataset.run.traceId,
     selection: defaultSelectionForDataset(activeDataset),
-    inspectorTab: "summary",
     drawerTab: "artifacts",
     drawerOpen: false,
     inspectorOpen: !compactViewport,
-    inspectorPinned: false,
     followLiveByRunId: buildFollowLiveMap(FIXTURE_DATASETS),
     liveConnectionByRunId: buildConnectionMap(FIXTURE_DATASETS),
     filtersByRunId: buildFilterMap(FIXTURE_DATASETS),

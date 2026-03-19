@@ -21,6 +21,12 @@ function isNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function assertTimestampRange(start: number, end: number, label: string) {
+  if (end < start) {
+    throw new Error(`Invalid payload: ${label} end timestamp must be greater than or equal to start timestamp.`);
+  }
+}
+
 function assertStringField(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (!isString(value) || !value.length) {
@@ -72,9 +78,10 @@ function validateRunPayload(record: Record<string, unknown>) {
   assertStringField(record, "traceId");
   assertStringField(record, "title");
   assertEnumField(record, "status", RUN_STATUSES);
-  assertNumberField(record, "startTs");
+  const startTs = assertNumberField(record, "startTs");
   if (record.endTs !== null && record.endTs !== undefined) {
-    assertNumberField(record, "endTs");
+    const endTs = assertNumberField(record, "endTs");
+    assertTimestampRange(startTs, endTs, "run");
   }
   if (record.durationMs !== undefined) {
     assertNumberField(record, "durationMs");
@@ -124,10 +131,11 @@ function validateEventShape(value: unknown): asserts value is RawImportEvent {
   assertStringField(value, "thread_id");
   assertEnumField(value, "event_type", EVENT_TYPES);
   const status = assertEnumField(value, "status", RUN_STATUSES);
-  assertNumberField(value, "start_ts");
+  const startTs = assertNumberField(value, "start_ts");
   assertStringField(value, "title");
   if (value.end_ts !== undefined && value.end_ts !== null) {
-    assertNumberField(value, "end_ts");
+    const endTs = assertNumberField(value, "end_ts");
+    assertTimestampRange(startTs, endTs, `event ${value.event_id}`);
   }
   if (value.retry_count !== undefined) {
     assertNumberField(value, "retry_count");
@@ -164,6 +172,93 @@ function validateArtifactShape(value: unknown) {
   assertOptionalString(value, "rawContent");
 }
 
+function collectUniqueIds<T>(
+  items: T[],
+  label: string,
+  getId: (item: T) => string,
+) {
+  const ids = new Set<string>();
+  for (const item of items) {
+    const id = getId(item);
+    if (ids.has(id)) {
+      throw new Error(`Invalid payload: duplicate ${label} id ${id}.`);
+    }
+    ids.add(id);
+  }
+  return ids;
+}
+
+function validatePayloadReferences(payload: {
+  run: RawImportPayload["run"];
+  lanes: RawImportPayload["lanes"];
+  events: RawImportPayload["events"];
+  edges: RawImportPayload["edges"];
+  artifacts: RawImportPayload["artifacts"];
+}) {
+  const laneIds = collectUniqueIds(payload.lanes, "lane", (lane) => lane.laneId);
+  const eventIds = collectUniqueIds(payload.events, "event", (event) => event.event_id);
+  const artifactIds = collectUniqueIds(
+    payload.artifacts,
+    "artifact",
+    (artifact) => artifact.artifactId,
+  );
+  collectUniqueIds(payload.edges, "edge", (edge) => edge.edgeId);
+
+  payload.events.forEach((event) => {
+    if (!laneIds.has(event.lane_id)) {
+      throw new Error(
+        `Invalid payload: event ${event.event_id} references unknown lane ${event.lane_id}.`,
+      );
+    }
+
+    if (event.artifact_id && !artifactIds.has(event.artifact_id)) {
+      throw new Error(
+        `Invalid payload: event ${event.event_id} references unknown artifact ${event.artifact_id}.`,
+      );
+    }
+  });
+
+  payload.edges.forEach((edge) => {
+    if (!eventIds.has(edge.sourceEventId)) {
+      throw new Error(
+        `Invalid payload: edge ${edge.edgeId} references unknown source event ${edge.sourceEventId}.`,
+      );
+    }
+
+    if (!eventIds.has(edge.targetEventId)) {
+      throw new Error(
+        `Invalid payload: edge ${edge.edgeId} references unknown target event ${edge.targetEventId}.`,
+      );
+    }
+
+    if (edge.artifactId && !artifactIds.has(edge.artifactId)) {
+      throw new Error(
+        `Invalid payload: edge ${edge.edgeId} references unknown artifact ${edge.artifactId}.`,
+      );
+    }
+  });
+
+  payload.artifacts.forEach((artifact) => {
+    if (!eventIds.has(artifact.producerEventId)) {
+      throw new Error(
+        `Invalid payload: artifact ${artifact.artifactId} references unknown producer event ${artifact.producerEventId}.`,
+      );
+    }
+  });
+
+  if (payload.run.selectedByDefaultId && !eventIds.has(payload.run.selectedByDefaultId)) {
+    throw new Error(
+      `Invalid payload: selectedByDefaultId references unknown event ${payload.run.selectedByDefaultId}.`,
+    );
+  }
+
+  if (payload.run.finalArtifactId && !artifactIds.has(payload.run.finalArtifactId)) {
+    throw new Error(
+      `Invalid payload: finalArtifactId references unknown artifact ${payload.run.finalArtifactId}.`,
+    );
+  }
+}
+
 export function parseCompletedRunPayload(input: string): RawImportPayload {
   const parsed = JSON.parse(input) as unknown;
   if (!isRecord(parsed)) {
@@ -192,13 +287,19 @@ export function parseCompletedRunPayload(input: string): RawImportPayload {
   edges.forEach(validateEdgeShape);
   artifacts.forEach(validateArtifactShape);
 
-  return {
-    project: parsed.project as unknown as RawImportPayload["project"],
-    session: parsed.session as unknown as RawImportPayload["session"],
+  const payload = {
     run: parsed.run as unknown as RawImportPayload["run"],
     lanes: lanes as unknown as RawImportPayload["lanes"],
     events: events as unknown as RawImportPayload["events"],
     edges: edges as unknown as RawImportPayload["edges"],
     artifacts: artifacts as unknown as RawImportPayload["artifacts"],
+  };
+
+  validatePayloadReferences(payload);
+
+  return {
+    project: parsed.project as unknown as RawImportPayload["project"],
+    session: parsed.session as unknown as RawImportPayload["session"],
+    ...payload,
   };
 }

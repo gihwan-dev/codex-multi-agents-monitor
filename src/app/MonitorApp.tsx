@@ -16,6 +16,7 @@ import {
   ResizeHandle,
 } from "./components/MonitorChrome";
 import { MonitorDrawer } from "./components/MonitorDrawer";
+import { isEditableKeyboardTarget } from "./keyboardTarget";
 import { useMonitorAppState } from "./useMonitorAppState";
 import { resolveWorkspaceIdentityOverrides } from "./workspaceIdentityResolver";
 
@@ -77,11 +78,7 @@ export function MonitorApp() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (
-        event.key === "/" &&
-        !(event.target instanceof HTMLInputElement) &&
-        !(event.target instanceof HTMLTextAreaElement)
-      ) {
+      if (event.key === "/" && !isEditableKeyboardTarget(event.target)) {
         event.preventDefault();
         searchRef.current?.focus();
       }
@@ -204,8 +201,6 @@ export function MonitorApp() {
               onSelectJump={actions.selectItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
-              onTogglePinned={actions.togglePinned}
-              pinned={state.inspectorPinned}
               open={state.inspectorOpen}
             />
           ) : null}
@@ -237,8 +232,6 @@ export function MonitorApp() {
               onSelectJump={actions.selectItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
-              onTogglePinned={actions.togglePinned}
-              pinned={state.inspectorPinned}
               open={state.inspectorOpen}
             />
           </aside>

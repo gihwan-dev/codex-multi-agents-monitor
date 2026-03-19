@@ -78,9 +78,6 @@ export function createMonitorActions({
     toggleInspector() {
       dispatch({ type: "toggle-inspector" });
     },
-    togglePinned() {
-      dispatch({ type: "toggle-pin" });
-    },
     toggleFollowLive() {
       dispatch({
         type: "toggle-follow-live",

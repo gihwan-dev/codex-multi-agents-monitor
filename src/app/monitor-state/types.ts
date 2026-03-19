@@ -2,7 +2,6 @@ import type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
   DrawerTab,
-  InspectorTab,
   RunDataset,
   RunFilters,
   SelectionState,
@@ -19,11 +18,9 @@ export interface MonitorState {
   datasets: RunDataset[];
   activeRunId: string;
   selection: SelectionState | null;
-  inspectorTab: InspectorTab;
   drawerTab: DrawerTab;
   drawerOpen: boolean;
   inspectorOpen: boolean;
-  inspectorPinned: boolean;
   followLiveByRunId: Record<string, boolean>;
   liveConnectionByRunId: Record<string, LiveConnection>;
   filtersByRunId: Record<string, RunFilters>;
@@ -53,7 +50,6 @@ export type MonitorAction =
   | { type: "set-drawer-tab"; tab: DrawerTab; open?: boolean }
   | { type: "toggle-drawer" }
   | { type: "toggle-inspector" }
-  | { type: "toggle-pin" }
   | { type: "toggle-follow-live"; traceId: string }
   | { type: "set-follow-live"; traceId: string; value: boolean }
   | {

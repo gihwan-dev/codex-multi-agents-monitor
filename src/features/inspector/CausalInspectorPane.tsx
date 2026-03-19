@@ -20,8 +20,6 @@ interface CausalInspectorPaneProps {
   onSelectJump: (selection: SelectionState) => void;
   onOpenDrawer: (tab: DrawerTab) => void;
   onToggleOpen: () => void;
-  onTogglePinned: () => void;
-  pinned: boolean;
   open: boolean;
   compact?: boolean;
 }
@@ -31,8 +29,6 @@ export function CausalInspectorPane({
   onSelectJump,
   onOpenDrawer,
   onToggleOpen,
-  onTogglePinned,
-  pinned,
   open,
   compact = false,
 }: CausalInspectorPaneProps) {
@@ -137,15 +133,9 @@ export function CausalInspectorPane({
       title="Inspector"
       className={`inspector ${open ? "" : "inspector--closed"} ${compact ? "inspector--compact" : ""}`.trim()}
       actions={
-        compact ? (
-          <button type="button" className="button button--ghost" onClick={onToggleOpen}>
-            {open ? "Close" : "Open"}
-          </button>
-        ) : (
-          <button type="button" className="button button--ghost" onClick={onTogglePinned}>
-            {pinned ? "Pinned" : "Pin"}
-          </button>
-        )
+        <button type="button" className="button button--ghost" onClick={onToggleOpen}>
+          {open ? "Close" : "Open"}
+        </button>
       }
     >
       {!open && compact ? <CompactSummary summary={summary} /> : null}

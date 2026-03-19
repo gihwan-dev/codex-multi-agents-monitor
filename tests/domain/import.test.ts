@@ -100,6 +100,75 @@ describe("completedRunParser", () => {
       ),
     ).toThrow(/artifacts must be an array/i);
   });
+
+  it("알 수 없는 lane을 참조하는 event를 거부한다", () => {
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...JSON.parse(FIXTURE_IMPORT_TEXT),
+          events: [
+            {
+              ...JSON.parse(FIXTURE_IMPORT_TEXT).events[0],
+              lane_id: "missing-lane",
+            },
+          ],
+          edges: [],
+          artifacts: [],
+        }),
+      ),
+    ).toThrow(/unknown lane/i);
+  });
+
+  it("존재하지 않는 event를 가리키는 edge를 거부한다", () => {
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...JSON.parse(FIXTURE_IMPORT_TEXT),
+          edges: [
+            {
+              ...JSON.parse(FIXTURE_IMPORT_TEXT).edges[0],
+              targetEventId: "missing-event",
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/unknown target event/i);
+  });
+
+  it("존재하지 않는 producer event를 가리키는 artifact를 거부한다", () => {
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...JSON.parse(FIXTURE_IMPORT_TEXT),
+          artifacts: [
+            {
+              ...JSON.parse(FIXTURE_IMPORT_TEXT).artifacts[0],
+              producerEventId: "missing-event",
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/unknown producer event/i);
+  });
+
+  it("시작 시각보다 빠른 종료 시각을 가진 event를 거부한다", () => {
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...JSON.parse(FIXTURE_IMPORT_TEXT),
+          events: [
+            {
+              ...JSON.parse(FIXTURE_IMPORT_TEXT).events[0],
+              start_ts: 20,
+              end_ts: 10,
+            },
+          ],
+          edges: [],
+          artifacts: [],
+        }),
+      ),
+    ).toThrow(/end timestamp/i);
+  });
 });
 
 describe("내보내기/가져오기 계약", () => {
@@ -490,7 +559,7 @@ describe("monitor state contracts", () => {
     expect(withLiveErrorOnly.filtersByRunId[liveRun.run.traceId]?.errorOnly).toBe(true);
   });
 
-  it("hides raw tabs when the selected dataset has no raw payload", () => {
+  it("raw payload가 없는 dataset은 raw drawer 탭으로 진입하지 않는다", () => {
     const dataset = normalizeImportPayload(parseCompletedRunPayload(FIXTURE_IMPORT_TEXT), {
       allowRaw: false,
       noRawStorage: true,
@@ -503,7 +572,6 @@ describe("monitor state contracts", () => {
     });
     const rawSelectedState = {
       ...importedState,
-      inspectorTab: "raw" as const,
       drawerTab: "raw" as const,
     };
 
@@ -512,7 +580,6 @@ describe("monitor state contracts", () => {
       traceId: dataset.run.traceId,
     });
 
-    expect(nextState.inspectorTab).toBe("summary");
     expect(nextState.drawerTab).toBe("artifacts");
   });
 });
