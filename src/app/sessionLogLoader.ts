@@ -1317,7 +1317,7 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
       return "Input delivered";
     }
 
-    if (toolName === "resume_agent") {
+    if (toolName === "resume_agent" || toolName === "close_agent") {
       const status = parsed.status;
       if (status && typeof status === "object") {
         if ("completed" in status) return typeof status.completed === "string"
