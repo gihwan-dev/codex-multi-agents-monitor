@@ -1709,6 +1709,30 @@ describe("tool input preview extraction", () => {
     expect(toolEvent!.inputPreview).toBe("not-json");
   });
 
+  it("extracts message from send_input JSON arguments with interrupt prefix", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check agent"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "send_input",
+          functionCallId: "call_send",
+          functionArgumentsPreview: '{"id":"agent-1","message":"Stop and report status","interrupt":true}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const toolEvent = dataset.events.find((e) => e.toolName === "send_input");
+    expect(toolEvent).toBeDefined();
+    expect(toolEvent!.inputPreview).toBe("[interrupt] Stop and report status");
+  });
+
   it("strips exec_command output boilerplate and shows actual content", () => {
     const boilerplateOutput = [
       "Command: /bin/zsh -lc 'git status'",

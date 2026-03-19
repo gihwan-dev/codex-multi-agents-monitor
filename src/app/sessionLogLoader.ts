@@ -1172,18 +1172,15 @@ function isAutomationEnvelope(value: string) {
 
 function extractToolInputPreview(toolName: string, rawPreview: string | null): string | null {
   if (!rawPreview) return null;
-  if (toolName === "exec_command") {
-    try {
-      const args = JSON.parse(rawPreview);
-      if (typeof args.cmd === "string") return args.cmd;
-    } catch { /* not JSON, fall through */ }
-  }
-  if (toolName === "apply_patch") {
-    try {
-      const args = JSON.parse(rawPreview);
-      if (typeof args.path === "string") return args.path;
-    } catch { /* not JSON, fall through */ }
-  }
+  try {
+    const args = JSON.parse(rawPreview);
+    if (toolName === "exec_command" && typeof args.cmd === "string") return args.cmd;
+    if (toolName === "apply_patch" && typeof args.path === "string") return args.path;
+    if (toolName === "send_input" && typeof args.message === "string") {
+      const prefix = args.interrupt ? "[interrupt] " : "";
+      return `${prefix}${args.message}`;
+    }
+  } catch { /* not JSON, fall through */ }
   return rawPreview;
 }
 
