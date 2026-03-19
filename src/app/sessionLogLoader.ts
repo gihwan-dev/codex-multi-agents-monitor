@@ -1327,6 +1327,14 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
       return "Input delivered";
     }
 
+    if (toolName === "request_user_input" && parsed.answers && typeof parsed.answers === "object") {
+      const firstAnswer = Object.values(parsed.answers)[0];
+      if (firstAnswer && typeof firstAnswer === "object" && Array.isArray((firstAnswer as Record<string, unknown>).answers)) {
+        const text = ((firstAnswer as Record<string, unknown>).answers as string[])[0];
+        if (typeof text === "string") return text;
+      }
+    }
+
     if (toolName === "resume_agent" || toolName === "close_agent") {
       const status = parsed.status;
       if (status && typeof status === "object") {
