@@ -94,6 +94,32 @@ describe("live 상태 전이", () => {
       id: updatedLiveRun?.events[updatedLiveRun.events.length - 1]?.eventId,
     });
   });
+
+  it("follow-live가 꺼진 live run은 새 frame이 와도 현재 선택을 유지한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const initialState = createMonitorInitialState();
+    const pausedSelection = {
+      kind: "event" as const,
+      id: liveRun.events[0]?.eventId ?? "",
+    };
+    const pausedState = {
+      ...initialState,
+      activeRunId: liveRun.run.traceId,
+      selection: pausedSelection,
+      followLiveByRunId: {
+        ...initialState.followLiveByRunId,
+        [liveRun.run.traceId]: false,
+      },
+    };
+
+    const nextState = monitorStateReducer(pausedState, {
+      type: "apply-live-frame",
+    });
+
+    expect(nextState.appliedLiveFrames).toBe(1);
+    expect(nextState.selection).toEqual(pausedSelection);
+    expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
+  });
 });
 
 describe("archive 요청 상태", () => {
