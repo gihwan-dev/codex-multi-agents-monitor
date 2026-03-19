@@ -754,6 +754,141 @@ function buildFix006(): RunDataset {
   });
 }
 
+function buildFix007(): RunDataset {
+  const start = baseTime + 3_600_000;
+  const lanes = [
+    lane("err-main", "Orchestrator", "orchestrator", "gpt-5.3-codex-spark", "Main", "done"),
+    lane("err-gibbs", "Gibbs", "explorer", "gpt-5.4", "Scout", "interrupted"),
+    lane("err-pasteur", "Pasteur", "researcher", "gpt-5.4", "Research", "running"),
+    lane("err-hume", "Hume", "explorer", "gpt-5.4", "Scout", "running"),
+  ];
+  const events = [
+    event({
+      eventId: "fix7-start",
+      laneId: "err-main",
+      agentId: "err-main",
+      threadId: "thread-err-main",
+      eventType: "run.started",
+      status: "running",
+      startTs: start,
+      endTs: start + 10_000,
+      title: "Run started",
+    }),
+    event({
+      eventId: "fix7-spawn",
+      laneId: "err-main",
+      agentId: "err-main",
+      threadId: "thread-err-main",
+      eventType: "agent.spawned",
+      status: "running",
+      startTs: start + 12_000,
+      endTs: start + 30_000,
+      title: "Spawn 3 agents",
+      outputPreview: "Exploring codebase from multiple angles.",
+    }),
+    event({
+      eventId: "fix7-gibbs-work",
+      laneId: "err-gibbs",
+      agentId: "err-gibbs",
+      threadId: "thread-err-gibbs",
+      eventType: "error",
+      status: "failed",
+      startTs: start + 35_000,
+      endTs: start + 90_000,
+      title: "Usage limit hit",
+      errorMessage: "You've hit your usage limit",
+      outputPreview: "Agent errored during exploration.",
+    }),
+    event({
+      eventId: "fix7-pasteur-work",
+      laneId: "err-pasteur",
+      agentId: "err-pasteur",
+      threadId: "thread-err-pasteur",
+      eventType: "tool.started",
+      status: "running",
+      startTs: start + 35_000,
+      endTs: start + 120_000,
+      title: "Research in progress",
+      outputPreview: "Scanning documentation and tests.",
+    }),
+    event({
+      eventId: "fix7-hume-work",
+      laneId: "err-hume",
+      agentId: "err-hume",
+      threadId: "thread-err-hume",
+      eventType: "tool.started",
+      status: "running",
+      startTs: start + 35_000,
+      endTs: start + 100_000,
+      title: "Exploring structure",
+      outputPreview: "Mapping module boundaries.",
+    }),
+    event({
+      eventId: "fix7-wait",
+      laneId: "err-main",
+      agentId: "err-main",
+      threadId: "thread-err-main",
+      eventType: "tool.started",
+      status: "done",
+      startTs: start + 130_000,
+      endTs: start + 150_000,
+      title: "Wait for agents",
+      toolName: "wait_agent",
+    }),
+  ];
+
+  return withMetrics({
+    project: {
+      projectId: "proj-observatory",
+      name: "codex-multi-agent-monitor",
+      repoPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+      badge: "Desktop",
+    },
+    session: {
+      sessionId: "session-fix7",
+      title: "만약 니가 멀티 에이전트 탐색",
+      owner: "Choe",
+      startedAt: start,
+    },
+    run: {
+      traceId: "trace-fix-007",
+      title: "FIX-007 Errored subagent run",
+      status: "done",
+      startTs: start,
+      endTs: start + 150_000,
+      durationMs: 150_000,
+      environment: "Desktop",
+      liveMode: "imported",
+      summaryMetrics: {
+        totalDurationMs: 0,
+        activeTimeMs: 0,
+        idleTimeMs: 0,
+        agentCount: 0,
+        peakParallelism: 0,
+        llmCalls: 0,
+        toolCalls: 0,
+        tokens: 0,
+        costUsd: 0,
+        errorCount: 1,
+      },
+      finalArtifactId: null,
+      selectedByDefaultId: "fix7-gibbs-work",
+      rawIncluded: false,
+      noRawStorage: true,
+      isArchived: false,
+    },
+    lanes,
+    events,
+    edges: [
+      edge("edge-fix7-spawn-gibbs", "spawn", "err-main", "err-gibbs", "fix7-spawn", "fix7-gibbs-work", "Gibbs explores codebase"),
+      edge("edge-fix7-spawn-pasteur", "spawn", "err-main", "err-pasteur", "fix7-spawn", "fix7-pasteur-work", "Pasteur researches docs"),
+      edge("edge-fix7-spawn-hume", "spawn", "err-main", "err-hume", "fix7-spawn", "fix7-hume-work", "Hume maps structure"),
+      edge("edge-fix7-merge", "merge", "err-gibbs", "err-main", "fix7-gibbs-work", "fix7-wait", "Errored agent result collected"),
+    ],
+    artifacts: [],
+  });
+}
+
 export const FIXTURE_DATASETS = [
   buildFix001(),
   buildFix002(),
@@ -761,6 +896,7 @@ export const FIXTURE_DATASETS = [
   buildFix004(),
   buildFix005(),
   buildFix006(),
+  buildFix007(),
 ];
 
 const FIXTURE_BY_ID = Object.fromEntries(
