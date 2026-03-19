@@ -4,69 +4,47 @@ import {
   calculateSummaryMetrics,
   type EdgeRecord,
   type EventRecord,
-  type EventType,
   type PromptAssembly,
   type PromptLayerType,
   type RunDataset,
   type RunStatus,
 } from "../shared/domain";
+import { buildLaneEventsFromEntries } from "./session-log-loader/eventBuilder";
+import {
+  buildEntryEventId,
+  buildTimedSubagentSnapshots,
+  parseRequiredTimestamp,
+} from "./session-log-loader/helpers";
+import {
+  deriveArchiveIndexTitle,
+  deriveSessionLogStatus,
+  deriveSessionLogTitle,
+  sanitizeSessionText,
+} from "./session-log-loader/text";
+import {
+  parseJsonRecord,
+  readAgentReference,
+  readStringArray,
+} from "./session-log-loader/toolPreview";
+import type {
+  PromptAssemblyLayerSnapshot,
+  SessionLogSnapshot,
+  TimedSubagentSnapshot,
+} from "./session-log-loader/types";
+export { NEW_THREAD_TITLE } from "./session-log-loader/types";
+export type {
+  PromptAssemblyLayerSnapshot,
+  SessionEntrySnapshot,
+  SessionLogSnapshot,
+  SubagentSnapshot,
+} from "./session-log-loader/types";
+export {
+  deriveArchiveIndexTitle,
+  deriveSessionLogStatus,
+  deriveSessionLogTitle,
+  sanitizeSessionText,
+} from "./session-log-loader/text";
 import { invokeTauri } from "./tauri";
-
-export interface SessionEntrySnapshot {
-  timestamp: string;
-  entryType: string;
-  role: string | null;
-  text: string | null;
-  functionName: string | null;
-  functionCallId: string | null;
-  functionArgumentsPreview: string | null;
-}
-
-export interface SubagentSnapshot {
-  sessionId: string;
-  parentThreadId: string;
-  depth: number;
-  agentNickname: string;
-  agentRole: string;
-  model: string | null;
-  startedAt: string;
-  updatedAt: string;
-  entries: SessionEntrySnapshot[];
-  error?: string | null;
-}
-
-export interface PromptAssemblyLayerSnapshot {
-  layerType: string;
-  label: string;
-  contentLength: number;
-  preview: string;
-  rawContent: string;
-}
-
-export interface SessionLogSnapshot {
-  sessionId: string;
-  workspacePath: string;
-  originPath: string;
-  displayName: string;
-  startedAt: string;
-  updatedAt: string;
-  model: string | null;
-  entries: SessionEntrySnapshot[];
-  subagents?: SubagentSnapshot[];
-  isArchived?: boolean;
-  promptAssembly?: PromptAssemblyLayerSnapshot[];
-}
-
-interface TimedSubagentSnapshot extends SubagentSnapshot {
-  startedTs: number;
-  updatedTs: number;
-}
-
-export const NEW_THREAD_TITLE = "새 스레드";
-
-const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\([^)]+\)/g;
-const IMAGE_TAG_PATTERN = /<\/?image>/gi;
-const IMPLEMENT_PLAN_PATTERN = /^PLEASE IMPLEMENT THIS PLAN:/i;
 const WEB_SESSION_SNAPSHOT_URL = "/__codex/session-snapshots.json";
 
 export async function loadSessionLogDatasets(): Promise<RunDataset[] | null> {
@@ -107,99 +85,6 @@ async function loadWebSessionLogDatasets(): Promise<RunDataset[] | null> {
   } catch {
     return null;
   }
-}
-
-export function deriveSessionLogTitle(entries: SessionEntrySnapshot[]) {
-  const firstMeaningfulUserMessage = entries.find(
-    (entry) =>
-      entry.entryType === "message" &&
-      entry.role === "user" &&
-      entry.text != null &&
-      isMeaningfulTitleMessage(entry.text),
-  );
-
-  if (!firstMeaningfulUserMessage?.text) {
-    return NEW_THREAD_TITLE;
-  }
-
-  const sanitizedTitle = sanitizeSessionText(firstMeaningfulUserMessage.text);
-  if (sanitizedTitle.length === 0) return NEW_THREAD_TITLE;
-  return sanitizedTitle.length > 120 ? `${sanitizedTitle.slice(0, 117)}...` : sanitizedTitle;
-}
-
-export function deriveSessionLogStatus(
-  entries: SessionEntrySnapshot[],
-  skipImplementPlan = false,
-): RunStatus {
-  const hasAbort = entries.some(isAbortEntry);
-  const latestMessage = findLatestMeaningfulMessage(entries, skipImplementPlan);
-
-  if (!latestMessage) {
-    return hasAbort ? "interrupted" : "done";
-  }
-
-  if (latestMessage.text?.includes("<turn_aborted>")) {
-    return "interrupted";
-  }
-
-  if (hasAbort && wasInterruptedAfterMessage(entries, latestMessage)) {
-    return "interrupted";
-  }
-
-  if (latestMessage.role === "user") {
-    // If a task_complete follows the last user message, the turn already finished
-    // (e.g. subagent received a delegated prompt and completed without a response).
-    const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
-    if (msgTs === null) {
-      return "running";
-    }
-    return hasCompletionAfter(entries, msgTs) ? "done" : "running";
-  }
-
-  return "done";
-}
-
-function isAbortEntry(entry: SessionEntrySnapshot) {
-  return entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back";
-}
-
-function findLatestMeaningfulMessage(
-  entries: SessionEntrySnapshot[],
-  skipImplementPlan: boolean,
-) {
-  return [...entries].reverse().find((entry) => {
-    if (entry.entryType !== "message" || entry.text == null) {
-      return false;
-    }
-
-    const trimmed = entry.text.trim();
-    return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
-  });
-}
-
-function wasInterruptedAfterMessage(
-  entries: SessionEntrySnapshot[],
-  latestMessage: SessionEntrySnapshot,
-) {
-  const lastAbortEntry = [...entries].reverse().find(isAbortEntry);
-  if (!lastAbortEntry) {
-    return false;
-  }
-
-  const abortTs = parseRequiredTimestamp(lastAbortEntry.timestamp);
-  const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
-  return abortTs !== null && msgTs !== null && abortTs >= msgTs;
-}
-
-function hasCompletionAfter(entries: SessionEntrySnapshot[], messageTs: number) {
-  return entries.some((entry) => {
-    if (entry.entryType !== "task_complete") {
-      return false;
-    }
-
-    const entryTs = parseRequiredTimestamp(entry.timestamp);
-    return entryTs !== null && entryTs >= messageTs;
-  });
 }
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
