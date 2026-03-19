@@ -924,13 +924,15 @@ function buildLaneEventsFromEntries({
           ? sanitizeMessagePreview(extractToolOutputPreview(toolName, entry.text))
           : null;
 
-        // Detect failed commands from exit code or execution failure in output
+        // Detect failed tool outputs from various patterns
         const exitCodeMatch = entry.text?.match(/Process exited with code (\d+)/);
         const failedExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
         const isExecFailed = failedExitCode !== 0 || (entry.text?.startsWith("exec_command failed") ?? false);
+        const isToolOutputFailed = !isExecFailed && detectCodexToolFailure(entry.text);
         const errorMsg = failedExitCode !== 0
           ? `Exit code ${failedExitCode}`
-          : isExecFailed ? "Command rejected" : undefined;
+          : isExecFailed ? "Command rejected"
+          : isToolOutputFailed ? "Tool failed" : undefined;
 
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
@@ -943,7 +945,7 @@ function buildLaneEventsFromEntries({
         }));
 
         // Override status for failed tool outputs so they render with failed visual
-        if (isExecFailed) {
+        if (isExecFailed || isToolOutputFailed) {
           events[events.length - 1].status = "failed";
         }
         break;
@@ -1343,6 +1345,19 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
   } catch { /* not JSON, fall through */ }
 
   return rawOutput;
+}
+
+/** Detect Codex-style tool failures from JSON output with metadata.exit_code or error text */
+function detectCodexToolFailure(rawOutput: string | null | undefined): boolean {
+  if (!rawOutput) return false;
+  try {
+    const parsed = JSON.parse(rawOutput);
+    if (parsed.metadata?.exit_code && parsed.metadata.exit_code !== 0) return true;
+    if (typeof parsed.output === "string") {
+      return parsed.output.includes("verification failed") || parsed.output.includes("apply_patch failed");
+    }
+  } catch { /* not JSON */ }
+  return false;
 }
 
 function sanitizeMessagePreview(value: string) {
