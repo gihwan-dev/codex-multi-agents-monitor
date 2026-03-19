@@ -807,6 +807,15 @@ function buildLaneEventsFromEntries({
       case "message": {
         if (!entry.text) continue;
         const isUser = entry.role === "user";
+
+        // assistant message가 바로 앞의 agent_message와 동일 타임스탬프면 중복 → 건너뜀
+        if (!isUser) {
+          const prevEntry = entries[index - 1];
+          if (prevEntry?.entryType === "agent_message" && prevEntry.timestamp === entry.timestamp) {
+            break;
+          }
+        }
+
         const preview = sanitizeMessagePreview(entry.text);
 
         // 서브에이전트의 role:"user" 메시지는 위임된 컨텍스트 (직접적인 사용자 입력 아님)
