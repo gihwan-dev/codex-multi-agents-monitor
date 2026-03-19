@@ -15,12 +15,29 @@ const DEFAULT_FILTERS: RunFilters = {
   errorOnly: false,
 };
 
+function expectDefined<T>(value: T | null | undefined, message: string): T {
+  expect(value).toBeDefined();
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 function buildDefaultSelection(traceId: string): SelectionState | null {
   const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === traceId);
   if (!dataset?.run.selectedByDefaultId) {
     return null;
   }
   return { kind: "event", id: dataset.run.selectedByDefaultId };
+}
+
+function expectDataset(snapshot: SessionLogSnapshot) {
+  const dataset = buildDatasetFromSessionLog(snapshot);
+  expect(dataset).not.toBeNull();
+  if (!dataset) {
+    throw new Error("expected graph scene dataset");
+  }
+  return dataset;
 }
 
 describe("buildGraphSceneModel", () => {
@@ -197,9 +214,7 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
 }
 
 function buildMultiAgentDataset() {
-  const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
-  if (!dataset) throw new Error("multi-agent dataset build failed");
-  return dataset;
+  return expectDataset(buildMultiAgentSnapshot());
 }
 
 describe("multi-agent scene model", () => {
@@ -370,7 +385,7 @@ describe("merge edge scene integration", () => {
         },
       ],
     };
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     if (!dataset) throw new Error("merge edge dataset build failed");
     return dataset;
   }
@@ -568,9 +583,7 @@ describe("errored subagent graph rendering", () => {
   }
 
   it("produces a dataset with events for all lanes including errored subagents", () => {
-    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
+    const dataset = expectDataset(buildErroredSubagentSnapshot());
 
     // 5 lanes: User + Main + 3 subagents
     expect(dataset.lanes).toHaveLength(5);
@@ -590,9 +603,7 @@ describe("errored subagent graph rendering", () => {
   });
 
   it("graph scene model has non-empty rows for errored subagents session", () => {
-    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
+    const dataset = expectDataset(buildErroredSubagentSnapshot());
 
     const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
 
@@ -608,9 +619,7 @@ describe("errored subagent graph rendering", () => {
   });
 
   it("all edges flow forward in time (no backward edges)", () => {
-    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
+    const dataset = expectDataset(buildErroredSubagentSnapshot());
 
     const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
     const eventsById = new Map(dataset.events.map((e) => [e.eventId, e]));
@@ -626,35 +635,41 @@ describe("errored subagent graph rendering", () => {
   });
 
   it("subagent lanes show correct status: errored from wait_agent vs running for empty entries", () => {
-    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
+    const dataset = expectDataset(buildErroredSubagentSnapshot());
 
     const subLanes = dataset.lanes.filter((l) => l.badge === "Subagent");
     expect(subLanes).toHaveLength(3);
 
     // Gibbs errored via wait_agent → interrupted
-    const gibbsLane = subLanes.find((l) => l.name === "Gibbs");
-    expect(gibbsLane).toBeDefined();
-    expect(gibbsLane!.laneStatus).toBe("interrupted");
+    const gibbsLane = expectDefined(
+      subLanes.find((l) => l.name === "Gibbs"),
+      "missing Gibbs lane",
+    );
+    expect(gibbsLane.laneStatus).toBe("interrupted");
 
     // Pasteur and Hume have empty entries and no error → running
-    const pasteurLane = subLanes.find((l) => l.name === "Pasteur");
-    const humeLane = subLanes.find((l) => l.name === "Hume");
-    expect(pasteurLane!.laneStatus).toBe("running");
-    expect(humeLane!.laneStatus).toBe("running");
+    const pasteurLane = expectDefined(
+      subLanes.find((l) => l.name === "Pasteur"),
+      "missing Pasteur lane",
+    );
+    const humeLane = expectDefined(
+      subLanes.find((l) => l.name === "Hume"),
+      "missing Hume lane",
+    );
+    expect(pasteurLane.laneStatus).toBe("running");
+    expect(humeLane.laneStatus).toBe("running");
   });
 
   it("Gibbs spawn event shows failed status with error message from wait_agent", () => {
-    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
+    const dataset = expectDataset(buildErroredSubagentSnapshot());
 
-    const gibbsSpawn = dataset.events.find(
-      (e) => e.eventType === "agent.spawned" && e.laneId === "sub-err-gibbs:sub",
+    const gibbsSpawn = expectDefined(
+      dataset.events.find(
+        (e) => e.eventType === "agent.spawned" && e.laneId === "sub-err-gibbs:sub",
+      ),
+      "missing Gibbs spawn event",
     );
-    expect(gibbsSpawn).toBeDefined();
-    expect(gibbsSpawn!.status).toBe("failed");
-    expect(gibbsSpawn!.errorMessage).toBe("You've hit your usage limit");
+    expect(gibbsSpawn.status).toBe("failed");
+    expect(gibbsSpawn.errorMessage).toBe("You've hit your usage limit");
   });
 });

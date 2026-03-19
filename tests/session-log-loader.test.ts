@@ -56,6 +56,34 @@ function expectDataset(snapshot: SessionLogSnapshot) {
   return dataset;
 }
 
+function expectDefined<T>(value: T | null | undefined, message: string): T {
+  expect(value).toBeDefined();
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+
+type Dataset = ReturnType<typeof expectDataset>;
+type DatasetLane = Dataset["lanes"][number];
+type DatasetEvent = Dataset["events"][number];
+
+function expectLane(
+  dataset: Dataset,
+  predicate: (lane: DatasetLane) => boolean,
+  message: string,
+) {
+  return expectDefined(dataset.lanes.find(predicate), message);
+}
+
+function expectEvent(
+  dataset: Dataset,
+  predicate: (event: DatasetEvent) => boolean,
+  message: string,
+) {
+  return expectDefined(dataset.events.find(predicate), message);
+}
+
 beforeEach(() => {
   mockedInvokeTauri.mockReset();
 });
@@ -218,7 +246,7 @@ describe("sessionLogLoader", () => {
   });
 
   it("filters out subagent_notification system messages from timeline events", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry(
           "2026-03-09T15:03:18.000Z",
@@ -243,9 +271,8 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const userPrompts = dataset!.events.filter((e) => e.eventType === "user.prompt");
-    const noteEvents = dataset!.events.filter((e) => e.eventType === "note");
+    const userPrompts = dataset.events.filter((e) => e.eventType === "user.prompt");
+    const noteEvents = dataset.events.filter((e) => e.eventType === "note");
     // 1 user prompt (subagent_notifications are filtered out)
     expect(userPrompts).toHaveLength(1);
     // 1 assistant note
@@ -254,7 +281,7 @@ describe("sessionLogLoader", () => {
   });
 
   it("generates unique eventIds for entries with identical timestamp and entryType", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry(
           "2026-03-09T15:03:18.000Z",
@@ -274,8 +301,7 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const contentEvents = dataset!.events.filter(
+    const contentEvents = dataset.events.filter(
       (e) => e.eventType === "note" || e.eventType === "user.prompt",
     );
     const eventIds = contentEvents.map((e) => e.eventId);
@@ -324,7 +350,7 @@ describe("sessionLogLoader", () => {
   });
 
   it("builds a minimal RunDataset with the derived sidebar title", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry(
           "2026-03-09T15:03:12.000Z",
@@ -389,7 +415,7 @@ describe("sessionLogLoader", () => {
   });
 
   it("generates tool.started from function_call entries", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "파일 목록 보여줘"),
         {
@@ -404,15 +430,14 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const toolStarted = dataset!.events.filter((e) => e.eventType === "tool.started");
+    const toolStarted = dataset.events.filter((e) => e.eventType === "tool.started");
     expect(toolStarted).toHaveLength(1);
     expect(toolStarted[0].title).toBe("exec_command");
     expect(toolStarted[0].toolName).toBe("exec_command");
   });
 
   it("generates tool.finished from function_call_output entries", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "파일 목록 보여줘"),
         {
@@ -436,15 +461,14 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const toolFinished = dataset!.events.filter((e) => e.eventType === "tool.finished");
+    const toolFinished = dataset.events.filter((e) => e.eventType === "tool.finished");
     expect(toolFinished).toHaveLength(1);
     expect(toolFinished[0].toolName).toBe("exec_command");
     expect(toolFinished[0].title).toBe("exec_command result");
   });
 
   it("pairs tool.started and tool.finished by callId", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "테스트"),
         {
@@ -486,15 +510,14 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const toolFinished = dataset!.events.filter((e) => e.eventType === "tool.finished");
+    const toolFinished = dataset.events.filter((e) => e.eventType === "tool.finished");
     expect(toolFinished).toHaveLength(2);
     expect(toolFinished[0].toolName).toBe("exec_command");
     expect(toolFinished[1].toolName).toBe("apply_patch");
   });
 
   it("generates llm.started for reasoning entries", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "분석해줘"),
         {
@@ -509,14 +532,13 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const reasoning = dataset!.events.filter((e) => e.eventType === "llm.started");
+    const reasoning = dataset.events.filter((e) => e.eventType === "llm.started");
     expect(reasoning).toHaveLength(1);
     expect(reasoning[0].title).toBe("Reasoning");
   });
 
   it("context_compacted shows descriptive output preview", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -531,17 +553,17 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
-
-    const compacted = dataset.events.find((e) => e.title === "Context compacted");
-    expect(compacted).toBeDefined();
-    expect(compacted!.eventType).toBe("note");
-    expect(compacted!.outputPreview).toBe("Context reduced to fit within the model window");
+    const compacted = expectEvent(
+      dataset,
+      (event) => event.title === "Context compacted",
+      "expected compacted note event",
+    );
+    expect(compacted.eventType).toBe("note");
+    expect(compacted.outputPreview).toBe("Context reduced to fit within the model window");
   });
 
   it("turn_aborted shows reason in both outputPreview and errorMessage", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -556,18 +578,18 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
-
-    const aborted = dataset.events.find((e) => e.title === "Turn aborted");
-    expect(aborted).toBeDefined();
-    expect(aborted!.eventType).toBe("error");
-    expect(aborted!.outputPreview).toBe("interrupted");
-    expect(aborted!.errorMessage).toBe("interrupted");
+    const aborted = expectEvent(
+      dataset,
+      (event) => event.title === "Turn aborted",
+      "expected turn aborted event",
+    );
+    expect(aborted.eventType).toBe("error");
+    expect(aborted.outputPreview).toBe("interrupted");
+    expect(aborted.errorMessage).toBe("interrupted");
   });
 
   it("thread_rolled_back shows reason in outputPreview", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -582,44 +604,50 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
-
-    const rolledBack = dataset.events.find((e) => e.title === "Thread rolled back");
-    expect(rolledBack).toBeDefined();
-    expect(rolledBack!.outputPreview).toBe("Thread rolled back");
-    expect(rolledBack!.errorMessage).toBe("Thread rolled back");
+    const rolledBack = expectEvent(
+      dataset,
+      (event) => event.title === "Thread rolled back",
+      "expected rolled back event",
+    );
+    expect(rolledBack.outputPreview).toBe("Thread rolled back");
+    expect(rolledBack.errorMessage).toBe("Thread rolled back");
   });
 
   it("creates user lane and assigns user.prompt events", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "테스트 질문"),
         makeMessageEntry("2026-03-09T15:05:00.000Z", "assistant", "답변입니다."),
       ]),
     );
 
-    expect(dataset).not.toBeNull();
-    const userLane = dataset!.lanes.find((l) => l.role === "user");
-    expect(userLane).toBeDefined();
-    expect(userLane!.name).toBe("User");
-    expect(userLane!.model).toBe("human");
+    const userLane = expectLane(
+      dataset,
+      (lane) => lane.role === "user",
+      "expected user lane",
+    );
+    expect(userLane.name).toBe("User");
+    expect(userLane.model).toBe("human");
 
-    const userPrompts = dataset!.events.filter((e) => e.eventType === "user.prompt");
+    const userPrompts = dataset.events.filter((e) => e.eventType === "user.prompt");
     expect(userPrompts).toHaveLength(1);
-    expect(userPrompts[0].laneId).toBe(userLane!.laneId);
+    expect(userPrompts[0].laneId).toBe(userLane.laneId);
 
-    const assistantNotes = dataset!.events.filter((e) => e.eventType === "note" && e.title === "Assistant");
+    const assistantNotes = dataset.events.filter(
+      (e) => e.eventType === "note" && e.title === "Assistant",
+    );
     expect(assistantNotes).toHaveLength(1);
-    expect(assistantNotes[0].laneId).toBe(dataset!.lanes.find((l) => l.role === "session")!.laneId);
+    const sessionLane = expectLane(
+      dataset,
+      (lane) => lane.role === "session",
+      "expected session lane",
+    );
+    expect(assistantNotes[0].laneId).toBe(sessionLane.laneId);
   });
 
   it("subagent IMPLEMENT_PLAN shown as system instruction", () => {
     const snapshot = buildMultiAgentSnapshot();
-    const dataset = buildDatasetFromSessionLog(snapshot);
-    expect(dataset).not.toBeNull();
-    if (!dataset) return;
-
+    const dataset = expectDataset(snapshot);
     const humeEvents = dataset.events.filter(
       (e) => e.laneId === "sub-hume:sub" && e.title === "System instruction",
     );
@@ -643,10 +671,12 @@ describe("deriveArchiveIndexTitle", () => {
 
   it("truncates long messages to 120 chars with ellipsis", () => {
     const longMessage = "가".repeat(200);
-    const title = deriveArchiveIndexTitle(longMessage);
-    expect(title).not.toBeNull();
-    expect(title!.length).toBe(120);
-    expect(title!.endsWith("...")).toBe(true);
+    const title = expectDefined(
+      deriveArchiveIndexTitle(longMessage),
+      "expected archive index title",
+    );
+    expect(title.length).toBe(120);
+    expect(title.endsWith("...")).toBe(true);
   });
 
   it("returns null for null input", () => {
@@ -781,7 +811,7 @@ function buildMultiAgentSnapshot(): SessionLogSnapshot {
 
 describe("multi-agent data pipeline", () => {
   it("generates lanes including user lane, main lane, and subagent lanes with spawn events and edges", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -801,7 +831,7 @@ describe("multi-agent data pipeline", () => {
   });
 
   it("includes IMPLEMENT_PLAN user messages as system instruction events for subagent lanes", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -820,7 +850,7 @@ describe("multi-agent data pipeline", () => {
   });
 
   it("assigns correct laneId to every subagent event", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -839,23 +869,23 @@ describe("multi-agent data pipeline", () => {
   });
 
   it("derives running status for subagent with only IMPLEMENT_PLAN user message", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const gibbsLane = dataset.lanes.find((l) => l.laneId === "sub-gibbs:sub");
     expect(gibbsLane).toBeDefined();
-    expect(gibbsLane!.laneStatus).toBe("running");
+    expect(gibbsLane?.laneStatus).toBe("running");
   });
 
   it("derives done status for subagent with assistant response after IMPLEMENT_PLAN", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const humeLane = dataset.lanes.find((l) => l.laneId === "sub-hume:sub");
     expect(humeLane).toBeDefined();
-    expect(humeLane!.laneStatus).toBe("done");
+    expect(humeLane?.laneStatus).toBe("done");
   });
 
   it("marks subagent with error as interrupted and sets spawn event to failed", () => {
@@ -874,20 +904,20 @@ describe("multi-agent data pipeline", () => {
     };
     snapshot.subagents = [...(snapshot.subagents ?? []), errorSub];
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const errorLane = dataset.lanes.find((l) => l.laneId === "sub-error:sub");
     expect(errorLane).toBeDefined();
-    expect(errorLane!.laneStatus).toBe("interrupted");
+    expect(errorLane?.laneStatus).toBe("interrupted");
 
     const spawnEvent = dataset.events.find(
       (e) => e.eventType === "agent.spawned" && e.laneId === "sub-error:sub",
     );
     expect(spawnEvent).toBeDefined();
-    expect(spawnEvent!.status).toBe("failed");
-    expect(spawnEvent!.errorMessage).toBe("Rate limit exceeded: too many requests");
+    expect(spawnEvent?.status).toBe("failed");
+    expect(spawnEvent?.errorMessage).toBe("Rate limit exceeded: too many requests");
   });
 
   it("propagates errored status from wait_agent output to subagent", () => {
@@ -915,20 +945,20 @@ describe("multi-agent data pipeline", () => {
       },
     );
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const gibbsLane = dataset.lanes.find((l) => l.laneId === "sub-gibbs:sub");
     expect(gibbsLane).toBeDefined();
-    expect(gibbsLane!.laneStatus).toBe("interrupted");
+    expect(gibbsLane?.laneStatus).toBe("interrupted");
 
     const spawnEvent = dataset.events.find(
       (e) => e.eventType === "agent.spawned" && e.laneId === "sub-gibbs:sub",
     );
     expect(spawnEvent).toBeDefined();
-    expect(spawnEvent!.status).toBe("failed");
-    expect(spawnEvent!.errorMessage).toBe("You've hit your usage limit");
+    expect(spawnEvent?.status).toBe("failed");
+    expect(spawnEvent?.errorMessage).toBe("You've hit your usage limit");
   });
 
   it("classifies subagent user messages as delegated prompt, not user.prompt", () => {
@@ -958,7 +988,7 @@ describe("multi-agent data pipeline", () => {
     };
     snapshot.subagents = [...(snapshot.subagents ?? []), delegatedSub];
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -981,7 +1011,7 @@ describe("multi-agent data pipeline", () => {
 
   it("ensures no user.prompt events exist in any subagent lane", () => {
     const snapshot = buildMultiAgentSnapshot();
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1012,17 +1042,17 @@ describe("multi-agent data pipeline", () => {
     };
     snapshot.subagents = [...(snapshot.subagents ?? []), emptySub];
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const emptyLane = dataset.lanes.find((l) => l.laneId === "sub-empty:sub");
     expect(emptyLane).toBeDefined();
-    expect(emptyLane!.laneStatus).toBe("running");
+    expect(emptyLane?.laneStatus).toBe("running");
   });
 
   it("maps each spawn_agent function_call 1:1 to its corresponding subagent edge", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1037,13 +1067,13 @@ describe("multi-agent data pipeline", () => {
     for (const sourceId of sourceIds) {
       const evt = dataset.events.find((e) => e.eventId === sourceId);
       expect(evt).toBeDefined();
-      expect(evt!.eventType).toBe("tool.started");
-      expect(evt!.toolName).toBe("spawn_agent");
+      expect(evt?.eventType).toBe("tool.started");
+      expect(evt?.toolName).toBe("spawn_agent");
     }
   });
 
   it("classifies spawn_agent function_calls as tool.started, not agent.spawned", () => {
-    const dataset = buildDatasetFromSessionLog(buildMultiAgentSnapshot());
+    const dataset = expectDataset(buildMultiAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1080,7 +1110,7 @@ describe("multi-agent data pipeline", () => {
     };
     snapshot.subagents = [...(snapshot.subagents ?? []), extraSub];
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1098,7 +1128,7 @@ describe("multi-agent data pipeline", () => {
     // 4번째는 fallback → sourceEventId가 존재하지만 spawn_agent가 아닐 수 있음
     const extraEdge = spawnEdges.find((e) => e.targetAgentId === "sub-extra:sub");
     expect(extraEdge).toBeDefined();
-    expect(extraEdge!.sourceEventId).toBeTruthy();
+    expect(extraEdge?.sourceEventId).toBeTruthy();
   });
 });
 
@@ -1226,7 +1256,7 @@ describe("merge edge generation", () => {
   }
 
   it("generates merge edges from close_agent function calls", () => {
-    const dataset = buildDatasetFromSessionLog(buildCloseAgentSnapshot());
+    const dataset = expectDataset(buildCloseAgentSnapshot());
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1329,7 +1359,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1407,7 +1437,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1431,7 +1461,7 @@ describe("merge edge generation", () => {
       ),
     );
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1445,7 +1475,7 @@ describe("merge edge generation", () => {
   });
 
   it("handles agent_reasoning entries as note events", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-18T10:00:00.000Z", "user", "분석해줘"),
         {
@@ -1472,7 +1502,7 @@ describe("merge edge generation", () => {
   });
 
   it("filters permissions instructions as system boilerplate", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-18T10:00:00.000Z", "user", "작업 시작"),
         makeMessageEntry(
@@ -1551,7 +1581,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1622,7 +1652,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1635,12 +1665,12 @@ describe("merge edge generation", () => {
     expect(targetEvent).toBeDefined();
 
     // The merge target should be the function_call_output (tool.finished), not the function_call
-    expect(targetEvent!.eventType).toBe("tool.finished");
-    expect(targetEvent!.toolName).toBe("wait_agent");
+    expect(targetEvent?.eventType).toBe("tool.finished");
+    expect(targetEvent?.toolName).toBe("wait_agent");
 
     // The target event's timestamp must be >= source event's timestamp
     // to ensure the edge flows forward (downward) in the timeline
-    expect(targetEvent!.startTs).toBeGreaterThanOrEqual(sourceEvent!.startTs);
+    expect(targetEvent?.startTs).toBeGreaterThanOrEqual(sourceEvent?.startTs);
   });
 
   it("spawn edge source is at or before the subagent start when using fallback", () => {
@@ -1678,7 +1708,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1691,7 +1721,7 @@ describe("merge edge generation", () => {
     expect(targetEvent).toBeDefined();
 
     // The spawn source event should be at or before the subagent's spawned event
-    expect(sourceEvent!.startTs).toBeLessThanOrEqual(targetEvent!.startTs);
+    expect(sourceEvent?.startTs).toBeLessThanOrEqual(targetEvent?.startTs);
   });
 
   it("merge edge uses spawned event when fork-context leak creates late subagent entries", () => {
@@ -1763,7 +1793,7 @@ describe("merge edge generation", () => {
       subagents,
     };
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1777,10 +1807,10 @@ describe("merge edge generation", () => {
 
     // The merge edge must NOT flow backward:
     // source timestamp should be <= target timestamp
-    expect(sourceEvent!.startTs).toBeLessThanOrEqual(targetEvent!.startTs);
+    expect(sourceEvent?.startTs).toBeLessThanOrEqual(targetEvent?.startTs);
 
     // The source should be the spawned event (fallback), not the leaked task_complete
-    expect(sourceEvent!.eventType).not.toBe("turn.finished");
+    expect(sourceEvent?.eventType).not.toBe("turn.finished");
   });
 });
 
@@ -1802,7 +1832,7 @@ describe("token_count enrichment", () => {
 
     const snapshot = buildSnapshot(entries);
     snapshot.model = "claude-sonnet-4-6";
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1815,9 +1845,9 @@ describe("token_count enrichment", () => {
       (e) => e.eventType === "note" && e.title === "Assistant",
     );
     expect(assistantNote).toBeDefined();
-    expect(assistantNote!.tokensIn).toBe(20090);
-    expect(assistantNote!.tokensOut).toBe(1047);
-    expect(assistantNote!.cacheReadTokens).toBe(3712);
+    expect(assistantNote?.tokensIn).toBe(20090);
+    expect(assistantNote?.tokensOut).toBe(1047);
+    expect(assistantNote?.cacheReadTokens).toBe(3712);
 
     // Summary metrics should reflect the token data
     expect(dataset.run.summaryMetrics.llmCalls).toBe(1);
@@ -1840,7 +1870,7 @@ describe("token_count enrichment", () => {
 
     const snapshot = buildSnapshot(entries);
     snapshot.model = "claude-sonnet-4-6";
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
@@ -1854,7 +1884,7 @@ describe("token_count enrichment", () => {
 
 describe("tool input preview extraction", () => {
   it("extracts cmd from exec_command JSON arguments", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check status"),
         {
@@ -1874,7 +1904,7 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "exec_command");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("git status --short");
+    expect(toolEvent?.inputPreview).toBe("git status --short");
   });
 
   it("extracts message from spawn_agent JSON arguments", () => {
@@ -1891,17 +1921,17 @@ describe("tool input preview extraction", () => {
       },
     ]);
 
-    const dataset = buildDatasetFromSessionLog(snapshot);
+    const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
     const spawnEvent = dataset.events.find((e) => e.toolName === "spawn_agent");
     expect(spawnEvent).toBeDefined();
-    expect(spawnEvent!.inputPreview).toBe("[code-quality-reviewer] 코드 품질 리뷰해주세요");
+    expect(spawnEvent?.inputPreview).toBe("[code-quality-reviewer] 코드 품질 리뷰해주세요");
   });
 
   it("extracts explanation from update_plan JSON arguments", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Start plan"),
         {
@@ -1921,11 +1951,11 @@ describe("tool input preview extraction", () => {
 
     const planEvent = dataset.events.find((e) => e.toolName === "update_plan");
     expect(planEvent).toBeDefined();
-    expect(planEvent!.outputPreview).toBe("Runtime 추출 작업 진행 중");
+    expect(planEvent?.outputPreview).toBe("Runtime 추출 작업 진행 중");
   });
 
   it("extracts path from apply_patch JSON arguments", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Fix the file"),
         {
@@ -1945,11 +1975,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "apply_patch");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("src/app/main.ts");
+    expect(toolEvent?.inputPreview).toBe("src/app/main.ts");
   });
 
   it("falls back to raw preview when JSON parsing fails", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Run it"),
         {
@@ -1969,11 +1999,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "exec_command");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("not-json");
+    expect(toolEvent?.inputPreview).toBe("not-json");
   });
 
   it("extracts message from send_input JSON arguments with interrupt prefix", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check agent"),
         {
@@ -1993,11 +2023,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "send_input");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("[interrupt] Stop and report status");
+    expect(toolEvent?.inputPreview).toBe("[interrupt] Stop and report status");
   });
 
   it("extracts path from view_image JSON arguments", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Show me the image"),
         {
@@ -2017,11 +2047,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "view_image");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("/tmp/screenshot.png");
+    expect(toolEvent?.inputPreview).toBe("/tmp/screenshot.png");
   });
 
   it("extracts input from write_stdin JSON arguments", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Confirm"),
         {
@@ -2041,11 +2071,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "write_stdin");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("y\n");
+    expect(toolEvent?.inputPreview).toBe("y\n");
   });
 
   it("extracts file path from apply_patch raw patch text", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Patch it"),
         {
@@ -2065,11 +2095,11 @@ describe("tool input preview extraction", () => {
 
     const toolEvent = dataset.events.find((e) => e.toolName === "apply_patch");
     expect(toolEvent).toBeDefined();
-    expect(toolEvent!.inputPreview).toBe("src/utils/helper.ts");
+    expect(toolEvent?.inputPreview).toBe("src/utils/helper.ts");
   });
 
   it("extracts inner output from Codex-style JSON tool output", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Fix it"),
         {
@@ -2098,11 +2128,11 @@ describe("tool input preview extraction", () => {
 
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "apply_patch");
     expect(resultEvent).toBeDefined();
-    expect(resultEvent!.outputPreview).toBe("Success. Updated the following files: M src/app.ts");
+    expect(resultEvent?.outputPreview).toBe("Success. Updated the following files: M src/app.ts");
   });
 
   it("wait output shows 'Timed out' for timed_out responses", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -2131,11 +2161,11 @@ describe("tool input preview extraction", () => {
 
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "wait");
     expect(resultEvent).toBeDefined();
-    expect(resultEvent!.outputPreview).toBe("Timed out (polling)");
+    expect(resultEvent?.outputPreview).toBe("Timed out (polling)");
   });
 
   it("spawn_agent output shows agent nickname", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -2164,11 +2194,11 @@ describe("tool input preview extraction", () => {
 
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "spawn_agent");
     expect(resultEvent).toBeDefined();
-    expect(resultEvent!.outputPreview).toBe("Spawned: Pasteur");
+    expect(resultEvent?.outputPreview).toBe("Spawned: Pasteur");
   });
 
   it("send_input output shows 'Input delivered'", () => {
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
         {
@@ -2197,7 +2227,7 @@ describe("tool input preview extraction", () => {
 
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "send_input");
     expect(resultEvent).toBeDefined();
-    expect(resultEvent!.outputPreview).toBe("Input delivered");
+    expect(resultEvent?.outputPreview).toBe("Input delivered");
   });
 
   it("strips exec_command output boilerplate and shows actual content", () => {
@@ -2212,7 +2242,7 @@ describe("tool input preview extraction", () => {
       "M src/app.ts",
     ].join("\n");
 
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Check status"),
         {
@@ -2242,10 +2272,10 @@ describe("tool input preview extraction", () => {
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "exec_command");
     expect(resultEvent).toBeDefined();
     // Should show the content after "Output:" not the boilerplate
-    expect(resultEvent!.outputPreview).toContain("branch main");
-    expect(resultEvent!.outputPreview).not.toContain("Chunk ID");
+    expect(resultEvent?.outputPreview).toContain("branch main");
+    expect(resultEvent?.outputPreview).not.toContain("Chunk ID");
     // Successful command should not have errorMessage
-    expect(resultEvent!.errorMessage).toBeNull();
+    expect(resultEvent?.errorMessage).toBeNull();
   });
 
   it("marks failed exec_command output with 'failed' status and exit code", () => {
@@ -2259,7 +2289,7 @@ describe("tool input preview extraction", () => {
       "error TS2322: Type 'string' is not assignable to type 'number'.",
     ].join("\n");
 
-    const dataset = buildDatasetFromSessionLog(
+    const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Build it"),
         {
@@ -2288,7 +2318,7 @@ describe("tool input preview extraction", () => {
 
     const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "exec_command");
     expect(resultEvent).toBeDefined();
-    expect(resultEvent!.status).toBe("failed");
-    expect(resultEvent!.errorMessage).toBe("Exit code 2");
+    expect(resultEvent?.status).toBe("failed");
+    expect(resultEvent?.errorMessage).toBe("Exit code 2");
   });
 });

@@ -31,7 +31,7 @@ const files = [
     update(content) {
       const json = JSON.parse(content);
       json.version = version;
-      return JSON.stringify(json, null, 2) + "\n";
+      return `${JSON.stringify(json, null, 2)}\n`;
     },
   },
   {
@@ -39,7 +39,7 @@ const files = [
     update(content) {
       const json = JSON.parse(content);
       json.version = version;
-      return JSON.stringify(json, null, 2) + "\n";
+      return `${JSON.stringify(json, null, 2)}\n`;
     },
   },
   {

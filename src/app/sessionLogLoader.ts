@@ -131,39 +131,19 @@ export function deriveSessionLogStatus(
   entries: SessionEntrySnapshot[],
   skipImplementPlan = false,
 ): RunStatus {
-  const hasAbort = entries.some(
-    (entry) => entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
-  );
-
-  const messageEntries = entries.filter(
-    (entry) => entry.entryType === "message" && entry.text != null,
-  );
-
-  const latestMessage = [...messageEntries].reverse().find((entry) => {
-    const trimmed = entry.text?.trim() ?? "";
-    return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
-  });
+  const hasAbort = entries.some(isAbortEntry);
+  const latestMessage = findLatestMeaningfulMessage(entries, skipImplementPlan);
 
   if (!latestMessage) {
-    if (hasAbort) return "interrupted";
-    return "done";
+    return hasAbort ? "interrupted" : "done";
   }
 
   if (latestMessage.text?.includes("<turn_aborted>")) {
     return "interrupted";
   }
 
-  if (hasAbort) {
-    const lastAbortEntry = [...entries].reverse().find(
-      (entry) => entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
-    );
-    if (lastAbortEntry) {
-      const abortTs = parseRequiredTimestamp(lastAbortEntry.timestamp);
-      const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
-      if (abortTs !== null && msgTs !== null && abortTs >= msgTs) {
-        return "interrupted";
-      }
-    }
+  if (hasAbort && wasInterruptedAfterMessage(entries, latestMessage)) {
+    return "interrupted";
   }
 
   if (latestMessage.role === "user") {
@@ -173,19 +153,53 @@ export function deriveSessionLogStatus(
     if (msgTs === null) {
       return "running";
     }
-    const hasCompletionAfter = entries.some(
-      (entry) => {
-        if (entry.entryType !== "task_complete") {
-          return false;
-        }
-        const entryTs = parseRequiredTimestamp(entry.timestamp);
-        return entryTs !== null && entryTs >= msgTs;
-      },
-    );
-    return hasCompletionAfter ? "done" : "running";
+    return hasCompletionAfter(entries, msgTs) ? "done" : "running";
   }
 
   return "done";
+}
+
+function isAbortEntry(entry: SessionEntrySnapshot) {
+  return entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back";
+}
+
+function findLatestMeaningfulMessage(
+  entries: SessionEntrySnapshot[],
+  skipImplementPlan: boolean,
+) {
+  return [...entries].reverse().find((entry) => {
+    if (entry.entryType !== "message" || entry.text == null) {
+      return false;
+    }
+
+    const trimmed = entry.text.trim();
+    return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
+  });
+}
+
+function wasInterruptedAfterMessage(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot,
+) {
+  const lastAbortEntry = [...entries].reverse().find(isAbortEntry);
+  if (!lastAbortEntry) {
+    return false;
+  }
+
+  const abortTs = parseRequiredTimestamp(lastAbortEntry.timestamp);
+  const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
+  return abortTs !== null && msgTs !== null && abortTs >= msgTs;
+}
+
+function hasCompletionAfter(entries: SessionEntrySnapshot[], messageTs: number) {
+  return entries.some((entry) => {
+    if (entry.entryType !== "task_complete") {
+      return false;
+    }
+
+    const entryTs = parseRequiredTimestamp(entry.timestamp);
+    return entryTs !== null && entryTs >= messageTs;
+  });
 }
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
