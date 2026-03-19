@@ -10,10 +10,6 @@ vi.mock("../src/app/sessionLogLoader.js", () => ({
 
 const mockedLoadArchivedSessionSnapshot = vi.mocked(loadArchivedSessionSnapshot);
 
-function flushMicrotask() {
-  return Promise.resolve();
-}
-
 function requireLiveDataset() {
   const dataset = createMonitorInitialState().datasets.find(
     (item) => item.run.liveMode === "live",
@@ -103,6 +99,23 @@ describe("createMonitorArchiveActions", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it("첫 페이지 로드에서는 빈 검색어를 undefined로 정규화한다", () => {
+    const dispatch = vi.fn();
+    const requestArchiveIndex = vi.fn();
+    const actions = createMonitorArchiveActions({
+      archivedIndexLength: 7,
+      archivedSearch: "",
+      dispatch,
+      requestArchiveIndex,
+      archiveSnapshotRequestIdRef: { current: 0 },
+    });
+
+    actions.loadArchiveIndex(false);
+
+    expect(requestArchiveIndex).toHaveBeenCalledWith(0, false, undefined);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("archive 검색은 검색어를 상태에 저장한 뒤 첫 페이지를 다시 요청한다", () => {
     const dispatch = vi.fn();
     const requestArchiveIndex = vi.fn();
@@ -121,6 +134,26 @@ describe("createMonitorArchiveActions", () => {
       value: "planner",
     });
     expect(requestArchiveIndex).toHaveBeenCalledWith(0, false, "planner");
+  });
+
+  it("archive 검색어가 비면 검색 파라미터를 비운다", () => {
+    const dispatch = vi.fn();
+    const requestArchiveIndex = vi.fn();
+    const actions = createMonitorArchiveActions({
+      archivedIndexLength: 2,
+      archivedSearch: "codex",
+      dispatch,
+      requestArchiveIndex,
+      archiveSnapshotRequestIdRef: { current: 3 },
+    });
+
+    actions.searchArchive("");
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-archived-search",
+      value: "",
+    });
+    expect(requestArchiveIndex).toHaveBeenCalledWith(0, false, undefined);
   });
 
   it("archive snapshot 로드 성공 시 최신 request id로 dataset을 반영한다", async () => {
@@ -143,17 +176,45 @@ describe("createMonitorArchiveActions", () => {
     mockedLoadArchivedSessionSnapshot.mockResolvedValueOnce(dataset);
 
     actions.selectArchivedSession("/tmp/archive.json");
-    await flushMicrotask();
+    await vi.waitFor(() => {
+      expect(dispatch).toHaveBeenNthCalledWith(2, {
+        type: "resolve-archived-snapshot-request",
+        requestId: 5,
+        dataset,
+      });
+    });
 
     expect(archiveSnapshotRequestIdRef.current).toBe(5);
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "begin-archived-snapshot-request",
       requestId: 5,
     });
-    expect(dispatch).toHaveBeenNthCalledWith(2, {
-      type: "resolve-archived-snapshot-request",
-      requestId: 5,
-      dataset,
+    expect(requestArchiveIndex).not.toHaveBeenCalled();
+  });
+
+  it("archive snapshot 결과가 비어도 loading 상태를 종료한다", async () => {
+    const dispatch = vi.fn();
+    const requestArchiveIndex = vi.fn();
+    const actions = createMonitorArchiveActions({
+      archivedIndexLength: 0,
+      archivedSearch: "",
+      dispatch,
+      requestArchiveIndex,
+      archiveSnapshotRequestIdRef: { current: 7 },
+    });
+    mockedLoadArchivedSessionSnapshot.mockResolvedValueOnce(null);
+
+    actions.selectArchivedSession("/tmp/archive.json");
+    await vi.waitFor(() => {
+      expect(dispatch).toHaveBeenNthCalledWith(2, {
+        type: "finish-archived-snapshot-request",
+        requestId: 8,
+      });
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "begin-archived-snapshot-request",
+      requestId: 8,
     });
     expect(requestArchiveIndex).not.toHaveBeenCalled();
   });

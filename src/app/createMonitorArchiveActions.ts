@@ -18,6 +18,10 @@ interface CreateMonitorArchiveActionsOptions {
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
 }
 
+function toOptionalSearch(value: string) {
+  return value || undefined;
+}
+
 export function createMonitorArchiveActions({
   archivedIndexLength,
   archivedSearch,
@@ -25,24 +29,33 @@ export function createMonitorArchiveActions({
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
 }: CreateMonitorArchiveActionsOptions) {
+  function startSnapshotRequest() {
+    const requestId = archiveSnapshotRequestIdRef.current + 1;
+    archiveSnapshotRequestIdRef.current = requestId;
+    dispatch({ type: "begin-archived-snapshot-request", requestId });
+    return requestId;
+  }
+
+  function finishSnapshotRequest(requestId: number) {
+    dispatch({ type: "finish-archived-snapshot-request", requestId });
+  }
+
   return {
     loadArchiveIndex(append: boolean) {
       const offset = append ? archivedIndexLength : 0;
-      requestArchiveIndex(offset, append, archivedSearch || undefined);
+      requestArchiveIndex(offset, append, toOptionalSearch(archivedSearch));
     },
     searchArchive(query: string) {
       dispatch({ type: "set-archived-search", value: query });
-      requestArchiveIndex(0, false, query || undefined);
+      requestArchiveIndex(0, false, toOptionalSearch(query));
     },
     selectArchivedSession(filePath: string) {
-      const requestId = archiveSnapshotRequestIdRef.current + 1;
-      archiveSnapshotRequestIdRef.current = requestId;
-      dispatch({ type: "begin-archived-snapshot-request", requestId });
+      const requestId = startSnapshotRequest();
 
       loadArchivedSessionSnapshot(filePath)
         .then((dataset) => {
           if (!dataset) {
-            dispatch({ type: "finish-archived-snapshot-request", requestId });
+            finishSnapshotRequest(requestId);
             return;
           }
 
@@ -55,7 +68,7 @@ export function createMonitorArchiveActions({
           });
         })
         .catch(() => {
-          dispatch({ type: "finish-archived-snapshot-request", requestId });
+          finishSnapshotRequest(requestId);
         });
     },
   };
