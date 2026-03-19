@@ -1928,6 +1928,105 @@ describe("tool input preview extraction", () => {
     expect(toolEvent!.inputPreview).toBe("src/utils/helper.ts");
   });
 
+  it("wait output shows 'Timed out' for timed_out responses", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "wait",
+          functionCallId: "call_wait",
+          functionArgumentsPreview: '{"ids":["agent-1"]}',
+        },
+        {
+          timestamp: "2026-03-19T10:00:06.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: '{"status":{},"timed_out":true}',
+          functionName: null,
+          functionCallId: "call_wait",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "wait");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent!.outputPreview).toBe("Timed out (polling)");
+  });
+
+  it("spawn_agent output shows agent nickname", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "spawn_agent",
+          functionCallId: "call_spawn_out",
+          functionArgumentsPreview: '{"message":"do stuff"}',
+        },
+        {
+          timestamp: "2026-03-19T10:00:06.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: '{"agent_id":"agent-123","nickname":"Pasteur"}',
+          functionName: null,
+          functionCallId: "call_spawn_out",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "spawn_agent");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent!.outputPreview).toBe("Spawned: Pasteur");
+  });
+
+  it("send_input output shows 'Input delivered'", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "send_input",
+          functionCallId: "call_send_out",
+          functionArgumentsPreview: '{"id":"agent-1","message":"stop"}',
+        },
+        {
+          timestamp: "2026-03-19T10:00:06.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: '{"submission_id":"sub-123"}',
+          functionName: null,
+          functionCallId: "call_send_out",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "send_input");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent!.outputPreview).toBe("Input delivered");
+  });
+
   it("strips exec_command output boilerplate and shows actual content", () => {
     const boilerplateOutput = [
       "Command: /bin/zsh -lc 'git status'",

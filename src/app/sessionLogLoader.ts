@@ -1212,6 +1212,47 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
       return content || rawOutput;
     }
   }
+
+  try {
+    const parsed = JSON.parse(rawOutput);
+
+    if (toolName === "wait" || toolName === "wait_agent") {
+      if (parsed.timed_out) return "Timed out (polling)";
+      const statuses = parsed.status;
+      if (statuses && typeof statuses === "object") {
+        const entries = Object.values(statuses);
+        if (entries.length === 0) return "No agent status";
+        const summaries = entries.map((s: unknown) => {
+          if (s && typeof s === "object") {
+            if ("completed" in s) return "completed";
+            if ("errored" in s) return `errored: ${(s as Record<string, string>).errored}`;
+          }
+          return "unknown";
+        });
+        return summaries.join(", ");
+      }
+    }
+
+    if (toolName === "spawn_agent") {
+      const nickname = parsed.nickname ?? parsed.agent_nickname;
+      if (typeof nickname === "string") return `Spawned: ${nickname}`;
+    }
+
+    if (toolName === "send_input") {
+      return "Input delivered";
+    }
+
+    if (toolName === "resume_agent") {
+      const status = parsed.status;
+      if (status && typeof status === "object") {
+        if ("completed" in status) return typeof status.completed === "string"
+          ? status.completed
+          : "Agent completed";
+        if ("errored" in status) return `Agent errored: ${status.errored}`;
+      }
+    }
+  } catch { /* not JSON, fall through */ }
+
   return rawOutput;
 }
 
