@@ -1,8 +1,8 @@
 import {
+  formatCompactNumber,
   formatDuration,
   formatRelativeTime,
   formatTimestamp,
-  formatTokens,
   truncateId,
 } from "./format.js";
 import type {
@@ -1002,9 +1002,9 @@ function buildEventFacts(event: EventRecord): SummaryFact[] {
   const totalTokens = event.tokensIn + event.tokensOut;
   if (totalTokens > 0) {
     const cacheSuffix = event.cacheReadTokens > 0
-      ? ` (${formatTokens(event.cacheReadTokens)} cached)`
+      ? ` (${formatCompactNumber(event.cacheReadTokens)} cached)`
       : "";
-    facts.push({ label: "Tokens", value: `${formatTokens(event.tokensIn)} in${cacheSuffix} / ${formatTokens(event.tokensOut)} out` });
+    facts.push({ label: "Tokens", value: `${formatCompactNumber(event.tokensIn)} in${cacheSuffix} / ${formatCompactNumber(event.tokensOut)} out` });
   }
 
   if (event.errorMessage) {
