@@ -823,16 +823,48 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .get("call_id")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
-            let args_limit = match name.as_str() {
+            let arguments = match name.as_str() {
+                // apply_patch: extract file paths from the full patch text before truncation
+                "apply_patch" => {
+                    let raw = payload
+                        .get("arguments")
+                        .and_then(Value::as_str)
+                        .or_else(|| payload.get("input").and_then(Value::as_str));
+                    raw.and_then(|args| {
+                        let file_paths: Vec<&str> = args
+                            .lines()
+                            .filter_map(|line| {
+                                line.strip_prefix("*** Add File: ")
+                                    .or_else(|| line.strip_prefix("*** Update File: "))
+                                    .or_else(|| line.strip_prefix("*** Delete File: "))
+                            })
+                            .collect();
+                        if file_paths.len() > 1 {
+                            let first = file_paths[0].trim();
+                            Some(format!(
+                                "{} (+{} more)",
+                                truncate_utf8_safe(first, 200),
+                                file_paths.len() - 1
+                            ))
+                        } else if file_paths.len() == 1 {
+                            Some(truncate_utf8_safe(file_paths[0].trim(), 200))
+                        } else {
+                            Some(truncate_utf8_safe(args, 200))
+                        }
+                    })
+                }
                 "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => 2000,
-                _ => 200,
+                | "resume_agent" | "send_input" => payload
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .or_else(|| payload.get("input").and_then(Value::as_str))
+                    .map(|args| truncate_utf8_safe(args, 2000)),
+                _ => payload
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .or_else(|| payload.get("input").and_then(Value::as_str))
+                    .map(|args| truncate_utf8_safe(args, 200)),
             };
-            let arguments = payload
-                .get("arguments")
-                .and_then(Value::as_str)
-                .or_else(|| payload.get("input").and_then(Value::as_str))
-                .map(|args| truncate_utf8_safe(args, args_limit));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call".to_owned(),
