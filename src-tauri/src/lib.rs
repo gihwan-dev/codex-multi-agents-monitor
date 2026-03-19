@@ -880,15 +880,22 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
             function_call_id: None,
             function_arguments_preview: None,
         }),
-        "task_complete" => Some(SessionEntrySnapshot {
-            timestamp,
-            entry_type: "task_complete".to_owned(),
-            role: None,
-            text: None,
-            function_name: None,
-            function_call_id: None,
-            function_arguments_preview: None,
-        }),
+        "task_complete" => {
+            let text = payload
+                .get("last_agent_message")
+                .and_then(Value::as_str)
+                .filter(|v| !v.trim().is_empty())
+                .map(|t| truncate_utf8_safe(t, 500));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "task_complete".to_owned(),
+                role: None,
+                text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
         "agent_message" => {
             let text = payload
                 .get("message")

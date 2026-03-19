@@ -1001,7 +1001,7 @@ function buildLaneEventsFromEntries({
           eventType: "turn.finished",
           title: "Turn finished",
           inputPreview: null,
-          outputPreview: null,
+          outputPreview: entry.text ? sanitizeMessagePreview(entry.text) : null,
         }));
         break;
 
