@@ -6,7 +6,7 @@ on:
       - "v*"
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   validate:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - run: corepack enable pnpm
 
       - uses: actions/setup-node@v4
         with:
@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - run: corepack enable pnpm
 
       - uses: actions/setup-node@v4
         with:
