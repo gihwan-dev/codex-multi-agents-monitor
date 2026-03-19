@@ -530,14 +530,38 @@ textarea {
 }
 
 .graph-sequence__lane-header {
+  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
   padding: 10px 14px;
   min-height: 48px;
   border-left: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
   transition: opacity 180ms ease;
 }
+
+.graph-sequence__lane-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 12px 12px 0;
+  border-color: transparent;
+}
+
+.graph-sequence__lane-corner--running   { border-right-color: var(--color-active); }
+.graph-sequence__lane-corner--done      { border-right-color: var(--color-success); }
+.graph-sequence__lane-corner--failed    { border-right-color: var(--color-failed); }
+.graph-sequence__lane-corner--waiting   { border-right-color: var(--color-waiting); }
+.graph-sequence__lane-corner--blocked   { border-right-color: var(--color-blocked); }
+.graph-sequence__lane-corner--interrupted { border-right-color: var(--color-transfer); }
+.graph-sequence__lane-corner--cancelled { border-right-color: var(--color-text-tertiary); }
+.graph-sequence__lane-corner--stale     { border-right-color: var(--color-stale); }
+.graph-sequence__lane-corner--disconnected { border-right-color: var(--color-disconnected); }
+.graph-sequence__lane-corner--queued    { border-right-color: var(--color-text-tertiary); }
 
 .graph-sequence__lane-title {
   position: relative;
@@ -547,11 +571,6 @@ textarea {
   gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.graph-sequence__lane-status {
-  position: absolute;
-  right: 0;
 }
 
 .graph-sequence__lane-title strong {
