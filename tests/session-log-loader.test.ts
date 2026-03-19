@@ -2104,5 +2104,51 @@ describe("tool input preview extraction", () => {
     // Should show the content after "Output:" not the boilerplate
     expect(resultEvent!.outputPreview).toContain("branch main");
     expect(resultEvent!.outputPreview).not.toContain("Chunk ID");
+    // Successful command should not have errorMessage
+    expect(resultEvent!.errorMessage).toBeNull();
+  });
+
+  it("marks failed exec_command output with 'failed' status and exit code", () => {
+    const failedOutput = [
+      "Command: /bin/zsh -lc 'pnpm build'",
+      "Chunk ID: abc123",
+      "Wall time: 5.0 seconds",
+      "Process exited with code 2",
+      "Original token count: 200",
+      "Output:",
+      "error TS2322: Type 'string' is not assignable to type 'number'.",
+    ].join("\n");
+
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Build it"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "exec_command",
+          functionCallId: "call_fail",
+          functionArgumentsPreview: '{"cmd":"pnpm build"}',
+        },
+        {
+          timestamp: "2026-03-19T10:00:10.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: failedOutput,
+          functionName: null,
+          functionCallId: "call_fail",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "exec_command");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent!.status).toBe("failed");
+    expect(resultEvent!.errorMessage).toBe("Exit code 2");
   });
 });

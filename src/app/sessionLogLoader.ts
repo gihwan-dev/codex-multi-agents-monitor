@@ -924,6 +924,10 @@ function buildLaneEventsFromEntries({
           ? sanitizeMessagePreview(extractToolOutputPreview(toolName, entry.text))
           : null;
 
+        // Detect failed commands from exit code in output
+        const exitCodeMatch = entry.text?.match(/Process exited with code (\d+)/);
+        const failedExitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
+
         events.push(buildEntryEvent({
           entry, lane, startTs, safeEndTs, isLatest, status, model, index,
           eventType: "tool.finished",
@@ -931,7 +935,13 @@ function buildLaneEventsFromEntries({
           inputPreview: null,
           outputPreview: outputText,
           toolName,
+          errorMessage: failedExitCode !== 0 ? `Exit code ${failedExitCode}` : undefined,
         }));
+
+        // Override status for failed tool outputs so they render with failed visual
+        if (failedExitCode !== 0) {
+          events[events.length - 1].status = "failed";
+        }
         break;
       }
 
