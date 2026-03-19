@@ -270,7 +270,15 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
     let mut updated_at = started_at.clone();
     let mut model: Option<String> = None;
     let mut error: Option<String> = None;
-    let mut has_fork_context = false;
+
+    // Fork context boundary: when a second session_meta is detected (parent's
+    // session_meta copied into the forked JSONL), skip entries until we find
+    // the subagent's own task_started. Detection: a new task_started appearing
+    // while a previous turn is still open (no task_complete) means we've reached
+    // the subagent's own turn — the parent's last turn in the fork context is
+    // always incomplete (still active when the subagent was spawned).
+    let mut past_fork_boundary = true;
+    let mut has_open_turn = false;
 
     for line in reader.lines() {
         let line = line?;
@@ -283,15 +291,33 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             Err(_) => continue,
         };
 
-        // Detect forked context: a second session_meta line from the parent session
         if entry.get("type").and_then(Value::as_str) == Some("session_meta") {
-            has_fork_context = true;
+            past_fork_boundary = false;
             continue;
         }
 
+        if !past_fork_boundary {
+            let payload_type = entry
+                .get("payload")
+                .and_then(|p| p.get("type"))
+                .and_then(Value::as_str);
+            match payload_type {
+                Some("task_started") => {
+                    if has_open_turn {
+                        past_fork_boundary = true;
+                    }
+                    has_open_turn = true;
+                }
+                Some("task_complete") => {
+                    has_open_turn = false;
+                }
+                _ => {}
+            }
+        }
+
+        // Always take the latest model from turn_context — the subagent's own
+        // turn_context (which comes last) has the actual model.
         if let Some("turn_context") = entry.get("type").and_then(Value::as_str) {
-            // Always take the latest model — forked context may carry the parent's model,
-            // but the subagent's own turn_context (which comes last) has the actual model.
             if let Some(m) = entry
                 .get("payload")
                 .and_then(|p| p.get("model"))
@@ -302,19 +328,13 @@ fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnap
             }
         }
 
-        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
-            updated_at = snapshot_entry.timestamp.clone();
-            entries.push(snapshot_entry);
-        } else if error.is_none() {
-            error = extract_error_hint(&entry);
-        }
-    }
-
-    // Strip forked context: entries with timestamps clustered at the start (within 200ms)
-    if has_fork_context && entries.len() > 1 {
-        let fork_end = find_fork_context_boundary(&entries);
-        if fork_end > 0 && fork_end < entries.len() {
-            entries = entries.split_off(fork_end);
+        if past_fork_boundary {
+            if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+                updated_at = snapshot_entry.timestamp.clone();
+                entries.push(snapshot_entry);
+            } else if error.is_none() {
+                error = extract_error_hint(&entry);
+            }
         }
     }
 
@@ -471,51 +491,6 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     }
 }
 
-/// Find the boundary between forked context entries and actual subagent work.
-/// Forked entries have timestamps clustered within a few milliseconds at the start.
-/// Returns the index of the first actual entry, or 0 if no boundary is found.
-fn find_fork_context_boundary(entries: &[SessionEntrySnapshot]) -> usize {
-    if entries.len() < 2 {
-        return 0;
-    }
-
-    // Parse milliseconds from ISO 8601 timestamp for gap detection.
-    // Compare consecutive entry timestamps: the first gap > 200ms marks the boundary.
-    let parse_ms = |ts: &str| -> u64 {
-        // Format: "2026-03-18T00:14:09.101Z" — extract seconds and millis
-        let parts: Vec<&str> = ts.split('T').collect();
-        if parts.len() < 2 {
-            return 0;
-        }
-        let time_part = parts[1].trim_end_matches('Z');
-        let time_parts: Vec<&str> = time_part.split(':').collect();
-        if time_parts.len() < 3 {
-            return 0;
-        }
-        let hours: u64 = time_parts[0].parse().unwrap_or(0);
-        let minutes: u64 = time_parts[1].parse().unwrap_or(0);
-        let sec_parts: Vec<&str> = time_parts[2].split('.').collect();
-        let seconds: u64 = sec_parts[0].parse().unwrap_or(0);
-        let millis: u64 = if sec_parts.len() > 1 {
-            let frac = sec_parts[1];
-            let padded = format!("{:0<3}", &frac[..frac.len().min(3)]);
-            padded.parse().unwrap_or(0)
-        } else {
-            0
-        };
-        ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
-    };
-
-    let first_ms = parse_ms(&entries[0].timestamp);
-    for i in 1..entries.len() {
-        let curr_ms = parse_ms(&entries[i].timestamp);
-        if curr_ms.saturating_sub(first_ms) > 200 {
-            return i;
-        }
-    }
-
-    0
-}
 
 fn is_system_boilerplate_text(text: &str) -> bool {
     let trimmed = text.trim();
@@ -643,7 +618,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
             let args_limit = match name.as_str() {
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent" => 2000,
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
+                | "resume_agent" | "send_input" => 2000,
                 _ => 200,
             };
             let arguments = payload
@@ -668,7 +644,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
             let output = payload
                 .get("output")
                 .and_then(Value::as_str)
-                .map(|o| truncate_utf8_safe(o, 1000));
+                .map(|o| truncate_utf8_safe(o, 2000));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call_output".to_owned(),
@@ -690,7 +666,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
             let args_limit = match name.as_str() {
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent" => 2000,
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
+                | "resume_agent" | "send_input" => 2000,
                 _ => 200,
             };
             let arguments = payload
@@ -716,7 +693,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
             let output = payload
                 .get("output")
                 .and_then(Value::as_str)
-                .map(|o| truncate_utf8_safe(o, 1000));
+                .map(|o| truncate_utf8_safe(o, 2000));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call_output".to_owned(),
@@ -835,6 +812,53 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 entry_type: "agent_message".to_owned(),
                 role: None,
                 text: item_text,
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            })
+        }
+        "web_search_call" => {
+            let query = payload
+                .get("action")
+                .and_then(|a| a.get("query"))
+                .and_then(Value::as_str)
+                .map(|q| truncate_utf8_safe(q, 200));
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "function_call".to_owned(),
+                role: None,
+                text: None,
+                function_name: Some("web_search".to_owned()),
+                function_call_id: None,
+                function_arguments_preview: query,
+            })
+        }
+        "token_count" => {
+            let info = payload.get("info").and_then(Value::as_object)?;
+            let last_usage = info
+                .get("last_token_usage")
+                .and_then(Value::as_object)?;
+            let input = last_usage
+                .get("input_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let cached = last_usage
+                .get("cached_input_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let output = last_usage
+                .get("output_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let text = format!(
+                r#"{{"in":{},"cached":{},"out":{}}}"#,
+                input, cached, output,
+            );
+            Some(SessionEntrySnapshot {
+                timestamp,
+                entry_type: "token_count".to_owned(),
+                role: None,
+                text: Some(text),
                 function_name: None,
                 function_call_id: None,
                 function_arguments_preview: None,
@@ -990,7 +1014,12 @@ fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapsho
                     continue;
                 }
                 if let Ok(Some(sub)) = read_subagent_snapshot(&sub_path) {
-                    if sub.parent_thread_id == snapshot.session_id {
+                    if sub.parent_thread_id == snapshot.session_id
+                        || snapshot
+                            .forked_from_id
+                            .as_ref()
+                            .map_or(false, |fid| sub.parent_thread_id == *fid)
+                    {
                         snapshot.subagents.push(sub);
                     }
                 }
@@ -1169,6 +1198,11 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         .filter(|v| !v.trim().is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| session_file.display().to_string());
+    let forked_from_id = payload
+        .get("forked_from_id")
+        .and_then(Value::as_str)
+        .filter(|v| !v.trim().is_empty())
+        .map(ToOwned::to_owned);
 
     let (origin_path, display_name) = resolve_archived_workspace_identity(workspace_path);
 
@@ -1206,7 +1240,7 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
 
     Ok(Some(SessionLogSnapshot {
         session_id,
-        forked_from_id: None,
+        forked_from_id,
         workspace_path: workspace_path.to_owned(),
         origin_path,
         display_name,
@@ -1361,5 +1395,127 @@ mod tests {
 
         let error = resolve_workspace_identity(&repo_path).expect_err("invalid gitdir should fail");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn strips_fork_context_from_subagent_entries() {
+        let temp_dir = TempDir::new("fork-context");
+        let subagent_file = temp_dir.path.join("sub.jsonl");
+
+        let lines = [
+            // Line 1: subagent session_meta
+            r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-001","forked_from_id":"parent-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-001","depth":1,"agent_nickname":"Gibbs","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+            // Line 2: parent session_meta (triggers fork context)
+            r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
+            // Line 3: parent turn 1 task_started
+            r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
+            // Line 4: parent turn 1 user message
+            r#"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Hello parent"}]}}"#,
+            // Line 5: parent turn 1 assistant message
+            r#"{"timestamp":"2026-03-18T09:12:10.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will help you."}]}}"#,
+            // Line 6: parent turn 1 task_complete
+            r#"{"timestamp":"2026-03-18T09:12:15.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-p1","last_agent_message":"done"}}"#,
+            // Line 7: parent turn 2 task_started (incomplete — still active when subagent forked)
+            r#"{"timestamp":"2026-03-18T09:13:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p2"}}"#,
+            // Line 8: parent turn 2 spawn_agent call
+            r#"{"timestamp":"2026-03-18T09:13:05.000Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","call_id":"call-001","arguments":"{\"agent_type\":\"explorer\",\"message\":\"do stuff\",\"fork_context\":true}"}}"#,
+            // Line 9: parent turn 2 spawn output
+            r#"{"timestamp":"2026-03-18T09:13:06.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-001","output":"You are the newly spawned agent."}}"#,
+            // Line 10: subagent's own task_started (boundary)
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+            // Line 11: subagent turn_context
+            r#"{"timestamp":"2026-03-18T09:14:10.100Z","type":"turn_context","payload":{"model":"gpt-5.3-codex-spark","turn_id":"turn-sub-1"}}"#,
+            // Line 12: subagent user message (delegated task)
+            r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"do stuff"}]}}"#,
+            // Line 13: subagent task_complete
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":null}}"#,
+        ];
+
+        fs::write(&subagent_file, lines.join("\n")).unwrap();
+
+        let snapshot = read_subagent_snapshot(&subagent_file)
+            .expect("should parse subagent file")
+            .expect("should produce a snapshot");
+
+        assert_eq!(snapshot.session_id, "sub-001");
+        assert_eq!(snapshot.parent_thread_id, "parent-001");
+        assert_eq!(snapshot.agent_nickname, "Gibbs");
+        assert_eq!(snapshot.agent_role, "explorer");
+        assert_eq!(snapshot.model, Some("gpt-5.3-codex-spark".to_owned()));
+
+        // Only subagent's own entries: task_started, user message, task_complete
+        assert_eq!(snapshot.entries.len(), 3, "fork context entries should be stripped");
+        assert_eq!(snapshot.entries[0].entry_type, "task_started");
+        assert_eq!(snapshot.entries[1].entry_type, "message");
+        assert_eq!(snapshot.entries[1].role.as_deref(), Some("user"));
+        assert_eq!(snapshot.entries[1].text.as_deref(), Some("do stuff"));
+        assert_eq!(snapshot.entries[2].entry_type, "task_complete");
+
+        // updated_at should reflect the last subagent entry
+        assert_eq!(snapshot.updated_at, "2026-03-18T09:14:30.000Z");
+    }
+
+    #[test]
+    fn reads_subagent_without_fork_context() {
+        let temp_dir = TempDir::new("no-fork");
+        let subagent_file = temp_dir.path.join("sub.jsonl");
+
+        let lines = [
+            r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-002","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-001","depth":1,"agent_nickname":"Pasteur","agent_role":"researcher"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:10.100Z","type":"turn_context","payload":{"model":"gpt-5","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"research this"}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:20.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Here are my findings."}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
+        ];
+
+        fs::write(&subagent_file, lines.join("\n")).unwrap();
+
+        let snapshot = read_subagent_snapshot(&subagent_file)
+            .expect("should parse subagent file")
+            .expect("should produce a snapshot");
+
+        assert_eq!(snapshot.agent_nickname, "Pasteur");
+        assert_eq!(snapshot.entries.len(), 4); // task_started, user, assistant, task_complete
+        assert_eq!(snapshot.entries[0].entry_type, "task_started");
+        assert_eq!(snapshot.entries[1].entry_type, "message");
+        assert_eq!(snapshot.entries[1].role.as_deref(), Some("user"));
+        assert_eq!(snapshot.entries[2].entry_type, "message");
+        assert_eq!(snapshot.entries[2].role.as_deref(), Some("assistant"));
+        assert_eq!(snapshot.entries[3].entry_type, "task_complete");
+    }
+
+    #[test]
+    fn fork_context_single_incomplete_parent_turn() {
+        let temp_dir = TempDir::new("single-turn-fork");
+        let subagent_file = temp_dir.path.join("sub.jsonl");
+
+        let lines = [
+            // subagent meta
+            r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-003","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-001","depth":1,"agent_nickname":"Hume","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+            // parent meta
+            r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
+            // parent turn 1 (incomplete — only task_started, no task_complete)
+            r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:12:10.000Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","call_id":"call-x","arguments":"{}"}}"#,
+            // subagent's own task_started (detected as boundary: 2nd task_started while turn-p1 is open)
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Working on it."}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
+        ];
+
+        fs::write(&subagent_file, lines.join("\n")).unwrap();
+
+        let snapshot = read_subagent_snapshot(&subagent_file)
+            .expect("should parse")
+            .expect("should produce snapshot");
+
+        assert_eq!(snapshot.agent_nickname, "Hume");
+        // Only subagent entries: task_started, assistant message, task_complete
+        assert_eq!(snapshot.entries.len(), 3, "fork context with single incomplete turn should be stripped");
+        assert_eq!(snapshot.entries[0].entry_type, "task_started");
+        assert_eq!(snapshot.entries[1].entry_type, "message");
+        assert_eq!(snapshot.entries[1].role.as_deref(), Some("assistant"));
+        assert_eq!(snapshot.entries[2].entry_type, "task_complete");
     }
 }

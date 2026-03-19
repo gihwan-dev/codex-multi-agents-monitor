@@ -144,7 +144,19 @@ export function deriveSessionLogStatus(
     }
   }
 
-  return latestMessage.role === "user" ? "running" : "done";
+  if (latestMessage.role === "user") {
+    // If a task_complete follows the last user message, the turn already finished
+    // (e.g. subagent received a delegated prompt and completed without a response).
+    const msgTs = parseTimestamp(latestMessage.timestamp);
+    const hasCompletionAfter = entries.some(
+      (entry) =>
+        entry.entryType === "task_complete" &&
+        parseTimestamp(entry.timestamp) >= msgTs,
+    );
+    return hasCompletionAfter ? "done" : "running";
+  }
+
+  return "done";
 }
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
@@ -294,15 +306,50 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     }
   }
 
+  // Extract error status from wait_agent outputs in parent entries.
+  // Some subagent errors (e.g. usage limits) are only reported back to the
+  // parent via wait_agent, not recorded in the subagent's own JSONL.
+  const waitAgentErrors = new Map<string, string>();
+  {
+    const callNames = new Map<string, string>();
+    for (const entry of snapshot.entries) {
+      if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
+        callNames.set(entry.functionCallId, entry.functionName);
+      }
+    }
+    for (const entry of snapshot.entries) {
+      if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
+      const name = callNames.get(entry.functionCallId);
+      if ((name !== "wait_agent" && name !== "wait") || !entry.text) continue;
+      try {
+        const parsed = JSON.parse(entry.text);
+        const statuses = parsed.status;
+        if (statuses && typeof statuses === "object") {
+          for (const [agentId, agentStatus] of Object.entries(statuses)) {
+            if (agentStatus && typeof agentStatus === "object" && "errored" in agentStatus) {
+              const matched = subagents.find((s) => s.sessionId === agentId);
+              if (matched && !waitAgentErrors.has(matched.sessionId)) {
+                waitAgentErrors.set(matched.sessionId, (agentStatus as Record<string, string>).errored);
+              }
+            }
+          }
+        }
+      } catch {
+        // Non-JSON wait output, skip
+      }
+    }
+  }
+
   for (const sub of subagents) {
     const subLaneId = `${sub.sessionId}:sub`;
     const subModel = sub.model ?? resolvedModel;
     let subStatus = deriveSessionLogStatus(sub.entries, true);
 
-    if (sub.error && subStatus === "done") {
+    const subError = sub.error ?? waitAgentErrors.get(sub.sessionId) ?? null;
+    if (subError && subStatus !== "interrupted") {
       subStatus = "interrupted";
     }
-    if (sub.entries.length === 0 && !sub.error && subStatus === "done") {
+    if (sub.entries.length === 0 && !subError && subStatus === "done") {
       subStatus = "running";
     }
 
@@ -340,7 +387,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       agentId: subLane.agentId,
       threadId: subLane.threadId,
       eventType: "agent.spawned",
-      status: sub.error ? "failed" : "done",
+      status: subError ? "failed" : "done",
       waitReason: null,
       retryCount: 0,
       startTs: subStartTs,
@@ -351,7 +398,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       outputPreview: null,
       artifactId: null,
       errorCode: null,
-      errorMessage: sub.error ?? null,
+      errorMessage: subError,
       provider: "OpenAI",
       model: subModel,
       toolName: null,
@@ -400,6 +447,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   }
 
   // Build codex agent_id → subagent sessionId mapping from spawn_agent outputs
+  // (declared early so resume_agent/send_input enrichment can use it below)
   const parentCallIdToName = new Map<string, string>();
   for (const entry of snapshot.entries) {
     if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
@@ -434,19 +482,82 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     }
   }
 
-  // Find the last event in a subagent lane
+  // Find the last event in a subagent lane.
+  // Excludes lifecycle bookend events (run.finished, run.cancelled) to avoid
+  // selecting events whose timestamp comes from updatedAt rather than real work.
   const findLastSubagentEventId = (sessionId: string): string | null => {
     const subLaneId = `${sessionId}:sub`;
     const subLaneEvents = allEvents
-      .filter((e) => e.laneId === subLaneId)
+      .filter((e) => e.laneId === subLaneId
+        && e.eventType !== "run.finished"
+        && e.eventType !== "run.cancelled")
       .sort((a, b) => b.startTs - a.startTs);
     return subLaneEvents[0]?.eventId ?? null;
+  };
+
+  // Resolve merge edge source, ensuring it doesn't have a later timestamp
+  // than the target. Fork-context entries (e.g. parent's task_complete leaking
+  // into the subagent) can create events with very late timestamps that would
+  // cause backward-flowing edges. Falls back to the spawned event.
+  const resolveMergeSource = (sessionId: string, targetEventId: string): string | null => {
+    const lastEventId = findLastSubagentEventId(sessionId);
+    if (!lastEventId) return null;
+
+    const sourceTs = allEvents.find((e) => e.eventId === lastEventId)?.startTs ?? 0;
+    const targetTs = allEvents.find((e) => e.eventId === targetEventId)?.startTs ?? 0;
+
+    if (sourceTs <= targetTs) {
+      return lastEventId;
+    }
+
+    // Source is after target — fall back to the spawned event
+    const spawnedEventId = `${sessionId}:spawn`;
+    if (allEvents.some((e) => e.eventId === spawnedEventId)) {
+      return spawnedEventId;
+    }
+
+    return lastEventId;
   };
 
   // Resolve codex agent_id to subagent sessionId with direct match fallback
   const resolveSessionId = (agentId: string): string | undefined =>
     codexAgentIdToSessionId.get(agentId)
     ?? (subagents.some((s) => s.sessionId === agentId) ? agentId : undefined);
+
+  // Build function_call eventId → function_call_output eventId mapping.
+  // Merge edges target the output event (later timestamp) to prevent
+  // backward-flowing arrows when the parent initiates wait/close before
+  // the subagent actually finishes.
+  const callEventToOutputEvent = new Map<string, string>();
+  {
+    const tempCallIdToEventId = new Map<string, string>();
+    for (let i = 0; i < snapshot.entries.length; i++) {
+      const entry = snapshot.entries[i];
+      const eventId = `${snapshot.sessionId}:${entry.timestamp}:${entry.entryType}:${i}`;
+      if (entry.entryType === "function_call" && entry.functionCallId) {
+        tempCallIdToEventId.set(entry.functionCallId, eventId);
+      } else if (entry.entryType === "function_call_output" && entry.functionCallId) {
+        const callEventId = tempCallIdToEventId.get(entry.functionCallId);
+        if (callEventId) {
+          callEventToOutputEvent.set(callEventId, eventId);
+        }
+      }
+    }
+  }
+
+  // Collect candidate merge edges from close_agent and wait/wait_agent events.
+  // A subagent may be referenced by multiple wait calls (polling with timeouts)
+  // and then a close_agent. We keep only the merge edge with the LATEST target
+  // timestamp per subagent to avoid cluttering the graph with redundant arrows.
+  const mergeEdgeCandidates = new Map<string, { edge: EdgeRecord; targetTs: number }>();
+
+  const upsertMergeCandidate = (sessionId: string, edge: EdgeRecord) => {
+    const targetTs = allEvents.find((e) => e.eventId === edge.targetEventId)?.startTs ?? 0;
+    const existing = mergeEdgeCandidates.get(sessionId);
+    if (!existing || targetTs > existing.targetTs) {
+      mergeEdgeCandidates.set(sessionId, { edge, targetTs });
+    }
+  };
 
   // Generate merge edges from close_agent events
   for (const evt of parentEvents) {
@@ -456,16 +567,17 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       const agentId = args.id;
       const sessionId = agentId ? resolveSessionId(agentId) : undefined;
       if (!sessionId) continue;
-      const lastEventId = findLastSubagentEventId(sessionId);
-      if (!lastEventId) continue;
       const sub = subagents.find((s) => s.sessionId === sessionId);
-      allEdges.push({
+      const resolvedTarget = callEventToOutputEvent.get(evt.eventId) ?? evt.eventId;
+      const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
+      if (!mergeSourceId) continue;
+      upsertMergeCandidate(sessionId, {
         edgeId: `merge:close:${sessionId}`,
         edgeType: "merge",
         sourceAgentId: `${sessionId}:sub`,
         targetAgentId: mainLane.agentId,
-        sourceEventId: lastEventId,
-        targetEventId: evt.eventId,
+        sourceEventId: mergeSourceId,
+        targetEventId: resolvedTarget,
         payloadPreview: `${sub?.agentNickname ?? "Agent"} result`,
         artifactId: null,
       });
@@ -484,19 +596,47 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       for (const agentId of ids) {
         const sessionId = resolveSessionId(agentId);
         if (!sessionId) continue;
-        const lastEventId = findLastSubagentEventId(sessionId);
-        if (!lastEventId) continue;
         const sub = subagents.find((s) => s.sessionId === sessionId);
-        allEdges.push({
-          edgeId: `merge:wait:${sessionId}:${evt.eventId}`,
+        const resolvedTarget = callEventToOutputEvent.get(evt.eventId) ?? evt.eventId;
+        const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
+        if (!mergeSourceId) continue;
+        upsertMergeCandidate(sessionId, {
+          edgeId: `merge:wait:${sessionId}`,
           edgeType: "merge",
           sourceAgentId: `${sessionId}:sub`,
           targetAgentId: mainLane.agentId,
-          sourceEventId: lastEventId,
-          targetEventId: evt.eventId,
+          sourceEventId: mergeSourceId,
+          targetEventId: resolvedTarget,
           payloadPreview: `${sub?.agentNickname ?? "Agent"} joined`,
           artifactId: null,
         });
+      }
+    } catch {
+      // Argument parse error, skip
+    }
+  }
+
+  for (const { edge } of mergeEdgeCandidates.values()) {
+    allEdges.push(edge);
+  }
+
+  // Enrich resume_agent / send_input event titles with subagent nicknames.
+  // These represent parent-to-subagent interactions and are more readable
+  // when the target subagent name is visible.
+  for (const evt of allEvents) {
+    if (evt.toolName !== "resume_agent" && evt.toolName !== "send_input") continue;
+    if (!evt.inputPreview) continue;
+    try {
+      const args = JSON.parse(evt.inputPreview);
+      const agentId = args.id;
+      const sessionId = agentId ? resolveSessionId(agentId) : undefined;
+      if (!sessionId) continue;
+      const sub = subagents.find((s) => s.sessionId === sessionId);
+      if (!sub) continue;
+      if (evt.toolName === "resume_agent") {
+        evt.title = `Resume (${sub.agentNickname})`;
+      } else {
+        evt.title = `Send to ${sub.agentNickname}`;
       }
     } catch {
       // Argument parse error, skip
@@ -819,6 +959,21 @@ function buildLaneEventsFromEntries({
           errorMessage: entry.text ?? "Thread rolled back",
         }));
         break;
+
+      case "token_count": {
+        if (!entry.text) break;
+        const lastEvent = events[events.length - 1];
+        if (!lastEvent) break;
+        try {
+          const tokens = JSON.parse(entry.text) as { in?: number; cached?: number; out?: number };
+          lastEvent.tokensIn = tokens.in ?? 0;
+          lastEvent.tokensOut = tokens.out ?? 0;
+          lastEvent.cacheReadTokens = tokens.cached ?? 0;
+        } catch {
+          // Malformed token JSON, skip
+        }
+        break;
+      }
     }
   }
 
@@ -897,15 +1052,29 @@ function findClosestParentEvent(
   targetTs: number,
 ): string {
   if (parentEvents.length === 0) return "";
-  let best = parentEvents[0];
-  let bestDelta = Math.abs(best.startTs - targetTs);
+
+  // Find the latest parent event at or before the subagent start time.
+  // This ensures spawn edges always flow forward (downward) in the timeline.
+  let best: EventRecord | null = null;
   for (const event of parentEvents) {
-    const delta = Math.abs(event.startTs - targetTs);
-    if (delta < bestDelta) {
+    if (event.startTs <= targetTs && (!best || event.startTs > best.startTs)) {
       best = event;
-      bestDelta = delta;
     }
   }
+
+  // If no event exists before the target, fall back to the absolute closest
+  if (!best) {
+    best = parentEvents[0];
+    let bestDelta = Math.abs(best.startTs - targetTs);
+    for (const event of parentEvents) {
+      const delta = Math.abs(event.startTs - targetTs);
+      if (delta < bestDelta) {
+        best = event;
+        bestDelta = delta;
+      }
+    }
+  }
+
   return best.eventId;
 }
 

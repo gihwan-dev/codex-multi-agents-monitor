@@ -100,6 +100,36 @@ describe("sessionLogLoader", () => {
     expect(status).toBe("running");
   });
 
+  it("marks user-only entries as done when task_complete follows", () => {
+    const status = deriveSessionLogStatus([
+      {
+        timestamp: "2026-03-18T09:14:10.000Z",
+        entryType: "task_started",
+        role: null,
+        text: null,
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+      makeMessageEntry(
+        "2026-03-18T09:14:11.000Z",
+        "user",
+        "do stuff",
+      ),
+      {
+        timestamp: "2026-03-18T09:14:30.000Z",
+        entryType: "task_complete",
+        role: null,
+        text: null,
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ]);
+
+    expect(status).toBe("done");
+  });
+
   it("filters out subagent_notification system messages from timeline events", () => {
     const dataset = buildDatasetFromSessionLog(
       buildSnapshot([
@@ -645,6 +675,47 @@ describe("multi-agent data pipeline", () => {
     expect(spawnEvent!.errorMessage).toBe("Rate limit exceeded: too many requests");
   });
 
+  it("propagates errored status from wait_agent output to subagent", () => {
+    const snapshot = buildMultiAgentSnapshot();
+
+    // Add a wait_agent function_call and its output with an errored subagent
+    snapshot.entries.push(
+      {
+        timestamp: "2026-03-15T10:05:00.000Z",
+        entryType: "function_call",
+        role: null,
+        text: null,
+        functionName: "wait_agent",
+        functionCallId: "call_wait_1",
+        functionArgumentsPreview: '{"ids":["sub-gibbs"],"timeout_ms":120000}',
+      },
+      {
+        timestamp: "2026-03-15T10:05:30.000Z",
+        entryType: "function_call_output",
+        role: null,
+        text: '{"status":{"sub-gibbs":{"errored":"You\'ve hit your usage limit"}},"timed_out":false}',
+        functionName: null,
+        functionCallId: "call_wait_1",
+        functionArgumentsPreview: null,
+      },
+    );
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const gibbsLane = dataset.lanes.find((l) => l.laneId === "sub-gibbs:sub");
+    expect(gibbsLane).toBeDefined();
+    expect(gibbsLane!.laneStatus).toBe("interrupted");
+
+    const spawnEvent = dataset.events.find(
+      (e) => e.eventType === "agent.spawned" && e.laneId === "sub-gibbs:sub",
+    );
+    expect(spawnEvent).toBeDefined();
+    expect(spawnEvent!.status).toBe("failed");
+    expect(spawnEvent!.errorMessage).toBe("You've hit your usage limit");
+  });
+
   it("classifies subagent user messages as delegated prompt, not user.prompt", () => {
     const snapshot = buildMultiAgentSnapshot();
     // 일반 user 메시지를 가진 서브에이전트 추가 (IMPLEMENT_PLAN 패턴 아님)
@@ -1126,12 +1197,10 @@ describe("merge edge generation", () => {
     if (!dataset) return;
 
     const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
-    // 1 from wait + 1 from close_agent = 2 merge edges
-    expect(mergeEdges).toHaveLength(2);
+    // Deduplication: 1 merge edge per subagent (close_agent wins as the last event)
+    expect(mergeEdges).toHaveLength(1);
 
-    const waitMerge = mergeEdges.find((e) => e.edgeId.includes("wait"));
     const closeMerge = mergeEdges.find((e) => e.edgeId.includes("close"));
-    expect(waitMerge).toBeDefined();
     expect(closeMerge).toBeDefined();
   });
 
@@ -1278,5 +1347,291 @@ describe("merge edge generation", () => {
     // Spawn edges should still exist
     const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
     expect(spawnEdges).toHaveLength(1);
+  });
+
+  it("merge edge targets the function_call_output to prevent backward-flowing arrows", () => {
+    // Scenario: parent calls wait_agent BEFORE subagent finishes.
+    // Without the fix, the merge edge would go backward (target timestamp < source timestamp).
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-forward",
+        parentThreadId: "forward-session",
+        depth: 1,
+        agentNickname: "ForwardAgent",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-19T10:02:00.000Z",
+        updatedAt: "2026-03-19T10:12:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-19T10:02:05.000Z", "assistant", "작업 시작"),
+          makeMessageEntry("2026-03-19T10:10:00.000Z", "assistant", "작업 완료."),
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "forward-session",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "forward-test",
+      startedAt: "2026-03-19T10:00:00.000Z",
+      updatedAt: "2026-03-19T10:30:00.000Z",
+      model: "claude-opus-4-6",
+      entries: [
+        makeMessageEntry("2026-03-19T10:00:05.000Z", "user", "작업 시작"),
+        makeFunctionCallEntry(
+          "2026-03-19T10:01:00.000Z",
+          "spawn_agent",
+          "call_sp_fwd",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-19T10:01:05.000Z",
+          "call_sp_fwd",
+          '{"agent_id":"cid-forward","nickname":"ForwardAgent"}',
+        ),
+        // Parent calls wait_agent at 10:05 — BEFORE the subagent finishes at 10:10
+        makeFunctionCallEntry(
+          "2026-03-19T10:05:00.000Z",
+          "wait_agent",
+          "call_wait_fwd",
+          '{"ids":["cid-forward"],"timeout_ms":120000}',
+        ),
+        // wait_agent output arrives at 10:13 — AFTER the subagent finishes
+        makeFunctionCallOutputEntry(
+          "2026-03-19T10:13:00.000Z",
+          "call_wait_fwd",
+          '{"status":{"cid-forward":"completed"}}',
+        ),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges).toHaveLength(1);
+
+    const sourceEvent = dataset.events.find((ev) => ev.eventId === mergeEdges[0].sourceEventId);
+    const targetEvent = dataset.events.find((ev) => ev.eventId === mergeEdges[0].targetEventId);
+    expect(sourceEvent).toBeDefined();
+    expect(targetEvent).toBeDefined();
+
+    // The merge target should be the function_call_output (tool.finished), not the function_call
+    expect(targetEvent!.eventType).toBe("tool.finished");
+    expect(targetEvent!.toolName).toBe("wait_agent");
+
+    // The target event's timestamp must be >= source event's timestamp
+    // to ensure the edge flows forward (downward) in the timeline
+    expect(targetEvent!.startTs).toBeGreaterThanOrEqual(sourceEvent!.startTs);
+  });
+
+  it("spawn edge source is at or before the subagent start when using fallback", () => {
+    // Scenario: no call_id match, fallback picks a parent event before the subagent start
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-fb",
+        parentThreadId: "fb-session",
+        depth: 1,
+        agentNickname: "FallbackAgent",
+        agentRole: "worker",
+        model: "claude-sonnet-4-6",
+        startedAt: "2026-03-19T10:03:00.000Z",
+        updatedAt: "2026-03-19T10:10:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-19T10:03:05.000Z", "assistant", "완료."),
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "fb-session",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "fallback-test",
+      startedAt: "2026-03-19T10:00:00.000Z",
+      updatedAt: "2026-03-19T10:15:00.000Z",
+      model: "claude-opus-4-6",
+      entries: [
+        makeMessageEntry("2026-03-19T10:00:05.000Z", "user", "작업 시작"),
+        makeMessageEntry("2026-03-19T10:02:00.000Z", "assistant", "이전 작업"),
+        // No spawn_agent function_call — subagent matched via chronological fallback
+        makeMessageEntry("2026-03-19T10:05:00.000Z", "assistant", "이후 작업"),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const spawnEdges = dataset.edges.filter((e) => e.edgeType === "spawn");
+    expect(spawnEdges).toHaveLength(1);
+
+    const sourceEvent = dataset.events.find((ev) => ev.eventId === spawnEdges[0].sourceEventId);
+    const targetEvent = dataset.events.find((ev) => ev.eventId === spawnEdges[0].targetEventId);
+    expect(sourceEvent).toBeDefined();
+    expect(targetEvent).toBeDefined();
+
+    // The spawn source event should be at or before the subagent's spawned event
+    expect(sourceEvent!.startTs).toBeLessThanOrEqual(targetEvent!.startTs);
+  });
+
+  it("merge edge uses spawned event when fork-context leak creates late subagent entries", () => {
+    // Scenario: Rust backend includes parent's task_complete in subagent entries
+    // (fork context leak). The task_complete has a VERY LATE timestamp (10:20:00)
+    // while the wait_agent output is at 10:05:00. Without the fix, the merge edge
+    // would go backward from 10:20:00 → 10:05:00.
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-leak",
+        parentThreadId: "leak-session",
+        depth: 1,
+        agentNickname: "LeakAgent",
+        agentRole: "worker",
+        model: "gpt-5.4",
+        startedAt: "2026-03-19T10:02:00.000Z",
+        updatedAt: "2026-03-19T10:20:00.000Z",
+        entries: [
+          makeMessageEntry("2026-03-19T10:02:05.000Z", "assistant", "작업 시작"),
+          // Fork context leak: parent's task_complete appears in subagent entries
+          // with a very late timestamp
+          {
+            timestamp: "2026-03-19T10:20:00.000Z",
+            entryType: "task_complete",
+            role: null,
+            text: null,
+            functionName: null,
+            functionCallId: null,
+            functionArgumentsPreview: null,
+          },
+        ],
+      },
+    ];
+
+    const snapshot: SessionLogSnapshot = {
+      sessionId: "leak-session",
+      workspacePath: "/projects/test",
+      originPath: "/projects/test",
+      displayName: "fork-leak-test",
+      startedAt: "2026-03-19T10:00:00.000Z",
+      updatedAt: "2026-03-19T10:25:00.000Z",
+      model: "gpt-5.3",
+      entries: [
+        makeMessageEntry("2026-03-19T10:00:05.000Z", "user", "작업 시작"),
+        makeFunctionCallEntry(
+          "2026-03-19T10:01:00.000Z",
+          "spawn_agent",
+          "call_sp_lk",
+          '{"agent_type":"worker"}',
+        ),
+        makeFunctionCallOutputEntry(
+          "2026-03-19T10:01:05.000Z",
+          "call_sp_lk",
+          '{"agent_id":"sub-leak","nickname":"LeakAgent"}',
+        ),
+        makeFunctionCallEntry(
+          "2026-03-19T10:03:00.000Z",
+          "wait_agent",
+          "call_wait_lk",
+          '{"ids":["sub-leak"],"timeout_ms":120000}',
+        ),
+        // wait_agent output at 10:05:00 — BEFORE the leaked task_complete at 10:20:00
+        makeFunctionCallOutputEntry(
+          "2026-03-19T10:05:00.000Z",
+          "call_wait_lk",
+          '{"status":{"sub-leak":{"completed":"done"}}}',
+        ),
+      ],
+      subagents,
+    };
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
+    expect(mergeEdges).toHaveLength(1);
+
+    const sourceEvent = dataset.events.find((ev) => ev.eventId === mergeEdges[0].sourceEventId);
+    const targetEvent = dataset.events.find((ev) => ev.eventId === mergeEdges[0].targetEventId);
+    expect(sourceEvent).toBeDefined();
+    expect(targetEvent).toBeDefined();
+
+    // The merge edge must NOT flow backward:
+    // source timestamp should be <= target timestamp
+    expect(sourceEvent!.startTs).toBeLessThanOrEqual(targetEvent!.startTs);
+
+    // The source should be the spawned event (fallback), not the leaked task_complete
+    expect(sourceEvent!.eventType).not.toBe("turn.finished");
+  });
+});
+
+describe("token_count enrichment", () => {
+  it("attaches token data from token_count entries to the preceding event", () => {
+    const entries: SessionEntrySnapshot[] = [
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Hello"),
+      makeMessageEntry("2026-03-19T10:00:05.000Z", "assistant", "Hi there"),
+      {
+        timestamp: "2026-03-19T10:00:06.000Z",
+        entryType: "token_count",
+        role: null,
+        text: '{"in":20090,"cached":3712,"out":1047}',
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ];
+
+    const snapshot = buildSnapshot(entries);
+    snapshot.model = "claude-sonnet-4-6";
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    // token_count should NOT produce its own visible event
+    const tokenEvents = dataset.events.filter((e) => e.title === "token_count");
+    expect(tokenEvents).toHaveLength(0);
+
+    // The assistant "note" event should have token data attached
+    const assistantNote = dataset.events.find(
+      (e) => e.eventType === "note" && e.title === "Assistant",
+    );
+    expect(assistantNote).toBeDefined();
+    expect(assistantNote!.tokensIn).toBe(20090);
+    expect(assistantNote!.tokensOut).toBe(1047);
+    expect(assistantNote!.cacheReadTokens).toBe(3712);
+
+    // Summary metrics should reflect the token data
+    expect(dataset.run.summaryMetrics.tokens).toBe(20090 + 1047);
+  });
+
+  it("does not create visible events for token_count entries", () => {
+    const entries: SessionEntrySnapshot[] = [
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
+      {
+        timestamp: "2026-03-19T10:00:01.000Z",
+        entryType: "token_count",
+        role: null,
+        text: '{"in":100,"cached":0,"out":50}',
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ];
+
+    const snapshot = buildSnapshot(entries);
+    snapshot.model = "claude-sonnet-4-6";
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    // Only lifecycle events + user prompt, no token_count event
+    const nonLifecycleEvents = dataset.events.filter(
+      (e) => !e.eventType.startsWith("run.") && e.eventType !== "run.started",
+    );
+    expect(nonLifecycleEvents.every((e) => e.title !== "token_count")).toBe(true);
   });
 });
