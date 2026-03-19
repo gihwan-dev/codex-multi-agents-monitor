@@ -2,10 +2,10 @@
  * README용 고품질 스크린샷 캡처 스크립트
  * 27인치 모니터 해상도 (2560x1440) 기준
  */
-import { chromium } from "@playwright/test";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, join } from "node:path";
+import { chromium } from "@playwright/test";
 
 const DIST = join(import.meta.dirname, "..", "dist");
 const OUT = join(import.meta.dirname, "..", "docs", "screenshots");

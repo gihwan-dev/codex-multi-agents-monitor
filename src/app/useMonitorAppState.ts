@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useEffectEvent, useReducer } from "react";
+import { startTransition, useEffect, useEffectEvent, useReducer, useRef } from "react";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT, LIVE_FIXTURE_FRAMES } from "../features/fixtures";
 import { applyLiveFrame, buildExportPayload, normalizeImportPayload, parseCompletedRunPayload } from "../features/ingestion";
 import {
@@ -49,6 +49,7 @@ export interface MonitorState {
   archivedHasMore: boolean;
   archivedSearch: string;
   archivedLoading: boolean;
+  archivedRequestId: number;
   archiveSectionOpen: boolean;
 }
 
@@ -75,7 +76,9 @@ type Action =
   | { type: "import-dataset"; dataset: RunDataset }
   | { type: "replace-datasets"; datasets: RunDataset[] }
   | { type: "apply-live-frame" }
-  | { type: "set-archived-index"; result: ArchivedSessionIndexResult; append: boolean }
+  | { type: "begin-archived-request"; requestId: number }
+  | { type: "resolve-archived-request"; requestId: number; result: ArchivedSessionIndexResult; append: boolean }
+  | { type: "finish-archived-request"; requestId: number }
   | { type: "set-archived-search"; value: string }
   | { type: "set-archived-loading"; value: boolean }
   | { type: "toggle-archive-section" }
@@ -184,6 +187,7 @@ export function createMonitorInitialState(): MonitorState {
     archivedHasMore: false,
     archivedSearch: "",
     archivedLoading: false,
+    archivedRequestId: 0,
     archiveSectionOpen: false,
   };
 }
@@ -368,7 +372,16 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         appliedLiveFrames: state.appliedLiveFrames + 1,
       };
     }
-    case "set-archived-index": {
+    case "begin-archived-request":
+      return {
+        ...state,
+        archivedLoading: true,
+        archivedRequestId: action.requestId,
+      };
+    case "resolve-archived-request": {
+      if (action.requestId !== state.archivedRequestId) {
+        return state;
+      }
       const items = action.append
         ? [...state.archivedIndex, ...action.result.items]
         : action.result.items;
@@ -380,6 +393,11 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         archivedLoading: false,
       };
     }
+    case "finish-archived-request":
+      if (action.requestId !== state.archivedRequestId) {
+        return state;
+      }
+      return { ...state, archivedLoading: false };
     case "set-archived-search":
       return { ...state, archivedSearch: action.value };
     case "set-archived-loading":
@@ -406,6 +424,7 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
 
 export function useMonitorAppState() {
   const [state, dispatch] = useReducer(monitorStateReducer, undefined, createMonitorInitialState);
+  const archiveRequestIdRef = useRef(0);
   const activeDataset =
     state.datasets.find((item) => item.run.traceId === state.activeRunId) ?? state.datasets[0];
   const activeFilters = state.filtersByRunId[activeDataset.run.traceId] ?? createDefaultFilters();
@@ -428,6 +447,21 @@ export function useMonitorAppState() {
     graphScene.selectionPath,
   );
   const anomalyJumps = buildAnomalyJumps(activeDataset);
+  const requestArchiveIndex = useEffectEvent((offset: number, append: boolean, search?: string) => {
+    const requestId = archiveRequestIdRef.current + 1;
+    archiveRequestIdRef.current = requestId;
+    dispatch({ type: "begin-archived-request", requestId });
+    loadArchivedSessionIndex(offset, 50, search).then((result) => {
+      if (!result) {
+        dispatch({ type: "finish-archived-request", requestId });
+        return;
+      }
+      startTransition(() => {
+        dispatch({ type: "resolve-archived-request", requestId, result, append });
+      });
+    });
+  });
+
   useEffect(() => {
     let cancelled = false;
 
@@ -526,14 +560,7 @@ export function useMonitorAppState() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    loadArchivedSessionIndex(0, 50).then((result) => {
-      if (cancelled || !result) return;
-      startTransition(() => {
-        dispatch({ type: "set-archived-index", result, append: false });
-      });
-    });
-    return () => { cancelled = true; };
+    requestArchiveIndex(0, false);
   }, []);
 
   return {
@@ -652,31 +679,11 @@ export function useMonitorAppState() {
       },
       loadArchiveIndex(append: boolean) {
         const offset = append ? state.archivedIndex.length : 0;
-        dispatch({ type: "set-archived-loading", value: true });
-        loadArchivedSessionIndex(offset, 50, state.archivedSearch || undefined).then(
-          (result) => {
-            if (!result) {
-              dispatch({ type: "set-archived-loading", value: false });
-              return;
-            }
-            startTransition(() => {
-              dispatch({ type: "set-archived-index", result, append });
-            });
-          },
-        );
+        requestArchiveIndex(offset, append, state.archivedSearch || undefined);
       },
       searchArchive(query: string) {
         dispatch({ type: "set-archived-search", value: query });
-        dispatch({ type: "set-archived-loading", value: true });
-        loadArchivedSessionIndex(0, 50, query || undefined).then((result) => {
-          if (!result) {
-            dispatch({ type: "set-archived-loading", value: false });
-            return;
-          }
-          startTransition(() => {
-            dispatch({ type: "set-archived-index", result, append: false });
-          });
-        });
+        requestArchiveIndex(0, false, query || undefined);
       },
       selectArchivedSession(filePath: string) {
         dispatch({ type: "set-archived-loading", value: true });

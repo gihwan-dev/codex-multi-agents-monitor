@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createMonitorInitialState, monitorStateReducer } from "../../src/app/useMonitorAppState.js";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/features/fixtures/index.js";
-import { normalizeImportPayload, parseCompletedRunPayload } from "../../src/features/ingestion/index.js";
+import {
+  buildExportPayload,
+  normalizeImportPayload,
+  parseCompletedRunPayload,
+} from "../../src/features/ingestion/index.js";
 import {
   buildAnomalyJumps,
   buildGraphSceneModel,
@@ -95,6 +99,39 @@ describe("completedRunParser", () => {
         }),
       ),
     ).toThrow(/artifacts must be an array/i);
+  });
+});
+
+describe("내보내기/가져오기 계약", () => {
+  it("내보낸 데이터셋을 다시 가져올 수 있다", () => {
+    const source = normalizeImportPayload(parseCompletedRunPayload(FIXTURE_IMPORT_TEXT), {
+      allowRaw: true,
+      noRawStorage: false,
+    });
+
+    const parsed = parseCompletedRunPayload(buildExportPayload(source, true));
+    const reimported = normalizeImportPayload(parsed, {
+      allowRaw: true,
+      noRawStorage: false,
+    });
+
+    expect(parsed.events[0]?.event_id).toBe(source.events[0]?.eventId);
+    expect(parsed.events[0]?.input_raw).toBe(source.events[0]?.rawInput);
+    expect(reimported.events[0]?.eventId).toBe(source.events[0]?.eventId);
+    expect(reimported.events[0]?.rawInput).toBe(source.events[0]?.rawInput);
+  });
+
+  it("raw 제외 내보내기는 import 가능한 redacted payload를 만든다", () => {
+    const source = normalizeImportPayload(parseCompletedRunPayload(FIXTURE_IMPORT_TEXT), {
+      allowRaw: true,
+      noRawStorage: false,
+    });
+
+    const parsed = parseCompletedRunPayload(buildExportPayload(source, false));
+
+    expect(parsed.run.rawIncluded).toBe(false);
+    expect(parsed.events.every((event) => event.input_raw === null && event.output_raw === null)).toBe(true);
+    expect(parsed.artifacts.every((artifact) => artifact.rawContent === null)).toBe(true);
   });
 });
 

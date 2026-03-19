@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deriveArchiveIndexTitle } from "../../app/sessionLogLoader";
 import type { ArchivedSessionIndexItem } from "../../shared/domain";
-
-interface ArchivedWorkspaceGroup {
-  displayName: string;
-  sessions: ArchivedSessionIndexItem[];
-}
+import { groupArchivedSessionsByWorkspace } from "./archiveGroups";
 
 interface ArchivedSessionListProps {
   items: ArchivedSessionIndexItem[];
@@ -33,7 +29,7 @@ export function ArchivedSessionList({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const workspaceGroups = useMemo(() => groupByWorkspace(items), [items]);
+  const workspaceGroups = useMemo(() => groupArchivedSessionsByWorkspace(items), [items]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -89,13 +85,13 @@ export function ArchivedSessionList({
 
       <div className="archive-list__tree">
         {workspaceGroups.map((group) => {
-          const expanded = expandedGroups.has(group.displayName);
+          const expanded = expandedGroups.has(group.key);
           return (
-            <section key={group.displayName} className="archive-list__workspace">
+            <section key={group.key} className="archive-list__workspace">
               <button
                 type="button"
                 className="run-list__workspace-row"
-                onClick={() => toggleGroup(group.displayName)}
+                onClick={() => toggleGroup(group.key)}
                 aria-expanded={expanded}
               >
                 <div className="run-list__workspace-copy">
@@ -166,20 +162,6 @@ export function ArchivedSessionList({
       ) : null}
     </div>
   );
-}
-
-function groupByWorkspace(items: ArchivedSessionIndexItem[]): ArchivedWorkspaceGroup[] {
-  const map = new Map<string, ArchivedSessionIndexItem[]>();
-  for (const item of items) {
-    const key = item.displayName;
-    const group = map.get(key);
-    if (group) {
-      group.push(item);
-    } else {
-      map.set(key, [item]);
-    }
-  }
-  return Array.from(map, ([displayName, sessions]) => ({ displayName, sessions }));
 }
 
 function deriveArchiveItemTitle(session: ArchivedSessionIndexItem): string {

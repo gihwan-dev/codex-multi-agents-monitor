@@ -8,7 +8,6 @@ import {
 import type {
   AnomalyJump,
   EventRecord,
-  GapSegment,
   GraphSceneEdgeBundle,
   GraphSceneModel,
   GraphSceneRow,
@@ -278,41 +277,6 @@ export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
       emphasis: "default" as const,
     },
   ].filter(Boolean) as AnomalyJump[];
-}
-
-function buildGaps(
-  events: EventRecord[],
-  laneId: string,
-): Array<{ event: EventRecord } | { gap: GapSegment; events: EventRecord[] }> {
-  const sorted = sortEvents(events);
-  const items: Array<{ event: EventRecord } | { gap: GapSegment; events: EventRecord[] }> = [];
-
-  for (let index = 0; index < sorted.length; index += 1) {
-    const current = sorted[index];
-    const previous = sorted[index - 1];
-
-    if (previous) {
-      const delta = current.startTs - (previous.endTs ?? previous.startTs);
-      if (delta >= GAP_THRESHOLD_MS) {
-        items.push({
-          gap: {
-            gapId: `${laneId}-${previous.eventId}-${current.eventId}`,
-            laneId,
-            startTs: previous.endTs ?? previous.startTs,
-            endTs: current.startTs,
-            durationMs: delta,
-            hiddenCount: 1,
-            idleLaneCount: 1,
-          },
-          events: [current],
-        });
-      }
-    }
-
-    items.push({ event: current });
-  }
-
-  return items;
 }
 
 export function buildSelectionPath(
@@ -1026,19 +990,6 @@ function buildEventFacts(event: EventRecord): SummaryFact[] {
   }
 
   return facts;
-}
-
-export function defaultCollapsedGapIds(dataset: RunDataset): Set<string> {
-  const ids = new Set<string>();
-  for (const lane of dataset.lanes) {
-    const laneEvents = dataset.events.filter((event) => event.laneId === lane.laneId);
-    for (const item of buildGaps(laneEvents, lane.laneId)) {
-      if ("gap" in item) {
-        ids.add(item.gap.gapId);
-      }
-    }
-  }
-  return ids;
 }
 
 export function hasRawPayload(dataset: RunDataset): boolean {
