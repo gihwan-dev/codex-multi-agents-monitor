@@ -641,6 +641,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
         const sub = subagents.find((s) => s.sessionId === sessionId);
         if (!sub) continue;
         evt.title = `Close (${sub.agentNickname})`;
+        evt.outputPreview = `${sub.agentNickname} (${sub.agentRole})`;
       } else if (evt.toolName === "wait" || evt.toolName === "wait_agent") {
         const ids: string[] = args.ids ?? [];
         const names = ids
@@ -850,7 +851,7 @@ function buildLaneEventsFromEntries({
             eventType: "tool.started",
             title: "User input requested",
             inputPreview: entry.functionArgumentsPreview,
-            outputPreview: null,
+            outputPreview: extractToolInputPreview(functionName, entry.functionArgumentsPreview),
             waitReason: "awaiting user",
             toolName: functionName,
           }));
@@ -1182,6 +1183,10 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
     }
     if (toolName === "spawn_agent" && typeof args.message === "string") return args.message;
     if (toolName === "update_plan" && typeof args.explanation === "string") return args.explanation;
+    if (toolName === "request_user_input" && Array.isArray(args.questions) && args.questions[0]) {
+      const q = args.questions[0];
+      return typeof q.question === "string" ? q.question : null;
+    }
   } catch { /* not JSON, fall through */ }
   return rawPreview;
 }
