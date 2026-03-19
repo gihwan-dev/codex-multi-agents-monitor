@@ -995,13 +995,16 @@ function buildEventFacts(event: EventRecord): SummaryFact[] {
     facts.push({ label: "Tool", value: event.toolName });
   }
 
-  if (event.model && event.eventType.startsWith("llm.")) {
+  if (event.model && event.model !== "human") {
     facts.push({ label: "Model", value: event.model });
   }
 
   const totalTokens = event.tokensIn + event.tokensOut;
   if (totalTokens > 0) {
-    facts.push({ label: "Tokens", value: `${formatTokens(event.tokensIn)} in / ${formatTokens(event.tokensOut)} out` });
+    const cacheSuffix = event.cacheReadTokens > 0
+      ? ` (${formatTokens(event.cacheReadTokens)} cached)`
+      : "";
+    facts.push({ label: "Tokens", value: `${formatTokens(event.tokensIn)} in${cacheSuffix} / ${formatTokens(event.tokensOut)} out` });
   }
 
   if (event.errorMessage) {

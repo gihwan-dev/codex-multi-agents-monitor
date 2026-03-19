@@ -197,6 +197,33 @@ describe("normalization and selectors", () => {
     expect(summary?.downstream.some((item) => item.label === "handoff target")).toBe(true);
   });
 
+  it("shows model fact for non-llm events and hides it for human", () => {
+    const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
+    expect(dataset).toBeDefined();
+    if (!dataset) {
+      throw new Error("waiting-chain fixture missing");
+    }
+
+    // Select a non-llm event (the blocked planner event is eventType "llm.started" already,
+    // so find a tool or note event)
+    const toolEvent = dataset.events.find((e) => e.eventType === "tool.started");
+    if (toolEvent) {
+      const summary = buildInspectorCausalSummary(dataset, { kind: "event", id: toolEvent.eventId }, false);
+      expect(summary).not.toBeNull();
+      // Model fact should now be present for non-llm events
+      const modelFact = summary?.facts.find((f) => f.label === "Model");
+      expect(modelFact).toBeDefined();
+    }
+
+    // User prompt events (model = "human") should NOT show model fact
+    const userEvent = dataset.events.find((e) => e.model === "human");
+    if (userEvent) {
+      const summary = buildInspectorCausalSummary(dataset, { kind: "event", id: userEvent.eventId }, false);
+      const modelFact = summary?.facts.find((f) => f.label === "Model");
+      expect(modelFact).toBeUndefined();
+    }
+  });
+
   it("derives causal inspector copy from an edge selection", () => {
     const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
     expect(dataset).toBeDefined();
