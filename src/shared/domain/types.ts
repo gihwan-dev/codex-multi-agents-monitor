@@ -62,6 +62,7 @@ export interface SummaryMetrics {
   totalDurationMs: number;
   activeTimeMs: number;
   idleTimeMs: number;
+  longestGapMs: number;
   agentCount: number;
   peakParallelism: number;
   llmCalls: number;

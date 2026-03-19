@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMonitorInitialState, monitorStateReducer } from "../../src/app/useMonitorAppState.js";
+import { createMonitorInitialState, monitorStateReducer } from "../../src/app/monitorState.js";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/features/fixtures/index.js";
 import {
   buildExportPayload,
@@ -13,6 +13,7 @@ import {
   buildSummaryFacts,
   buildWorkspaceTreeModel,
   calculateSummaryMetrics,
+  formatDuration,
   hasRawPayload,
 } from "../../src/shared/domain/index.js";
 
@@ -289,6 +290,74 @@ describe("normalization and selectors", () => {
 
     expect(facts.find((fact) => fact.label === "Blocked by")?.value).toBe("Planner");
     expect(facts.find((fact) => fact.label === "Last handoff")?.value).toContain("Planner");
+  });
+
+  it("tracks the longest gap separately from aggregate idle time", () => {
+    const source = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-001");
+    expect(source).toBeDefined();
+    if (!source) {
+      throw new Error("fixture for longest gap test missing");
+    }
+
+    const [lane] = source.lanes;
+    const [eventA, eventB, eventC] = source.events;
+    if (!lane || !eventA || !eventB || !eventC) {
+      throw new Error("fixture for longest gap test is incomplete");
+    }
+
+    const dataset = {
+      ...source,
+      run: {
+        ...source.run,
+        durationMs: 500,
+      },
+      lanes: [lane],
+      events: [
+        {
+          ...eventA,
+          eventId: "gap-a",
+          laneId: lane.laneId,
+          eventType: "tool.finished" as const,
+          startTs: 0,
+          endTs: 100,
+          durationMs: 100,
+        },
+        {
+          ...eventB,
+          eventId: "gap-b",
+          laneId: lane.laneId,
+          eventType: "tool.finished" as const,
+          startTs: 150,
+          endTs: 200,
+          durationMs: 50,
+        },
+        {
+          ...eventC,
+          eventId: "gap-c",
+          laneId: lane.laneId,
+          eventType: "tool.finished" as const,
+          startTs: 300,
+          endTs: 350,
+          durationMs: 50,
+        },
+      ],
+      edges: [],
+      artifacts: [],
+    };
+    dataset.run.summaryMetrics = calculateSummaryMetrics(dataset);
+
+    const scene = buildGraphSceneModel(
+      dataset,
+      { agentId: null, eventType: "all", search: "", errorOnly: false },
+      null,
+    );
+    const facts = buildSummaryFacts(dataset, scene.selectionPath);
+
+    expect(dataset.run.summaryMetrics.idleTimeMs).toBe(300);
+    expect(dataset.run.summaryMetrics.longestGapMs).toBe(100);
+    expect(facts.find((fact) => fact.label === "Longest gap")?.value).toBe(
+      formatDuration(100),
+    );
   });
 
   it("derives causal inspector copy from the selected event", () => {

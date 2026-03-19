@@ -700,6 +700,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
         totalDurationMs: 0,
         activeTimeMs: 0,
         idleTimeMs: 0,
+        longestGapMs: 0,
         agentCount: 0,
         peakParallelism: 0,
         llmCalls: 0,

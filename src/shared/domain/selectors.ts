@@ -101,6 +101,24 @@ function sortEvents(events: EventRecord[]) {
   return [...events].sort((left, right) => left.startTs - right.startTs);
 }
 
+function calculateLongestGap(events: EventRecord[]) {
+  const orderedEvents = sortEvents(events);
+  let longestGapMs = 0;
+
+  for (let index = 1; index < orderedEvents.length; index += 1) {
+    const previous = orderedEvents[index - 1];
+    const current = orderedEvents[index];
+    if (!previous || !current) {
+      continue;
+    }
+
+    const previousEndTs = previous.endTs ?? previous.startTs;
+    longestGapMs = Math.max(longestGapMs, current.startTs - previousEndTs);
+  }
+
+  return Math.max(longestGapMs, 0);
+}
+
 function hasTokenUsage(event: EventRecord) {
   return event.tokensIn > 0 || event.tokensOut > 0 || event.reasoningTokens > 0;
 }
@@ -228,6 +246,7 @@ export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
   ).length;
   const timePoints = events.flatMap((event) => [event.startTs, event.endTs ?? event.startTs]);
   const peakParallelism = calculatePeakParallelism(events);
+  const longestGapMs = calculateLongestGap(events);
   const durationMs =
     dataset.run.durationMs || Math.max(...timePoints) - Math.min(...timePoints);
 
@@ -235,6 +254,7 @@ export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
     totalDurationMs: durationMs,
     activeTimeMs,
     idleTimeMs: Math.max(durationMs - activeTimeMs, 0),
+    longestGapMs,
     agentCount: dataset.lanes.length,
     peakParallelism,
     llmCalls: events.filter(countsAsLlmCall).length,
@@ -614,7 +634,7 @@ export function buildSummaryFacts(
     { label: "Blocked by", value: blockerLaneName, emphasis: blockerEvent ? "warning" : "default" },
     { label: "Affected", value: `${affectedLaneIds.size}`, emphasis: affectedLaneIds.size ? "accent" : "default" },
     { label: "Last handoff", value: lastHandoffLabel, emphasis: lastHandoff ? "accent" : "default" },
-    { label: "Longest gap", value: formatDuration(dataset.run.summaryMetrics.idleTimeMs), emphasis: "default" },
+    { label: "Longest gap", value: formatDuration(dataset.run.summaryMetrics.longestGapMs), emphasis: "default" },
     { label: "First failure", value: firstFailure?.title ?? "None", emphasis: firstFailure ? "danger" : "default" },
   ];
 }
