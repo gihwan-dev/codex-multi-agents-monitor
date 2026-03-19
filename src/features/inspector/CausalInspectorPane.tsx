@@ -149,7 +149,7 @@ function SummarySection({ summary }: { summary: InspectorCausalSummary | null })
         {summary.facts.map((fact) => (
           <div key={fact.label}>
             <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
+            <dd className={fact.emphasis && fact.emphasis !== "default" ? `definition-list__value--${fact.emphasis}` : undefined}>{fact.value}</dd>
           </div>
         ))}
       </dl>

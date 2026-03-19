@@ -1166,6 +1166,18 @@ textarea {
   font-size: 0.74rem;
 }
 
+.definition-list__value--danger {
+  color: var(--color-failed);
+}
+
+.definition-list__value--warning {
+  color: var(--color-waiting);
+}
+
+.definition-list__value--accent {
+  color: var(--color-active);
+}
+
 .inspector__next-action,
 .inspector__payload-copy {
   color: var(--color-text-secondary);

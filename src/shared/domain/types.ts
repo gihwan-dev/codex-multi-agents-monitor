@@ -376,6 +376,7 @@ export interface LiveWatchFrame {
 export interface InspectorFact {
   label: string;
   value: string;
+  emphasis?: "default" | "warning" | "danger" | "accent";
 }
 
 export interface InspectorJump {
