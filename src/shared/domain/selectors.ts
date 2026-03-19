@@ -200,7 +200,7 @@ function resolveBaseEventIds(dataset: RunDataset, selection: SelectionState | nu
 
 export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
   const events = dataset.events;
-  const totalTokens = events.reduce((acc, event) => acc + event.tokensIn + event.tokensOut, 0);
+  const totalTokens = events.reduce((acc, event) => acc + event.tokensIn + event.tokensOut + event.reasoningTokens, 0);
   const activeTimeMs = events.reduce(
     (acc, event) =>
       acc +
@@ -1004,7 +1004,10 @@ function buildEventFacts(event: EventRecord): SummaryFact[] {
     const cacheSuffix = event.cacheReadTokens > 0
       ? ` (${formatCompactNumber(event.cacheReadTokens)} cached)`
       : "";
-    facts.push({ label: "Tokens", value: `${formatCompactNumber(event.tokensIn)} in${cacheSuffix} / ${formatCompactNumber(event.tokensOut)} out` });
+    const reasoningSuffix = event.reasoningTokens > 0
+      ? ` + ${formatCompactNumber(event.reasoningTokens)} reasoning`
+      : "";
+    facts.push({ label: "Tokens", value: `${formatCompactNumber(event.tokensIn)} in${cacheSuffix} / ${formatCompactNumber(event.tokensOut)} out${reasoningSuffix}` });
   }
 
   if (event.errorMessage) {

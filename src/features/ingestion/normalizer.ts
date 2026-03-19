@@ -32,6 +32,7 @@ export function normalizeImportPayload(
         toolName: item.tool_name ?? null,
         tokensIn: item.tokens_in ?? 0,
         tokensOut: item.tokens_out ?? 0,
+        reasoningTokens: item.reasoning_tokens ?? 0,
         cacheReadTokens: item.cache_read_tokens ?? 0,
         cacheWriteTokens: item.cache_write_tokens ?? 0,
         costUsd: item.cost_usd ?? 0,

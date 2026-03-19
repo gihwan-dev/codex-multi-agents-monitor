@@ -128,6 +128,7 @@ export interface EventRecord {
   toolName: string | null;
   tokensIn: number;
   tokensOut: number;
+  reasoningTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
   costUsd: number;
@@ -422,6 +423,7 @@ export interface RawImportEvent {
   tool_name?: string | null;
   tokens_in?: number;
   tokens_out?: number;
+  reasoning_tokens?: number;
   cache_read_tokens?: number;
   cache_write_tokens?: number;
   cost_usd?: number;

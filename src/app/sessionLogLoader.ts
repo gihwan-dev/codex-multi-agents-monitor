@@ -246,6 +246,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     toolName: null,
     tokensIn: 0,
     tokensOut: 0,
+    reasoningTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     costUsd: 0,
@@ -415,6 +416,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       toolName: null,
       tokensIn: 0,
       tokensOut: 0,
+      reasoningTokens: 0,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       costUsd: 0,
@@ -1025,9 +1027,10 @@ function buildLaneEventsFromEntries({
         const lastEvent = events[events.length - 1];
         if (!lastEvent) break;
         try {
-          const tokens = JSON.parse(entry.text) as { in?: number; cached?: number; out?: number };
+          const tokens = JSON.parse(entry.text) as { in?: number; cached?: number; out?: number; reasoning?: number };
           lastEvent.tokensIn = tokens.in ?? 0;
           lastEvent.tokensOut = tokens.out ?? 0;
+          lastEvent.reasoningTokens = tokens.reasoning ?? 0;
           lastEvent.cacheReadTokens = tokens.cached ?? 0;
         } catch {
           // Malformed token JSON, skip
@@ -1098,6 +1101,7 @@ function buildEntryEvent({
     toolName: toolName ?? null,
     tokensIn: 0,
     tokensOut: 0,
+    reasoningTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     costUsd: 0,
@@ -1175,6 +1179,7 @@ function buildRunEndEvent(
     toolName: null,
     tokensIn: 0,
     tokensOut: 0,
+    reasoningTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     costUsd: 0,

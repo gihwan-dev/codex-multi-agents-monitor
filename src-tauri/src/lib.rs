@@ -987,9 +987,13 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .get("output_tokens")
                 .and_then(Value::as_u64)
                 .unwrap_or(0);
+            let reasoning = last_usage
+                .get("reasoning_output_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
             let text = format!(
-                r#"{{"in":{},"cached":{},"out":{}}}"#,
-                input, cached, output,
+                r#"{{"in":{},"cached":{},"out":{},"reasoning":{}}}"#,
+                input, cached, output, reasoning,
             );
             Some(SessionEntrySnapshot {
                 timestamp,
