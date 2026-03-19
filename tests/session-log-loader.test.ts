@@ -1,14 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildDatasetFromSessionLog,
   deriveArchiveIndexTitle,
   deriveSessionLogStatus,
   deriveSessionLogTitle,
+  loadSessionLogDatasets,
   NEW_THREAD_TITLE,
   type SessionEntrySnapshot,
   type SessionLogSnapshot,
   type SubagentSnapshot,
 } from "../src/app/sessionLogLoader.js";
+import { invokeTauri } from "../src/app/tauri.js";
+
+vi.mock("../src/app/tauri.js", () => ({
+  invokeTauri: vi.fn(),
+}));
+
+const mockedInvokeTauri = vi.mocked(invokeTauri);
 
 function makeMessageEntry(
   timestamp: string,
@@ -38,6 +46,23 @@ function buildSnapshot(entries: SessionEntrySnapshot[]): SessionLogSnapshot {
     entries,
   };
 }
+
+function expectDataset(snapshot: SessionLogSnapshot) {
+  const dataset = buildDatasetFromSessionLog(snapshot);
+  expect(dataset).not.toBeNull();
+  if (!dataset) {
+    throw new Error("expected session log dataset");
+  }
+  return dataset;
+}
+
+beforeEach(() => {
+  mockedInvokeTauri.mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("sessionLogLoader", () => {
   it("ignores AGENTS noise and keeps the first real user prompt as the title", () => {
@@ -128,6 +153,68 @@ describe("sessionLogLoader", () => {
     ]);
 
     expect(status).toBe("done");
+  });
+
+  it("loads recent session snapshots from Tauri before falling back to web fetch", async () => {
+    mockedInvokeTauri.mockResolvedValue([
+      buildSnapshot([
+        makeMessageEntry(
+          "2026-03-09T15:03:18.000Z",
+          "user",
+          "tauri 우선 로드",
+        ),
+      ]),
+    ]);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const datasets = await loadSessionLogDatasets();
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_recent_session_snapshots");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(datasets).toHaveLength(1);
+    expect(datasets?.[0]?.run.title).toBe("tauri 우선 로드");
+  });
+
+  it("falls back to web snapshots when the Tauri bridge is unavailable", async () => {
+    mockedInvokeTauri.mockRejectedValue(new Error("Tauri runtime is unavailable."));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      async json() {
+        return [
+          buildSnapshot([
+            makeMessageEntry(
+              "2026-03-09T15:03:18.000Z",
+              "user",
+              "web fallback 로드",
+            ),
+          ]),
+        ];
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const datasets = await loadSessionLogDatasets();
+
+    expect(fetchMock).toHaveBeenCalledWith("/__codex/session-snapshots.json", {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    expect(datasets).toHaveLength(1);
+    expect(datasets?.[0]?.run.title).toBe("web fallback 로드");
+  });
+
+  it("returns null when both Tauri and web snapshot loading fail", async () => {
+    mockedInvokeTauri.mockRejectedValue(new Error("bridge down"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+      }),
+    );
+
+    await expect(loadSessionLogDatasets()).resolves.toBeNull();
   });
 
   it("filters out subagent_notification system messages from timeline events", () => {
@@ -266,6 +353,39 @@ describe("sessionLogLoader", () => {
     expect(userPrompt?.inputPreview).toBe(
       "design-task 지금 내가 Table 컴포넌트의 리액트 의존성을 덜어내는 작업을 하고 있거든?",
     );
+  });
+
+  it("returns null when the session startedAt or updatedAt timestamp is invalid", () => {
+    expect(
+      buildDatasetFromSessionLog({
+        ...buildSnapshot([makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "x")]),
+        startedAt: "not-a-date",
+      }),
+    ).toBeNull();
+    expect(
+      buildDatasetFromSessionLog({
+        ...buildSnapshot([makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "x")]),
+        updatedAt: "not-a-date",
+      }),
+    ).toBeNull();
+  });
+
+  it("skips malformed entry timestamps instead of anchoring events at the Unix epoch", () => {
+    const dataset = expectDataset(
+      buildSnapshot([
+        makeMessageEntry("2026-03-09T15:03:18.000Z", "user", "정상 이벤트"),
+        makeMessageEntry("not-a-date", "assistant", "버려져야 하는 이벤트"),
+        makeMessageEntry("2026-03-09T15:05:00.000Z", "assistant", "유효한 후속 응답"),
+      ]),
+    );
+
+    expect(dataset.events.some((event) => event.startTs === 0)).toBe(false);
+    expect(
+      dataset.events.some((event) => event.outputPreview === "버려져야 하는 이벤트"),
+    ).toBe(false);
+    expect(
+      dataset.events.some((event) => event.outputPreview === "유효한 후속 응답"),
+    ).toBe(true);
   });
 
   it("generates tool.started from function_call entries", () => {
