@@ -151,6 +151,7 @@ export function buildEventRects(
   rowPositions: RowPosition[];
 } {
   const laneCenterById = new Map<string, number>();
+  const laneIndexById = new Map<string, number>();
   const eventById = new Map<string, EventLayout>();
   const rowGuideYByEventId = new Map<string, number>();
   const rowPositions: RowPosition[] = [];
@@ -160,6 +161,7 @@ export function buildEventRects(
       lane.laneId,
       laneMetrics.timeGutter + index * laneMetrics.laneWidth + laneMetrics.laneWidth / 2,
     );
+    laneIndexById.set(lane.laneId, index);
   });
 
   let cursorY = 0;
@@ -172,7 +174,7 @@ export function buildEventRects(
       kind: row.kind === "gap" ? "gap" : "event",
     });
     if (row.kind === "event") {
-      const laneIndex = scene.lanes.findIndex((lane) => lane.laneId === row.laneId);
+      const laneIndex = laneIndexById.get(row.laneId) ?? -1;
       const laneCenter = laneCenterById.get(row.laneId) ?? laneMetrics.timeGutter;
       const rowAnchorY = cursorY + height / 2;
       eventById.set(row.eventId, {
@@ -427,7 +429,12 @@ function addPortGroupEntry(
   routeKey: string,
   axis: number,
 ) {
-  groups.set(groupKey, [...(groups.get(groupKey) ?? []), { routeKey, axis }]);
+  let group = groups.get(groupKey);
+  if (!group) {
+    group = [];
+    groups.set(groupKey, group);
+  }
+  group.push({ routeKey, axis });
 }
 
 function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
@@ -435,7 +442,12 @@ function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
   const groups = new Map<string, PendingRoute[]>();
 
   routes.forEach((route) => {
-    groups.set(route.groupKey, [...(groups.get(route.groupKey) ?? []), route]);
+    let group = groups.get(route.groupKey);
+    if (!group) {
+      group = [];
+      groups.set(route.groupKey, group);
+    }
+    group.push(route);
   });
 
   groups.forEach((group) => {
