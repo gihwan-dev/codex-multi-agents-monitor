@@ -1294,7 +1294,7 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
     const outputMarker = rawOutput.indexOf("Output:\n");
     if (outputMarker !== -1) {
       const content = rawOutput.slice(outputMarker + "Output:\n".length).trim();
-      return content || rawOutput;
+      return content || "(no output)";
     }
   }
 
