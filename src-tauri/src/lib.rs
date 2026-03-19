@@ -680,6 +680,12 @@ fn extract_message_text(content: &Value) -> Option<String> {
             Value::String(value) if !value.trim().is_empty() => parts.push(value.trim().to_owned()),
             Value::Object(value) => {
                 let content_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
+
+                if content_type == "input_image" {
+                    parts.push("[Image]".to_owned());
+                    continue;
+                }
+
                 if !matches!(content_type, "input_text" | "output_text" | "text") {
                     continue;
                 }
