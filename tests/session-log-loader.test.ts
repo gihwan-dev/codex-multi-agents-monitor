@@ -1684,6 +1684,30 @@ describe("tool input preview extraction", () => {
     expect(spawnEvent!.inputPreview).toBe("코드 품질 리뷰해주세요");
   });
 
+  it("extracts explanation from update_plan JSON arguments", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Start plan"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "update_plan",
+          functionCallId: "call_plan",
+          functionArgumentsPreview: '{"explanation":"Runtime 추출 작업 진행 중","plan":[{"step":"scaffold","status":"completed"}]}',
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const planEvent = dataset.events.find((e) => e.toolName === "update_plan");
+    expect(planEvent).toBeDefined();
+    expect(planEvent!.outputPreview).toBe("Runtime 추출 작업 진행 중");
+  });
+
   it("extracts path from apply_patch JSON arguments", () => {
     const dataset = buildDatasetFromSessionLog(
       buildSnapshot([

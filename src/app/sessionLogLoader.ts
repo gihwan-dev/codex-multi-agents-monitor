@@ -841,7 +841,7 @@ function buildLaneEventsFromEntries({
             eventType: "note",
             title: "Plan updated",
             inputPreview: null,
-            outputPreview: entry.functionArgumentsPreview,
+            outputPreview: extractToolInputPreview(functionName, entry.functionArgumentsPreview),
             toolName: functionName,
           }));
         } else if (functionName === "request_user_input") {
@@ -1181,6 +1181,7 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
       return `${prefix}${args.message}`;
     }
     if (toolName === "spawn_agent" && typeof args.message === "string") return args.message;
+    if (toolName === "update_plan" && typeof args.explanation === "string") return args.explanation;
   } catch { /* not JSON, fall through */ }
   return rawPreview;
 }
