@@ -1,20 +1,13 @@
-import {
-  type RefObject,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  type ArchivedSessionIndexItem,
-  buildWorkspaceTreeModel,
-  type RunDataset,
-  type WorkspaceIdentityOverrideMap,
-  type WorkspaceTreeItem,
+import type { RefObject } from "react";
+import type {
+  ArchivedSessionIndexItem,
+  RunDataset,
+  WorkspaceIdentityOverrideMap,
 } from "../../shared/domain";
 import { Panel, StatusChip } from "../../shared/ui";
 import { ArchivedSessionList } from "./ArchivedSessionList";
+import { useWorkspaceTreeState } from "./useWorkspaceTreeState";
+import { buildRunTreeId, buildWorkspaceTreeId, getWorkspaceRuns } from "./workspaceTreeUtils";
 
 interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
@@ -35,13 +28,6 @@ interface WorkspaceRunTreeProps {
   onArchiveSelect: (filePath: string) => void;
 }
 
-interface FlatTreeItem {
-  treeId: string;
-  workspaceId: string;
-  type: "workspace" | "run";
-  runId?: string;
-}
-
 export function WorkspaceRunTree({
   datasets,
   activeRunId,
@@ -60,45 +46,22 @@ export function WorkspaceRunTree({
   onArchiveLoadMore,
   onArchiveSelect,
 }: WorkspaceRunTreeProps) {
-  const [search, setSearch] = useState("");
-  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([]);
-  const [activeTreeId, setActiveTreeId] = useState<string>("");
-  const deferredSearch = useDeferredValue(search);
-  const treeRef = useRef<HTMLDivElement>(null);
-  const model = buildWorkspaceTreeModel(
+  const {
+    activeTreeId,
+    expandedWorkspaceIds,
+    handleTreeKeyDown,
+    model,
+    search,
+    selectRun,
+    setSearch,
+    toggleWorkspace,
+    treeRef,
+  } = useWorkspaceTreeState({
     datasets,
-    deferredSearch,
-    "all",
+    activeRunId,
+    onSelectRun,
     workspaceIdentityOverrides,
-  );
-
-  useEffect(() => {
-    setExpandedWorkspaceIds((current) => {
-      const nextExpanded = current.filter((workspaceId) =>
-        model.workspaces.some((workspace) => workspace.id === workspaceId),
-      );
-      const fallbackExpanded = model.workspaces.map((workspace) => workspace.id);
-      const resolvedExpanded = nextExpanded.length ? nextExpanded : fallbackExpanded;
-
-      return areWorkspaceIdsEqual(current, resolvedExpanded) ? current : resolvedExpanded;
-    });
-    setActiveTreeId((current) => {
-      const nextTreeId =
-        findRunTreeId(model.workspaces, activeRunId) ??
-        buildWorkspaceTreeId(model.workspaces[0]?.id ?? "");
-      return current === nextTreeId ? current : nextTreeId;
-    });
-  }, [activeRunId, model.workspaces]);
-
-  const flatItems = useMemo(
-    () => flattenTree(model.workspaces, expandedWorkspaceIds),
-    [model.workspaces, expandedWorkspaceIds],
-  );
-
-  const focusTreeItem = (itemId: string) => {
-    const target = treeRef.current?.querySelector<HTMLElement>(`[data-tree-id="${itemId}"]`);
-    target?.focus();
-  };
+  });
 
   return (
     <Panel className="run-list run-list--dense">
@@ -122,94 +85,7 @@ export function WorkspaceRunTree({
         className="run-list__tree"
         role="tree"
         aria-label="Workspace tree"
-        onKeyDown={(event) => {
-          if (!flatItems.length) {
-            return;
-          }
-
-          const currentIndex = Math.max(
-            flatItems.findIndex((item) => item.treeId === activeTreeId),
-            0,
-          );
-          const move = (delta: -1 | 1) => {
-            const nextIndex = Math.min(Math.max(currentIndex + delta, 0), flatItems.length - 1);
-            const next = flatItems[nextIndex];
-            if (!next) {
-              return;
-            }
-            setActiveTreeId(next.treeId);
-            focusTreeItem(next.treeId);
-          };
-
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            move(1);
-            return;
-          }
-
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            move(-1);
-            return;
-          }
-
-          const activeItem = flatItems[currentIndex];
-          if (!activeItem) {
-            return;
-          }
-
-          const workspace = model.workspaces.find((item) => item.id === activeItem.workspaceId);
-          if (!workspace) {
-            return;
-          }
-
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            if (activeItem.type === "workspace") {
-              if (!expandedWorkspaceIds.includes(workspace.id)) {
-                setExpandedWorkspaceIds((items) => [...items, workspace.id]);
-                return;
-              }
-
-              const firstRun = getWorkspaceRuns(workspace)[0];
-              if (firstRun) {
-                const nextId = buildRunTreeId(workspace.id, firstRun.id);
-                setActiveTreeId(nextId);
-                window.requestAnimationFrame(() => focusTreeItem(nextId));
-              }
-            }
-            return;
-          }
-
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            if (activeItem.type === "run") {
-              const workspaceTreeId = buildWorkspaceTreeId(workspace.id);
-              setActiveTreeId(workspaceTreeId);
-              window.requestAnimationFrame(() => focusTreeItem(workspaceTreeId));
-              return;
-            }
-
-            setExpandedWorkspaceIds((items) =>
-              items.filter((workspaceItemId) => workspaceItemId !== workspace.id),
-            );
-            return;
-          }
-
-          if (event.key === "Enter") {
-            event.preventDefault();
-            if (activeItem.type === "run") {
-              onSelectRun(activeItem.runId ?? activeRunId);
-              return;
-            }
-
-            setExpandedWorkspaceIds((items) =>
-              items.includes(workspace.id)
-                ? items.filter((workspaceItemId) => workspaceItemId !== workspace.id)
-                : [...items, workspace.id],
-            );
-          }
-        }}
+        onKeyDown={handleTreeKeyDown}
       >
         {model.workspaces.map((workspace) => {
           const expanded = expandedWorkspaceIds.includes(workspace.id);
@@ -224,12 +100,7 @@ export function WorkspaceRunTree({
                 tabIndex={activeTreeId === buildWorkspaceTreeId(workspace.id) ? 0 : -1}
                 className="run-list__workspace-row"
                 onClick={() => {
-                  setActiveTreeId(buildWorkspaceTreeId(workspace.id));
-                  setExpandedWorkspaceIds((items) =>
-                    items.includes(workspace.id)
-                      ? items.filter((workspaceId) => workspaceId !== workspace.id)
-                      : [...items, workspace.id],
-                  );
+                  toggleWorkspace(workspace.id);
                 }}
               >
                 <div className="run-list__workspace-copy">
@@ -258,8 +129,7 @@ export function WorkspaceRunTree({
                         tabIndex={activeTreeId === treeId ? 0 : -1}
                         className={`run-row ${activeRunId === run.id ? "run-row--active" : ""}`.trim()}
                         onClick={() => {
-                          setActiveTreeId(treeId);
-                          onSelectRun(run.id);
+                          selectRun(workspace.id, run.id);
                         }}
                         title={run.title}
                       >
@@ -314,49 +184,4 @@ export function WorkspaceRunTree({
       ) : null}
     </Panel>
   );
-}
-
-function flattenTree(workspaces: WorkspaceTreeItem[], expandedWorkspaceIds: string[]): FlatTreeItem[] {
-  return workspaces.flatMap((workspace) => [
-    {
-      treeId: buildWorkspaceTreeId(workspace.id),
-      workspaceId: workspace.id,
-      type: "workspace" as const,
-    },
-    ...(expandedWorkspaceIds.includes(workspace.id)
-      ? getWorkspaceRuns(workspace).map((run) => ({
-          treeId: buildRunTreeId(workspace.id, run.id),
-          workspaceId: workspace.id,
-          type: "run" as const,
-          runId: run.id,
-        }))
-      : []),
-  ]);
-}
-
-function areWorkspaceIdsEqual(left: string[], right: string[]) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function getWorkspaceRuns(workspace: WorkspaceTreeItem) {
-  return workspace.threads.flatMap((thread) => thread.runs);
-}
-
-function buildWorkspaceTreeId(workspaceId: string) {
-  return `workspace-${encodeURIComponent(workspaceId)}`;
-}
-
-function buildRunTreeId(workspaceId: string, runId: string) {
-  return `run-${encodeURIComponent(workspaceId)}-${encodeURIComponent(runId)}`;
-}
-
-function findRunTreeId(workspaces: WorkspaceTreeItem[], activeRunId: string) {
-  for (const workspace of workspaces) {
-    const run = getWorkspaceRuns(workspace).find((item) => item.id === activeRunId);
-    if (run) {
-      return buildRunTreeId(workspace.id, run.id);
-    }
-  }
-
-  return null;
 }
