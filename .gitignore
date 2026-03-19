@@ -16,6 +16,7 @@ playwright-report
 src-tauri/target
 src-tauri/gen
 test-results
+.tmp-playwright-captures
 target
 gen
 *.local
