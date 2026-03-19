@@ -48,8 +48,10 @@ export interface MonitorState {
   archivedTotal: number;
   archivedHasMore: boolean;
   archivedSearch: string;
-  archivedLoading: boolean;
-  archivedRequestId: number;
+  archivedIndexLoading: boolean;
+  archivedSnapshotLoading: boolean;
+  archivedIndexRequestId: number;
+  archivedSnapshotRequestId: number;
   archiveSectionOpen: boolean;
 }
 
@@ -76,13 +78,14 @@ type Action =
   | { type: "import-dataset"; dataset: RunDataset }
   | { type: "replace-datasets"; datasets: RunDataset[] }
   | { type: "apply-live-frame" }
-  | { type: "begin-archived-request"; requestId: number }
-  | { type: "resolve-archived-request"; requestId: number; result: ArchivedSessionIndexResult; append: boolean }
-  | { type: "finish-archived-request"; requestId: number }
+  | { type: "begin-archived-index-request"; requestId: number }
+  | { type: "resolve-archived-index-request"; requestId: number; result: ArchivedSessionIndexResult; append: boolean }
+  | { type: "finish-archived-index-request"; requestId: number }
+  | { type: "begin-archived-snapshot-request"; requestId: number }
+  | { type: "resolve-archived-snapshot-request"; requestId: number; dataset: RunDataset }
+  | { type: "finish-archived-snapshot-request"; requestId: number }
   | { type: "set-archived-search"; value: string }
-  | { type: "set-archived-loading"; value: boolean }
-  | { type: "toggle-archive-section" }
-  | { type: "load-archived-dataset"; dataset: RunDataset };
+  | { type: "toggle-archive-section" };
 
 function createDefaultFilters(): RunFilters {
   return {
@@ -186,8 +189,10 @@ export function createMonitorInitialState(): MonitorState {
     archivedTotal: 0,
     archivedHasMore: false,
     archivedSearch: "",
-    archivedLoading: false,
-    archivedRequestId: 0,
+    archivedIndexLoading: false,
+    archivedSnapshotLoading: false,
+    archivedIndexRequestId: 0,
+    archivedSnapshotRequestId: 0,
     archiveSectionOpen: false,
   };
 }
@@ -372,14 +377,14 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         appliedLiveFrames: state.appliedLiveFrames + 1,
       };
     }
-    case "begin-archived-request":
+    case "begin-archived-index-request":
       return {
         ...state,
-        archivedLoading: true,
-        archivedRequestId: action.requestId,
+        archivedIndexLoading: true,
+        archivedIndexRequestId: action.requestId,
       };
-    case "resolve-archived-request": {
-      if (action.requestId !== state.archivedRequestId) {
+    case "resolve-archived-index-request": {
+      if (action.requestId !== state.archivedIndexRequestId) {
         return state;
       }
       const items = action.append
@@ -390,33 +395,42 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
         archivedIndex: items,
         archivedTotal: action.result.total,
         archivedHasMore: action.result.hasMore,
-        archivedLoading: false,
+        archivedIndexLoading: false,
       };
     }
-    case "finish-archived-request":
-      if (action.requestId !== state.archivedRequestId) {
+    case "finish-archived-index-request":
+      if (action.requestId !== state.archivedIndexRequestId) {
         return state;
       }
-      return { ...state, archivedLoading: false };
-    case "set-archived-search":
-      return { ...state, archivedSearch: action.value };
-    case "set-archived-loading":
-      return { ...state, archivedLoading: action.value };
-    case "toggle-archive-section":
-      return { ...state, archiveSectionOpen: !state.archiveSectionOpen };
-    case "load-archived-dataset": {
-      const datasets = [
-        action.dataset,
-        ...state.datasets.filter(
-          (item) => item.run.traceId !== action.dataset.run.traceId,
-        ),
-      ];
+      return { ...state, archivedIndexLoading: false };
+    case "begin-archived-snapshot-request":
       return {
         ...state,
-        datasets,
+        archivedSnapshotLoading: true,
+        archivedSnapshotRequestId: action.requestId,
+      };
+    case "resolve-archived-snapshot-request":
+      if (action.requestId !== state.archivedSnapshotRequestId) {
+        return state;
+      }
+      return {
+        ...state,
+        archivedSnapshotLoading: false,
+        datasets: [
+          action.dataset,
+          ...state.datasets.filter((item) => item.run.traceId !== action.dataset.run.traceId),
+        ],
         ...buildDatasetActivationPatch(state, action.dataset),
       };
-    }
+    case "finish-archived-snapshot-request":
+      if (action.requestId !== state.archivedSnapshotRequestId) {
+        return state;
+      }
+      return { ...state, archivedSnapshotLoading: false };
+    case "set-archived-search":
+      return { ...state, archivedSearch: action.value };
+    case "toggle-archive-section":
+      return { ...state, archiveSectionOpen: !state.archiveSectionOpen };
     default:
       return state;
   }
@@ -424,7 +438,8 @@ export function monitorStateReducer(state: MonitorState, action: Action): Monito
 
 export function useMonitorAppState() {
   const [state, dispatch] = useReducer(monitorStateReducer, undefined, createMonitorInitialState);
-  const archiveRequestIdRef = useRef(0);
+  const archiveIndexRequestIdRef = useRef(0);
+  const archiveSnapshotRequestIdRef = useRef(0);
   const activeDataset =
     state.datasets.find((item) => item.run.traceId === state.activeRunId) ?? state.datasets[0];
   const activeFilters = state.filtersByRunId[activeDataset.run.traceId] ?? createDefaultFilters();
@@ -432,6 +447,7 @@ export function useMonitorAppState() {
   const activeLiveConnection =
     state.liveConnectionByRunId[activeDataset.run.traceId] ??
     (activeDataset.run.liveMode === "live" ? "live" : "paused");
+  const archivedLoading = state.archivedIndexLoading || state.archivedSnapshotLoading;
   const graphScene = buildGraphSceneModel(
     activeDataset,
     activeFilters,
@@ -448,16 +464,16 @@ export function useMonitorAppState() {
   );
   const anomalyJumps = buildAnomalyJumps(activeDataset);
   const requestArchiveIndex = useEffectEvent((offset: number, append: boolean, search?: string) => {
-    const requestId = archiveRequestIdRef.current + 1;
-    archiveRequestIdRef.current = requestId;
-    dispatch({ type: "begin-archived-request", requestId });
+    const requestId = archiveIndexRequestIdRef.current + 1;
+    archiveIndexRequestIdRef.current = requestId;
+    dispatch({ type: "begin-archived-index-request", requestId });
     loadArchivedSessionIndex(offset, 50, search).then((result) => {
       if (!result) {
-        dispatch({ type: "finish-archived-request", requestId });
+        dispatch({ type: "finish-archived-index-request", requestId });
         return;
       }
       startTransition(() => {
-        dispatch({ type: "resolve-archived-request", requestId, result, append });
+        dispatch({ type: "resolve-archived-index-request", requestId, result, append });
       });
     });
   });
@@ -569,6 +585,7 @@ export function useMonitorAppState() {
     activeFilters,
     activeFollowLive,
     activeLiveConnection,
+    archivedLoading,
     rawTabAvailable: hasRawPayload(activeDataset),
     graphScene,
     inspectorSummary,
@@ -686,12 +703,16 @@ export function useMonitorAppState() {
         requestArchiveIndex(0, false, query || undefined);
       },
       selectArchivedSession(filePath: string) {
-        dispatch({ type: "set-archived-loading", value: true });
+        const requestId = archiveSnapshotRequestIdRef.current + 1;
+        archiveSnapshotRequestIdRef.current = requestId;
+        dispatch({ type: "begin-archived-snapshot-request", requestId });
         loadArchivedSessionSnapshot(filePath).then((dataset) => {
-          dispatch({ type: "set-archived-loading", value: false });
-          if (!dataset) return;
+          if (!dataset) {
+            dispatch({ type: "finish-archived-snapshot-request", requestId });
+            return;
+          }
           startTransition(() => {
-            dispatch({ type: "load-archived-dataset", dataset });
+            dispatch({ type: "resolve-archived-snapshot-request", requestId, dataset });
           });
         });
       },

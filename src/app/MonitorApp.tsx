@@ -53,6 +53,7 @@ export function MonitorApp() {
     activeFilters,
     activeFollowLive,
     activeLiveConnection,
+    archivedLoading,
     rawTabAvailable,
     graphScene,
     inspectorSummary,
@@ -180,7 +181,7 @@ export function MonitorApp() {
               archivedIndex={state.archivedIndex}
               archivedTotal={state.archivedTotal}
               archivedHasMore={state.archivedHasMore}
-              archivedLoading={state.archivedLoading}
+              archivedLoading={archivedLoading}
               archivedSearch={state.archivedSearch}
               archiveSectionOpen={state.archiveSectionOpen}
               onToggleArchiveSection={actions.toggleArchiveSection}

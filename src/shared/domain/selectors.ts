@@ -101,6 +101,21 @@ function sortEvents(events: EventRecord[]) {
   return [...events].sort((left, right) => left.startTs - right.startTs);
 }
 
+function hasTokenUsage(event: EventRecord) {
+  return event.tokensIn > 0 || event.tokensOut > 0 || event.reasoningTokens > 0;
+}
+
+function countsAsLlmCall(event: EventRecord) {
+  if (event.eventType === "llm.finished") {
+    return true;
+  }
+
+  // Session logs often attach token_count to the assistant note instead of
+  // emitting an explicit llm.finished event. Count those outputs once so the
+  // summary stays aligned with the visible token totals.
+  return event.eventType === "note" && hasTokenUsage(event);
+}
+
 function sanitizeSidebarRunTitle(value: string) {
   return value
     .replace(/^(prompt|input|user(?:\s+message)?)(?:\s+preview)?\s*:\s*/i, "")
@@ -222,7 +237,7 @@ export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
     idleTimeMs: Math.max(durationMs - activeTimeMs, 0),
     agentCount: dataset.lanes.length,
     peakParallelism,
-    llmCalls: events.filter((event) => event.eventType === "llm.finished").length,
+    llmCalls: events.filter(countsAsLlmCall).length,
     toolCalls: events.filter((event) => event.eventType === "tool.finished").length,
     tokens: totalTokens,
     costUsd: Number(events.reduce((acc, event) => acc + event.costUsd, 0).toFixed(2)),

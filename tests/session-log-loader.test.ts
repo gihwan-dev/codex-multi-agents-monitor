@@ -1820,6 +1820,7 @@ describe("token_count enrichment", () => {
     expect(assistantNote!.cacheReadTokens).toBe(3712);
 
     // Summary metrics should reflect the token data
+    expect(dataset.run.summaryMetrics.llmCalls).toBe(1);
     expect(dataset.run.summaryMetrics.tokens).toBe(20090 + 1047);
   });
 
