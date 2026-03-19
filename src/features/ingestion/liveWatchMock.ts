@@ -1,6 +1,10 @@
-import { calculateSummaryMetrics, type LiveWatchFrame, type RunDataset } from "../../shared/domain/index.js";
+import {
+  calculateSummaryMetrics,
+  type LiveWatchFrame,
+  type RunDataset,
+} from "../../shared/domain/index.js";
 
-export interface LiveWatchSnapshot {
+interface LiveWatchSnapshot {
   dataset: RunDataset;
   connection: "live" | "stale" | "disconnected" | "reconnected";
 }

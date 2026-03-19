@@ -314,7 +314,7 @@ export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
   ].filter(Boolean) as AnomalyJump[];
 }
 
-export function buildSelectionPath(
+function buildSelectionPath(
   dataset: RunDataset,
   selection: SelectionState | null,
 ): SelectionPath {
@@ -819,7 +819,7 @@ export function buildGraphSceneModel(
   };
 }
 
-export function findSelectionDetails(
+function findSelectionDetails(
   dataset: RunDataset,
   selection: SelectionState | null,
 ): EventRecord | RunDataset["edges"][number] | RunDataset["artifacts"][number] | null {

@@ -24,7 +24,10 @@ import {
   readAgentReference,
   readStringArray,
 } from "./session-log-loader/toolPreview";
-import type { SessionLogSnapshot } from "./session-log-loader/types";
+import type {
+  SessionLogSnapshot,
+  TimedSubagentSnapshot,
+} from "./session-log-loader/types";
 import { invokeTauri } from "./tauri";
 
 export {
@@ -42,6 +45,19 @@ export type {
 export { NEW_THREAD_TITLE } from "./session-log-loader/types";
 
 const WEB_SESSION_SNAPSHOT_URL = "/__codex/session-snapshots.json";
+
+interface IndexedSubagents {
+  bySessionId: Map<string, TimedSubagentSnapshot>;
+  byNickname: Map<string, TimedSubagentSnapshot>;
+}
+
+interface SessionLinkMaps {
+  subagentToSpawnSource: Map<string, string>;
+  waitAgentErrors: Map<string, string>;
+  codexAgentIdToSessionId: Map<string, string>;
+  callEventToOutputEvent: Map<string, string>;
+  parentFunctionArgsByEventId: Map<string, string | null>;
+}
 
 export async function loadSessionLogDatasets(): Promise<RunDataset[] | null> {
   try {
@@ -176,94 +192,21 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   const allEdges: EdgeRecord[] = [];
 
   const subagents = buildTimedSubagentSnapshots(snapshot.subagents ?? []);
-
-  // Build call_id → eventId map for spawn_agent function_call entries
-  const spawnCallIdToEventId = new Map<string, string>();
-  for (let i = 0; i < snapshot.entries.length; i++) {
-    const entry = snapshot.entries[i];
-    if (
-      entry.entryType === "function_call" &&
-      entry.functionName === "spawn_agent" &&
-      entry.functionCallId &&
-      parseRequiredTimestamp(entry.timestamp) !== null
-    ) {
-      const eventId = buildEntryEventId(snapshot.sessionId, entry, i);
-      spawnCallIdToEventId.set(entry.functionCallId, eventId);
-    }
-  }
-
-  // Build call_id pairing: spawn_agent output → sessionId, then map to spawn event
-  const subagentToSpawnSource = new Map<string, string>();
-  for (const entry of snapshot.entries) {
-    if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
-    const spawnEventId = spawnCallIdToEventId.get(entry.functionCallId);
-    if (!spawnEventId) continue;
-    const { agentId, nickname } = readAgentReference(parseJsonRecord(entry.text));
-    if (agentId) {
-      // Direct match: agent_id = sessionId (Codex)
-      const directMatch = subagents.find((subagent) => subagent.sessionId === agentId);
-      if (directMatch) {
-        subagentToSpawnSource.set(directMatch.sessionId, spawnEventId);
-        continue;
-      }
-      // Fallback: nickname match
-      if (nickname) {
-        const nicknameMatch = subagents.find(
-          (subagent) => subagent.agentNickname === nickname,
-        );
-        if (nicknameMatch) {
-          subagentToSpawnSource.set(nicknameMatch.sessionId, spawnEventId);
-        }
-      }
-    }
-  }
-
-  // Fallback: chronological ordering for subagents without call_id mapping
-  if (subagentToSpawnSource.size < subagents.length) {
-    const spawnToolEvents = parentEvents
-      .filter((e) => e.toolName === "spawn_agent")
-      .sort((a, b) => a.startTs - b.startTs);
-    const sortedSubagents = [...subagents].sort((a, b) => a.startedTs - b.startedTs);
-    for (let i = 0; i < sortedSubagents.length; i++) {
-      if (!subagentToSpawnSource.has(sortedSubagents[i].sessionId) && i < spawnToolEvents.length) {
-        subagentToSpawnSource.set(sortedSubagents[i].sessionId, spawnToolEvents[i].eventId);
-      }
-    }
-  }
-
-  // Extract error status from wait_agent outputs in parent entries.
-  // Some subagent errors (e.g. usage limits) are only reported back to the
-  // parent via wait_agent, not recorded in the subagent's own JSONL.
-  const waitAgentErrors = new Map<string, string>();
-  {
-    const callNames = new Map<string, string>();
-    for (const entry of snapshot.entries) {
-      if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
-        callNames.set(entry.functionCallId, entry.functionName);
-      }
-    }
-    for (const entry of snapshot.entries) {
-      if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
-      const name = callNames.get(entry.functionCallId);
-      if (name !== "wait_agent" && name !== "wait") continue;
-      const parsed = parseJsonRecord(entry.text);
-      const statuses = parsed?.status;
-      if (statuses && typeof statuses === "object") {
-        for (const [agentId, agentStatus] of Object.entries(statuses)) {
-          if (!agentStatus || typeof agentStatus !== "object") {
-            continue;
-          }
-          const errored = (agentStatus as Record<string, unknown>).errored;
-          if (typeof errored === "string") {
-            const matched = subagents.find((subagent) => subagent.sessionId === agentId);
-            if (matched && !waitAgentErrors.has(matched.sessionId)) {
-              waitAgentErrors.set(matched.sessionId, errored);
-            }
-          }
-        }
-      }
-    }
-  }
+  const indexedSubagents = indexSubagents(subagents);
+  const parentTimelineEvents = [runStartEvent, ...parentEvents];
+  const {
+    subagentToSpawnSource,
+    waitAgentErrors,
+    codexAgentIdToSessionId,
+    callEventToOutputEvent,
+    parentFunctionArgsByEventId,
+  } = buildSessionLinkMaps({
+    sessionId: snapshot.sessionId,
+    entries: snapshot.entries,
+    parentEvents,
+    subagents,
+    indexedSubagents,
+  });
 
   for (const sub of subagents) {
     const subLaneId = `${sub.sessionId}:sub`;
@@ -349,7 +292,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
 
     const sourceEventId =
       subagentToSpawnSource.get(sub.sessionId) ??
-      findClosestParentEvent([runStartEvent, ...parentEvents], sub.startedTs);
+      findClosestParentEvent(parentTimelineEvents, sub.startedTs);
     allEdges.push({
       edgeId: `spawn:${sub.sessionId}`,
       edgeType: "spawn",
@@ -362,70 +305,27 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     });
   }
 
-  // 매칭된 spawn_agent 이벤트 제목에 서브에이전트 닉네임 보강
+  const eventsById = new Map(allEvents.map((event) => [event.eventId, event]));
+  const latestSubagentEventBySessionId = buildLatestSubagentEventBySessionId(allEvents);
+
   for (const [sessionId, eventId] of subagentToSpawnSource) {
-    const sub = subagents.find((s) => s.sessionId === sessionId);
-    const evt = allEvents.find((e) => e.eventId === eventId);
-    if (sub && evt) {
-      evt.title = `spawn_agent (${sub.agentNickname})`;
+    const sub = indexedSubagents.bySessionId.get(sessionId);
+    const event = eventsById.get(eventId);
+    if (sub && event) {
+      event.title = `spawn_agent (${sub.agentNickname})`;
     }
   }
-
-  // Build codex agent_id → subagent sessionId mapping from spawn_agent outputs
-  // (declared early so resume_agent/send_input enrichment can use it below)
-  const parentCallIdToName = new Map<string, string>();
-  for (const entry of snapshot.entries) {
-    if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
-      parentCallIdToName.set(entry.functionCallId, entry.functionName);
-    }
-  }
-
-  const codexAgentIdToSessionId = new Map<string, string>();
-  for (const entry of snapshot.entries) {
-    if (entry.entryType !== "function_call_output" || !entry.functionCallId) continue;
-    const pairedName = parentCallIdToName.get(entry.functionCallId);
-    if (pairedName !== "spawn_agent") continue;
-    const { agentId, nickname } = readAgentReference(parseJsonRecord(entry.text));
-    if (agentId) {
-      // Direct match: Codex uses agent_id = sessionId
-      const directMatch = subagents.find((subagent) => subagent.sessionId === agentId);
-      if (directMatch) {
-        codexAgentIdToSessionId.set(agentId, directMatch.sessionId);
-      } else if (nickname) {
-        // Fallback: match by nickname
-        const matchingSub = subagents.find(
-          (subagent) => subagent.agentNickname === nickname,
-        );
-        if (matchingSub) {
-          codexAgentIdToSessionId.set(agentId, matchingSub.sessionId);
-        }
-      }
-    }
-  }
-
-  // Find the last event in a subagent lane.
-  // Excludes lifecycle bookend events (run.finished, run.cancelled) to avoid
-  // selecting events whose timestamp comes from updatedAt rather than real work.
-  const findLastSubagentEventId = (sessionId: string): string | null => {
-    const subLaneId = `${sessionId}:sub`;
-    const subLaneEvents = allEvents
-      .filter((e) => e.laneId === subLaneId
-        && e.eventType !== "run.finished"
-        && e.eventType !== "run.cancelled")
-      .sort((a, b) => b.startTs - a.startTs);
-    return subLaneEvents[0]?.eventId ?? null;
-  };
 
   // Resolve merge edge source, ensuring it doesn't have a later timestamp
   // than the target. Fork-context entries (e.g. parent's task_complete leaking
   // into the subagent) can create events with very late timestamps that would
   // cause backward-flowing edges. Falls back to the spawned event.
   const resolveMergeSource = (sessionId: string, targetEventId: string): string | null => {
-    const lastEventId = findLastSubagentEventId(sessionId);
+    const lastEventId = latestSubagentEventBySessionId.get(sessionId)?.eventId ?? null;
     if (!lastEventId) return null;
 
-    const sourceTs = allEvents.find((e) => e.eventId === lastEventId)?.startTs ?? 0;
-    const targetTs = allEvents.find((e) => e.eventId === targetEventId)?.startTs ?? 0;
+    const sourceTs = eventsById.get(lastEventId)?.startTs ?? 0;
+    const targetTs = eventsById.get(targetEventId)?.startTs ?? 0;
 
     if (sourceTs <= targetTs) {
       return lastEventId;
@@ -433,7 +333,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
 
     // Source is after target — fall back to the spawned event
     const spawnedEventId = `${sessionId}:spawn`;
-    if (allEvents.some((e) => e.eventId === spawnedEventId)) {
+    if (eventsById.has(spawnedEventId)) {
       return spawnedEventId;
     }
 
@@ -443,35 +343,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   // Resolve codex agent_id to subagent sessionId with direct match fallback
   const resolveSessionId = (agentId: string): string | undefined =>
     codexAgentIdToSessionId.get(agentId)
-    ?? (subagents.some((s) => s.sessionId === agentId) ? agentId : undefined);
-
-  // Build function_call eventId → function_call_output eventId mapping.
-  // Merge edges target the output event (later timestamp) to prevent
-  // backward-flowing arrows when the parent initiates wait/close before
-  // the subagent actually finishes.
-  const callEventToOutputEvent = new Map<string, string>();
-  const parentFunctionArgsByEventId = new Map<string, string | null>();
-  {
-    const tempCallIdToEventId = new Map<string, string>();
-    for (let i = 0; i < snapshot.entries.length; i++) {
-      const entry = snapshot.entries[i];
-      if (parseRequiredTimestamp(entry.timestamp) === null) {
-        continue;
-      }
-      const eventId = buildEntryEventId(snapshot.sessionId, entry, i);
-      if (entry.entryType === "function_call") {
-        parentFunctionArgsByEventId.set(eventId, entry.functionArgumentsPreview);
-        if (entry.functionCallId) {
-          tempCallIdToEventId.set(entry.functionCallId, eventId);
-        }
-      } else if (entry.entryType === "function_call_output" && entry.functionCallId) {
-        const callEventId = tempCallIdToEventId.get(entry.functionCallId);
-        if (callEventId) {
-          callEventToOutputEvent.set(callEventId, eventId);
-        }
-      }
-    }
-  }
+    ?? (indexedSubagents.bySessionId.has(agentId) ? agentId : undefined);
 
   const parseParentFunctionArgs = (event: EventRecord) =>
     parseJsonRecord(parentFunctionArgsByEventId.get(event.eventId) ?? event.inputPreview);
@@ -483,7 +355,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   const mergeEdgeCandidates = new Map<string, { edge: EdgeRecord; targetTs: number }>();
 
   const upsertMergeCandidate = (sessionId: string, edge: EdgeRecord) => {
-    const targetTs = allEvents.find((e) => e.eventId === edge.targetEventId)?.startTs ?? 0;
+    const targetTs = eventsById.get(edge.targetEventId)?.startTs ?? 0;
     const existing = mergeEdgeCandidates.get(sessionId);
     if (!existing || targetTs > existing.targetTs) {
       mergeEdgeCandidates.set(sessionId, { edge, targetTs });
@@ -497,7 +369,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     const agentId = typeof args?.id === "string" ? args.id : null;
     const sessionId = agentId ? resolveSessionId(agentId) : undefined;
     if (!sessionId) continue;
-    const sub = subagents.find((subagent) => subagent.sessionId === sessionId);
+    const sub = indexedSubagents.bySessionId.get(sessionId);
     const resolvedTarget = callEventToOutputEvent.get(evt.eventId) ?? evt.eventId;
     const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
     if (!mergeSourceId) continue;
@@ -519,7 +391,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     for (const agentId of readStringArray(parseParentFunctionArgs(evt), "ids")) {
       const sessionId = resolveSessionId(agentId);
       if (!sessionId) continue;
-      const sub = subagents.find((subagent) => subagent.sessionId === sessionId);
+      const sub = indexedSubagents.bySessionId.get(sessionId);
       const resolvedTarget = callEventToOutputEvent.get(evt.eventId) ?? evt.eventId;
       const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
       if (!mergeSourceId) continue;
@@ -549,7 +421,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     if (evt.toolName === "resume_agent" || evt.toolName === "send_input") {
       const sessionId = typeof args.id === "string" ? resolveSessionId(args.id) : undefined;
       if (!sessionId) continue;
-      const sub = subagents.find((subagent) => subagent.sessionId === sessionId);
+      const sub = indexedSubagents.bySessionId.get(sessionId);
       if (!sub) continue;
       evt.title = evt.toolName === "resume_agent"
         ? `Resume (${sub.agentNickname})`
@@ -557,7 +429,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     } else if (evt.toolName === "close_agent") {
       const sessionId = typeof args.id === "string" ? resolveSessionId(args.id) : undefined;
       if (!sessionId) continue;
-      const sub = subagents.find((subagent) => subagent.sessionId === sessionId);
+      const sub = indexedSubagents.bySessionId.get(sessionId);
       if (!sub) continue;
       evt.title = `Close (${sub.agentNickname})`;
       evt.outputPreview = `${sub.agentNickname} (${sub.agentRole})`;
@@ -565,7 +437,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       const names = readStringArray(args, "ids")
         .map((id) => resolveSessionId(id))
         .filter((sid): sid is string => sid !== undefined)
-        .map((sid) => subagents.find((subagent) => subagent.sessionId === sid)?.agentNickname)
+        .map((sid) => indexedSubagents.bySessionId.get(sid)?.agentNickname)
         .filter((name): name is string => name !== undefined);
       if (names.length > 0) {
         evt.title = `Wait (${names.join(", ")})`;
@@ -647,6 +519,175 @@ function buildPromptAssembly(snapshot: SessionLogSnapshot): PromptAssembly | und
     })),
     totalContentLength: layers.reduce((sum, l) => sum + l.contentLength, 0),
   };
+}
+
+function indexSubagents(subagents: TimedSubagentSnapshot[]): IndexedSubagents {
+  return {
+    bySessionId: new Map(subagents.map((subagent) => [subagent.sessionId, subagent])),
+    byNickname: new Map(subagents.map((subagent) => [subagent.agentNickname, subagent])),
+  };
+}
+
+function resolveLinkedSubagent(
+  indexedSubagents: IndexedSubagents,
+  agentId: string | null | undefined,
+  nickname: string | null | undefined,
+) {
+  if (agentId) {
+    const bySessionId = indexedSubagents.bySessionId.get(agentId);
+    if (bySessionId) {
+      return bySessionId;
+    }
+  }
+
+  if (nickname) {
+    return indexedSubagents.byNickname.get(nickname) ?? null;
+  }
+
+  return null;
+}
+
+function buildSessionLinkMaps({
+  sessionId,
+  entries,
+  parentEvents,
+  subagents,
+  indexedSubagents,
+}: {
+  sessionId: string;
+  entries: SessionLogSnapshot["entries"];
+  parentEvents: EventRecord[];
+  subagents: TimedSubagentSnapshot[];
+  indexedSubagents: IndexedSubagents;
+}): SessionLinkMaps {
+  const callIdToName = new Map<string, string>();
+  const spawnCallIdToEventId = new Map<string, string>();
+  const callEventIdByCallId = new Map<string, string>();
+  const subagentToSpawnSource = new Map<string, string>();
+  const waitAgentErrors = new Map<string, string>();
+  const codexAgentIdToSessionId = new Map<string, string>();
+  const callEventToOutputEvent = new Map<string, string>();
+  const parentFunctionArgsByEventId = new Map<string, string | null>();
+
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (entry.entryType !== "function_call" || !entry.functionCallId || !entry.functionName) {
+      continue;
+    }
+
+    callIdToName.set(entry.functionCallId, entry.functionName);
+
+    if (parseRequiredTimestamp(entry.timestamp) === null) {
+      continue;
+    }
+
+    const eventId = buildEntryEventId(sessionId, entry, index);
+    callEventIdByCallId.set(entry.functionCallId, eventId);
+    parentFunctionArgsByEventId.set(eventId, entry.functionArgumentsPreview);
+
+    if (entry.functionName === "spawn_agent") {
+      spawnCallIdToEventId.set(entry.functionCallId, eventId);
+    }
+  }
+
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (entry.entryType !== "function_call_output" || !entry.functionCallId) {
+      continue;
+    }
+
+    const toolName = callIdToName.get(entry.functionCallId);
+    const outputEventId =
+      parseRequiredTimestamp(entry.timestamp) === null
+        ? null
+        : buildEntryEventId(sessionId, entry, index);
+    const pairedCallEventId = callEventIdByCallId.get(entry.functionCallId);
+    if (outputEventId && pairedCallEventId) {
+      callEventToOutputEvent.set(pairedCallEventId, outputEventId);
+    }
+
+    const parsedOutput = parseJsonRecord(entry.text);
+    if (toolName === "spawn_agent") {
+      const spawnSourceEventId = spawnCallIdToEventId.get(entry.functionCallId);
+      const { agentId, nickname } = readAgentReference(parsedOutput);
+      const matchedSubagent = resolveLinkedSubagent(indexedSubagents, agentId, nickname);
+      if (spawnSourceEventId && matchedSubagent) {
+        subagentToSpawnSource.set(matchedSubagent.sessionId, spawnSourceEventId);
+      }
+      if (agentId && matchedSubagent) {
+        codexAgentIdToSessionId.set(agentId, matchedSubagent.sessionId);
+      }
+      continue;
+    }
+
+    if (toolName !== "wait" && toolName !== "wait_agent") {
+      continue;
+    }
+
+    const statuses = parsedOutput?.status;
+    if (!statuses || typeof statuses !== "object") {
+      continue;
+    }
+
+    for (const [agentId, agentStatus] of Object.entries(statuses)) {
+      if (!agentStatus || typeof agentStatus !== "object") {
+        continue;
+      }
+      const errored = (agentStatus as Record<string, unknown>).errored;
+      if (typeof errored !== "string") {
+        continue;
+      }
+
+      const resolvedSessionId = codexAgentIdToSessionId.get(agentId) ?? agentId;
+      if (
+        indexedSubagents.bySessionId.has(resolvedSessionId) &&
+        !waitAgentErrors.has(resolvedSessionId)
+      ) {
+        waitAgentErrors.set(resolvedSessionId, errored);
+      }
+    }
+  }
+
+  if (subagentToSpawnSource.size < subagents.length) {
+    const spawnToolEvents = parentEvents
+      .filter((event) => event.toolName === "spawn_agent")
+      .sort((left, right) => left.startTs - right.startTs);
+    const sortedSubagents = [...subagents].sort((left, right) => left.startedTs - right.startedTs);
+    for (let index = 0; index < sortedSubagents.length; index++) {
+      const subagent = sortedSubagents[index];
+      if (!subagent || subagentToSpawnSource.has(subagent.sessionId) || index >= spawnToolEvents.length) {
+        continue;
+      }
+      subagentToSpawnSource.set(subagent.sessionId, spawnToolEvents[index].eventId);
+    }
+  }
+
+  return {
+    subagentToSpawnSource,
+    waitAgentErrors,
+    codexAgentIdToSessionId,
+    callEventToOutputEvent,
+    parentFunctionArgsByEventId,
+  };
+}
+
+function buildLatestSubagentEventBySessionId(events: EventRecord[]) {
+  const latestBySessionId = new Map<string, EventRecord>();
+  for (const event of events) {
+    if (
+      !event.laneId.endsWith(":sub") ||
+      event.eventType === "run.finished" ||
+      event.eventType === "run.cancelled"
+    ) {
+      continue;
+    }
+
+    const existing = latestBySessionId.get(event.threadId);
+    if (!existing || event.startTs > existing.startTs) {
+      latestBySessionId.set(event.threadId, event);
+    }
+  }
+  return latestBySessionId;
 }
 
 function findClosestParentEvent(

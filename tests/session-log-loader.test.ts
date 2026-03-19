@@ -4,6 +4,8 @@ import {
   deriveArchiveIndexTitle,
   deriveSessionLogStatus,
   deriveSessionLogTitle,
+  loadArchivedSessionIndex,
+  loadArchivedSessionSnapshot,
   loadSessionLogDatasets,
   NEW_THREAD_TITLE,
   type SessionEntrySnapshot,
@@ -243,6 +245,53 @@ describe("sessionLogLoader", () => {
     );
 
     await expect(loadSessionLogDatasets()).resolves.toBeNull();
+  });
+
+  it("archive 인덱스를 Tauri 브리지로 읽고 빈 검색어를 null로 정규화한다", async () => {
+    const archiveResult = {
+      items: [],
+      total: 0,
+      hasMore: false,
+    };
+    mockedInvokeTauri.mockResolvedValue(archiveResult);
+
+    const result = await loadArchivedSessionIndex(20, 50, "");
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_archived_session_index", {
+      offset: 20,
+      limit: 50,
+      search: null,
+    });
+    expect(result).toEqual(archiveResult);
+  });
+
+  it("archive snapshot을 RunDataset으로 변환한다", async () => {
+    mockedInvokeTauri.mockResolvedValue({
+      ...buildSnapshot([
+        makeMessageEntry(
+          "2026-03-09T15:03:18.000Z",
+          "user",
+          "archive snapshot 로드",
+        ),
+      ]),
+      isArchived: true,
+    });
+
+    const dataset = await loadArchivedSessionSnapshot("/tmp/archive-session.json");
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_archived_session_snapshot", {
+      filePath: "/tmp/archive-session.json",
+    });
+    expect(dataset?.run.title).toBe("archive snapshot 로드");
+    expect(dataset?.run.isArchived).toBe(true);
+  });
+
+  it("archive 브리지 호출이 실패하거나 비어 있으면 null을 반환한다", async () => {
+    mockedInvokeTauri.mockRejectedValueOnce(new Error("archive index down"));
+    await expect(loadArchivedSessionIndex(0, 50, "codex")).resolves.toBeNull();
+
+    mockedInvokeTauri.mockResolvedValueOnce(null);
+    await expect(loadArchivedSessionSnapshot("/tmp/missing-session.json")).resolves.toBeNull();
   });
 
   it("filters out subagent_notification system messages from timeline events", () => {
@@ -1280,6 +1329,40 @@ describe("merge edge generation", () => {
       dataset.events.find((ev) => ev.eventId === e.targetEventId),
     );
     expect(targetEvents.every((ev) => ev?.toolName === "close_agent")).toBe(true);
+  });
+
+  it("codex agent_id 기반 wait_agent 오류도 서브에이전트 상태에 반영한다", () => {
+    const snapshot = buildCloseAgentSnapshot();
+    snapshot.entries.push(
+      makeFunctionCallEntry(
+        "2026-03-18T10:19:00.000Z",
+        "wait_agent",
+        "call_wait_error",
+        '{"ids":["codex-id-beta"],"timeout_ms":120000}',
+      ),
+      makeFunctionCallOutputEntry(
+        "2026-03-18T10:19:05.000Z",
+        "call_wait_error",
+        '{"status":{"codex-id-beta":{"errored":"Usage limit reached"}},"timed_out":false}',
+      ),
+    );
+
+    const dataset = expectDataset(snapshot);
+
+    const betaLane = expectLane(
+      dataset,
+      (lane) => lane.laneId === "sub-beta:sub",
+      "expected beta lane",
+    );
+    expect(betaLane.laneStatus).toBe("interrupted");
+
+    const spawnEvent = expectEvent(
+      dataset,
+      (event) => event.eventType === "agent.spawned" && event.laneId === "sub-beta:sub",
+      "expected beta spawn event",
+    );
+    expect(spawnEvent.status).toBe("failed");
+    expect(spawnEvent.errorMessage).toBe("Usage limit reached");
   });
 
   it("generates merge edges from wait_agent function calls", () => {

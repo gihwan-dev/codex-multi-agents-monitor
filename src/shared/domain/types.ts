@@ -216,25 +216,6 @@ export interface RunFilters {
   errorOnly: boolean;
 }
 
-export interface LaneDisplayItemEvent {
-  kind: "event";
-  event: EventRecord;
-}
-
-export interface LaneDisplayItemGap {
-  kind: "gap";
-  gap: GapSegment;
-  events: EventRecord[];
-}
-
-export type LaneDisplayItem = LaneDisplayItemEvent | LaneDisplayItemGap;
-
-export interface LaneDisplay {
-  lane: AgentLane;
-  items: LaneDisplayItem[];
-  hiddenByDegradation: boolean;
-}
-
 export interface AnomalyJump {
   label: string;
   selection:
@@ -242,11 +223,6 @@ export interface AnomalyJump {
     | { kind: "edge"; id: string }
     | { kind: "artifact"; id: string };
   emphasis: "default" | "warning" | "danger" | "accent";
-}
-
-export interface RunGroup {
-  title: string;
-  runs: RunDataset[];
 }
 
 export interface QuickFilterSummary {
