@@ -133,6 +133,24 @@ describe("workspaceTreeUtils", () => {
     });
   });
 
+  it("ArrowLeft는 workspace row를 접고 포커스는 현재 workspace에 유지한다", () => {
+    const collapseWorkspaceAction = resolveTreeKeyAction({
+      key: "ArrowLeft",
+      flatItems: flattenTree(WORKSPACES, ["workspace-a"]),
+      activeTreeId: buildWorkspaceTreeId("workspace-a"),
+      activeRunId: "run-a1",
+      workspaces: WORKSPACES,
+      expandedWorkspaceIds: ["workspace-a"],
+    });
+
+    expect(collapseWorkspaceAction).toMatchObject({
+      handled: true,
+      expandedWorkspaceIds: [],
+    });
+    expect(collapseWorkspaceAction.activeTreeId).toBeUndefined();
+    expect(collapseWorkspaceAction.focusTreeId).toBeUndefined();
+  });
+
   it("ArrowLeft와 Enter는 run selection에서 workspace 복귀와 run 선택을 처리한다", () => {
     const flatItems = flattenTree(WORKSPACES, ["workspace-a"]);
     const activeTreeId = buildRunTreeId("workspace-a", "run-a1");

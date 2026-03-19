@@ -1,6 +1,6 @@
 import type { WorkspaceTreeItem } from "../../shared/domain";
 
-export interface FlatTreeItem {
+interface FlatTreeItem {
   treeId: string;
   workspaceId: string;
   type: "workspace" | "run";
@@ -16,7 +16,7 @@ interface ResolveTreeKeyActionArgs {
   expandedWorkspaceIds: string[];
 }
 
-export interface WorkspaceTreeKeyAction {
+interface WorkspaceTreeKeyAction {
   handled: boolean;
   activeTreeId?: string;
   expandedWorkspaceIds?: string[];
