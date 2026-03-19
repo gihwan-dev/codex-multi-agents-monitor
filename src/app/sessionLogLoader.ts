@@ -1236,6 +1236,14 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
     }
     if (toolName === "view_image" && typeof args.path === "string") return args.path;
     if (toolName === "write_stdin" && typeof args.input === "string") return args.input;
+    if (toolName === "search_tool_bm25" && typeof args.query === "string") return args.query;
+    if (toolName === "read_mcp_resource") {
+      const parts = [args.server, args.uri].filter(Boolean);
+      if (parts.length > 0) return parts.join(":");
+    }
+    if (toolName === "list_mcp_resources" || toolName === "list_mcp_resource_templates" || toolName === "read_thread_terminal") {
+      return null;
+    }
   } catch { /* not JSON, fall through */ }
 
   // apply_patch from custom_tool_call: extract file paths from raw patch text
