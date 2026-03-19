@@ -822,7 +822,7 @@ function buildLaneEventsFromEntries({
             entry, lane, startTs, safeEndTs, isLatest, status, model, index,
             eventType: "tool.started",
             title: "spawn_agent",
-            inputPreview: entry.functionArgumentsPreview,
+            inputPreview: extractToolInputPreview(functionName, entry.functionArgumentsPreview),
             outputPreview: null,
             toolName: functionName,
           }));
@@ -1180,6 +1180,7 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
       const prefix = args.interrupt ? "[interrupt] " : "";
       return `${prefix}${args.message}`;
     }
+    if (toolName === "spawn_agent" && typeof args.message === "string") return args.message;
   } catch { /* not JSON, fall through */ }
   return rawPreview;
 }

@@ -1661,6 +1661,29 @@ describe("tool input preview extraction", () => {
     expect(toolEvent!.inputPreview).toBe("git status --short");
   });
 
+  it("extracts message from spawn_agent JSON arguments", () => {
+    const snapshot = buildSnapshot([
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Review code"),
+      {
+        timestamp: "2026-03-19T10:00:05.000Z",
+        entryType: "function_call",
+        role: null,
+        text: null,
+        functionName: "spawn_agent",
+        functionCallId: "call_spawn_msg",
+        functionArgumentsPreview: '{"agent_type":"code-quality-reviewer","message":"코드 품질 리뷰해주세요"}',
+      },
+    ]);
+
+    const dataset = buildDatasetFromSessionLog(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const spawnEvent = dataset.events.find((e) => e.toolName === "spawn_agent");
+    expect(spawnEvent).toBeDefined();
+    expect(spawnEvent!.inputPreview).toBe("코드 품질 리뷰해주세요");
+  });
+
   it("extracts path from apply_patch JSON arguments", () => {
     const dataset = buildDatasetFromSessionLog(
       buildSnapshot([
