@@ -237,9 +237,9 @@ export function WorkspaceRunTree({
                     className={`run-list__disclosure${expanded ? " run-list__disclosure--open" : ""}`}
                     aria-hidden="true"
                   />
-                  <span className="run-list__workspace-name" title={workspace.name}>
+                  <strong className="run-list__workspace-name" title={workspace.name}>
                     {workspace.name}
-                  </span>
+                  </strong>
                   <span className="run-list__workspace-count">{workspace.runCount}</span>
                 </div>
               </button>
@@ -264,7 +264,7 @@ export function WorkspaceRunTree({
                         title={run.title}
                       >
                         <div className="run-row__title">
-                          <span>{run.title}</span>
+                          <strong>{run.title}</strong>
                           <StatusChip status={run.status} subtle />
                         </div>
                         <div className="run-row__sub">
