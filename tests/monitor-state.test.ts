@@ -4,6 +4,14 @@ import {
   monitorStateReducer,
 } from "../src/app/useMonitorAppState.js";
 
+function requireDataset(traceId: string) {
+  const dataset = createMonitorInitialState().datasets.find((item) => item.run.traceId === traceId);
+  if (!dataset) {
+    throw new Error(`fixture dataset missing: ${traceId}`);
+  }
+  return dataset;
+}
+
 function buildArchiveResult(sessionId: string) {
   return {
     items: [
@@ -45,6 +53,48 @@ function buildArchivedDataset(traceId: string) {
     },
   };
 }
+
+describe("live 상태 전이", () => {
+  it("imported run에서는 follow-live 토글을 무시한다", () => {
+    const importedRun = createMonitorInitialState().datasets.find(
+      (item) => item.run.liveMode === "imported",
+    );
+
+    expect(importedRun).toBeDefined();
+    if (!importedRun) {
+      throw new Error("fixture imported run missing");
+    }
+
+    const initialState = createMonitorInitialState();
+    const nextState = monitorStateReducer(initialState, {
+      type: "toggle-follow-live",
+      traceId: importedRun.run.traceId,
+    });
+
+    expect(nextState).toBe(initialState);
+  });
+
+  it("follow-live 중인 active live run은 새 frame 적용 시 최신 이벤트를 선택한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const liveSelectedState = monitorStateReducer(createMonitorInitialState(), {
+      type: "set-active-run",
+      traceId: liveRun.run.traceId,
+    });
+
+    const nextState = monitorStateReducer(liveSelectedState, {
+      type: "apply-live-frame",
+    });
+    const updatedLiveRun = nextState.datasets.find((item) => item.run.traceId === liveRun.run.traceId);
+
+    expect(updatedLiveRun).toBeDefined();
+    expect(nextState.appliedLiveFrames).toBe(1);
+    expect(updatedLiveRun?.events.length).toBeGreaterThan(liveRun.events.length);
+    expect(nextState.selection).toEqual({
+      kind: "event",
+      id: updatedLiveRun?.events[updatedLiveRun.events.length - 1]?.eventId,
+    });
+  });
+});
 
 describe("archive 요청 상태", () => {
   it("최신 검색 요청만 archive 결과를 반영한다", () => {
@@ -148,5 +198,54 @@ describe("archive 요청 상태", () => {
 
     expect(staleFinished.archivedSnapshotLoading).toBe(true);
     expect(currentFinished.archivedSnapshotLoading).toBe(false);
+  });
+
+  it("dataset 교체는 run별 UI 상태를 재초기화하고 raw 탭 fallback을 적용한다", () => {
+    const replacementDataset = {
+      ...requireDataset("trace-fix-005"),
+      run: {
+        ...requireDataset("trace-fix-005").run,
+        rawIncluded: false,
+      },
+    };
+    const stateWithRawTab = {
+      ...createMonitorInitialState(),
+      activeRunId: "trace-fix-999",
+      inspectorTab: "raw" as const,
+      drawerTab: "raw" as const,
+      appliedLiveFrames: 3,
+      filtersByRunId: {
+        "trace-fix-999": {
+          agentId: "agent-1",
+          eventType: "error" as const,
+          search: "handoff",
+          errorOnly: true,
+        },
+      },
+      collapsedGapIds: {
+        "trace-fix-999": ["gap-1"],
+      },
+    };
+
+    const nextState = monitorStateReducer(stateWithRawTab, {
+      type: "replace-datasets",
+      datasets: [replacementDataset],
+    });
+
+    expect(nextState.activeRunId).toBe(replacementDataset.run.traceId);
+    expect(nextState.inspectorTab).toBe("summary");
+    expect(nextState.drawerTab).toBe("artifacts");
+    expect(nextState.appliedLiveFrames).toBe(0);
+    expect(nextState.filtersByRunId).toEqual({
+      [replacementDataset.run.traceId]: {
+        agentId: null,
+        eventType: "all",
+        search: "",
+        errorOnly: false,
+      },
+    });
+    expect(nextState.collapsedGapIds).toEqual({
+      [replacementDataset.run.traceId]: [],
+    });
   });
 });
