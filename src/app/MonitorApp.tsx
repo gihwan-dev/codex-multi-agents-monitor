@@ -236,6 +236,14 @@ export function MonitorApp() {
             />
           ) : null}
 
+          {!state.drawerOpen ? (
+            <div className="drawer-trigger">
+              <button type="button" className="button button--ghost" onClick={() => openDrawer("artifacts")}>Artifacts</button>
+              <button type="button" className="button button--ghost" onClick={() => openDrawer("context")}>Context</button>
+              <button type="button" className="button button--ghost" onClick={() => openDrawer("log")}>Log</button>
+            </div>
+          ) : null}
+
           <Drawer
             state={state}
             activeDataset={activeDataset}
