@@ -1244,7 +1244,12 @@ function extractToolInputPreview(toolName: string, rawPreview: string | null): s
       return typeof q.question === "string" ? q.question : null;
     }
     if (toolName === "view_image" && typeof args.path === "string") return args.path;
-    if (toolName === "write_stdin" && typeof args.input === "string") return args.input;
+    if (toolName === "write_stdin") {
+      if (typeof args.input === "string") return args.input;
+      // Codex format: chars field contains the actual stdin content
+      if (typeof args.chars === "string" && args.chars.length > 0) return args.chars;
+      return null;
+    }
     if (toolName === "search_tool_bm25" && typeof args.query === "string") return args.query;
     if (toolName === "read_mcp_resource") {
       const parts = [args.server, args.uri].filter(Boolean);
