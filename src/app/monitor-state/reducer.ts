@@ -10,6 +10,7 @@ import {
   defaultSelectionForDataset,
   LIVE_FIXTURE_TRACE_ID,
   resolveDatasetDrawerTab,
+  resolveVisibleLiveConnection,
   toggleGapIds,
   upsertDataset,
 } from "./helpers";
@@ -62,9 +63,12 @@ function applyFixtureFrame(state: MonitorState) {
     ),
     liveConnectionByRunId: {
       ...state.liveConnectionByRunId,
-      [LIVE_FIXTURE_TRACE_ID]: state.followLiveByRunId[LIVE_FIXTURE_TRACE_ID]
-        ? snapshot.connection
-        : ("paused" as const),
+      [LIVE_FIXTURE_TRACE_ID]: resolveVisibleLiveConnection(
+        snapshot.dataset,
+        state.followLiveByRunId[LIVE_FIXTURE_TRACE_ID] ?? false,
+        state.liveConnectionByRunId[LIVE_FIXTURE_TRACE_ID],
+        snapshot.connection,
+      ),
     },
     selection:
       state.followLiveByRunId[LIVE_FIXTURE_TRACE_ID] &&
@@ -125,11 +129,16 @@ export function monitorStateReducer(
         },
         liveConnectionByRunId: {
           ...state.liveConnectionByRunId,
-          [action.traceId]: nextFollow ? "live" : "paused",
+          [action.traceId]: resolveVisibleLiveConnection(
+            dataset,
+            nextFollow,
+            state.liveConnectionByRunId[action.traceId],
+          ),
         },
       };
     }
-    case "set-follow-live":
+    case "set-follow-live": {
+      const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
       return {
         ...state,
         followLiveByRunId: {
@@ -138,9 +147,18 @@ export function monitorStateReducer(
         },
         liveConnectionByRunId: {
           ...state.liveConnectionByRunId,
-          [action.traceId]: action.value ? "live" : "paused",
+          [action.traceId]: dataset
+            ? resolveVisibleLiveConnection(
+                dataset,
+                action.value,
+                state.liveConnectionByRunId[action.traceId],
+              )
+            : action.value
+              ? "live"
+              : "paused",
         },
       };
+    }
     case "set-filter":
       return {
         ...state,

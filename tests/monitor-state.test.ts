@@ -120,6 +120,66 @@ describe("live 상태 전이", () => {
     expect(nextState.selection).toEqual(pausedSelection);
     expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
   });
+
+  it("follow-live가 꺼져 있어도 stale/disconnected 전환은 badge에 반영한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const initialState = createMonitorInitialState();
+    const pausedSelection = {
+      kind: "event" as const,
+      id: liveRun.events[0]?.eventId ?? "",
+    };
+    const pausedState = {
+      ...initialState,
+      activeRunId: liveRun.run.traceId,
+      selection: pausedSelection,
+      followLiveByRunId: {
+        ...initialState.followLiveByRunId,
+        [liveRun.run.traceId]: false,
+      },
+    };
+
+    const afterLiveFrame = monitorStateReducer(pausedState, {
+      type: "apply-live-frame",
+    });
+    const afterStaleFrame = monitorStateReducer(afterLiveFrame, {
+      type: "apply-live-frame",
+    });
+    const afterDisconnectedFrame = monitorStateReducer(afterStaleFrame, {
+      type: "apply-live-frame",
+    });
+
+    expect(afterLiveFrame.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
+    expect(afterStaleFrame.liveConnectionByRunId[liveRun.run.traceId]).toBe("stale");
+    expect(afterDisconnectedFrame.liveConnectionByRunId[liveRun.run.traceId]).toBe(
+      "disconnected",
+    );
+    expect(afterDisconnectedFrame.selection).toEqual(pausedSelection);
+  });
+
+  it("stale live run에서 follow-live를 다시 켜도 stale badge를 유지한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const initialState = createMonitorInitialState();
+    const pausedState = {
+      ...initialState,
+      followLiveByRunId: {
+        ...initialState.followLiveByRunId,
+        [liveRun.run.traceId]: false,
+      },
+    };
+
+    const staleState = monitorStateReducer(
+      monitorStateReducer(pausedState, { type: "apply-live-frame" }),
+      { type: "apply-live-frame" },
+    );
+    const resumedState = monitorStateReducer(staleState, {
+      type: "toggle-follow-live",
+      traceId: liveRun.run.traceId,
+    });
+
+    expect(staleState.liveConnectionByRunId[liveRun.run.traceId]).toBe("stale");
+    expect(resumedState.followLiveByRunId[liveRun.run.traceId]).toBe(true);
+    expect(resumedState.liveConnectionByRunId[liveRun.run.traceId]).toBe("stale");
+  });
 });
 
 describe("archive 요청 상태", () => {

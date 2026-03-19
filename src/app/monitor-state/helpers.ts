@@ -36,16 +36,42 @@ export function buildConnectionMap(datasets: RunDataset[]) {
   return Object.fromEntries(
     datasets
       .filter((dataset) => dataset.run.liveMode === "live")
-      .map((dataset) => {
-        if (dataset.run.status === "stale") {
-          return [dataset.run.traceId, "stale" as const];
-        }
-        if (dataset.run.status === "disconnected") {
-          return [dataset.run.traceId, "disconnected" as const];
-        }
-        return [dataset.run.traceId, "live" as const];
-      }),
+      .map((dataset) => [
+        dataset.run.traceId,
+        resolveLiveConnection(dataset),
+      ]),
   ) as Record<string, LiveConnection>;
+}
+
+function resolveLiveConnection(
+  dataset: RunDataset,
+): Exclude<LiveConnection, "paused"> {
+  if (dataset.run.status === "stale") {
+    return "stale";
+  }
+  if (dataset.run.status === "disconnected") {
+    return "disconnected";
+  }
+  return "live";
+}
+
+export function resolveVisibleLiveConnection(
+  dataset: RunDataset,
+  followLive: boolean,
+  currentConnection?: LiveConnection,
+  nextConnection?: Exclude<LiveConnection, "paused">,
+): LiveConnection {
+  const resolvedConnection =
+    nextConnection ??
+    (currentConnection && currentConnection !== "paused"
+      ? currentConnection
+      : resolveLiveConnection(dataset));
+
+  if (resolvedConnection !== "live") {
+    return resolvedConnection;
+  }
+
+  return followLive ? "live" : "paused";
 }
 
 export function buildFilterMap(datasets: RunDataset[]) {
