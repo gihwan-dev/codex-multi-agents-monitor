@@ -206,6 +206,36 @@ describe("sessionLogLoader", () => {
     expect(datasets?.[0]?.run.title).toBe("tauri 우선 로드");
   });
 
+  it("Tauri snapshot 목록에서 잘못된 세션은 걸러내고 유효한 세션만 유지한다", async () => {
+    mockedInvokeTauri.mockResolvedValue([
+      buildSnapshot([
+        makeMessageEntry(
+          "2026-03-09T15:03:18.000Z",
+          "user",
+          "유효한 snapshot",
+        ),
+      ]),
+      {
+        ...buildSnapshot([
+          makeMessageEntry(
+            "2026-03-09T15:03:18.000Z",
+            "user",
+            "무시되어야 하는 snapshot",
+          ),
+        ]),
+        sessionId: "broken-session",
+        startedAt: "invalid-timestamp",
+      },
+    ]);
+    vi.stubGlobal("fetch", vi.fn());
+
+    const datasets = await loadSessionLogDatasets();
+
+    expect(datasets).toHaveLength(1);
+    expect(datasets?.[0]?.session.sessionId).toBe("session-1");
+    expect(datasets?.[0]?.run.title).toBe("유효한 snapshot");
+  });
+
   it("falls back to web snapshots when the Tauri bridge is unavailable", async () => {
     mockedInvokeTauri.mockRejectedValue(new Error("Tauri runtime is unavailable."));
     const fetchMock = vi.fn().mockResolvedValue({
