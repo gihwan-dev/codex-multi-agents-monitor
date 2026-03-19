@@ -22,16 +22,6 @@ import {
 import { deriveMonitorViewState } from "./useMonitorAppDerivedState";
 import { useMonitorKeyboardShortcuts } from "./useMonitorKeyboardShortcuts";
 
-export type {
-  LiveConnection,
-  MonitorAction,
-  MonitorState,
-} from "./monitorState";
-export {
-  createMonitorInitialState,
-  monitorStateReducer,
-} from "./monitorState";
-
 export function useMonitorAppState() {
   const [state, dispatch] = useReducer(
     monitorStateReducer,

@@ -18,14 +18,6 @@ export const WaitingChainRun = {
   render: () => <StoryScenario selectRunLabel="FIX-002 Waiting chain run" />,
 };
 
-export const WaterfallMode = {
-  render: () => <StoryScenario mode="w" />,
-};
-
-export const MapMode = {
-  render: () => <StoryScenario mode="m" />,
-};
-
 export const DenseParallelRun = {
   render: () => <StoryScenario selectRunLabel="FIX-004 Dense parallel run" />,
 };
@@ -35,11 +27,9 @@ export const ImportDrawerOpen = {
 };
 
 function StoryScenario({
-  mode,
   openButtonLabel,
   selectRunLabel,
 }: {
-  mode?: "w" | "m";
   openButtonLabel?: string;
   selectRunLabel?: string;
 }) {
@@ -48,16 +38,13 @@ function StoryScenario({
       if (selectRunLabel) {
         clickButton(selectRunLabel);
       }
-      if (mode) {
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: mode, bubbles: true }));
-      }
       if (openButtonLabel) {
         clickButton(openButtonLabel);
       }
     }, 80);
 
     return () => window.clearTimeout(timeout);
-  }, [mode, openButtonLabel, selectRunLabel]);
+  }, [openButtonLabel, selectRunLabel]);
 
   return <MonitorApp />;
 }

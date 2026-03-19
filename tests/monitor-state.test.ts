@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMonitorInitialState,
   monitorStateReducer,
-} from "../src/app/useMonitorAppState.js";
+} from "../src/app/monitorState.js";
 
 function requireDataset(traceId: string) {
   const dataset = createMonitorInitialState().datasets.find((item) => item.run.traceId === traceId);
@@ -123,6 +123,26 @@ describe("live 상태 전이", () => {
 });
 
 describe("archive 요청 상태", () => {
+  it("drawer 닫기 액션은 이미 닫힌 상태에서도 다시 열지 않는다", () => {
+    const closedState = createMonitorInitialState();
+    const reopenedState = monitorStateReducer(closedState, {
+      type: "set-drawer-open",
+      open: false,
+    });
+    const openedState = monitorStateReducer(closedState, {
+      type: "set-drawer-open",
+      open: true,
+    });
+    const closedAgainState = monitorStateReducer(openedState, {
+      type: "set-drawer-open",
+      open: false,
+    });
+
+    expect(reopenedState.drawerOpen).toBe(false);
+    expect(openedState.drawerOpen).toBe(true);
+    expect(closedAgainState.drawerOpen).toBe(false);
+  });
+
   it("최신 검색 요청만 archive 결과를 반영한다", () => {
     const initialState = createMonitorInitialState();
     const firstRequest = monitorStateReducer(initialState, {

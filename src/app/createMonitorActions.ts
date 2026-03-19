@@ -72,8 +72,8 @@ export function createMonitorActions({
     setDrawerTab(tab: DrawerTab, open = state.drawerOpen) {
       dispatch({ type: "set-drawer-tab", tab, open });
     },
-    toggleDrawer() {
-      dispatch({ type: "toggle-drawer" });
+    setDrawerOpen(open: boolean) {
+      dispatch({ type: "set-drawer-open", open });
     },
     toggleInspector() {
       dispatch({ type: "toggle-inspector" });

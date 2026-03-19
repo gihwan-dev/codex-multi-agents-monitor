@@ -7,7 +7,7 @@ import {
   type RunDataset,
 } from "../../shared/domain";
 import { Panel } from "../../shared/ui";
-import type { MonitorState } from "../useMonitorAppState";
+import type { MonitorState } from "../monitorState";
 
 interface MonitorDrawerProps {
   state: MonitorState;
@@ -18,7 +18,7 @@ interface MonitorDrawerProps {
   onImportTextChange: (value: string) => void;
   onAllowRawChange: (value: boolean) => void;
   onNoRawChange: (value: boolean) => void;
-  onToggleDrawer: () => void;
+  onCloseDrawer: () => void;
 }
 
 export function MonitorDrawer({
@@ -30,7 +30,7 @@ export function MonitorDrawer({
   onImportTextChange,
   onAllowRawChange,
   onNoRawChange,
-  onToggleDrawer,
+  onCloseDrawer,
 }: MonitorDrawerProps) {
   if (!state.drawerOpen) {
     return <div className="drawer drawer--closed" aria-hidden="true" />;
@@ -41,7 +41,7 @@ export function MonitorDrawer({
       title="Bottom drawer"
       className="drawer drawer--open"
       actions={
-        <button type="button" className="button button--ghost" onClick={onToggleDrawer}>
+        <button type="button" className="button button--ghost" onClick={onCloseDrawer}>
           Close
         </button>
       }

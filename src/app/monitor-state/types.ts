@@ -48,7 +48,7 @@ export type MonitorAction =
   | { type: "set-active-run"; traceId: string }
   | { type: "set-selection"; selection: SelectionState | null }
   | { type: "set-drawer-tab"; tab: DrawerTab; open?: boolean }
-  | { type: "toggle-drawer" }
+  | { type: "set-drawer-open"; open: boolean }
   | { type: "toggle-inspector" }
   | { type: "toggle-follow-live"; traceId: string }
   | { type: "set-follow-live"; traceId: string; value: boolean }

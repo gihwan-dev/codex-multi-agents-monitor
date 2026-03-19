@@ -6,7 +6,7 @@ import type {
   SummaryFact,
 } from "../../shared/domain";
 import { MetricPill, StatusChip } from "../../shared/ui";
-import type { LiveConnection } from "../useMonitorAppState";
+import type { LiveConnection } from "../monitorState";
 
 const EVENT_FILTER_OPTIONS = [
   "all",

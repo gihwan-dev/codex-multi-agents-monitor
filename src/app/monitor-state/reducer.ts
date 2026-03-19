@@ -106,8 +106,8 @@ export function monitorStateReducer(
         drawerTab: action.tab,
         drawerOpen: action.open ?? state.drawerOpen,
       };
-    case "toggle-drawer":
-      return { ...state, drawerOpen: !state.drawerOpen };
+    case "set-drawer-open":
+      return { ...state, drawerOpen: action.open };
     case "toggle-inspector":
       return { ...state, inspectorOpen: !state.inspectorOpen };
     case "toggle-follow-live": {
