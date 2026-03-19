@@ -355,6 +355,9 @@ function buildFix002(): RunDataset {
     events,
     edges: [
       edge("edge-fix2-spawn", "spawn", "orchestrator", "finder", "fix2-spawn", "fix2-wait", "Explorer starts waiting"),
+      edge("edge-fix2-spawn-writer", "spawn", "orchestrator", "writer", "fix2-spawn", "fix2-interrupt", "Writer receives implementation slice"),
+      edge("edge-fix2-spawn-verifier", "spawn", "orchestrator", "verifier", "fix2-spawn", "fix2-verify", "Verifier queued for checkpoint"),
+      edge("edge-fix2-merge", "merge", "finder", "orchestrator", "fix2-wait", "fix2-blocked", "Explorer results collected"),
       edge("edge-fix2-handoff", "handoff", "orchestrator", "writer", "fix2-spawn", "fix2-interrupt", "Writer receives implementation slice"),
       edge("edge-fix2-transfer", "transfer", "writer", "verifier", "fix2-interrupt", "fix2-verify", "Pass checkpoint to verification"),
     ],
