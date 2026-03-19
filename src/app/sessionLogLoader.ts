@@ -1302,6 +1302,12 @@ function extractToolOutputPreview(toolName: string, rawOutput: string): string {
         if ("errored" in status) return `Agent errored: ${status.errored}`;
       }
     }
+
+    // Generic Codex-style tool output: {"output": "...", "metadata": {...}}
+    // Handles apply_patch and other custom tools that wrap results in this structure
+    if (typeof parsed.output === "string") {
+      return parsed.output;
+    }
   } catch { /* not JSON, fall through */ }
 
   return rawOutput;

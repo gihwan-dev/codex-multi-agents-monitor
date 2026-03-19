@@ -1928,6 +1928,39 @@ describe("tool input preview extraction", () => {
     expect(toolEvent!.inputPreview).toBe("src/utils/helper.ts");
   });
 
+  it("extracts inner output from Codex-style JSON tool output", () => {
+    const dataset = buildDatasetFromSessionLog(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Fix it"),
+        {
+          timestamp: "2026-03-19T10:00:05.000Z",
+          entryType: "function_call",
+          role: null,
+          text: null,
+          functionName: "apply_patch",
+          functionCallId: "call_patch",
+          functionArgumentsPreview: "*** Begin Patch\n*** Update File: src/app.ts",
+        },
+        {
+          timestamp: "2026-03-19T10:00:06.000Z",
+          entryType: "function_call_output",
+          role: null,
+          text: '{"output":"Success. Updated the following files:\\nM src/app.ts\\n","metadata":{"exit_code":0,"duration_seconds":0.1}}',
+          functionName: null,
+          functionCallId: "call_patch",
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const resultEvent = dataset.events.find((e) => e.eventType === "tool.finished" && e.toolName === "apply_patch");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent!.outputPreview).toBe("Success. Updated the following files: M src/app.ts");
+  });
+
   it("wait output shows 'Timed out' for timed_out responses", () => {
     const dataset = buildDatasetFromSessionLog(
       buildSnapshot([
