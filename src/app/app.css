@@ -1382,6 +1382,11 @@ textarea {
   background: linear-gradient(180deg, rgba(255, 107, 107, 0.06), rgba(16, 20, 29, 1));
 }
 
+.graph-sequence__card--note {
+  border-left: 3px solid rgba(166, 175, 189, 0.25);
+  opacity: 0.85;
+}
+
 .graph-sequence__card--turn-started,
 .graph-sequence__card--turn-finished {
   border: 1px dashed rgba(255, 255, 255, 0.10);
