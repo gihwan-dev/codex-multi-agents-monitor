@@ -620,23 +620,37 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     allEdges.push(edge);
   }
 
-  // Enrich resume_agent / send_input event titles with subagent nicknames.
-  // These represent parent-to-subagent interactions and are more readable
-  // when the target subagent name is visible.
+  // Enrich agent-interaction event titles with subagent nicknames.
+  // resume_agent, send_input, close_agent, wait, wait_agent all reference
+  // subagent IDs in their arguments — showing the nickname is far more readable.
   for (const evt of allEvents) {
-    if (evt.toolName !== "resume_agent" && evt.toolName !== "send_input") continue;
     if (!evt.inputPreview) continue;
     try {
       const args = JSON.parse(evt.inputPreview);
-      const agentId = args.id;
-      const sessionId = agentId ? resolveSessionId(agentId) : undefined;
-      if (!sessionId) continue;
-      const sub = subagents.find((s) => s.sessionId === sessionId);
-      if (!sub) continue;
-      if (evt.toolName === "resume_agent") {
-        evt.title = `Resume (${sub.agentNickname})`;
-      } else {
-        evt.title = `Send to ${sub.agentNickname}`;
+      if (evt.toolName === "resume_agent" || evt.toolName === "send_input") {
+        const sessionId = args.id ? resolveSessionId(args.id) : undefined;
+        if (!sessionId) continue;
+        const sub = subagents.find((s) => s.sessionId === sessionId);
+        if (!sub) continue;
+        evt.title = evt.toolName === "resume_agent"
+          ? `Resume (${sub.agentNickname})`
+          : `Send to ${sub.agentNickname}`;
+      } else if (evt.toolName === "close_agent") {
+        const sessionId = args.id ? resolveSessionId(args.id) : undefined;
+        if (!sessionId) continue;
+        const sub = subagents.find((s) => s.sessionId === sessionId);
+        if (!sub) continue;
+        evt.title = `Close (${sub.agentNickname})`;
+      } else if (evt.toolName === "wait" || evt.toolName === "wait_agent") {
+        const ids: string[] = args.ids ?? [];
+        const names = ids
+          .map((id) => resolveSessionId(id))
+          .filter((sid): sid is string => sid !== undefined)
+          .map((sid) => subagents.find((s) => s.sessionId === sid)?.agentNickname)
+          .filter((name): name is string => name !== undefined);
+        if (names.length > 0) {
+          evt.title = `Wait (${names.join(", ")})`;
+        }
       }
     } catch {
       // Argument parse error, skip

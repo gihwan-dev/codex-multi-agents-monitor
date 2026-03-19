@@ -1224,7 +1224,7 @@ describe("merge edge generation", () => {
       (e) => e.toolName === "wait_agent",
     );
     expect(waitEvents.length).toBeGreaterThanOrEqual(1);
-    expect(waitEvents[0].title).toBe("Waiting for agents");
+    expect(waitEvents[0].title).toBe("Wait (Alpha)");
     expect(waitEvents[0].waitReason).toBe("awaiting agents");
     expect(waitEvents[0].eventType).toBe("tool.started");
   });
