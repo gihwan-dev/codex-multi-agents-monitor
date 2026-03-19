@@ -35,7 +35,6 @@ describe("buildGraphSceneModel", () => {
       dataset,
       DEFAULT_FILTERS,
       buildDefaultSelection("trace-fix-002"),
-      false,
     );
 
     expect(scene.rows.some((row) => row.kind === "event" && row.eventId === "fix2-blocked")).toBe(true);
@@ -57,7 +56,6 @@ describe("buildGraphSceneModel", () => {
       dataset,
       DEFAULT_FILTERS,
       { kind: "event", id: "fix4-lane-1-0" },
-      true,
     );
 
     expect(scene.hiddenLaneCount).toBeGreaterThan(0);
@@ -415,5 +413,248 @@ describe("merge edge scene integration", () => {
     expect(spawnEdges[0].targetAgentId).toBe("sub-x:sub");
     expect(mergeEdges[0].sourceAgentId).toBe("sub-x:sub");
     expect(mergeEdges[0].targetAgentId).toBe("merge-scene-1:main");
+  });
+});
+
+describe("errored subagent graph rendering", () => {
+  function makeFunctionCallEntry(
+    timestamp: string,
+    functionName: string,
+    callId: string,
+    args: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call",
+      role: null,
+      text: null,
+      functionName,
+      functionCallId: callId,
+      functionArgumentsPreview: args,
+    };
+  }
+
+  function makeFunctionCallOutputEntry(
+    timestamp: string,
+    callId: string,
+    output: string,
+  ): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "function_call_output",
+      role: null,
+      text: output,
+      functionName: null,
+      functionCallId: callId,
+      functionArgumentsPreview: null,
+    };
+  }
+
+  function makeAgentMessageEntry(timestamp: string, text: string): SessionEntrySnapshot {
+    return {
+      timestamp,
+      entryType: "agent_message",
+      role: null,
+      text,
+      functionName: null,
+      functionCallId: null,
+      functionArgumentsPreview: null,
+    };
+  }
+
+  function buildErroredSubagentSnapshot(): SessionLogSnapshot {
+    // Main session entries
+    // Timestamps follow the real problematic pattern:
+    //   spawn calls:   10:01:00, 10:01:01, 10:01:02
+    //   spawn outputs: 10:01:05, 10:01:06, 10:01:07
+    //   wait #1 call:  10:02:00  (IDs: Gibbs, Pasteur, Hume)
+    //   wait #1 out:   10:02:30  (Gibbs errored)
+    //   wait #2 call:  10:02:35  (IDs: Pasteur, Hume)
+    //   wait #2 out:   10:02:40  (Pasteur, Hume completed:null)
+    //   agent_message: 10:03:00
+    //   exec_command:  10:03:30 / output 10:03:35
+    //   agent_message: 10:05:00
+    //   task_complete: 10:05:10
+    //
+    // Subagent startedAt timestamps are AFTER the wait call (10:02:00):
+    //   Gibbs:   10:01:08  — starts slightly after spawn outputs
+    //   Pasteur: 10:01:09
+    //   Hume:    10:01:10
+    // (This replicates the real pattern where wait_agent call ts < subagent startedAt)
+    //
+    // Subagent entries are empty (fork_context filtering removed parent entries).
+    // Subagent model differs from parent to match real data pattern.
+    const entries: SessionEntrySnapshot[] = [
+      makeMessageEntry("2026-03-19T10:00:05.000Z", "user", "Run parallel research tasks with subagents"),
+      makeMessageEntry("2026-03-19T10:00:30.000Z", "assistant", "Spawning 3 subagents for parallel execution."),
+      // spawn_agent calls
+      makeFunctionCallEntry("2026-03-19T10:01:00.000Z", "spawn_agent", "sp-gibbs", '{"agent_type":"researcher","nickname":"Gibbs"}'),
+      makeFunctionCallEntry("2026-03-19T10:01:01.000Z", "spawn_agent", "sp-pasteur", '{"agent_type":"researcher","nickname":"Pasteur"}'),
+      makeFunctionCallEntry("2026-03-19T10:01:02.000Z", "spawn_agent", "sp-hume", '{"agent_type":"researcher","nickname":"Hume"}'),
+      // spawn_agent outputs — agent_id must match subagent sessionIds exactly
+      makeFunctionCallOutputEntry("2026-03-19T10:01:05.000Z", "sp-gibbs", '{"agent_id":"sub-err-gibbs","nickname":"Gibbs"}'),
+      makeFunctionCallOutputEntry("2026-03-19T10:01:06.000Z", "sp-pasteur", '{"agent_id":"sub-err-pasteur","nickname":"Pasteur"}'),
+      makeFunctionCallOutputEntry("2026-03-19T10:01:07.000Z", "sp-hume", '{"agent_id":"sub-err-hume","nickname":"Hume"}'),
+      // wait_agent #1 — CRITICAL: call timestamp 10:02:00 is BEFORE subagent startedAt (10:01:08-10:01:10)
+      // but AFTER spawn outputs (10:01:05-10:01:07). This is the real problematic pattern.
+      makeFunctionCallEntry("2026-03-19T10:02:00.000Z", "wait_agent", "wait-1", '{"ids":["sub-err-gibbs","sub-err-pasteur","sub-err-hume"]}'),
+      makeFunctionCallOutputEntry("2026-03-19T10:02:30.000Z", "wait-1", '{"status":{"sub-err-gibbs":{"errored":"You\'ve hit your usage limit"},"sub-err-pasteur":{"completed":null},"sub-err-hume":{"completed":null}},"timed_out":false}'),
+      // wait_agent #2 — collect remaining
+      makeFunctionCallEntry("2026-03-19T10:02:35.000Z", "wait_agent", "wait-2", '{"ids":["sub-err-pasteur","sub-err-hume"]}'),
+      makeFunctionCallOutputEntry("2026-03-19T10:02:40.000Z", "wait-2", '{"status":{"sub-err-pasteur":{"completed":null},"sub-err-hume":{"completed":null}},"timed_out":false}'),
+      makeAgentMessageEntry("2026-03-19T10:03:00.000Z", "All agents have reported. Summarising results."),
+      makeFunctionCallEntry("2026-03-19T10:03:30.000Z", "exec_command", "exec-1", '{"command":"cat /tmp/results.txt"}'),
+      makeFunctionCallOutputEntry("2026-03-19T10:03:35.000Z", "exec-1", '{"stdout":"Research output collected.","exit_code":0}'),
+      makeAgentMessageEntry("2026-03-19T10:05:00.000Z", "Task finalised. Gibbs hit usage limit but Pasteur and Hume completed."),
+      {
+        timestamp: "2026-03-19T10:05:10.000Z",
+        entryType: "task_complete",
+        role: null,
+        text: "Task complete",
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ];
+
+    const subagents: SubagentSnapshot[] = [
+      {
+        sessionId: "sub-err-gibbs",
+        parentThreadId: "errored-session-1",
+        depth: 1,
+        agentNickname: "Gibbs",
+        agentRole: "researcher",
+        model: "gpt-5.4",
+        startedAt: "2026-03-19T10:01:08.000Z",
+        updatedAt: "2026-03-19T10:02:00.000Z",
+        entries: [],
+        // No error field: status derives from empty entries → "running"
+      },
+      {
+        sessionId: "sub-err-pasteur",
+        parentThreadId: "errored-session-1",
+        depth: 1,
+        agentNickname: "Pasteur",
+        agentRole: "researcher",
+        model: "gpt-5.4",
+        startedAt: "2026-03-19T10:01:09.000Z",
+        updatedAt: "2026-03-19T10:02:00.000Z",
+        entries: [],
+      },
+      {
+        sessionId: "sub-err-hume",
+        parentThreadId: "errored-session-1",
+        depth: 1,
+        agentNickname: "Hume",
+        agentRole: "researcher",
+        model: "gpt-5.4",
+        startedAt: "2026-03-19T10:01:10.000Z",
+        updatedAt: "2026-03-19T10:02:00.000Z",
+        entries: [],
+      },
+    ];
+
+    return {
+      sessionId: "errored-session-1",
+      workspacePath: "/projects/research",
+      originPath: "/projects/research",
+      displayName: "errored-subagent-test",
+      startedAt: "2026-03-19T10:00:00.000Z",
+      updatedAt: "2026-03-19T10:05:15.000Z",
+      model: "gpt-5.3",
+      entries,
+      subagents,
+    };
+  }
+
+  it("produces a dataset with events for all lanes including errored subagents", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    // 5 lanes: User + Main + 3 subagents
+    expect(dataset.lanes).toHaveLength(5);
+
+    // Main lane should have many events
+    const mainEvents = dataset.events.filter((e) => e.laneId === "errored-session-1:main");
+    expect(mainEvents.length).toBeGreaterThan(5);
+
+    // Each subagent lane should have at least 1 event (agent.spawned)
+    for (const sub of ["sub-err-gibbs", "sub-err-pasteur", "sub-err-hume"]) {
+      const subEvents = dataset.events.filter((e) => e.laneId === `${sub}:sub`);
+      expect(subEvents.length).toBeGreaterThanOrEqual(1);
+    }
+
+    // Should have 3 spawn edges
+    expect(dataset.edges.filter((e) => e.edgeType === "spawn")).toHaveLength(3);
+  });
+
+  it("graph scene model has non-empty rows for errored subagents session", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+
+    // The graph MUST have rows (this verifies the graph is not empty)
+    expect(scene.rows.length).toBeGreaterThan(0);
+
+    // All visible lanes should be present
+    expect(scene.lanes.length).toBe(5);
+
+    // Spawn edge bundles should exist
+    const spawnBundles = scene.edgeBundles.filter((b) => b.edgeType === "spawn");
+    expect(spawnBundles.length).toBe(3);
+  });
+
+  it("all edges flow forward in time (no backward edges)", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const eventsById = new Map(dataset.events.map((e) => [e.eventId, e]));
+
+    for (const bundle of scene.edgeBundles) {
+      const source = eventsById.get(bundle.sourceEventId);
+      const target = eventsById.get(bundle.targetEventId);
+      if (!source || !target) continue;
+
+      // Target timestamp must be >= source timestamp (forward flow)
+      expect(target.startTs).toBeGreaterThanOrEqual(source.startTs);
+    }
+  });
+
+  it("subagent lanes show correct status: errored from wait_agent vs running for empty entries", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const subLanes = dataset.lanes.filter((l) => l.badge === "Subagent");
+    expect(subLanes).toHaveLength(3);
+
+    // Gibbs errored via wait_agent → interrupted
+    const gibbsLane = subLanes.find((l) => l.name === "Gibbs");
+    expect(gibbsLane).toBeDefined();
+    expect(gibbsLane!.laneStatus).toBe("interrupted");
+
+    // Pasteur and Hume have empty entries and no error → running
+    const pasteurLane = subLanes.find((l) => l.name === "Pasteur");
+    const humeLane = subLanes.find((l) => l.name === "Hume");
+    expect(pasteurLane!.laneStatus).toBe("running");
+    expect(humeLane!.laneStatus).toBe("running");
+  });
+
+  it("Gibbs spawn event shows failed status with error message from wait_agent", () => {
+    const dataset = buildDatasetFromSessionLog(buildErroredSubagentSnapshot());
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    const gibbsSpawn = dataset.events.find(
+      (e) => e.eventType === "agent.spawned" && e.laneId === "sub-err-gibbs:sub",
+    );
+    expect(gibbsSpawn).toBeDefined();
+    expect(gibbsSpawn!.status).toBe("failed");
+    expect(gibbsSpawn!.errorMessage).toBe("You've hit your usage limit");
   });
 });
