@@ -754,15 +754,36 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .get("call_id")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned);
-            let args_limit = match name.as_str() {
+            let arguments = match name.as_str() {
+                // exec_command: extract just the "cmd" field for a clean preview
+                "exec_command" => payload
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .and_then(|args| {
+                        serde_json::from_str::<Value>(args)
+                            .ok()
+                            .and_then(|v| {
+                                v.get("cmd")
+                                    .and_then(Value::as_str)
+                                    .map(|c| truncate_utf8_safe(c, 500))
+                            })
+                    })
+                    .or_else(|| {
+                        payload
+                            .get("arguments")
+                            .and_then(Value::as_str)
+                            .map(|args| truncate_utf8_safe(args, 500))
+                    }),
                 "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => 2000,
-                _ => 200,
+                | "resume_agent" | "send_input" => payload
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .map(|args| truncate_utf8_safe(args, 2000)),
+                _ => payload
+                    .get("arguments")
+                    .and_then(Value::as_str)
+                    .map(|args| truncate_utf8_safe(args, 200)),
             };
-            let arguments = payload
-                .get("arguments")
-                .and_then(Value::as_str)
-                .map(|args| truncate_utf8_safe(args, args_limit));
             Some(SessionEntrySnapshot {
                 timestamp,
                 entry_type: "function_call".to_owned(),
