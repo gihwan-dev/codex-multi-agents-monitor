@@ -185,7 +185,7 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
                     || parent
                         .forked_from_id
                         .as_ref()
-                        .map_or(false, |fid| sub.parent_thread_id == *fid)
+                        .is_some_and(|fid| sub.parent_thread_id == *fid)
             })
             .cloned()
             .collect();
@@ -381,7 +381,7 @@ fn read_session_snapshot(
         .and_then(Value::as_object)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing"))?;
 
-    if !payload.get("source").and_then(Value::as_str).is_some() {
+    if payload.get("source").and_then(Value::as_str).is_none() {
         return Ok(None);
     }
 
@@ -466,10 +466,10 @@ fn read_session_snapshot(
             }
         }
 
-        if !prompt_assembly_done {
-            if entry.get("type").and_then(Value::as_str) == Some("response_item") {
-                extract_prompt_layers(&entry, &mut prompt_assembly);
-            }
+        if !prompt_assembly_done
+            && entry.get("type").and_then(Value::as_str) == Some("response_item")
+        {
+            extract_prompt_layers(&entry, &mut prompt_assembly);
         }
 
         if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
@@ -564,7 +564,7 @@ fn classify_user_context(text: &str) -> (String, String) {
         ("delegated".into(), "Delegated Plan".into())
     } else if trimmed.starts_with("<skill>") {
         let name = extract_skill_name(trimmed);
-        ("skill".into(), format!("Skill: {}", name))
+        ("skill".into(), format!("Skill: {name}"))
     } else if trimmed.starts_with("<subagent_notification>") {
         ("subagent-notification".into(), "Subagent Notification".into())
     } else if trimmed.starts_with("<turn_aborted>") {
@@ -830,7 +830,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                         .get("arguments")
                         .and_then(Value::as_str)
                         .or_else(|| payload.get("input").and_then(Value::as_str));
-                    raw.and_then(|args| {
+                    raw.map(|args| {
                         let file_paths: Vec<&str> = args
                             .lines()
                             .filter_map(|line| {
@@ -841,15 +841,15 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                             .collect();
                         if file_paths.len() > 1 {
                             let first = file_paths[0].trim();
-                            Some(format!(
+                            format!(
                                 "{} (+{} more)",
                                 truncate_utf8_safe(first, 200),
                                 file_paths.len() - 1
-                            ))
+                            )
                         } else if file_paths.len() == 1 {
-                            Some(truncate_utf8_safe(file_paths[0].trim(), 200))
+                            truncate_utf8_safe(file_paths[0].trim(), 200)
                         } else {
-                            Some(truncate_utf8_safe(args, 200))
+                            truncate_utf8_safe(args, 200)
                         }
                     })
                 }
@@ -1066,8 +1066,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                 .and_then(Value::as_u64)
                 .unwrap_or(0);
             let text = format!(
-                r#"{{"in":{},"cached":{},"out":{},"reasoning":{}}}"#,
-                input, cached, output, reasoning,
+                r#"{{"in":{input},"cached":{cached},"out":{output},"reasoning":{reasoning}}}"#,
             );
             Some(SessionEntrySnapshot {
                 timestamp,
@@ -1233,7 +1232,7 @@ fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapsho
                         || snapshot
                             .forked_from_id
                             .as_ref()
-                            .map_or(false, |fid| sub.parent_thread_id == *fid)
+                            .is_some_and(|fid| sub.parent_thread_id == *fid)
                     {
                         snapshot.subagents.push(sub);
                     }
@@ -1333,15 +1332,15 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
             Err(_) => continue,
         };
 
-        if model.is_none() {
-            if entry.get("type").and_then(Value::as_str) == Some("turn_context") {
-                model = entry
-                    .get("payload")
-                    .and_then(|p| p.get("model"))
-                    .and_then(Value::as_str)
-                    .filter(|v| !v.trim().is_empty())
-                    .map(ToOwned::to_owned);
-            }
+        if model.is_none()
+            && entry.get("type").and_then(Value::as_str) == Some("turn_context")
+        {
+            model = entry
+                .get("payload")
+                .and_then(|p| p.get("model"))
+                .and_then(Value::as_str)
+                .filter(|v| !v.trim().is_empty())
+                .map(ToOwned::to_owned);
         }
 
         if first_user_message.is_none() {
@@ -1473,10 +1472,10 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
             }
         }
 
-        if !prompt_assembly_done {
-            if entry.get("type").and_then(Value::as_str) == Some("response_item") {
-                extract_prompt_layers(&entry, &mut prompt_assembly);
-            }
+        if !prompt_assembly_done
+            && entry.get("type").and_then(Value::as_str) == Some("response_item")
+        {
+            extract_prompt_layers(&entry, &mut prompt_assembly);
         }
 
         if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
