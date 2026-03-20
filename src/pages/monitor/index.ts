@@ -1,4 +1,5 @@
 export { isEditableKeyboardTarget } from "./lib/keyboardTarget";
+export { dispatchMonitorKeyboardShortcut } from "./lib/useMonitorKeyboardShortcuts";
 export { createMonitorArchiveActions } from "./model/createMonitorArchiveActions";
 export { createMonitorImportExportActions } from "./model/createMonitorImportExportActions";
 export { createMonitorViewActions } from "./model/createMonitorViewActions";

@@ -38,6 +38,83 @@ interface UseMonitorKeyboardShortcutsOptions {
   graphRows: GraphSceneRow[];
 }
 
+interface MonitorKeyboardShortcutContext extends UseMonitorKeyboardShortcutsOptions {}
+
+type MonitorKeyboardShortcutEvent = Pick<
+  KeyboardEvent,
+  "ctrlKey" | "key" | "metaKey" | "preventDefault" | "target"
+>;
+
+export function dispatchMonitorKeyboardShortcut(
+  event: MonitorKeyboardShortcutEvent,
+  {
+    dispatch,
+    activeDataset,
+    activeFilters,
+    selection,
+    graphRows,
+  }: MonitorKeyboardShortcutContext,
+) {
+  if (isEditableKeyboardTarget(event.target)) {
+    return;
+  }
+
+  const visibleEventIds = collectVisibleEventIds(graphRows);
+  const normalizedKey = event.key.toLowerCase();
+
+  if ((event.metaKey || event.ctrlKey) && normalizedKey === "k") {
+    event.preventDefault();
+    dispatch({ type: "toggle-shortcuts" });
+    return;
+  }
+
+  switch (normalizedKey) {
+    case "i":
+      dispatch({ type: "toggle-inspector" });
+      break;
+    case ".":
+      dispatch({
+        type: "toggle-follow-live",
+        traceId: activeDataset.run.traceId,
+      });
+      break;
+    case "e":
+      dispatch({
+        type: "set-filter",
+        traceId: activeDataset.run.traceId,
+        key: "errorOnly",
+        value: !activeFilters.errorOnly,
+      });
+      break;
+    case "c":
+      dispatch({ type: "set-drawer-tab", tab: "context", open: true });
+      break;
+    case "?":
+      dispatch({ type: "toggle-shortcuts" });
+      break;
+    case "arrowdown":
+    case "arrowup": {
+      const nextSelectionId = getNextVisibleEventId(
+        visibleEventIds,
+        selection,
+        normalizedKey === "arrowdown" ? "next" : "previous",
+      );
+      if (!nextSelectionId) {
+        break;
+      }
+
+      event.preventDefault();
+      dispatch({
+        type: "set-selection",
+        selection: { kind: "event", id: nextSelectionId },
+      });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 export function useMonitorKeyboardShortcuts({
   dispatch,
   activeDataset,
@@ -46,63 +123,13 @@ export function useMonitorKeyboardShortcuts({
   graphRows,
 }: UseMonitorKeyboardShortcutsOptions) {
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
-    if (isEditableKeyboardTarget(event.target)) {
-      return;
-    }
-
-    const visibleEventIds = collectVisibleEventIds(graphRows);
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      dispatch({ type: "toggle-shortcuts" });
-      return;
-    }
-
-    switch (event.key.toLowerCase()) {
-      case "i":
-        dispatch({ type: "toggle-inspector" });
-        break;
-      case ".":
-        dispatch({
-          type: "toggle-follow-live",
-          traceId: activeDataset.run.traceId,
-        });
-        break;
-      case "e":
-        dispatch({
-          type: "set-filter",
-          traceId: activeDataset.run.traceId,
-          key: "errorOnly",
-          value: !activeFilters.errorOnly,
-        });
-        break;
-      case "c":
-        dispatch({ type: "set-drawer-tab", tab: "context", open: true });
-        break;
-      case "?":
-        dispatch({ type: "toggle-shortcuts" });
-        break;
-      case "arrowdown":
-      case "arrowup": {
-        const nextSelectionId = getNextVisibleEventId(
-          visibleEventIds,
-          selection,
-          event.key.toLowerCase() === "arrowdown" ? "next" : "previous",
-        );
-        if (!nextSelectionId) {
-          break;
-        }
-
-        event.preventDefault();
-        dispatch({
-          type: "set-selection",
-          selection: { kind: "event", id: nextSelectionId },
-        });
-        break;
-      }
-      default:
-        break;
-    }
+    dispatchMonitorKeyboardShortcut(event, {
+      dispatch,
+      activeDataset,
+      activeFilters,
+      selection,
+      graphRows,
+    });
   });
 
   useEffect(() => {
