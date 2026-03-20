@@ -4,7 +4,6 @@ import {
   type EdgeRecord,
   type EventRecord,
   type RunDataset,
-  type RunStatus,
 } from "../../run";
 import {
   buildTimedSubagentSnapshots,
@@ -20,18 +19,20 @@ import {
   deriveSessionLogStatus,
   deriveSessionLogTitle,
 } from "../lib/text";
-import {
-  parseJsonRecord,
-  readStringArray,
-} from "../lib/toolPreview";
 import { buildLaneEventsFromEntries } from "./eventBuilder";
 import { buildPromptAssembly } from "./promptAssembly";
+import {
+  buildRunEndEvent,
+  buildRunStartEvent,
+} from "./runBoundaryEvents";
+import {
+  applySubagentToolMetadata,
+  buildSubagentMergeEdges,
+  labelSpawnSourceEvents,
+} from "./subagentLinks";
 import type {
   SessionLogSnapshot,
 } from "./types";
-
-type IndexedSubagentMaps = ReturnType<typeof indexSubagents>;
-type SessionLinkMaps = ReturnType<typeof buildSessionLinkMaps>;
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
   const startTs = parseRequiredTimestamp(snapshot.startedAt);
@@ -84,40 +85,15 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
   const hasUserEvents = parentEvents.some((event) => event.laneId === userLaneId);
 
   const firstEventTs = parentEvents[0]?.startTs ?? updatedTs;
-  const runStartEvent: EventRecord = {
-    eventId: `${snapshot.sessionId}:run-start`,
-    parentId: null,
-    linkIds: [],
-    laneId: mainLane.laneId,
-    agentId: mainLane.agentId,
-    threadId: mainLane.threadId,
-    eventType: "run.started",
-    status:
-      parentEvents.length === 0 && status === "running" ? "running" : "done",
-    waitReason: null,
-    retryCount: 0,
+  const runStartEvent = buildRunStartEvent({
+    sessionId: snapshot.sessionId,
+    lane: mainLane,
     startTs,
-    endTs: Math.max(firstEventTs, startTs + 1_000),
-    durationMs: Math.max(firstEventTs - startTs, 1_000),
-    title: "Session started",
-    inputPreview: null,
-    outputPreview: null,
-    artifactId: null,
-    errorCode: null,
-    errorMessage: null,
-    provider: "OpenAI",
+    firstEventTs,
+    hasParentEvents: parentEvents.length > 0,
+    status,
     model: resolvedModel,
-    toolName: null,
-    tokensIn: 0,
-    tokensOut: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
-  };
+  });
 
   const runEndEvent = buildRunEndEvent(
     snapshot.sessionId,
@@ -330,244 +306,4 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       summaryMetrics: calculateSummaryMetrics(dataset),
     },
   };
-}
-
-function buildRunEndEvent(
-  sessionId: string,
-  lane: AgentLane,
-  updatedTs: number,
-  status: RunStatus,
-  model: string,
-) {
-  if (status === "running") {
-    return null;
-  }
-
-  const finishedEventType = status === "interrupted" ? "run.cancelled" : "run.finished";
-  return {
-    eventId: `${sessionId}:run-finished`,
-    parentId: null,
-    linkIds: [],
-    laneId: lane.laneId,
-    agentId: lane.agentId,
-    threadId: lane.threadId,
-    eventType: finishedEventType,
-    status,
-    waitReason: null,
-    retryCount: 0,
-    startTs: updatedTs,
-    endTs: updatedTs + 1_000,
-    durationMs: 1_000,
-    title: status === "interrupted" ? "Session interrupted" : "Session finished",
-    inputPreview: null,
-    outputPreview: null,
-    artifactId: null,
-    errorCode: null,
-    errorMessage: null,
-    provider: "OpenAI",
-    model,
-    toolName: null,
-    tokensIn: 0,
-    tokensOut: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
-  } satisfies EventRecord;
-}
-
-function labelSpawnSourceEvents(
-  subagentToSpawnSource: SessionLinkMaps["subagentToSpawnSource"],
-  indexedSubagents: IndexedSubagentMaps,
-  eventsById: Map<string, EventRecord>,
-) {
-  for (const [sessionId, eventId] of subagentToSpawnSource) {
-    const sub = indexedSubagents.bySessionId.get(sessionId);
-    const event = eventsById.get(eventId);
-    if (sub && event) {
-      event.title = `spawn_agent (${sub.agentNickname})`;
-    }
-  }
-}
-
-function buildSubagentMergeEdges({
-  parentEvents,
-  mainLane,
-  indexedSubagents,
-  eventsById,
-  latestSubagentEventBySessionId,
-  sessionLinks,
-}: {
-  parentEvents: EventRecord[];
-  mainLane: AgentLane;
-  indexedSubagents: IndexedSubagentMaps;
-  eventsById: Map<string, EventRecord>;
-  latestSubagentEventBySessionId: Map<string, EventRecord>;
-  sessionLinks: Pick<
-    SessionLinkMaps,
-    "callEventToOutputEvent" | "codexAgentIdToSessionId" | "parentFunctionArgsByEventId"
-  >;
-}) {
-  const { callEventToOutputEvent, codexAgentIdToSessionId, parentFunctionArgsByEventId } =
-    sessionLinks;
-  const mergeEdgeCandidates = new Map<string, { edge: EdgeRecord; targetTs: number }>();
-
-  const resolveSessionId = (agentId: string): string | undefined =>
-    codexAgentIdToSessionId.get(agentId)
-    ?? (indexedSubagents.bySessionId.has(agentId) ? agentId : undefined);
-
-  const resolveMergeSource = (sessionId: string, targetEventId: string): string | null => {
-    const lastEventId = latestSubagentEventBySessionId.get(sessionId)?.eventId ?? null;
-    if (!lastEventId) {
-      return null;
-    }
-
-    const sourceTs = eventsById.get(lastEventId)?.startTs ?? 0;
-    const targetTs = eventsById.get(targetEventId)?.startTs ?? 0;
-    if (sourceTs <= targetTs) {
-      return lastEventId;
-    }
-
-    const spawnedEventId = `${sessionId}:spawn`;
-    return eventsById.has(spawnedEventId) ? spawnedEventId : lastEventId;
-  };
-
-  const parseParentFunctionArgs = (event: EventRecord) =>
-    parseJsonRecord(parentFunctionArgsByEventId.get(event.eventId) ?? event.inputPreview);
-
-  const upsertMergeCandidate = (sessionId: string, edge: EdgeRecord) => {
-    const targetTs = eventsById.get(edge.targetEventId)?.startTs ?? 0;
-    const existing = mergeEdgeCandidates.get(sessionId);
-    if (!existing || targetTs > existing.targetTs) {
-      mergeEdgeCandidates.set(sessionId, { edge, targetTs });
-    }
-  };
-
-  for (const event of parentEvents) {
-    if (event.toolName !== "close_agent") {
-      continue;
-    }
-
-    const args = parseParentFunctionArgs(event);
-    const agentId = typeof args?.id === "string" ? args.id : null;
-    const sessionId = agentId ? resolveSessionId(agentId) : undefined;
-    if (!sessionId) {
-      continue;
-    }
-
-    const sub = indexedSubagents.bySessionId.get(sessionId);
-    const resolvedTarget = callEventToOutputEvent.get(event.eventId) ?? event.eventId;
-    const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
-    if (!mergeSourceId) {
-      continue;
-    }
-
-    upsertMergeCandidate(sessionId, {
-      edgeId: `merge:close:${sessionId}`,
-      edgeType: "merge",
-      sourceAgentId: `${sessionId}:sub`,
-      targetAgentId: mainLane.agentId,
-      sourceEventId: mergeSourceId,
-      targetEventId: resolvedTarget,
-      payloadPreview: `${sub?.agentNickname ?? "Agent"} result`,
-      artifactId: null,
-    });
-  }
-
-  for (const event of parentEvents) {
-    if (event.toolName !== "wait" && event.toolName !== "wait_agent") {
-      continue;
-    }
-
-    const args = parseParentFunctionArgs(event);
-    const resolvedTarget = callEventToOutputEvent.get(event.eventId) ?? event.eventId;
-    for (const agentId of readStringArray(args, "ids")) {
-      const sessionId = resolveSessionId(agentId);
-      if (!sessionId) {
-        continue;
-      }
-
-      const sub = indexedSubagents.bySessionId.get(sessionId);
-      const mergeSourceId = resolveMergeSource(sessionId, resolvedTarget);
-      if (!mergeSourceId) {
-        continue;
-      }
-
-      upsertMergeCandidate(sessionId, {
-        edgeId: `merge:wait:${sessionId}`,
-        edgeType: "merge",
-        sourceAgentId: `${sessionId}:sub`,
-        targetAgentId: mainLane.agentId,
-        sourceEventId: mergeSourceId,
-        targetEventId: resolvedTarget,
-        payloadPreview: `${sub?.agentNickname ?? "Agent"} joined`,
-        artifactId: null,
-      });
-    }
-  }
-
-  return [...mergeEdgeCandidates.values()].map(({ edge }) => edge);
-}
-
-function applySubagentToolMetadata(
-  events: EventRecord[],
-  indexedSubagents: IndexedSubagentMaps,
-  sessionLinks: Pick<SessionLinkMaps, "codexAgentIdToSessionId" | "parentFunctionArgsByEventId">,
-) {
-  const { codexAgentIdToSessionId, parentFunctionArgsByEventId } = sessionLinks;
-  const resolveSessionId = (agentId: string): string | undefined =>
-    codexAgentIdToSessionId.get(agentId)
-    ?? (indexedSubagents.bySessionId.has(agentId) ? agentId : undefined);
-
-  for (const event of events) {
-    if (!event.toolName) {
-      continue;
-    }
-
-    const args = parseJsonRecord(parentFunctionArgsByEventId.get(event.eventId) ?? event.inputPreview);
-    if (!args) {
-      continue;
-    }
-
-    if (event.toolName === "resume_agent" || event.toolName === "send_input") {
-      const sessionId = typeof args.id === "string" ? resolveSessionId(args.id) : undefined;
-      const sub = sessionId ? indexedSubagents.bySessionId.get(sessionId) : undefined;
-      if (!sub) {
-        continue;
-      }
-
-      event.title = event.toolName === "resume_agent"
-        ? `Resume (${sub.agentNickname})`
-        : `Send to ${sub.agentNickname}`;
-      continue;
-    }
-
-    if (event.toolName === "close_agent") {
-      const sessionId = typeof args.id === "string" ? resolveSessionId(args.id) : undefined;
-      const sub = sessionId ? indexedSubagents.bySessionId.get(sessionId) : undefined;
-      if (!sub) {
-        continue;
-      }
-
-      event.title = `Close (${sub.agentNickname})`;
-      event.outputPreview = `${sub.agentNickname} (${sub.agentRole})`;
-      continue;
-    }
-
-    if (event.toolName !== "wait" && event.toolName !== "wait_agent") {
-      continue;
-    }
-
-    const names = readStringArray(args, "ids")
-      .map((id) => resolveSessionId(id))
-      .filter((sessionId): sessionId is string => sessionId !== undefined)
-      .map((sessionId) => indexedSubagents.bySessionId.get(sessionId)?.agentNickname)
-      .filter((name): name is string => name !== undefined);
-    if (names.length > 0) {
-      event.title = `Wait (${names.join(", ")})`;
-    }
-  }
 }
