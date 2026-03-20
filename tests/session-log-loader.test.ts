@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invokeTauri } from "../src/app/tauri.js";
 import {
   buildDatasetFromSessionLog,
   deriveArchiveIndexTitle,
@@ -11,8 +12,7 @@ import {
   type SessionEntrySnapshot,
   type SessionLogSnapshot,
   type SubagentSnapshot,
-} from "../src/app/sessionLogLoader.js";
-import { invokeTauri } from "../src/app/tauri.js";
+} from "../src/entities/session-log/index.js";
 
 vi.mock("../src/app/tauri.js", () => ({
   invokeTauri: vi.fn(),

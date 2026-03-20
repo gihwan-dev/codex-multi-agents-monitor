@@ -11,36 +11,46 @@
 - Framework and shell: `React 19`, `Vite 7`, `Tauri 2`.
 - Package manager: `pnpm` only.
 - Validation stack: `Biome`, `Vitest`, `Playwright`, `Storybook`.
-- State and data strategy: feature-local React state, reducer, or context plus fixture-backed selectors. Do not introduce an external global state or cache layer by default.
+- State and data strategy: feature-local React state, page-local orchestration, reducer, or context plus fixture-backed selectors. Do not introduce an external global state or cache layer by default.
 - Styling and design-system direction: token source paths are `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`. Shared UI primitives live in `src/shared/ui/` as a custom thin layer.
 - Component source: build task-specific primitives such as `Panel`, `StatusChip`, `MetricPill`, `LaneHeader`, `EventRow`, `GapChip`, and `InspectorTabs` inside the repo. Do not pull in a heavyweight UI kit for v0.1.
 - Screenshot and visual review tooling: `Storybook` is the component review and screenshot baseline, and `Playwright` covers interaction and end-to-end validation.
 - Module ownership:
-  - `src/app`: shell composition only
-  - `src/features/run-list`: home and run list surfaces
-  - `src/features/run-detail/*`: graph, waterfall, map renderers
-  - `src/features/inspector`: selection summary and payload tabs
-  - `src/features/ingestion`: import/watch adapters, parser, normalizer, redactor
-  - `src/features/fixtures`: `FIX-001` to `FIX-006`
-  - `src/shared/domain`: types, ids, selectors, status helpers
-  - `src/shared/ui`: token-aware primitives
-  - `src/theme/*`: tokens, primitives, motion layers
+  - `src/app`: bootstrap, providers, shell mount, and global wiring only
+  - `src/pages/monitor`: monitor page composition and page-local orchestration
+  - `src/widgets/*`: screen-scale blocks such as run tree, graph, inspector, shell, drawer, top bar
+  - `src/features/*`: user actions and interaction slices such as archive session, import run, follow live, search focus, workspace identity override
+  - `src/features/fixtures`: migration-only fixture source; final home is shared testing or mocks
+  - `src/entities/*`: core run, session-log, workspace, archive-session, and trace-event models/selectors
+  - `src/shared/*`: token-aware primitives, lib helpers, testing assets, config, and theme layers
+  - `src/shared/domain`: transitional aggregation only; do not treat it as a permanent owner
 
 # Architecture Boundaries
 
 - `src/App.tsx` stays root composition only.
-- `src/styles.css` is frozen as starter-era global CSS and must not absorb new feature responsibilities.
+- `src/app/app.css` is legacy shell CSS and must not absorb new feature responsibilities.
 - Parser, normalizer, storage adapter, and UI selectors must remain in separate modules.
 - Graph, waterfall, and map renderers share normalized selectors but do not share renderer implementation files.
 - Preview-first masking runs before persistence. Raw payload storage remains opt-in and export excludes raw by default.
 - `UX_SPEC.md` owns visual direction, tokens, layout intent, and screen flow. `UX_BEHAVIOR_ACCESSIBILITY.md` owns interaction, accessibility, live semantics, and approval criteria. Bootstrap docs only lock implementation stack and boundaries.
 
+# FSD Boundary Contract
+
+- Target FE layers are `app / pages / widgets / features / entities / shared`.
+- `processes` is intentionally not part of the v0.1 plan.
+- Import direction is top-down only. Higher layers may import lower layers, but lower layers must never import higher layers.
+- Each slice exposes a single public API from its root `index.ts`. Deep imports across slice internals are prohibited.
+- `src/features/run-list`, `src/features/run-detail`, `src/features/inspector`, and `src/features/fixtures` are migration families, not permanent FSD ownership.
+- `src/features/ingestion` splits into user-triggered actions under `features` and normalized data handling under `entities`.
+- `src/shared/domain` is a dismantling zone. Its exports move into `entities/*` or widget-local `model` modules.
+
 # Coding Conventions
 
-- Read order before implementation: task `README.md`, `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`, `TECH_SPEC.md`, `IMPLEMENTATION_CONTRACT.md`, then `EXECUTION_PLAN.md`.
+- Read order before implementation: task `README.md`, `docs/architecture/frontend-fsd.md`, `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`, `TECH_SPEC.md`, `IMPLEMENTATION_CONTRACT.md`, then `EXECUTION_PLAN.md`.
 - Use split-first file boundaries from `TECH_SPEC.md`; do not append major responsibilities onto starter files.
 - Prefer repo-local primitives and plain CSS layers over optional helper libraries until a deferred trigger is met.
 - Preserve preview-first masking, explicit raw opt-in, and `wait_reason` visibility requirements in all slices.
+- Preserve the FSD boundary contract and do not introduce a permanent `shared/domain` catch-all.
 - If a slice needs a new core dependency, update this file and the task implementation contract in the same change.
 
 # Validation Commands
@@ -95,6 +105,7 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Adding a second styling stack such as Tailwind, CSS-in-JS, or another token system alongside `src/theme/*`
 - Introducing a heavyweight UI kit for base primitives
 - Default raw prompt or tool payload persistence
+- Treating `src/shared/domain` as a permanent catch-all surface
 - Optional libraries that bypass locked validation commands or replace the documented source-of-truth docs
 
 # Decision Update Rules
@@ -103,12 +114,13 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Deferred items stay deferred until their trigger is actually met during implementation.
 - A slice may not auto-approve a deferred library just because it is convenient.
 - If visual direction or behavior semantics change, update the UX source-of-truth docs first; do not redefine them here.
+- If FE boundary direction changes, update `docs/architecture/frontend-fsd.md` and the task implementation contract in the same change.
 - If validation commands change, update root `AGENTS.md` and `CLAUDE.md` managed sections in the same change.
 
 # Prohibited Patterns
 
 - Extending `src/App.tsx` beyond root composition
-- Extending `src/styles.css` with feature-specific layout, state, or token logic
+- Extending `src/app/app.css` with feature-specific layout, state, or token logic
 - Combining parser, normalizer, storage, and selector code in one file
 - Combining graph interaction state and inspector state in the same presentation file
 - Mixing live transport code directly into renderer files

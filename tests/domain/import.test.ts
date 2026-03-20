@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { createMonitorInitialState, monitorStateReducer } from "../../src/app/monitorState.js";
-import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/features/fixtures/index.js";
+import {
+  buildAnomalyJumps,
+  buildSummaryFacts,
+  buildWorkspaceTreeModel,
+  calculateSummaryMetrics,
+  hasRawPayload,
+} from "../../src/entities/run/index.js";
 import {
   buildExportPayload,
   normalizeImportPayload,
   parseCompletedRunPayload,
-} from "../../src/features/ingestion/index.js";
-import {
-  buildAnomalyJumps,
-  buildGraphSceneModel,
-  buildInspectorCausalSummary,
-  buildSummaryFacts,
-  buildWorkspaceTreeModel,
-  calculateSummaryMetrics,
-  formatDuration,
-  hasRawPayload,
-} from "../../src/shared/domain/index.js";
+} from "../../src/features/import-run/index.js";
+import { createMonitorInitialState, monitorStateReducer } from "../../src/pages/monitor/model/state/index.js";
+import { formatDuration } from "../../src/shared/lib/format/index.js";
+import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/shared/testing/fixtures/index.js";
+import { buildGraphSceneModel } from "../../src/widgets/causal-graph/index.js";
+import { buildInspectorCausalSummary } from "../../src/widgets/causal-inspector/index.js";
 
 describe("completedRunParser", () => {
   it("rejects waiting-class events without wait_reason", () => {

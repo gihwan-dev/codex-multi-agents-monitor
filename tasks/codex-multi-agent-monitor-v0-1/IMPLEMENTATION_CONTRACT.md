@@ -5,6 +5,7 @@
 - `PRD.md`
 - `UX_SPEC.md`
 - `UX_BEHAVIOR_ACCESSIBILITY.md`
+- `docs/architecture/frontend-fsd.md`
 - `TECH_SPEC.md`
 - `EXECUTION_PLAN.md`
 - `ACCEPTANCE.feature`
@@ -20,10 +21,13 @@
   - task supplement: `IMPLEMENTATION_CONTRACT.md`
 - `SLICE-1` and `SLICE-2` implementers must read `UX_SPEC.md` and `UX_BEHAVIOR_ACCESSIBILITY.md` before touching UI files. Bootstrap docs do not replace UX ownership.
 - The baseline toolchain is locked to `Biome + Vitest + Playwright + Storybook`. Bootstrap records the contract only; implementation adds missing scripts or config later.
-- Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/styles.css` is not a feature stylesheet.
+- Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/app/app.css` is not a feature stylesheet.
+- FE target layers are `app / pages / widgets / features / entities / shared`.
+- `src/app/` is bootstrap only, `src/pages/monitor/` owns page orchestration, `src/widgets/` owns screen blocks, `src/features/` owns user actions, `src/entities/` owns normalized models, and `src/shared/` owns primitives, helpers, testing, and theme layers.
+- `src/shared/domain/` and `src/app/session-log-loader/` are transitional aggregation zones and must be dismantled as slices land.
 - Custom thin primitives under `src/shared/ui/` are the only approved component source for v0.1.
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.
-- `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, this file, and the UX docs as required pre-read inputs for every slice.
+- `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, `docs/architecture/frontend-fsd.md`, this file, and the UX docs as required pre-read inputs for every slice.
 
 # Allowed Core Libraries
 
@@ -53,10 +57,10 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 
 # Validation Overrides
 
-- `SLICE-1`: `30-second checklist review`, `visual shell snapshot review`, `layout density review`
-- `SLICE-2`: `keyboard walkthrough`, `state matrix walkthrough`, `fixture-based interaction smoke check`
-- `SLICE-3`: `parser unit test`, `normalization smoke check`, `masking contract review`
-- `SLICE-4`: `live update walkthrough`, `stale or reconnect simulation`, `large-run degradation fixture review`
+- `SLICE-1`: `boundary contract review`, `architecture doc review`, `import direction smoke check`
+- `SLICE-2`: `app-to-pages migration review`, `bootstrap smoke check`, `page-local state walkthrough`
+- `SLICE-3`: `widget extraction review`, `storybook smoke check`, `layout density review`
+- `SLICE-4`: `entity and loader split review`, `normalization smoke check`, `fixture boundary review`
 - Every slice still closes against the repo-level command contract in `docs/ai/ENGINEERING_RULES.md`.
 
 # Open Risks
@@ -64,4 +68,5 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - Large-run rendering cost can spike across graph, waterfall, and map simultaneously.
 - Source schema drift may omit or reshape `wait_reason`, handoff, transfer, or usage fields.
 - Preview-first masking can regress if import or live-watch code stores raw payload too early.
+- `shared/domain` and `session-log-loader` can leak back in if slices leave compatibility shims behind too long.
 - The current environment still blocks full Playwright browser navigation, so end-to-end coverage remains limited to built-artifact smoke plus contract assertions.

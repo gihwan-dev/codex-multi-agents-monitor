@@ -1,9 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader";
-import { FIXTURE_DATASETS } from "../src/features/fixtures";
-import { CausalGraphView } from "../src/features/run-detail/graph/CausalGraphView";
+import { buildGraphSceneModel, type GraphSceneModel, type RunFilters } from "../src/entities/run";
+import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
+import { FIXTURE_DATASETS } from "../src/shared/testing/fixtures";
+import { CausalGraphView } from "../src/widgets/causal-graph";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
@@ -16,8 +17,7 @@ import {
   GAP_ROW_HEIGHT,
   ROW_GAP,
   TIME_GUTTER,
-} from "../src/features/run-detail/graph/graphLayout";
-import { buildGraphSceneModel, type GraphSceneModel, type RunFilters } from "../src/shared/domain";
+} from "../src/widgets/causal-graph/model/graphLayout";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,

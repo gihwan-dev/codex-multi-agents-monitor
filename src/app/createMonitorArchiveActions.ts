@@ -3,8 +3,8 @@ import {
   type MutableRefObject,
   startTransition,
 } from "react";
-import type { MonitorAction } from "./monitorState";
-import { loadArchivedSessionSnapshot } from "./sessionLogLoader";
+import type { MonitorAction } from "../pages/monitor/model/state";
+import * as sessionLogLoader from "./sessionLogLoader.js";
 
 interface CreateMonitorArchiveActionsOptions {
   archivedIndexLength: number;
@@ -43,7 +43,7 @@ export function createMonitorArchiveActions({
 
   async function loadArchiveSnapshot(filePath: string, requestId: number) {
     try {
-      const dataset = await loadArchivedSessionSnapshot(filePath);
+      const dataset = await sessionLogLoader.loadArchivedSessionSnapshot(filePath);
       if (!dataset) {
         finishSnapshotRequest(requestId);
         return;

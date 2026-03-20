@@ -19,7 +19,7 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
-import type { EventType } from "../domain";
+import type { EventType } from "../../entities/run";
 
 const ICON_MAP: Record<EventType, LucideIcon> = {
   "run.started": Play,

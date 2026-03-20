@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/app/sessionLogLoader.js";
-import { FIXTURE_DATASETS } from "../src/features/fixtures";
+import { buildGraphSceneModel, type RunFilters, type SelectionState } from "../src/entities/run/index.js";
+import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log/index.js";
+import { FIXTURE_DATASETS } from "../src/shared/testing/fixtures/index.js";
 import {
   buildEventRects,
   computeLaneMetrics,
   computeVisibleRowRange,
-} from "../src/features/run-detail/graph/graphLayout";
-import { buildGraphSceneModel, type RunFilters, type SelectionState } from "../src/shared/domain";
+} from "../src/widgets/causal-graph/model/graphLayout";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,

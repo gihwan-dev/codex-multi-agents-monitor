@@ -1,4 +1,4 @@
-import type { RunStatus } from "../domain";
+import type { RunStatus } from "../../entities/run";
 
 const STATUS_LABELS: Record<RunStatus, string> = {
   queued: "Queued",

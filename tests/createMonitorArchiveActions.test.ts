@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMonitorArchiveActions } from "../src/app/createMonitorArchiveActions.js";
-import { createMonitorInitialState } from "../src/app/monitorState.js";
-import { loadArchivedSessionSnapshot } from "../src/app/sessionLogLoader.js";
+import { loadArchivedSessionSnapshot } from "../src/entities/session-log/index.js";
+import { createMonitorArchiveActions } from "../src/pages/monitor/model/createMonitorArchiveActions.js";
+import { createMonitorInitialState } from "../src/pages/monitor/model/state/index.js";
 
-vi.mock("../src/app/sessionLogLoader.js", () => ({
+vi.mock("../src/entities/session-log/index.js", () => ({
   loadArchivedSessionSnapshot: vi.fn(),
 }));
 

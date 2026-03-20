@@ -1,5 +1,5 @@
-import { MonitorApp } from "./app/MonitorApp";
+import { MonitorPage } from "./pages/monitor";
 
 export function App() {
-  return <MonitorApp />;
+  return <MonitorPage />;
 }

@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { MonitorApp } from "./MonitorApp";
+import { MonitorPage } from "../pages/monitor";
 
 const meta = {
-  title: "App/MonitorApp",
-  render: () => <MonitorApp />,
+  title: "Pages/MonitorPage",
+  render: () => <MonitorPage />,
 };
 
 export default meta;
@@ -46,7 +46,7 @@ function StoryScenario({
     return () => window.clearTimeout(timeout);
   }, [openButtonLabel, selectRunLabel]);
 
-  return <MonitorApp />;
+  return <MonitorPage />;
 }
 
 function clickButton(label: string) {

@@ -1,4 +1,4 @@
-import { formatDuration } from "../domain";
+import { formatDuration } from "../lib/format";
 
 interface GapChipProps {
   gapId: string;

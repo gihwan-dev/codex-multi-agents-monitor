@@ -1,1 +1,1 @@
-export * from "./runFixtures.js";
+export * from "../../shared/testing/fixtures";
