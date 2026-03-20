@@ -1,5 +1,4 @@
-import type { RunDataset } from "../../../entities/run";
-import type { LiveConnection } from "../../../pages/monitor/model/state";
+import type { LiveConnection, RunDataset } from "../../../entities/run";
 import { StatusChip } from "../../../shared/ui";
 
 interface MonitorTopBarProps {

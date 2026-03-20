@@ -1,1 +1,88 @@
-/* Compatibility placeholder for migrated drawer styles. */
+.drawer__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.drawer__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.drawer--closed {
+  height: 0;
+  overflow: hidden;
+}
+
+.drawer--open {
+  position: absolute;
+  inset: 0 0 0 0;
+  max-height: 100%;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tabs__pill {
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-secondary);
+}
+
+.tabs__pill--active {
+  border-color: rgba(77, 163, 255, 0.42);
+  color: var(--color-text);
+  background: rgba(77, 163, 255, 0.08);
+}
+
+.tabs__pill:active {
+  opacity: 0.75;
+}
+
+.artifact-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.artifact-card p {
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.import-textarea,
+.drawer__pre {
+  width: 100%;
+  min-height: 180px;
+  flex: 1 1 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.drawer__pre {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: auto;
+}

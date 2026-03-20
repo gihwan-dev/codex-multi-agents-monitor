@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { WorkspaceTreeItem } from "../src/entities/run/index.js";
 import {
   buildRunTreeId,
   buildWorkspaceTreeId,
@@ -7,8 +8,7 @@ import {
   resolveActiveTreeId,
   resolveExpandedWorkspaceIds,
   resolveTreeKeyAction,
-} from "../src/features/run-list/workspaceTreeUtils.js";
-import type { WorkspaceTreeItem } from "../src/shared/domain/index.js";
+} from "../src/widgets/workspace-run-tree/lib/workspaceTreeUtils.js";
 
 const WORKSPACES: WorkspaceTreeItem[] = [
   {

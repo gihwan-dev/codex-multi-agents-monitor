@@ -2,17 +2,11 @@ import type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
   DrawerTab,
+  LiveConnection,
   RunDataset,
   RunFilters,
   SelectionState,
 } from "../../../../entities/run";
-
-export type LiveConnection =
-  | "live"
-  | "stale"
-  | "disconnected"
-  | "reconnected"
-  | "paused";
 
 export interface MonitorState {
   datasets: RunDataset[];

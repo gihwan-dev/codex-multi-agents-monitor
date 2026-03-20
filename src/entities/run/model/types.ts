@@ -43,6 +43,12 @@ export type DrawerTab = (typeof DRAWER_TABS)[number];
 export type EdgeType = (typeof EDGE_TYPES)[number];
 export type RunEnvironment = (typeof RUN_ENVIRONMENTS)[number];
 export type LiveMode = (typeof LIVE_MODES)[number];
+export type LiveConnection =
+  | "live"
+  | "stale"
+  | "disconnected"
+  | "reconnected"
+  | "paused";
 
 export interface Project {
   projectId: string;
@@ -333,7 +339,7 @@ export interface LiveWatchFrame {
   delayMs: number;
   events: EventRecord[];
   status?: RunStatus;
-  connection?: "live" | "stale" | "disconnected" | "reconnected";
+  connection?: Exclude<LiveConnection, "paused">;
 }
 
 export interface InspectorFact {

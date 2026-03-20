@@ -4,7 +4,7 @@ import {
   formatRelativeTime,
   formatTimestamp,
   truncateId,
-} from "./format.js";
+} from "../../../shared/lib/format/index.js";
 import type {
   AnomalyJump,
   EventRecord,
@@ -25,7 +25,7 @@ import type {
   WorkspaceThreadGroup,
   WorkspaceTreeItem,
   WorkspaceTreeModel,
-} from "./types.js";
+} from "../model/types.js";
 
 const GAP_THRESHOLD_MS = 30_000;
 const LARGE_RUN_LANE_THRESHOLD = 8;

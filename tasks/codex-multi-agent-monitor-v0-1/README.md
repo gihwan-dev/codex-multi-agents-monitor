@@ -29,8 +29,8 @@
 ## Quality preflight
 
 - verdict: orchestrated-task
-- current repo state: monitor shell과 trace workbench는 이미 구현되어 있지만 `src/app`, `src/shared/domain`, `src/app/session-log-loader`, `src/features/*`에 page, widget, entity 책임이 겹쳐 있다.
-- structure preflight: 현재 구현을 append-only로 확장하면 `app`와 `shared/domain`이 page orchestration, widget model, entity model을 계속 흡수해 경계가 더 흐려질 가능성이 높다.
+- current repo state: monitor shell과 trace workbench는 `src/pages/monitor`, `src/widgets/*`, `src/features/*`, `src/entities/*`, `src/shared/*` 기준으로 재정렬되어 있고 `src/app`는 bootstrap/layout만 남는다.
+- structure preflight: 이후 변경도 이 FSD 경계를 유지해야 하며, 삭제된 legacy path를 호환 shim으로 되살리지 않는다.
 - split-first: required. 구현 단계에서는 `app -> pages/monitor`, `widgets`, `features`, `entities`, `shared` 경계를 먼저 분리한다.
 - bootstrap: repo baseline `../../docs/ai/ENGINEERING_RULES.md`와 task supplement `IMPLEMENTATION_CONTRACT.md`가 생성되어 `SLICE-1` 선행 조건이 해소됐다.
 
@@ -39,7 +39,7 @@
 - `work_type=feature`, `delivery_strategy=ui-first`로 고정한다.
 - 이 앱은 KPI 대시보드가 아니라 run-detail-first 디버깅 워크벤치로 설계한다.
 - FE 구조는 `app/pages/widgets/features/entities/shared` 6레이어로 고정하고 `processes`는 도입하지 않는다.
-- `src/shared/domain`은 permanent owner가 아니라 이행 구간으로 본다.
+- `src/shared/domain`과 `src/app/sessionLogLoader` 계열 shim은 제거됐고 재도입하지 않는다.
 - 내부 데이터 모델은 OTel/OpenAI Agents/Langfuse mental model을 따르되 `tree + link`를 모두 가지는 trace-native schema를 사용한다.
 - 기본 상세 모드는 `compressed event graph`이고 `Waterfall`과 `Map`은 같은 normalized dataset 위의 보조 모드로 둔다.
 - 프라이버시 기본 정책은 preview-only 저장, raw payload opt-in, export 시 raw 제외다.
@@ -57,7 +57,7 @@
 
 ## Implementation slices
 
-- `SLICE-1`은 FSD boundary 문서와 page/app 책임선을 먼저 고정한다.
-- `SLICE-2`는 `app`에서 `pages/monitor`를 분리하고 bootstrap only 경계를 남긴다.
-- `SLICE-3`은 `features/run-list`, `features/run-detail`, `features/inspector`를 `widgets`로 승격한다.
-- `SLICE-4`는 `shared/domain`, `session-log-loader`, `features/fixtures`, `features/ingestion`의 경계를 `entities`와 `shared` 기준으로 정리한다.
+- `SLICE-1`: FSD boundary 문서와 page/app 책임선을 고정한다.
+- `SLICE-2`: `app`에서 `pages/monitor`를 분리하고 bootstrap only 경계를 남긴다.
+- `SLICE-3`: run tree, graph, inspector, drawer, chrome을 `widgets`에 정착시킨다.
+- `SLICE-4`: session-log, workspace identity, fixtures, follow-live/import 경계를 `entities`, `features`, `shared` 기준으로 정리한다.

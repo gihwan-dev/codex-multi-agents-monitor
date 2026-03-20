@@ -21,10 +21,10 @@
   - task supplement: `IMPLEMENTATION_CONTRACT.md`
 - `SLICE-1` and `SLICE-2` implementers must read `UX_SPEC.md` and `UX_BEHAVIOR_ACCESSIBILITY.md` before touching UI files. Bootstrap docs do not replace UX ownership.
 - The baseline toolchain is locked to `Biome + Vitest + Playwright + Storybook`. Bootstrap records the contract only; implementation adds missing scripts or config later.
-- Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/app/app.css` is not a feature stylesheet.
+- Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/app/styles/layout.css` is not a widget feature stylesheet.
 - FE target layers are `app / pages / widgets / features / entities / shared`.
 - `src/app/` is bootstrap only, `src/pages/monitor/` owns page orchestration, `src/widgets/` owns screen blocks, `src/features/` owns user actions, `src/entities/` owns normalized models, and `src/shared/` owns primitives, helpers, testing, and theme layers.
-- `src/shared/domain/` and `src/app/session-log-loader/` are transitional aggregation zones and must be dismantled as slices land.
+- `src/shared/domain/` and `src/app/session-log-loader/` are removed legacy paths and must not be recreated.
 - Custom thin primitives under `src/shared/ui/` are the only approved component source for v0.1.
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.
 - `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, `docs/architecture/frontend-fsd.md`, this file, and the UX docs as required pre-read inputs for every slice.
@@ -68,5 +68,5 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - Large-run rendering cost can spike across graph, waterfall, and map simultaneously.
 - Source schema drift may omit or reshape `wait_reason`, handoff, transfer, or usage fields.
 - Preview-first masking can regress if import or live-watch code stores raw payload too early.
-- `shared/domain` and `session-log-loader` can leak back in if slices leave compatibility shims behind too long.
+- `shared/domain` and `session-log-loader` naming can leak back in if future slices reintroduce compatibility shims.
 - The current environment still blocks full Playwright browser navigation, so end-to-end coverage remains limited to built-artifact smoke plus contract assertions.

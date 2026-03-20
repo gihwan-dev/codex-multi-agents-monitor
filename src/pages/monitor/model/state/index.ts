@@ -1,3 +1,4 @@
+export type { LiveConnection } from "../../../../entities/run";
 export {
   ARCHIVE_PAGE_SIZE,
   createDefaultFilters,
@@ -8,7 +9,6 @@ export {
 } from "./helpers";
 export { monitorStateReducer } from "./reducer";
 export type {
-  LiveConnection,
   MonitorAction,
   MonitorState,
 } from "./types";

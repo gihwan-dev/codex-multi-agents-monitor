@@ -1,12 +1,13 @@
 import {
   calculateSummaryMetrics,
+  type LiveConnection,
   type LiveWatchFrame,
   type RunDataset,
 } from "../../../entities/run/index.js";
 
 interface LiveWatchSnapshot {
   dataset: RunDataset;
-  connection: "live" | "stale" | "disconnected" | "reconnected";
+  connection: Exclude<LiveConnection, "paused">;
 }
 
 export function applyLiveFrame(dataset: RunDataset, frame: LiveWatchFrame): LiveWatchSnapshot {

@@ -1,4 +1,4 @@
-import { invokeTauri } from "../../../app/tauri";
+import { invokeTauri } from "../../../shared/api";
 import type { ArchivedSessionIndexResult, RunDataset } from "../../run";
 import { buildDatasetFromSessionLog } from "../model/datasetBuilder";
 import type { SessionLogSnapshot } from "../model/types";

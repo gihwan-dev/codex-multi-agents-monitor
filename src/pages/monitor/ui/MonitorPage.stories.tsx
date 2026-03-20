@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { MonitorPage } from "../pages/monitor";
+import { MonitorPage } from "./MonitorPage";
 
 const meta = {
   title: "Pages/MonitorPage",

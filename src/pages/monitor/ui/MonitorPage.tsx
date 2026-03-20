@@ -65,6 +65,14 @@ export function MonitorPage() {
       drawerTriggerRef.current?.focus();
     });
   };
+  const drawerState = {
+    drawerOpen: state.drawerOpen,
+    drawerTab: state.drawerTab,
+    allowRawImport: state.allowRawImport,
+    noRawStorage: state.noRawStorage,
+    importText: state.importText,
+    exportText: state.exportText,
+  };
 
   return (
     <div className="monitor-shell">
@@ -148,7 +156,7 @@ export function MonitorPage() {
           ) : null}
 
           <MonitorDrawer
-            state={state}
+            drawerState={drawerState}
             activeDataset={activeDataset}
             rawTabAvailable={rawTabAvailable}
             onSetDrawerTab={openDrawer}

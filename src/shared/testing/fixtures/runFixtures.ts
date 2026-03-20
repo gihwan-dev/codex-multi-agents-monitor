@@ -1,4 +1,12 @@
-import { type AgentLane, type ArtifactRecord, calculateSummaryMetrics, type EdgeRecord, type EventRecord, type LiveWatchFrame, type RunDataset } from "../../entities/run/index.js";
+import {
+  type AgentLane,
+  type ArtifactRecord,
+  calculateSummaryMetrics,
+  type EdgeRecord,
+  type EventRecord,
+  type LiveWatchFrame,
+  type RunDataset,
+} from "../../../entities/run/index.js";
 
 const baseTime = Date.parse("2026-03-14T09:00:00Z");
 

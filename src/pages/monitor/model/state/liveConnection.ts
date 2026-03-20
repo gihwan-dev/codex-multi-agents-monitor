@@ -1,5 +1,5 @@
-import type { RunDataset } from "../../../../entities/run";
-import type { LiveConnection, MonitorState } from "./types";
+import type { LiveConnection, RunDataset } from "../../../../entities/run";
+import type { MonitorState } from "./types";
 
 export function buildConnectionMap(datasets: RunDataset[]) {
   return Object.fromEntries(

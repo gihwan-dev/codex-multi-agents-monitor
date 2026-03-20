@@ -16,18 +16,18 @@
 
 - verdict: `orchestrated-task`
 - 현재 UI root는 `src/App.tsx`가 얇은 composition만 담당하고 있다.
-- 현재 shell/style 결합 지점은 `src/app/MonitorApp.tsx`, `src/app/useMonitorAppState.ts`, `src/app/app.css`, `src/shared/domain/*`, `src/app/session-log-loader/*` 쪽에 집중되어 있다.
+- 현재 shell/style 결합 지점은 `src/pages/monitor/ui/MonitorPage.tsx`, `src/app/styles/layout.css`, `src/widgets/*`, `src/entities/run/*`, `src/entities/session-log/*` 기준으로 분리되어 있다.
 - `src/main.tsx`는 bootstrap only entry이므로 안정 경계로 유지한다.
 - `src-tauri/`는 runtime container지만 v0.1 shell/trace workbench 구현 초기에는 주 변경 대상이 아니다.
-- 예상 post-change LOC는 append-only 기준으로 `src/app`와 `src/shared/domain`이 급격히 비대화되기 쉬우므로 FSD 분리 없이는 유지보수가 어렵다.
+- 예상 post-change LOC는 widget/page/entity 책임선을 유지하지 않으면 다시 monolith 경로가 생기므로 FSD 경계를 계속 강제해야 한다.
 - split-first: true. `src/app`, `src/pages`, `src/widgets`, `src/features`, `src/entities`, `src/shared`에 책임을 분산하지 않은 채 append-only로 기능을 누적하지 않는다.
 
 | Existing file | Current role | Post-change risk | Decision |
 | --- | --- | --- | --- |
 | `src/App.tsx` | root composition only | 낮음 | root composition only 유지 |
-| `src/app/MonitorApp.tsx` | monitor shell + page orchestration | app, page, widget 책임이 뒤섞일 위험 | `pages/monitor`로 이동 |
-| `src/app/app.css` | shell + widget styles | layout, drawer, graph, inspector 스타일이 한 파일에 공존 | widget별 CSS로 분리 |
-| `src/shared/domain/*` | mixed domain DTO + selectors | entity model과 widget model이 한 파일군에 공존 | `entities`와 widget model로 분해 |
+| `src/pages/monitor/ui/MonitorPage.tsx` | monitor page composition | page orchestration이 widget/feature 경계를 다시 흡수할 위험 | page orchestration only 유지 |
+| `src/app/styles/layout.css` | shell layout styling | widget 스타일이 다시 app으로 회귀할 위험 | shell layout만 유지 |
+| `src/entities/run/*`, `src/entities/session-log/*` | normalized model + selectors + loaders | widget-specific model이 entity에 다시 섞일 위험 | entity-core 범위만 유지 |
 | `src/main.tsx` | app bootstrap | 낮음 | 그대로 유지 |
 
 ## FSD boundary model
@@ -38,7 +38,7 @@
 - `src/widgets/` owns the screen blocks: run tree, graph, inspector, shell, drawer.
 - `src/features/` owns user actions: archive session, import run, follow live, search focus, workspace identity override, view-mode toggles.
 - `src/entities/` owns run/session/workspace/archive-session and session-log models, selectors, and adapters.
-- `src/shared/domain/` is transitional and should be dismantled into `entities/*` and widget-local `model` modules.
+- `src/shared/domain/` is removed and must not be recreated.
 - `src/shared/*` keeps primitives, theme, lib helpers, and testing assets only.
 
 ```mermaid
@@ -135,7 +135,7 @@ flowchart LR
 - `src/widgets/run-tree/`, `src/widgets/causal-graph/`, `src/widgets/inspector/`, `src/widgets/monitor-shell/`, `src/widgets/bottom-drawer/`는 screen-scale view blocks를 담당한다.
 - `src/features/archive-session/`, `src/features/import-run/`, `src/features/follow-live/`, `src/features/search-focus/`, `src/features/workspace-identity/`, `src/features/view-mode-toggle/`는 user action slices를 담당한다.
 - `src/entities/run/`, `src/entities/session-log/`, `src/entities/workspace/`, `src/entities/archive-session/`는 normalized models, selectors, adapters를 담당한다.
-- `src/shared/domain/`은 migration-only aggregation으로 보고 최종적으로 해체한다.
+- `src/shared/domain/`과 `src/app/session-log-loader/` 계열 shim은 제거됐고 다시 만들지 않는다.
 - `src/shared/ui/`, `src/shared/lib/`, `src/shared/testing/`, `src/theme/*`는 공용 primitive, helper, fixture, token layer를 담당한다.
 
 `FSD boundary note`: `../../docs/architecture/frontend-fsd.md`
@@ -157,9 +157,9 @@ flowchart TD
 
 - target-file append 금지 규칙:
   - `src/App.tsx`는 composition만 유지한다.
-  - `src/app/app.css`는 starter-era shell 파일을 계속 확장하지 않는다.
+  - `src/app/styles/layout.css`는 shell/grid 파일로만 유지하고 widget CSS를 다시 흡수하지 않는다.
   - parser/normalizer/storage/UI selector는 같은 파일에 같이 두지 않는다.
-  - `shared/domain`을 새 catch-all으로 재생성하지 않는다.
+  - `shared/domain`이나 `app/sessionLogLoader` 같은 legacy catch-all shim을 재생성하지 않는다.
 
 ## Performance and degradation
 

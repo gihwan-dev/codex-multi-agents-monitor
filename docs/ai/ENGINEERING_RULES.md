@@ -20,15 +20,14 @@
   - `src/pages/monitor`: monitor page composition and page-local orchestration
   - `src/widgets/*`: screen-scale blocks such as run tree, graph, inspector, shell, drawer, top bar
   - `src/features/*`: user actions and interaction slices such as archive session, import run, follow live, search focus, workspace identity override
-  - `src/features/fixtures`: migration-only fixture source; final home is shared testing or mocks
-  - `src/entities/*`: core run, session-log, workspace, archive-session, and trace-event models/selectors
+  - `src/entities/*`: core run, session-log, workspace, and trace-event models/selectors
   - `src/shared/*`: token-aware primitives, lib helpers, testing assets, config, and theme layers
-  - `src/shared/domain`: transitional aggregation only; do not treat it as a permanent owner
+  - Legacy paths such as `src/shared/domain`, `src/app/sessionLogLoader`, `src/features/run-list`, `src/features/run-detail`, `src/features/inspector`, `src/features/ingestion`, and `src/features/fixtures` must not be recreated
 
 # Architecture Boundaries
 
 - `src/App.tsx` stays root composition only.
-- `src/app/app.css` is legacy shell CSS and must not absorb new feature responsibilities.
+- `src/app/styles/layout.css` is shell layout CSS only and must not absorb widget-specific styling responsibilities.
 - Parser, normalizer, storage adapter, and UI selectors must remain in separate modules.
 - Graph, waterfall, and map renderers share normalized selectors but do not share renderer implementation files.
 - Preview-first masking runs before persistence. Raw payload storage remains opt-in and export excludes raw by default.
@@ -40,9 +39,8 @@
 - `processes` is intentionally not part of the v0.1 plan.
 - Import direction is top-down only. Higher layers may import lower layers, but lower layers must never import higher layers.
 - Each slice exposes a single public API from its root `index.ts`. Deep imports across slice internals are prohibited.
-- `src/features/run-list`, `src/features/run-detail`, `src/features/inspector`, and `src/features/fixtures` are migration families, not permanent FSD ownership.
-- `src/features/ingestion` splits into user-triggered actions under `features` and normalized data handling under `entities`.
-- `src/shared/domain` is a dismantling zone. Its exports move into `entities/*` or widget-local `model` modules.
+- Legacy widget and aggregation paths under `src/features/run-list`, `src/features/run-detail`, `src/features/inspector`, `src/features/fixtures`, `src/features/ingestion`, and `src/shared/domain` are removed.
+- Shared infrastructure such as the Tauri bridge lives under `src/shared/api`, not under `src/app`.
 
 # Coding Conventions
 
@@ -50,7 +48,7 @@
 - Use split-first file boundaries from `TECH_SPEC.md`; do not append major responsibilities onto starter files.
 - Prefer repo-local primitives and plain CSS layers over optional helper libraries until a deferred trigger is met.
 - Preserve preview-first masking, explicit raw opt-in, and `wait_reason` visibility requirements in all slices.
-- Preserve the FSD boundary contract and do not introduce a permanent `shared/domain` catch-all.
+- Preserve the FSD boundary contract and do not reintroduce legacy compatibility shims or a `shared/domain` catch-all.
 - If a slice needs a new core dependency, update this file and the task implementation contract in the same change.
 
 # Validation Commands
@@ -105,7 +103,7 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Adding a second styling stack such as Tailwind, CSS-in-JS, or another token system alongside `src/theme/*`
 - Introducing a heavyweight UI kit for base primitives
 - Default raw prompt or tool payload persistence
-- Treating `src/shared/domain` as a permanent catch-all surface
+- Reintroducing `src/shared/domain` or other deleted compatibility surfaces as permanent catch-all modules
 - Optional libraries that bypass locked validation commands or replace the documented source-of-truth docs
 
 # Decision Update Rules
@@ -120,9 +118,10 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 # Prohibited Patterns
 
 - Extending `src/App.tsx` beyond root composition
-- Extending `src/app/app.css` with feature-specific layout, state, or token logic
+- Extending `src/app/styles/layout.css` with widget-specific feature styling
 - Combining parser, normalizer, storage, and selector code in one file
 - Combining graph interaction state and inspector state in the same presentation file
 - Mixing live transport code directly into renderer files
 - Storing raw payload by default or exposing raw export without explicit opt-in
+- Recreating deleted legacy paths such as `src/shared/domain`, `src/app/sessionLogLoader`, `src/features/run-list`, `src/features/run-detail`, or `src/features/inspector`
 - Reusing starter `Hello World` UI or metadata as a product source of truth

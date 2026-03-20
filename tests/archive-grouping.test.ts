@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupArchivedSessionsByWorkspace } from "../src/features/run-list/archiveGroups.js";
-import type { ArchivedSessionIndexItem } from "../src/shared/domain/index.js";
+import type { ArchivedSessionIndexItem } from "../src/entities/run/index.js";
+import { groupArchivedSessionsByWorkspace } from "../src/widgets/workspace-run-tree/lib/archiveGroups.js";
 
 function buildArchivedItem(
   overrides: Partial<ArchivedSessionIndexItem>,

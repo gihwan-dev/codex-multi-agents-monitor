@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SessionLogSnapshot } from "../src/app/sessionLogLoader";
-import { buildDatasetFromSessionLog } from "../src/app/sessionLogLoader";
+import type { SessionLogSnapshot } from "../src/entities/session-log/index.js";
+import { buildDatasetFromSessionLog } from "../src/entities/session-log/index.js";
 
 function makeSnapshot(overrides: Partial<SessionLogSnapshot> = {}): SessionLogSnapshot {
   return {

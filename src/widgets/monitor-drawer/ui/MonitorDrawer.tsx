@@ -3,14 +3,22 @@ import {
   type DrawerTab,
   type RunDataset,
 } from "../../../entities/run";
-import type { MonitorState } from "../../../pages/monitor/model/state";
 import { formatCurrency, formatTokens } from "../../../shared/lib/format";
 import { Panel } from "../../../shared/ui";
 import { PromptAssemblyView } from "../../causal-inspector";
 import "./monitor-drawer.css";
 
+interface MonitorDrawerState {
+  drawerOpen: boolean;
+  drawerTab: DrawerTab;
+  allowRawImport: boolean;
+  noRawStorage: boolean;
+  importText: string;
+  exportText: string;
+}
+
 interface MonitorDrawerProps {
-  state: MonitorState;
+  drawerState: MonitorDrawerState;
   activeDataset: RunDataset;
   rawTabAvailable: boolean;
   onSetDrawerTab: (tab: DrawerTab, target?: HTMLElement | null) => void;
@@ -22,7 +30,7 @@ interface MonitorDrawerProps {
 }
 
 export function MonitorDrawer({
-  state,
+  drawerState,
   activeDataset,
   rawTabAvailable,
   onSetDrawerTab,
@@ -32,7 +40,7 @@ export function MonitorDrawer({
   onNoRawChange,
   onCloseDrawer,
 }: MonitorDrawerProps) {
-  if (!state.drawerOpen) {
+  if (!drawerState.drawerOpen) {
     return <div className="drawer drawer--closed" aria-hidden="true" />;
   }
 
@@ -56,14 +64,14 @@ export function MonitorDrawer({
           <button
             key={tab}
             type="button"
-            className={`tabs__pill ${state.drawerTab === tab ? "tabs__pill--active" : ""}`.trim()}
+            className={`tabs__pill ${drawerState.drawerTab === tab ? "tabs__pill--active" : ""}`.trim()}
             onClick={(event) => onSetDrawerTab(tab, event.currentTarget)}
           >
             {tab}
           </button>
         ))}
       </div>
-      {state.drawerTab === "artifacts" ? (
+      {drawerState.drawerTab === "artifacts" ? (
         <div className="drawer__body">
           {activeDataset.artifacts.length ? (
             activeDataset.artifacts.map((item) => (
@@ -77,12 +85,12 @@ export function MonitorDrawer({
           )}
         </div>
       ) : null}
-      {state.drawerTab === "import" ? (
+      {drawerState.drawerTab === "import" ? (
         <div className="drawer__body">
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={state.allowRawImport}
+              checked={drawerState.allowRawImport}
               onChange={(event) => onAllowRawChange(event.target.checked)}
             />
             Raw opt-in
@@ -90,7 +98,7 @@ export function MonitorDrawer({
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={state.noRawStorage}
+              checked={drawerState.noRawStorage}
               onChange={(event) => onNoRawChange(event.target.checked)}
             />
             No raw storage
@@ -98,7 +106,7 @@ export function MonitorDrawer({
           <textarea
             className="import-textarea"
             aria-label="JSON payload to import"
-            value={state.importText}
+            value={drawerState.importText}
             onChange={(event) => onImportTextChange(event.target.value)}
           />
           <button type="button" className="button" onClick={onImport}>
@@ -106,7 +114,7 @@ export function MonitorDrawer({
           </button>
         </div>
       ) : null}
-      {state.drawerTab === "context" ? (
+      {drawerState.drawerTab === "context" ? (
         <div className="drawer__body">
           {activeDataset.promptAssembly ? (
             <PromptAssemblyView assembly={activeDataset.promptAssembly} />
@@ -115,15 +123,15 @@ export function MonitorDrawer({
           )}
         </div>
       ) : null}
-      {state.drawerTab === "raw" ? (
+      {drawerState.drawerTab === "raw" ? (
         <pre className="drawer__pre">
           {activeDataset.run.rawIncluded
             ? JSON.stringify(activeDataset, null, 2)
             : "Raw payload hidden by default."}
         </pre>
       ) : null}
-      {state.drawerTab === "log" ? (
-        <pre className="drawer__pre">{state.exportText || "No export generated yet."}</pre>
+      {drawerState.drawerTab === "log" ? (
+        <pre className="drawer__pre">{drawerState.exportText || "No export generated yet."}</pre>
       ) : null}
       <div className="drawer__footer">
         <span>{formatTokens(activeDataset.run.summaryMetrics.tokens)}</span>
