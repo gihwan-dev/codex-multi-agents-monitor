@@ -134,6 +134,38 @@ describe("monitor 키보드 단축키", () => {
     });
   });
 
+  it("? 입력 시 단축키 도움말 토글 action을 보낸다", () => {
+    const context = buildShortcutContext();
+    const dispatch = vi.fn();
+    const event = createShortcutEvent("?");
+
+    dispatchMonitorKeyboardShortcut(event, {
+      ...context,
+      dispatch,
+      selection: null,
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "toggle-shortcuts" });
+  });
+
+  it("C 입력 시 context drawer를 연다", () => {
+    const context = buildShortcutContext();
+    const dispatch = vi.fn();
+    const event = createShortcutEvent("c");
+
+    dispatchMonitorKeyboardShortcut(event, {
+      ...context,
+      dispatch,
+      selection: null,
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-drawer-tab",
+      tab: "context",
+      open: true,
+    });
+  });
+
   it("ArrowDown 입력 시 다음 보이는 이벤트를 선택한다", () => {
     const context = buildShortcutContext();
     const dispatch = vi.fn();

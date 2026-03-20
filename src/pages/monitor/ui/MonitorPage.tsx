@@ -196,7 +196,8 @@ export function MonitorPage() {
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
             <li>`E` error only</li>
-            <li>`Cmd/Ctrl + K` help</li>
+            <li>`?` shortcuts help</li>
+            <li>`Cmd/Ctrl + K` shortcuts help</li>
           </ul>
           <button type="button" className="button" onClick={actions.toggleShortcuts}>
             Close
