@@ -3,6 +3,21 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "Graph-first desktop workbench for debugging multi-agent runs",
+  "keywords": [
+    "multi-agent",
+    "debugging",
+    "tauri",
+    "react",
+    "causal-graph",
+    "desktop-app",
+    "visualization",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gihwan-dev/codex-multi-agents-monitor.git"
+  },
   "engines": {
     "node": ">=20.19.0"
   },
