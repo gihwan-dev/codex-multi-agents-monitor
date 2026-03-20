@@ -7,7 +7,7 @@ import {
   type RawImportPayload,
   RUN_ENVIRONMENTS,
   RUN_STATUSES,
-} from "../../entities/run/index.js";
+} from "../../entities/run";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

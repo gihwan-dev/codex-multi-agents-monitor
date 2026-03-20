@@ -1,4 +1,4 @@
-import { formatDuration } from "../../../shared/lib/format/index.js";
+import { formatDuration } from "../../../shared/lib/format";
 import type {
   AnomalyJump,
   EventRecord,

@@ -2,7 +2,7 @@ import type {
   RunDataset,
   WorkspaceIdentityOverride,
   WorkspaceIdentityOverrideMap,
-} from "../../run/index.js";
+} from "../../run";
 
 export function buildFallbackWorkspaceIdentityMap(
   datasets: RunDataset[],

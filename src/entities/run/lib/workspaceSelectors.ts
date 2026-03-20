@@ -1,4 +1,4 @@
-import { formatRelativeTime } from "../../../shared/lib/format/index.js";
+import { formatRelativeTime } from "../../../shared/lib/format";
 import type {
   EventRecord,
   QuickFilterSummary,

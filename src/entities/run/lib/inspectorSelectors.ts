@@ -3,7 +3,7 @@ import {
   formatDuration,
   formatTimestamp,
   truncateId,
-} from "../../../shared/lib/format/index.js";
+} from "../../../shared/lib/format";
 import type {
   EventRecord,
   InspectorCausalSummary,

@@ -3,7 +3,7 @@ import {
   type MutableRefObject,
   startTransition,
 } from "react";
-import { loadArchivedSessionSnapshot } from "../../../entities/session-log/index.js";
+import { loadArchivedSessionSnapshot } from "../../../entities/session-log";
 import type { MonitorAction } from "./state";
 
 interface CreateMonitorArchiveActionsOptions {

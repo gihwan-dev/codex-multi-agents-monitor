@@ -1,4 +1,4 @@
-import type { RawImportEvent, RawImportPayload, RunDataset } from "../../entities/run/index.js";
+import type { RawImportEvent, RawImportPayload, RunDataset } from "../../entities/run";
 
 export function buildExportPayload(dataset: RunDataset, includeRaw: boolean): string {
   const payload: RawImportPayload = {

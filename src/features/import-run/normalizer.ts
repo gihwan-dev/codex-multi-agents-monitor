@@ -1,4 +1,4 @@
-import { calculateSummaryMetrics, type RawImportPayload, type RunDataset } from "../../entities/run/index.js";
+import { calculateSummaryMetrics, type RawImportPayload, type RunDataset } from "../../entities/run";
 import { type RedactionOptions, redactEvent } from "./redactor.js";
 
 export function normalizeImportPayload(

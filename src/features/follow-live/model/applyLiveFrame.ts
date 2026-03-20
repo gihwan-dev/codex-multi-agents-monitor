@@ -3,7 +3,7 @@ import {
   type LiveConnection,
   type LiveWatchFrame,
   type RunDataset,
-} from "../../../entities/run/index.js";
+} from "../../../entities/run";
 
 interface LiveWatchSnapshot {
   dataset: RunDataset;

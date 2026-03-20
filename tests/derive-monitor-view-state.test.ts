@@ -3,16 +3,14 @@ import { deriveMonitorViewState } from "../src/pages/monitor/model/deriveMonitor
 import { createMonitorInitialState } from "../src/pages/monitor/model/state/index.js";
 
 describe("deriveMonitorViewState", () => {
-  it("archive index loading과 snapshot loading을 분리해서 유지한다", () => {
+  it("archive index loading을 파생 상태에 그대로 노출한다", () => {
     const state = {
       ...createMonitorInitialState(),
-      archivedIndexLoading: false,
-      archivedSnapshotLoading: true,
+      archivedIndexLoading: true,
     };
 
     const viewState = deriveMonitorViewState(state);
 
-    expect(viewState.archivedIndexLoading).toBe(false);
-    expect(viewState.archivedSnapshotLoading).toBe(true);
+    expect(viewState.archivedIndexLoading).toBe(true);
   });
 });

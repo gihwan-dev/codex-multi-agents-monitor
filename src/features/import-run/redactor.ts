@@ -1,4 +1,4 @@
-import type { EventRecord } from "../../entities/run/index.js";
+import type { EventRecord } from "../../entities/run";
 
 export interface RedactionOptions {
   allowRaw: boolean;
