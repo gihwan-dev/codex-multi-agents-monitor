@@ -295,6 +295,24 @@ describe("sessionLogLoader", () => {
     expect(result).toEqual(archiveResult);
   });
 
+  it("archive 인덱스 검색어의 앞뒤 공백을 제거한다", async () => {
+    const archiveResult = {
+      items: [],
+      total: 0,
+      hasMore: false,
+    };
+    mockedInvokeTauri.mockResolvedValue(archiveResult);
+
+    const result = await loadArchivedSessionIndex(20, 50, "  codex  ");
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_archived_session_index", {
+      offset: 20,
+      limit: 50,
+      search: "codex",
+    });
+    expect(result).toEqual(archiveResult);
+  });
+
   it("archive snapshot을 RunDataset으로 변환한다", async () => {
     mockedInvokeTauri.mockResolvedValue({
       ...buildSnapshot([
