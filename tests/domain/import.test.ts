@@ -247,6 +247,55 @@ describe("normalization and selectors", () => {
     expect(dataset.events[0]?.rawOutput).toBeNull();
   });
 
+  it("derives duration from run.endTs when an imported payload has no events", () => {
+    const payload = parseCompletedRunPayload(FIXTURE_IMPORT_TEXT);
+    const endTs = payload.run.startTs + 90_000;
+
+    const dataset = normalizeImportPayload(
+      {
+        ...payload,
+        run: {
+          ...payload.run,
+          durationMs: undefined,
+          endTs,
+        },
+        events: [],
+        edges: [],
+        artifacts: [],
+      },
+      {
+        allowRaw: false,
+        noRawStorage: true,
+      },
+    );
+
+    expect(dataset.run.durationMs).toBe(90_000);
+  });
+
+  it("clamps empty imported payload duration to zero when endTs is missing", () => {
+    const payload = parseCompletedRunPayload(FIXTURE_IMPORT_TEXT);
+
+    const dataset = normalizeImportPayload(
+      {
+        ...payload,
+        run: {
+          ...payload.run,
+          durationMs: undefined,
+          endTs: null,
+        },
+        events: [],
+        edges: [],
+        artifacts: [],
+      },
+      {
+        allowRaw: false,
+        noRawStorage: true,
+      },
+    );
+
+    expect(dataset.run.durationMs).toBe(0);
+  });
+
   it("exposes final artifact jump for imported runs", () => {
     const dataset = normalizeImportPayload(parseCompletedRunPayload(FIXTURE_IMPORT_TEXT), {
       allowRaw: false,

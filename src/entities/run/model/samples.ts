@@ -6,7 +6,7 @@ import type {
   EventRecord,
   LiveWatchFrame,
   RunDataset,
-} from "../model/types.js";
+} from "./types.js";
 
 const baseTime = Date.parse("2026-03-14T09:00:00Z");
 

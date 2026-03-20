@@ -6,15 +6,8 @@ import {
   type RunDataset,
 } from "../../run";
 import {
-  buildTimedSubagentSnapshots,
   parseRequiredTimestamp,
 } from "../lib/helpers";
-import {
-  buildLatestSubagentEventBySessionId,
-  buildSessionLinkMaps,
-  findClosestParentEvent,
-  indexSubagents,
-} from "../lib/sessionLinks";
 import {
   deriveSessionLogStatus,
   deriveSessionLogTitle,
@@ -30,6 +23,7 @@ import {
   buildSubagentMergeEdges,
   labelSpawnSourceEvents,
 } from "./subagentLinks";
+import { buildSubagentTimeline } from "./subagentTimeline";
 import type {
   SessionLogSnapshot,
 } from "./types";
@@ -109,144 +103,40 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     ...parentEvents,
     ...(runEndEvent ? [runEndEvent] : []),
   ];
-  const allEdges: EdgeRecord[] = [];
-
-  const subagents = buildTimedSubagentSnapshots(snapshot.subagents ?? []);
-  const indexedSubagents = indexSubagents(subagents);
   const parentTimelineEvents = [runStartEvent, ...parentEvents];
-  const {
-    subagentToSpawnSource,
-    waitAgentErrors,
-    codexAgentIdToSessionId,
-    callEventToOutputEvent,
-    parentFunctionArgsByEventId,
-  } = buildSessionLinkMaps({
-    sessionId: snapshot.sessionId,
-    entries: snapshot.entries,
+  const subagentTimeline = buildSubagentTimeline({
+    snapshot,
+    mainLane,
     parentEvents,
-    subagents,
-    indexedSubagents,
+    parentTimelineEvents,
+    resolvedModel,
   });
-
-  for (const sub of subagents) {
-    const subLaneId = `${sub.sessionId}:sub`;
-    const subModel = sub.model ?? resolvedModel;
-    let subStatus = deriveSessionLogStatus(sub.entries, true);
-
-    const subError = sub.error ?? waitAgentErrors.get(sub.sessionId) ?? null;
-    if (subError && subStatus !== "interrupted") {
-      subStatus = "interrupted";
-    }
-    if (sub.entries.length === 0 && !subError && subStatus === "done") {
-      subStatus = "running";
-    }
-
-    const subLane: AgentLane = {
-      laneId: subLaneId,
-      agentId: subLaneId,
-      threadId: sub.sessionId,
-      name: sub.agentNickname,
-      role: sub.agentRole,
-      model: subModel,
-      provider: "OpenAI",
-      badge: "Subagent",
-      laneStatus: subStatus,
-    };
-    allLanes.push(subLane);
-
-    const subEvents = buildLaneEventsFromEntries({
-      entries: sub.entries,
-      lane: subLane,
-      userLane: null,
-      updatedAtTs: sub.updatedTs,
-      status: subStatus,
-      model: subModel,
-      displayTitle: sub.agentNickname,
-      isSubagent: true,
-    });
-
-    const subFirstEventTs = subEvents[0]?.startTs ?? sub.startedTs;
-    const spawnEvent: EventRecord = {
-      eventId: `${sub.sessionId}:spawn`,
-      parentId: null,
-      linkIds: [],
-      laneId: subLane.laneId,
-      agentId: subLane.agentId,
-      threadId: subLane.threadId,
-      eventType: "agent.spawned",
-      status: subError ? "failed" : "done",
-      waitReason: null,
-      retryCount: 0,
-      startTs: sub.startedTs,
-      endTs: Math.max(subFirstEventTs, sub.startedTs + 1_000),
-      durationMs: Math.max(subFirstEventTs - sub.startedTs, 1_000),
-      title: `${sub.agentNickname} spawned`,
-      inputPreview: sub.agentRole,
-      outputPreview: null,
-      artifactId: null,
-      errorCode: null,
-      errorMessage: subError,
-      provider: "OpenAI",
-      model: subModel,
-      toolName: null,
-      tokensIn: 0,
-      tokensOut: 0,
-      reasoningTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      costUsd: 0,
-      finishReason: null,
-      rawInput: null,
-      rawOutput: null,
-    };
-
-    const subEndEvent = buildRunEndEvent(
-      sub.sessionId,
-      subLane,
-      sub.updatedTs,
-      subStatus,
-      subModel,
-    );
-
-    allEvents.push(spawnEvent, ...subEvents, ...(subEndEvent ? [subEndEvent] : []));
-
-    const sourceEventId =
-      subagentToSpawnSource.get(sub.sessionId) ??
-      findClosestParentEvent(parentTimelineEvents, sub.startedTs);
-    allEdges.push({
-      edgeId: `spawn:${sub.sessionId}`,
-      edgeType: "spawn",
-      sourceAgentId: mainLane.agentId,
-      targetAgentId: subLane.agentId,
-      sourceEventId,
-      targetEventId: spawnEvent.eventId,
-      payloadPreview: `${sub.agentNickname} (${sub.agentRole})`,
-      artifactId: null,
-    });
-  }
+  allLanes.push(...subagentTimeline.lanes);
+  allEvents.push(...subagentTimeline.events);
+  const allEdges: EdgeRecord[] = [...subagentTimeline.edges];
 
   const eventsById = new Map(allEvents.map((event) => [event.eventId, event]));
-  const latestSubagentEventBySessionId = buildLatestSubagentEventBySessionId(allEvents);
 
-  labelSpawnSourceEvents(subagentToSpawnSource, indexedSubagents, eventsById);
+  labelSpawnSourceEvents(
+    subagentTimeline.subagentToSpawnSource,
+    subagentTimeline.indexedSubagents,
+    eventsById,
+  );
   allEdges.push(
     ...buildSubagentMergeEdges({
       parentEvents,
       mainLane,
-      indexedSubagents,
+      indexedSubagents: subagentTimeline.indexedSubagents,
       eventsById,
-      latestSubagentEventBySessionId,
-      sessionLinks: {
-        callEventToOutputEvent,
-        codexAgentIdToSessionId,
-        parentFunctionArgsByEventId,
-      },
+      latestSubagentEventBySessionId: subagentTimeline.latestSubagentEventBySessionId,
+      sessionLinks: subagentTimeline.sessionLinks,
     }),
   );
-  applySubagentToolMetadata(allEvents, indexedSubagents, {
-    codexAgentIdToSessionId,
-    parentFunctionArgsByEventId,
-  });
+  applySubagentToolMetadata(
+    allEvents,
+    subagentTimeline.indexedSubagents,
+    subagentTimeline.sessionLinks,
+  );
 
   const selectedByDefaultId =
     parentEvents[parentEvents.length - 1]?.eventId ?? runStartEvent.eventId;
