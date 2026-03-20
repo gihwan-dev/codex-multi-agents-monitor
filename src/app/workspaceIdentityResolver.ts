@@ -1,87 +1,69 @@
-import type {
-  RunDataset,
-  WorkspaceIdentityOverride,
-  WorkspaceIdentityOverrideMap,
+import {
+  buildFallbackWorkspaceIdentityMap,
+  buildResolvedWorkspaceIdentityMap,
+  type RunDataset,
+  sanitizeWorkspaceIdentity,
+  type WorkspaceIdentityOverride,
+  type WorkspaceIdentityOverrideMap,
 } from "../shared/domain";
-import { invokeTauri } from "./tauri";
+import {
+  canResolveWorkspaceIdentityInTauri,
+  resolveWorkspaceIdentityLookup,
+  type WorkspaceIdentityLookup,
+} from "./workspace-identity/tauriWorkspaceIdentityLookup";
 
-const identityCache = new Map<string, WorkspaceIdentityOverride>();
+interface CreateWorkspaceIdentityResolverOptions {
+  cache?: Map<string, WorkspaceIdentityOverride>;
+  canResolve?: () => boolean;
+  lookup?: (repoPaths: string[]) => Promise<WorkspaceIdentityLookup>;
+}
 
-export async function resolveWorkspaceIdentityOverrides(
-  datasets: RunDataset[],
-): Promise<WorkspaceIdentityOverrideMap> {
-  const fallbackMap = buildFallbackIdentityMap(datasets);
-  const repoPaths = Object.keys(fallbackMap).filter((repoPath) => !identityCache.has(repoPath));
-
-  if (repoPaths.length && typeof window !== "undefined") {
-    try {
-      const resolved = await invokeTauri<Record<string, Partial<WorkspaceIdentityOverride>>>(
-        "resolve_workspace_identities",
-        {
-          repoPaths,
-        },
-      );
-
-      Object.entries(resolved).forEach(([repoPath, identity]) => {
-        const fallback = fallbackMap[repoPath];
-        if (!fallback) {
-          return;
-        }
-        identityCache.set(repoPath, sanitizeWorkspaceIdentity(identity, fallback));
-      });
-    } catch {
-      // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.
-    }
-  }
-
-  return Object.fromEntries(
-    Object.entries(fallbackMap).map(([repoPath, fallback]) => [
-      repoPath,
-      identityCache.get(repoPath) ?? fallback,
-    ]),
+function resolveMissingRepoPaths(
+  fallbackMap: WorkspaceIdentityOverrideMap,
+  cache: Map<string, WorkspaceIdentityOverride>,
+  failedRepoPaths: Set<string>,
+) {
+  return Object.keys(fallbackMap).filter(
+    (repoPath) => !cache.has(repoPath) && !failedRepoPaths.has(repoPath),
   );
 }
 
-function buildFallbackIdentityMap(datasets: RunDataset[]): WorkspaceIdentityOverrideMap {
-  return datasets.reduce<WorkspaceIdentityOverrideMap>((map, dataset) => {
-    const { repoPath, name } = dataset.project;
-    if (map[repoPath]) {
-      return map;
+export function createWorkspaceIdentityResolver({
+  cache = new Map<string, WorkspaceIdentityOverride>(),
+  canResolve = canResolveWorkspaceIdentityInTauri,
+  lookup = resolveWorkspaceIdentityLookup,
+}: CreateWorkspaceIdentityResolverOptions = {}) {
+  const failedRepoPaths = new Set<string>();
+
+  return async function resolveWorkspaceIdentityOverrides(
+    datasets: RunDataset[],
+  ): Promise<WorkspaceIdentityOverrideMap> {
+    const fallbackMap = buildFallbackWorkspaceIdentityMap(datasets);
+    const missingRepoPaths = resolveMissingRepoPaths(fallbackMap, cache, failedRepoPaths);
+
+    if (missingRepoPaths.length && canResolve()) {
+      try {
+        const resolved = await lookup(missingRepoPaths);
+
+        Object.entries(resolved).forEach(([repoPath, identity]) => {
+          const fallback = fallbackMap[repoPath];
+          if (!fallback) {
+            return;
+          }
+          cache.set(repoPath, sanitizeWorkspaceIdentity(identity, fallback));
+        });
+      } catch {
+        // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.
+        missingRepoPaths.forEach((repoPath) => {
+          failedRepoPaths.add(repoPath);
+        });
+      }
     }
 
-    map[repoPath] = {
-      originPath: repoPath,
-      displayName: resolveFallbackDisplayName(name, repoPath),
-      isWorktree: false,
-    };
-    return map;
-  }, {});
-}
-
-function sanitizeWorkspaceIdentity(
-  identity: Partial<WorkspaceIdentityOverride>,
-  fallback: WorkspaceIdentityOverride,
-): WorkspaceIdentityOverride {
-  return {
-    originPath:
-      typeof identity.originPath === "string" && identity.originPath.trim().length
-        ? identity.originPath
-        : fallback.originPath,
-    displayName:
-      typeof identity.displayName === "string" && identity.displayName.trim().length
-        ? identity.displayName
-        : fallback.displayName,
-    isWorktree: typeof identity.isWorktree === "boolean" ? identity.isWorktree : fallback.isWorktree,
+    return buildResolvedWorkspaceIdentityMap(fallbackMap, cache);
   };
 }
 
-function resolveFallbackDisplayName(name: string, repoPath: string) {
-  const trimmedName = name.trim();
-  if (trimmedName.length) {
-    return trimmedName;
-  }
-
-  const normalizedPath = repoPath.replace(/[\\/]+$/, "");
-  const segments = normalizedPath.split(/[\\/]/).filter(Boolean);
-  return segments[segments.length - 1] ?? repoPath;
-}
+export const resolveWorkspaceIdentityOverrides = createWorkspaceIdentityResolver({
+  cache: new Map<string, WorkspaceIdentityOverride>(),
+});
