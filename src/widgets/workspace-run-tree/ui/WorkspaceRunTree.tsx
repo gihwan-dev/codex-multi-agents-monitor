@@ -20,7 +20,7 @@ interface WorkspaceRunTreeProps {
   archivedIndex: ArchivedSessionIndexItem[];
   archivedTotal: number;
   archivedHasMore: boolean;
-  archivedLoading: boolean;
+  archivedIndexLoading: boolean;
   archivedSearch: string;
   archiveSectionOpen: boolean;
   onToggleArchiveSection: () => void;
@@ -39,7 +39,7 @@ export function WorkspaceRunTree({
   archivedIndex,
   archivedTotal,
   archivedHasMore,
-  archivedLoading,
+  archivedIndexLoading,
   archivedSearch,
   archiveSectionOpen,
   onToggleArchiveSection,
@@ -174,7 +174,7 @@ export function WorkspaceRunTree({
               items={archivedIndex}
               total={archivedTotal}
               hasMore={archivedHasMore}
-              loading={archivedLoading}
+              indexLoading={archivedIndexLoading}
               search={archivedSearch}
               onSearch={onArchiveSearch}
               onLoadMore={onArchiveLoadMore}

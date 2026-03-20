@@ -7,7 +7,7 @@ interface ArchivedSessionListProps {
   items: ArchivedSessionIndexItem[];
   total: number;
   hasMore: boolean;
-  loading: boolean;
+  indexLoading: boolean;
   search: string;
   onSearch: (query: string) => void;
   onLoadMore: () => void;
@@ -18,7 +18,7 @@ export function ArchivedSessionList({
   items,
   total,
   hasMore,
-  loading,
+  indexLoading,
   search,
   onSearch,
   onLoadMore,
@@ -30,6 +30,7 @@ export function ArchivedSessionList({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const workspaceGroups = useMemo(() => groupArchivedSessionsByWorkspace(items), [items]);
+  const searchPending = localSearch.trim() !== search.trim();
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -45,8 +46,12 @@ export function ArchivedSessionList({
   }, []);
 
   useEffect(() => {
+    setLocalSearch(search);
+  }, [search]);
+
+  useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore || loading) return undefined;
+    if (!sentinel || !hasMore || indexLoading || searchPending) return undefined;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -58,7 +63,7 @@ export function ArchivedSessionList({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loading, onLoadMore]);
+  }, [hasMore, indexLoading, onLoadMore, searchPending]);
 
   const toggleGroup = (name: string) => {
     setExpandedGroups((prev) => {
@@ -136,7 +141,7 @@ export function ArchivedSessionList({
           );
         })}
 
-        {loading ? (
+        {indexLoading ? (
           <>
             <div key="skeleton-a" className="archive-list__skeleton" aria-hidden="true" />
             <div key="skeleton-b" className="archive-list__skeleton" aria-hidden="true" />
@@ -144,13 +149,13 @@ export function ArchivedSessionList({
           </>
         ) : null}
 
-        {!loading && items.length === 0 ? (
+        {!indexLoading && !searchPending && items.length === 0 ? (
           <p className="archive-list__empty">
             {localSearch ? "No matching archived sessions." : "No archived sessions found."}
           </p>
         ) : null}
 
-        {hasMore && !loading ? (
+        {hasMore && !indexLoading && !searchPending ? (
           <div ref={sentinelRef} className="archive-list__sentinel" aria-hidden="true" />
         ) : null}
       </div>

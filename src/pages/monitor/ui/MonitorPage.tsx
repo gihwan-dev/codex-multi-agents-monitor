@@ -29,7 +29,7 @@ export function MonitorPage() {
     activeFilters,
     activeFollowLive,
     activeLiveConnection,
-    archivedLoading,
+    archivedIndexLoading,
     rawTabAvailable,
     graphScene,
     inspectorSummary,
@@ -101,7 +101,7 @@ export function MonitorPage() {
               archivedIndex={state.archivedIndex}
               archivedTotal={state.archivedTotal}
               archivedHasMore={state.archivedHasMore}
-              archivedLoading={archivedLoading}
+              archivedIndexLoading={archivedIndexLoading}
               archivedSearch={state.archivedSearch}
               archiveSectionOpen={state.archiveSectionOpen}
               onToggleArchiveSection={actions.toggleArchiveSection}

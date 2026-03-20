@@ -24,7 +24,7 @@ async function renderWorkspaceRunTree() {
         archivedIndex: [],
         archivedTotal: 0,
         archivedHasMore: false,
-        archivedLoading: false,
+        archivedIndexLoading: false,
         archivedSearch: "",
         archiveSectionOpen: false,
         onToggleArchiveSection: () => {},

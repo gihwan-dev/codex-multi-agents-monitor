@@ -34,8 +34,8 @@ export function deriveMonitorViewState(state: MonitorState) {
     activeLiveConnection:
       state.liveConnectionByRunId[activeDataset.run.traceId] ??
       (activeDataset.run.liveMode === "live" ? "live" : "paused"),
-    archivedLoading:
-      state.archivedIndexLoading || state.archivedSnapshotLoading,
+    archivedIndexLoading: state.archivedIndexLoading,
+    archivedSnapshotLoading: state.archivedSnapshotLoading,
     rawTabAvailable: hasRawPayload(activeDataset),
     graphScene,
     inspectorSummary: buildInspectorCausalSummary(
