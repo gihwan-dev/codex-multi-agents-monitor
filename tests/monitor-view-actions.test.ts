@@ -23,7 +23,7 @@ describe("createMonitorViewActions", () => {
     const activeDataset = requireLiveDataset();
     const dispatch = vi.fn();
     const actions = createMonitorViewActions({
-      state,
+      drawerOpen: state.drawerOpen,
       dispatch,
       activeDataset,
       activeFollowLive: true,
@@ -48,7 +48,7 @@ describe("createMonitorViewActions", () => {
     const activeDataset = requireLiveDataset();
     const dispatch = vi.fn();
     const actions = createMonitorViewActions({
-      state,
+      drawerOpen: state.drawerOpen,
       dispatch,
       activeDataset,
       activeFollowLive: false,

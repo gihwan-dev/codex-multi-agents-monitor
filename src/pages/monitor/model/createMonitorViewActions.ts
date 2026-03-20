@@ -1,17 +1,9 @@
-import {
-  type Dispatch,
-  startTransition,
-} from "react";
+import type { Dispatch } from "react";
 import type {
   DrawerTab,
   RunFilters,
   SelectionState,
 } from "../../../entities/run";
-import {
-  buildExportPayload,
-  normalizeImportPayload,
-  parseCompletedRunPayload,
-} from "../../../features/import-run";
 import {
   MIN_INSPECTOR_WIDTH,
   MIN_RAIL_WIDTH,
@@ -20,14 +12,14 @@ import {
 } from "./state";
 
 interface CreateMonitorViewActionsOptions {
-  state: MonitorState;
+  drawerOpen: boolean;
   dispatch: Dispatch<MonitorAction>;
   activeDataset: MonitorState["datasets"][number];
   activeFollowLive: boolean;
 }
 
 export function createMonitorViewActions({
-  state,
+  drawerOpen,
   dispatch,
   activeDataset,
   activeFollowLive,
@@ -52,7 +44,7 @@ export function createMonitorViewActions({
         });
       }
     },
-    setDrawerTab(tab: DrawerTab, open = state.drawerOpen) {
+    setDrawerTab(tab: DrawerTab, open = drawerOpen) {
       dispatch({ type: "set-drawer-tab", tab, open });
     },
     setDrawerOpen(open: boolean) {
@@ -113,44 +105,6 @@ export function createMonitorViewActions({
       dispatch({
         type: "set-inspector-width",
         width: Math.max(width, MIN_INSPECTOR_WIDTH),
-      });
-    },
-    setImportText(value: string) {
-      dispatch({ type: "set-import-text", value });
-    },
-    setAllowRaw(value: boolean) {
-      dispatch({ type: "set-allow-raw", value });
-    },
-    setNoRawStorage(value: boolean) {
-      dispatch({ type: "set-no-raw", value });
-    },
-    importPayload() {
-      try {
-        const parsed = parseCompletedRunPayload(state.importText);
-        const dataset = normalizeImportPayload(parsed, {
-          allowRaw: state.allowRawImport,
-          noRawStorage: state.noRawStorage,
-        });
-
-        startTransition(() => {
-          dispatch({ type: "import-dataset", dataset });
-        });
-      } catch (error) {
-        dispatch({
-          type: "set-export-text",
-          value: error instanceof Error ? error.message : "Import failed.",
-          open: true,
-        });
-      }
-    },
-    exportDataset(includeRaw = false) {
-      dispatch({
-        type: "set-export-text",
-        value: buildExportPayload(
-          activeDataset,
-          includeRaw && activeDataset.run.rawIncluded,
-        ),
-        open: true,
       });
     },
     toggleShortcuts() {

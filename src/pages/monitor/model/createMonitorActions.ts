@@ -3,6 +3,7 @@ import type {
   MutableRefObject,
 } from "react";
 import { createMonitorArchiveActions } from "./createMonitorArchiveActions";
+import { createMonitorImportExportActions } from "./createMonitorImportExportActions";
 import { createMonitorViewActions } from "./createMonitorViewActions";
 import type {
   MonitorAction,
@@ -31,10 +32,17 @@ export function createMonitorActions({
   archiveSnapshotRequestIdRef,
 }: CreateMonitorActionsOptions) {
   const viewActions = createMonitorViewActions({
-    state,
+    drawerOpen: state.drawerOpen,
     dispatch,
     activeDataset,
     activeFollowLive,
+  });
+  const importExportActions = createMonitorImportExportActions({
+    importText: state.importText,
+    allowRawImport: state.allowRawImport,
+    noRawStorage: state.noRawStorage,
+    dispatch,
+    activeDataset,
   });
   const archiveActions = createMonitorArchiveActions({
     archivedIndexLength: state.archivedIndex.length,
@@ -46,6 +54,7 @@ export function createMonitorActions({
 
   return {
     ...viewActions,
+    ...importExportActions,
     ...archiveActions,
   };
 }
