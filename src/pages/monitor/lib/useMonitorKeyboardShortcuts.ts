@@ -1,10 +1,10 @@
 import { type Dispatch, useEffect, useEffectEvent } from "react";
 import type {
+  GraphSceneRow,
   RunDataset,
   RunFilters,
   SelectionState,
 } from "../../../entities/run";
-import type { GraphSceneRow } from "../../../widgets/causal-graph";
 import type { MonitorAction } from "../model/state";
 import { isEditableKeyboardTarget } from "./keyboardTarget";
 

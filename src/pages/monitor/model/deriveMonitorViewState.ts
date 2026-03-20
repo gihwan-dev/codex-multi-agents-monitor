@@ -1,10 +1,10 @@
 import {
   buildAnomalyJumps,
+  buildGraphSceneModel,
+  buildInspectorCausalSummary,
   buildSummaryFacts,
   hasRawPayload,
 } from "../../../entities/run";
-import { buildGraphSceneModel } from "../../../widgets/causal-graph";
-import { buildInspectorCausalSummary } from "../../../widgets/causal-inspector";
 import { createDefaultFilters, type MonitorState } from "./state";
 
 function resolveActiveDataset(state: MonitorState) {
