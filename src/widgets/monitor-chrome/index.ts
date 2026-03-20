@@ -1,6 +1,6 @@
-export {
-  MonitorGraphToolbar,
-  MonitorSummaryStrip,
-  MonitorTopBar,
-  ResizeHandle,
-} from "./ui/MonitorChrome";
+import "./ui/monitor-chrome.css";
+
+export { MonitorGraphToolbar } from "./ui/MonitorGraphToolbar";
+export { MonitorSummaryStrip } from "./ui/MonitorSummaryStrip";
+export { MonitorTopBar } from "./ui/MonitorTopBar";
+export { ResizeHandle } from "./ui/ResizeHandle";

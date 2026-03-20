@@ -12,9 +12,9 @@ import {
   type SessionLogSnapshot,
   type SubagentSnapshot,
 } from "../src/entities/session-log/index.js";
-import { invokeTauri } from "../src/shared/api/tauri.js";
+import { invokeTauri } from "../src/shared/api/index.js";
 
-vi.mock("../src/shared/api/tauri.js", () => ({
+vi.mock("../src/shared/api/index.js", () => ({
   invokeTauri: vi.fn(),
 }));
 

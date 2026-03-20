@@ -10,8 +10,10 @@ import {
   normalizeImportPayload,
   parseCompletedRunPayload,
 } from "../src/features/import-run/index.js";
-import { createMonitorImportExportActions } from "../src/pages/monitor/model/createMonitorImportExportActions.js";
-import { createMonitorInitialState } from "../src/pages/monitor/model/state/index.js";
+import {
+  createMonitorImportExportActions,
+  createMonitorInitialState,
+} from "../src/pages/monitor/index.js";
 
 vi.mock("../src/features/import-run/index.js", () => ({
   buildExportPayload: vi.fn(),

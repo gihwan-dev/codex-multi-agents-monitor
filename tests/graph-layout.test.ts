@@ -8,10 +8,10 @@ import {
   type RunFilters,
 } from "../src/entities/run";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
-import { CausalGraphView } from "../src/widgets/causal-graph";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
+  CausalGraphView,
   choosePortPair,
   computeLaneMetrics,
   computeRenderedContentHeight,
@@ -21,7 +21,7 @@ import {
   GAP_ROW_HEIGHT,
   ROW_GAP,
   TIME_GUTTER,
-} from "../src/widgets/causal-graph/model/graphLayout";
+} from "../src/widgets/causal-graph";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,

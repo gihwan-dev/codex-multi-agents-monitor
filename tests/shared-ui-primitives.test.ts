@@ -3,8 +3,10 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EventTypeGlyph } from "../src/shared/ui/EventTypeGlyph.js";
-import { StatusChip } from "../src/shared/ui/StatusChip.js";
+import {
+  EventTypeGlyph,
+  StatusChip,
+} from "../src/shared/ui/index.js";
 
 let container: HTMLDivElement;
 let root: Root;

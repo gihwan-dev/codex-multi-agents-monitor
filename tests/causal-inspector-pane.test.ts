@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { DrawerTab, InspectorCausalSummary, SelectionState } from "../src/entities/run/index.js";
-import { CausalInspectorPane } from "../src/widgets/causal-inspector/ui/CausalInspectorPane.js";
+import { CausalInspectorPane } from "../src/widgets/causal-inspector/index.js";
 
 const noop = () => undefined;
 

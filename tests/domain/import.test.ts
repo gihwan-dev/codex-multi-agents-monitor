@@ -15,7 +15,7 @@ import {
   normalizeImportPayload,
   parseCompletedRunPayload,
 } from "../../src/features/import-run/index.js";
-import { createMonitorInitialState, monitorStateReducer } from "../../src/pages/monitor/model/state/index.js";
+import { createMonitorInitialState, monitorStateReducer } from "../../src/pages/monitor/index.js";
 import { formatDuration } from "../../src/shared/lib/format/index.js";
 
 describe("completedRunParser", () => {

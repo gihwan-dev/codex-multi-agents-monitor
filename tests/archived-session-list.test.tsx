@@ -3,7 +3,7 @@
 import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ArchivedSessionList } from "../src/widgets/workspace-run-tree/ui/ArchivedSessionList.js";
+import { ArchivedSessionList } from "../src/widgets/workspace-run-tree/index.js";
 
 let container: HTMLDivElement;
 let root: Root;

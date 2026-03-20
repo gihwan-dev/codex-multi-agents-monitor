@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMonitorViewActions } from "../src/pages/monitor/model/createMonitorViewActions.js";
-import { createMonitorInitialState } from "../src/pages/monitor/model/state/index.js";
+import {
+  createMonitorInitialState,
+  createMonitorViewActions,
+} from "../src/pages/monitor/index.js";
 
 function expectDefined<T>(value: T | null | undefined, message: string): T {
   expect(value).toBeDefined();

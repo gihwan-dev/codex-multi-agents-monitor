@@ -10,7 +10,7 @@ import {
   buildEventRects,
   computeLaneMetrics,
   computeVisibleRowRange,
-} from "../src/widgets/causal-graph/model/graphLayout";
+} from "../src/widgets/causal-graph/index.js";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,
