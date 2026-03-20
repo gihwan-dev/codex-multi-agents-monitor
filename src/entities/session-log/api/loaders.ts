@@ -1,7 +1,7 @@
 import { invokeTauri } from "../../../shared/api";
-import type { ArchivedSessionIndexResult, RunDataset } from "../../run";
+import type { RunDataset } from "../../run";
 import { buildDatasetFromSessionLog } from "../model/datasetBuilder";
-import type { SessionLogSnapshot } from "../model/types";
+import type { ArchivedSessionIndexResult, SessionLogSnapshot } from "../model/types";
 
 const WEB_SESSION_SNAPSHOT_URL = "/__codex/session-snapshots.json";
 

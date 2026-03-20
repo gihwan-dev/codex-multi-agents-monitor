@@ -1,4 +1,4 @@
-import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run";
+import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run/testing";
 import { applyLiveFrame } from "../../../../features/follow-live";
 import {
   buildCollapsedGapIds,

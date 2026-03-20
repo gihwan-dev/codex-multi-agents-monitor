@@ -63,25 +63,40 @@ describe("workspace identity resolver 동작", () => {
     expect(second[repoPath]).toEqual(first[repoPath]);
   });
 
-  it("네이티브 조회가 실패한 repoPath는 같은 세션에서 반복 재시도하지 않는다", async () => {
-    const repoPath = "/tmp/repo/worktrees/failing";
-    const lookup = vi.fn().mockRejectedValue(new Error("bridge unavailable"));
+  it("이전에 실패한 repoPath도 다음 호출에서 다시 조회할 수 있다", async () => {
+    const repoPath = "/tmp/repo/worktrees/retryable";
+    const lookup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("bridge unavailable"))
+      .mockResolvedValueOnce({
+        [repoPath]: {
+          originPath: "/tmp/repo",
+          displayName: "retryable",
+          isWorktree: true,
+        },
+      });
     const resolveWorkspaceIdentityOverrides = createWorkspaceIdentityResolver({
       canResolve: () => true,
       lookup,
     });
-    const datasets = [buildDataset(repoPath, "failing-worktree")];
+    const datasets = [buildDataset(repoPath, "retryable-worktree")];
 
     const first = await resolveWorkspaceIdentityOverrides(datasets);
     const second = await resolveWorkspaceIdentityOverrides(datasets);
 
-    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(lookup).toHaveBeenNthCalledWith(1, [repoPath]);
+    expect(lookup).toHaveBeenNthCalledWith(2, [repoPath]);
     expect(first[repoPath]).toEqual({
       originPath: repoPath,
-      displayName: "failing-worktree",
+      displayName: "retryable-worktree",
       isWorktree: false,
     });
-    expect(second[repoPath]).toEqual(first[repoPath]);
+    expect(second[repoPath]).toEqual({
+      originPath: "/tmp/repo",
+      displayName: "retryable",
+      isWorktree: true,
+    });
   });
 
   it("조회 실패 뒤 새 repoPath가 추가되면 새 path만 다시 조회한다", async () => {
@@ -110,7 +125,7 @@ describe("workspace identity resolver 동작", () => {
 
     expect(lookup).toHaveBeenCalledTimes(2);
     expect(lookup).toHaveBeenNthCalledWith(1, [failingRepoPath]);
-    expect(lookup).toHaveBeenNthCalledWith(2, [recoveredRepoPath]);
+    expect(lookup).toHaveBeenNthCalledWith(2, [failingRepoPath, recoveredRepoPath]);
     expect(overrides[failingRepoPath]).toEqual({
       originPath: failingRepoPath,
       displayName: "failing-worktree",

@@ -1,4 +1,4 @@
-import type { ArchivedSessionIndexItem } from "../../../entities/run";
+import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 
 export interface ArchivedWorkspaceGroup {
   key: string;

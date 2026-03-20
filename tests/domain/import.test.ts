@@ -6,10 +6,12 @@ import {
   buildSummaryFacts,
   buildWorkspaceTreeModel,
   calculateSummaryMetrics,
-  FIXTURE_DATASETS,
-  FIXTURE_IMPORT_TEXT,
   hasRawPayload,
 } from "../../src/entities/run/index.js";
+import {
+  FIXTURE_DATASETS,
+  FIXTURE_IMPORT_TEXT,
+} from "../../src/entities/run/testing.js";
 import {
   buildExportPayload,
   normalizeImportPayload,
@@ -208,8 +210,32 @@ describe("내보내기/가져오기 계약", () => {
       allowRaw: true,
       noRawStorage: false,
     });
+    const sourceWithPromptAssembly = {
+      ...source,
+      promptAssembly: {
+        layers: [
+          {
+            layerId: "trace-fix-001:layer:0",
+            layerType: "system" as const,
+            label: "System",
+            preview: "System prompt preview",
+            contentLength: 120,
+            rawContent: "System prompt raw",
+          },
+          {
+            layerId: "trace-fix-001:layer:1",
+            layerType: "user" as const,
+            label: "User",
+            preview: "User prompt preview",
+            contentLength: 40,
+            rawContent: "User prompt raw",
+          },
+        ],
+        totalContentLength: 160,
+      },
+    };
 
-    const parsed = parseCompletedRunPayload(buildExportPayload(source, true));
+    const parsed = parseCompletedRunPayload(buildExportPayload(sourceWithPromptAssembly, true));
     const reimported = normalizeImportPayload(parsed, {
       allowRaw: true,
       noRawStorage: false,
@@ -219,6 +245,7 @@ describe("내보내기/가져오기 계약", () => {
     expect(parsed.events[0]?.input_raw).toBe(source.events[0]?.rawInput);
     expect(reimported.events[0]?.eventId).toBe(source.events[0]?.eventId);
     expect(reimported.events[0]?.rawInput).toBe(source.events[0]?.rawInput);
+    expect(reimported.promptAssembly).toEqual(sourceWithPromptAssembly.promptAssembly);
   });
 
   it("raw 제외 내보내기는 import 가능한 redacted payload를 만든다", () => {

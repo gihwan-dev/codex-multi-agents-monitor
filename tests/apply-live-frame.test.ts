@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { LiveWatchFrame } from "../src/entities/run/index.js";
 import {
   FIXTURE_DATASETS,
   LIVE_FIXTURE_FRAMES,
-  type LiveWatchFrame,
-} from "../src/entities/run/index.js";
+} from "../src/entities/run/testing.js";
 import { applyLiveFrame } from "../src/features/follow-live/index.js";
 
 function requireLiveDataset() {
@@ -55,6 +55,27 @@ describe("applyLiveFrame", () => {
 
     expect(snapshot.dataset.run.durationMs).toBe(expectedDuration);
     expect(snapshot.dataset.run.summaryMetrics.totalDurationMs).toBe(expectedDuration);
+  });
+
+  it("같은 live frame을 다시 적용해도 이벤트와 summary metrics가 중복되지 않는다", () => {
+    const dataset = requireLiveDataset();
+    const replayFrame = LIVE_FIXTURE_FRAMES[0];
+    if (!replayFrame) {
+      throw new Error("replay frame missing");
+    }
+
+    const firstSnapshot = applyLiveFrame(dataset, replayFrame);
+    const replaySnapshot = applyLiveFrame(firstSnapshot.dataset, replayFrame);
+
+    expect(firstSnapshot.dataset.events.length).toBeGreaterThan(dataset.events.length);
+    expect(replaySnapshot.dataset.events).toHaveLength(firstSnapshot.dataset.events.length);
+    expect(replaySnapshot.dataset.events.map((event) => event.eventId)).toEqual(
+      firstSnapshot.dataset.events.map((event) => event.eventId),
+    );
+    expect(replaySnapshot.dataset.run.durationMs).toBe(firstSnapshot.dataset.run.durationMs);
+    expect(replaySnapshot.dataset.run.summaryMetrics).toEqual(
+      firstSnapshot.dataset.run.summaryMetrics,
+    );
   });
 
   it("완료 frame에 새 이벤트가 없어도 마지막 관측 이벤트로 run을 마감한다", () => {

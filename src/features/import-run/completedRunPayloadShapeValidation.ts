@@ -3,6 +3,7 @@ import {
   type EdgeRecord,
   EVENT_TYPES,
   LIVE_MODES,
+  type PromptAssembly,
   type RawImportEvent,
   type RawImportPayload,
   RUN_ENVIRONMENTS,
@@ -117,6 +118,29 @@ function validateArtifactShape(value: unknown) {
   assertOptionalString(value, "rawContent");
 }
 
+function validatePromptAssemblyLayerShape(value: unknown) {
+  if (!isRecord(value)) {
+    throw new Error("Invalid payload: promptAssembly layer entry must be an object.");
+  }
+
+  assertStringField(value, "layerId");
+  assertStringField(value, "layerType");
+  assertStringField(value, "label");
+  assertStringField(value, "preview");
+  assertNumberField(value, "contentLength");
+  assertOptionalString(value, "rawContent");
+}
+
+function validatePromptAssemblyShape(value: unknown): asserts value is PromptAssembly {
+  if (!isRecord(value)) {
+    throw new Error("Invalid payload: promptAssembly must be an object.");
+  }
+
+  const layers = assertArrayField(value, "layers");
+  assertNumberField(value, "totalContentLength");
+  layers.forEach(validatePromptAssemblyLayerShape);
+}
+
 export function validateCompletedRunPayloadShape(parsed: unknown): ValidatedCompletedRunPayload {
   if (!isRecord(parsed)) {
     throw new Error("Invalid payload: root must be an object.");
@@ -129,6 +153,9 @@ export function validateCompletedRunPayloadShape(parsed: unknown): ValidatedComp
   validateProjectShape(parsed.project);
   validateSessionShape(parsed.session);
   validateRunPayload(parsed.run);
+  if (parsed.promptAssembly !== undefined) {
+    validatePromptAssemblyShape(parsed.promptAssembly);
+  }
 
   const lanes = assertArrayField(parsed, "lanes");
   const events = assertArrayField(parsed, "events");
@@ -152,5 +179,6 @@ export function validateCompletedRunPayloadShape(parsed: unknown): ValidatedComp
     events: events as RawImportPayload["events"],
     edges: edges as RawImportPayload["edges"],
     artifacts: artifacts as RawImportPayload["artifacts"],
+    promptAssembly: parsed.promptAssembly as RawImportPayload["promptAssembly"],
   };
 }

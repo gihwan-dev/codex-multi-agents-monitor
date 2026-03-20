@@ -1,3 +1,20 @@
+.panel.canvas-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px;
+  padding: 14px;
+  border-color: rgba(255, 255, 255, 0.045);
+  background: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(17, 21, 30, 0.96));
+  box-shadow: none;
+}
+
+.workspace__main > .panel.canvas-panel {
+  border-left-width: 0;
+  border-right-width: 0;
+  border-radius: 0;
+}
+
 .graph-panel__collapsed-copy {
   color: var(--color-text-secondary);
   font-size: 0.8rem;
@@ -637,6 +654,13 @@
 .gap-chip:active,
 .graph-sequence__card:active {
   opacity: 0.75;
+}
+
+@media (max-width: 720px) {
+  .panel.canvas-panel {
+    border-width: 1px;
+    border-radius: 14px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,15 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
-  FIXTURE_DATASETS,
   type GraphSceneModel,
   type RunFilters,
 } from "../src/entities/run";
+import { FIXTURE_DATASETS } from "../src/entities/run/testing";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
+import {
+  CausalGraphView,
+} from "../src/widgets/causal-graph";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
-  CausalGraphView,
   choosePortPair,
   computeLaneMetrics,
   computeRenderedContentHeight,
@@ -21,7 +23,7 @@ import {
   GAP_ROW_HEIGHT,
   ROW_GAP,
   TIME_GUTTER,
-} from "../src/widgets/causal-graph";
+} from "../src/widgets/causal-graph/model/graphLayout";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,
@@ -239,7 +241,7 @@ describe("graphLayout", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        expandedGapIds: new Set<string>(),
+        toggledGapIds: [],
         onToggleGap: () => undefined,
         viewportHeightOverride: 1200,
         laneHeaderHeightOverride: 80,
@@ -508,7 +510,7 @@ describe("multi-agent rendering diagnostic", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        expandedGapIds: new Set<string>(),
+        toggledGapIds: [],
         onToggleGap: () => undefined,
         viewportHeightOverride: 2400,
         laneHeaderHeightOverride: 80,
@@ -582,7 +584,7 @@ describe("errored subagent rendering", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        expandedGapIds: new Set<string>(),
+        toggledGapIds: [],
         onToggleGap: () => undefined,
         viewportHeightOverride: 3000,
         laneHeaderHeightOverride: 80,

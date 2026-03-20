@@ -2,6 +2,7 @@ import { type CSSProperties, type KeyboardEvent, useEffect, useId, useRef, useSt
 import type { GraphSceneModel, LiveMode, SelectionState } from "../../../entities/run";
 import { EventTypeGlyph, GapChip, Panel, StatusChip } from "../../../shared/ui";
 import "./causal-graph.css";
+import { buildExpandedGapIds } from "../model/expandedGaps";
 import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
@@ -20,7 +21,7 @@ interface CausalGraphViewProps {
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
-  expandedGapIds: Set<string>;
+  toggledGapIds: string[];
   onToggleGap: (gapId: string) => void;
   viewportHeightOverride?: number;
   laneHeaderHeightOverride?: number;
@@ -32,7 +33,7 @@ export function CausalGraphView({
   followLive,
   liveMode,
   onPauseFollowLive,
-  expandedGapIds,
+  toggledGapIds,
   onToggleGap,
   viewportHeightOverride,
   laneHeaderHeightOverride,
@@ -44,6 +45,7 @@ export function CausalGraphView({
   const [viewportHeight, setViewportHeight] = useState(viewportHeightOverride ?? 0);
   const [laneHeaderHeight, setLaneHeaderHeight] = useState(laneHeaderHeightOverride ?? 0);
   const [scrollTop, setScrollTop] = useState(0);
+  const expandedGapIds = buildExpandedGapIds(scene.rows, toggledGapIds);
   const scrollTopRef = useRef(0);
   const rafRef = useRef(0);
   const layout = buildGraphLayoutSnapshot(scene, viewportWidth);

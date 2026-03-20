@@ -34,24 +34,20 @@ function StoryScenario({
   selectRunLabel?: string;
 }) {
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      if (selectRunLabel) {
-        clickButton(selectRunLabel);
-      }
-      if (openButtonLabel) {
-        clickButton(openButtonLabel);
-      }
-    }, 80);
-
-    return () => window.clearTimeout(timeout);
+    if (selectRunLabel) {
+      clickButton(selectRunLabel);
+    }
+    if (openButtonLabel) {
+      clickButton(openButtonLabel);
+    }
   }, [openButtonLabel, selectRunLabel]);
 
   return <MonitorPage />;
 }
 
 function clickButton(label: string) {
-  const button = Array.from(document.querySelectorAll("button")).find((item) =>
-    item.textContent?.includes(label),
+  const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+    (item) => item.getAttribute("title") === label || item.textContent?.trim() === label,
   );
   button?.click();
 }

@@ -1,12 +1,10 @@
-import type {
-  RunDataset,
-  WorkspaceIdentityOverride,
-  WorkspaceIdentityOverrideMap,
-} from "../../../entities/run";
+import type { RunDataset } from "../../../entities/run";
 import {
   buildFallbackWorkspaceIdentityMap,
   buildResolvedWorkspaceIdentityMap,
   sanitizeWorkspaceIdentity,
+  type WorkspaceIdentityOverride,
+  type WorkspaceIdentityOverrideMap,
 } from "../../../entities/workspace";
 import {
   canResolveWorkspaceIdentityInTauri,
@@ -23,11 +21,8 @@ interface CreateWorkspaceIdentityResolverOptions {
 function resolveMissingRepoPaths(
   fallbackMap: WorkspaceIdentityOverrideMap,
   cache: Map<string, WorkspaceIdentityOverride>,
-  failedRepoPaths: Set<string>,
 ) {
-  return Object.keys(fallbackMap).filter(
-    (repoPath) => !cache.has(repoPath) && !failedRepoPaths.has(repoPath),
-  );
+  return Object.keys(fallbackMap).filter((repoPath) => !cache.has(repoPath));
 }
 
 export function createWorkspaceIdentityResolver({
@@ -35,13 +30,11 @@ export function createWorkspaceIdentityResolver({
   canResolve = canResolveWorkspaceIdentityInTauri,
   lookup = resolveWorkspaceIdentityLookup,
 }: CreateWorkspaceIdentityResolverOptions = {}) {
-  const failedRepoPaths = new Set<string>();
-
   return async function resolveWorkspaceIdentityOverrides(
     datasets: RunDataset[],
   ): Promise<WorkspaceIdentityOverrideMap> {
     const fallbackMap = buildFallbackWorkspaceIdentityMap(datasets);
-    const missingRepoPaths = resolveMissingRepoPaths(fallbackMap, cache, failedRepoPaths);
+    const missingRepoPaths = resolveMissingRepoPaths(fallbackMap, cache);
 
     if (missingRepoPaths.length && canResolve()) {
       try {
@@ -56,9 +49,6 @@ export function createWorkspaceIdentityResolver({
         });
       } catch {
         // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.
-        missingRepoPaths.forEach((repoPath) => {
-          failedRepoPaths.add(repoPath);
-        });
       }
     }
 

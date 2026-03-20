@@ -1,12 +1,14 @@
 import type {
-  ArchivedSessionIndexItem,
-  ArchivedSessionIndexResult,
   DrawerTab,
   LiveConnection,
   RunDataset,
   RunFilters,
   SelectionState,
 } from "../../../../entities/run";
+import type {
+  ArchivedSessionIndexItem,
+  ArchivedSessionIndexResult,
+} from "../../../../entities/session-log";
 
 export interface MonitorState {
   datasets: RunDataset[];
@@ -32,6 +34,7 @@ export interface MonitorState {
   archivedHasMore: boolean;
   archivedSearch: string;
   archivedIndexLoading: boolean;
+  archivedIndexError: string | null;
   archivedSnapshotLoading: boolean;
   archivedIndexRequestId: number;
   archivedSnapshotRequestId: number;
@@ -70,7 +73,11 @@ export type MonitorAction =
       result: ArchivedSessionIndexResult;
       append: boolean;
     }
-  | { type: "finish-archived-index-request"; requestId: number }
+  | {
+      type: "finish-archived-index-request";
+      requestId: number;
+      error?: string | null;
+    }
   | { type: "begin-archived-snapshot-request"; requestId: number }
   | {
       type: "resolve-archived-snapshot-request";

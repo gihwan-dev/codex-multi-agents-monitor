@@ -1,6 +1,16 @@
 import type { RawImportEvent, RawImportPayload, RunDataset } from "../../entities/run";
 
 export function buildExportPayload(dataset: RunDataset, includeRaw: boolean): string {
+  const promptAssembly = dataset.promptAssembly?.layers.length
+    ? {
+        ...dataset.promptAssembly,
+        layers: dataset.promptAssembly.layers.map((layer) => ({
+          ...layer,
+          rawContent: includeRaw ? layer.rawContent : null,
+        })),
+      }
+    : undefined;
+
   const payload: RawImportPayload = {
     project: dataset.project,
     session: dataset.session,
@@ -17,6 +27,7 @@ export function buildExportPayload(dataset: RunDataset, includeRaw: boolean): st
       ...artifact,
       rawContent: includeRaw ? artifact.rawContent : null,
     })),
+    ...(promptAssembly ? { promptAssembly } : {}),
   };
 
   return JSON.stringify(payload, null, 2);

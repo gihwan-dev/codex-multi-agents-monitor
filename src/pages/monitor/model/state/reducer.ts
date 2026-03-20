@@ -80,7 +80,7 @@ export function monitorStateReducer(
         action.append,
       );
     case "finish-archived-index-request":
-      return finishArchivedIndexRequest(state, action.requestId);
+      return finishArchivedIndexRequest(state, action.requestId, action.error);
     case "begin-archived-snapshot-request":
       return beginArchivedSnapshotRequest(state, action.requestId);
     case "resolve-archived-snapshot-request":

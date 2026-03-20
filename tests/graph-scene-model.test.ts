@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
-  FIXTURE_DATASETS,
   type RunFilters,
   type SelectionState,
 } from "../src/entities/run/index.js";
+import { FIXTURE_DATASETS } from "../src/entities/run/testing.js";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log/index.js";
 import {
   buildEventRects,
   computeLaneMetrics,
   computeVisibleRowRange,
-} from "../src/widgets/causal-graph/index.js";
+} from "../src/widgets/causal-graph/model/graphLayout.js";
 
 const DEFAULT_FILTERS: RunFilters = {
   agentId: null,

@@ -5,7 +5,12 @@ const outputDir = path.join(process.cwd(), "storybook-static");
 fs.rmSync(outputDir, { recursive: true, force: true });
 fs.mkdirSync(outputDir, { recursive: true });
 
-const stories = ["App/MonitorApp"];
+const stories = [
+  {
+    title: "Pages/MonitorPage",
+    path: "src/pages/monitor/ui/MonitorPage.stories.tsx",
+  },
+];
 const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -22,7 +27,7 @@ const html = `<!doctype html>
     <p>Offline fallback for Storybook build. Replace with real Storybook when registry access is restored.</p>
     ${stories
       .map(
-        (story) => `<article class="story"><h2>${story}</h2><p>Primary workbench shell story is registered in <code>src/app/MonitorApp.stories.tsx</code>.</p></article>`,
+        (story) => `<article class="story"><h2>${story.title}</h2><p>Primary workbench shell story lives at <code>${story.path}</code>.</p></article>`,
       )
       .join("")}
   </body>

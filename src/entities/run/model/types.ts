@@ -220,14 +220,6 @@ export interface AnomalyJump {
 
 export type WorkspaceQuickFilterKey = "all" | "live" | "waiting" | "failed";
 
-export interface WorkspaceIdentityOverride {
-  originPath: string;
-  displayName: string;
-  isWorktree: boolean;
-}
-
-export type WorkspaceIdentityOverrideMap = Record<string, WorkspaceIdentityOverride>;
-
 export interface WorkspaceRunRow {
   id: string;
   title: string;
@@ -406,25 +398,7 @@ export interface RawImportPayload {
   events: RawImportEvent[];
   edges: EdgeRecord[];
   artifacts: ArtifactRecord[];
-}
-
-export interface ArchivedSessionIndexItem {
-  sessionId: string;
-  workspacePath: string;
-  originPath: string;
-  displayName: string;
-  startedAt: string;
-  updatedAt: string;
-  model: string | null;
-  messageCount: number;
-  filePath: string;
-  firstUserMessage: string | null;
-}
-
-export interface ArchivedSessionIndexResult {
-  items: ArchivedSessionIndexItem[];
-  total: number;
-  hasMore: boolean;
+  promptAssembly?: PromptAssembly;
 }
 
 export interface SelectionState {

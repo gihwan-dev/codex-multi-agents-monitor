@@ -8,7 +8,7 @@ import {
   resolveActiveTreeId,
   resolveExpandedWorkspaceIds,
   resolveTreeKeyAction,
-} from "../src/widgets/workspace-run-tree/index.js";
+} from "../src/widgets/workspace-run-tree/lib/workspaceTreeUtils.js";
 
 const WORKSPACES: WorkspaceTreeItem[] = [
   {

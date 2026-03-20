@@ -5,7 +5,7 @@ import {
   useReducer,
   useRef,
 } from "react";
-import { LIVE_FIXTURE_FRAMES } from "../../../entities/run";
+import { LIVE_FIXTURE_FRAMES } from "../../../entities/run/testing";
 import { loadArchivedSessionIndex, loadSessionLogDatasets } from "../../../entities/session-log";
 import { useMonitorKeyboardShortcuts } from "../lib/useMonitorKeyboardShortcuts";
 import { createMonitorActions } from "./createMonitorActions";
@@ -35,7 +35,11 @@ export function useMonitorPageState() {
 
       loadArchivedSessionIndex(offset, ARCHIVE_PAGE_SIZE, search).then((result) => {
         if (!result) {
-          dispatch({ type: "finish-archived-index-request", requestId });
+          dispatch({
+            type: "finish-archived-index-request",
+            requestId,
+            error: "Archive sessions are unavailable right now.",
+          });
           return;
         }
 

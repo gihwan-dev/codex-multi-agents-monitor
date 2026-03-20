@@ -20,8 +20,24 @@ function resolveLatestObservedTs(dataset: RunDataset, events: RunDataset["events
   );
 }
 
+function mergeLiveEvents(dataset: RunDataset, frame: LiveWatchFrame) {
+  const seenEventIds = new Set(dataset.events.map((event) => event.eventId));
+  const mergedEvents = [...dataset.events];
+
+  frame.events.forEach((event) => {
+    if (seenEventIds.has(event.eventId)) {
+      return;
+    }
+
+    seenEventIds.add(event.eventId);
+    mergedEvents.push(event);
+  });
+
+  return mergedEvents;
+}
+
 export function applyLiveFrame(dataset: RunDataset, frame: LiveWatchFrame): LiveWatchSnapshot {
-  const events = [...dataset.events, ...frame.events];
+  const events = mergeLiveEvents(dataset, frame);
   const runStatus = frame.status ?? dataset.run.status;
   const latestObservedTs = resolveLatestObservedTs(dataset, events);
   const nextDataset: RunDataset = {

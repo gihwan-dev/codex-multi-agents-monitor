@@ -1,3 +1,18 @@
+.panel.drawer {
+  min-height: 0;
+  gap: 12px;
+  padding: 14px;
+  border-color: rgba(255, 255, 255, 0.045);
+  background: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(17, 21, 30, 0.96));
+  box-shadow: none;
+}
+
+.workspace__main > .panel.drawer {
+  border-left-width: 0;
+  border-right-width: 0;
+  border-radius: 0;
+}
+
 .drawer__body {
   display: flex;
   flex: 1 1 auto;
@@ -78,6 +93,14 @@
   font-size: 0.78rem;
 }
 
+.import-textarea {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-soft);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+}
+
 .drawer__pre {
   margin: 0;
   padding: 12px;
@@ -85,4 +108,11 @@
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   overflow: auto;
+}
+
+@media (max-width: 720px) {
+  .panel.drawer {
+    border-width: 1px;
+    border-radius: 14px;
+  }
 }

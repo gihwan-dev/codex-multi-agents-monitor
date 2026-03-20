@@ -2,8 +2,6 @@ import { useRef } from "react";
 import type { DrawerTab } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import {
-  buildExpandedGapIds,
-  buildExpandedGaps,
   CausalGraphView,
   GapDetailSection,
 } from "../../../widgets/causal-graph";
@@ -30,6 +28,7 @@ export function MonitorPage() {
     activeFollowLive,
     activeLiveConnection,
     archivedIndexLoading,
+    archivedIndexError,
     rawTabAvailable,
     graphScene,
     inspectorSummary,
@@ -41,15 +40,7 @@ export function MonitorPage() {
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
-  const expandedGapIds = buildExpandedGapIds(
-    graphScene.rows,
-    state.collapsedGapIds[activeDataset.run.traceId] ?? [],
-  );
-  const expandedGaps = buildExpandedGaps(
-    graphScene.rows,
-    expandedGapIds,
-    activeDataset.events,
-  );
+  const toggledGapIds = state.collapsedGapIds[activeDataset.run.traceId] ?? [];
 
   useSearchFocusShortcut(searchRef);
 
@@ -102,6 +93,7 @@ export function MonitorPage() {
               archivedTotal={state.archivedTotal}
               archivedHasMore={state.archivedHasMore}
               archivedIndexLoading={archivedIndexLoading}
+              archivedIndexError={archivedIndexError}
               archivedSearch={state.archivedSearch}
               archiveSectionOpen={state.archiveSectionOpen}
               onToggleArchiveSection={actions.toggleArchiveSection}
@@ -134,12 +126,14 @@ export function MonitorPage() {
             followLive={activeFollowLive}
             liveMode={activeDataset.run.liveMode}
             onPauseFollowLive={actions.pauseFollowLive}
-            expandedGapIds={expandedGapIds}
+            toggledGapIds={toggledGapIds}
             onToggleGap={actions.toggleGap}
           />
 
           <GapDetailSection
-            expandedGaps={expandedGaps}
+            rows={graphScene.rows}
+            toggledGapIds={toggledGapIds}
+            events={activeDataset.events}
             onSelect={actions.selectItem}
             onCollapseGap={actions.toggleGap}
           />

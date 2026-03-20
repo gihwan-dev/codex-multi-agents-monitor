@@ -1,8 +1,8 @@
 import { formatRelativeTime } from "../../../shared/lib/format";
+import type { WorkspaceIdentityOverrideMap } from "../../workspace";
 import type {
   EventRecord,
   RunDataset,
-  WorkspaceIdentityOverrideMap,
   WorkspaceQuickFilterKey,
   WorkspaceRunRow,
   WorkspaceThreadGroup,

@@ -292,6 +292,31 @@ describe("archive 요청 상태", () => {
     expect(currentFinished.archivedIndexLoading).toBe(false);
   });
 
+  it("archive 요청 실패는 stale 결과를 지우고 에러를 기록한다", () => {
+    const initialState = {
+      ...createMonitorInitialState(),
+      archivedIndex: buildArchiveResult("stale").items,
+      archivedTotal: 1,
+      archivedHasMore: true,
+    };
+    const requestState = monitorStateReducer(initialState, {
+      type: "begin-archived-index-request",
+      requestId: 1,
+    });
+
+    const nextState = monitorStateReducer(requestState, {
+      type: "finish-archived-index-request",
+      requestId: 1,
+      error: "Archive sessions are unavailable right now.",
+    });
+
+    expect(nextState.archivedIndex).toEqual([]);
+    expect(nextState.archivedTotal).toBe(0);
+    expect(nextState.archivedHasMore).toBe(false);
+    expect(nextState.archivedIndexLoading).toBe(false);
+    expect(nextState.archivedIndexError).toBe("Archive sessions are unavailable right now.");
+  });
+
   it("최신 archive snapshot 요청만 선택 결과를 반영한다", () => {
     const initialState = createMonitorInitialState();
     const firstRequest = monitorStateReducer(initialState, {

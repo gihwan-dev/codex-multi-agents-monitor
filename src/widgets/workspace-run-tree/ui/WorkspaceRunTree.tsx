@@ -1,9 +1,7 @@
 import type { RefObject } from "react";
-import type {
-  ArchivedSessionIndexItem,
-  RunDataset,
-  WorkspaceIdentityOverrideMap,
-} from "../../../entities/run";
+import type { RunDataset } from "../../../entities/run";
+import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
+import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { Panel, StatusChip } from "../../../shared/ui";
 import "./workspace-run-tree.css";
 import { buildRunTreeId, buildWorkspaceTreeId, getWorkspaceRuns } from "../lib/workspaceTreeUtils";
@@ -21,6 +19,7 @@ interface WorkspaceRunTreeProps {
   archivedTotal: number;
   archivedHasMore: boolean;
   archivedIndexLoading: boolean;
+  archivedIndexError: string | null;
   archivedSearch: string;
   archiveSectionOpen: boolean;
   onToggleArchiveSection: () => void;
@@ -40,6 +39,7 @@ export function WorkspaceRunTree({
   archivedTotal,
   archivedHasMore,
   archivedIndexLoading,
+  archivedIndexError,
   archivedSearch,
   archiveSectionOpen,
   onToggleArchiveSection,
@@ -153,7 +153,7 @@ export function WorkspaceRunTree({
         })}
       </div>
 
-      {archivedTotal > 0 || archivedIndex.length > 0 ? (
+      {archivedIndexError || archivedTotal > 0 || archivedIndex.length > 0 ? (
         <section className="archive-section">
           <button
             type="button"
@@ -175,6 +175,7 @@ export function WorkspaceRunTree({
               total={archivedTotal}
               hasMore={archivedHasMore}
               indexLoading={archivedIndexLoading}
+              errorMessage={archivedIndexError}
               search={archivedSearch}
               onSearch={onArchiveSearch}
               onLoadMore={onArchiveLoadMore}

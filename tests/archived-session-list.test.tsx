@@ -69,6 +69,7 @@ async function renderArchivedSessionList(props?: Partial<ComponentProps<typeof A
         total: 3,
         hasMore: true,
         indexLoading: false,
+        errorMessage: null,
         search: "",
         onSearch,
         onLoadMore,
@@ -195,5 +196,18 @@ describe("ArchivedSessionList", () => {
     });
 
     expect(onSelect).toHaveBeenCalledWith(baseItem.filePath);
+  });
+
+  it("archive 에러가 있으면 empty copy 대신 에러를 보여준다", async () => {
+    await renderArchivedSessionList({
+      items: [],
+      total: 0,
+      hasMore: false,
+      errorMessage: "Archive sessions are unavailable right now.",
+    });
+
+    expect(container.textContent).toContain("Archive sessions are unavailable right now.");
+    expect(container.textContent).not.toContain("No archived sessions found.");
+    expect(container.querySelector(".archive-list__sentinel")).toBeNull();
   });
 });

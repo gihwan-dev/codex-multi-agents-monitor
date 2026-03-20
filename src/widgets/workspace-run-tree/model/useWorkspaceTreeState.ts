@@ -2,8 +2,8 @@ import { type KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useSt
 import {
   buildWorkspaceTreeModel,
   type RunDataset,
-  type WorkspaceIdentityOverrideMap,
 } from "../../../entities/run";
+import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import {
   areWorkspaceIdsEqual,
   buildRunTreeId,

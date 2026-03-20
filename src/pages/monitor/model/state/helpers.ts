@@ -1,10 +1,9 @@
-import {
-  FIXTURE_DATASETS,
-  FIXTURE_IMPORT_TEXT,
-  type RunDataset,
-  type RunFilters,
-  type SelectionState,
+import type {
+  RunDataset,
+  RunFilters,
+  SelectionState,
 } from "../../../../entities/run";
+import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run/testing";
 import { buildConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 
@@ -147,6 +146,7 @@ export function createMonitorInitialState(): MonitorState {
     archivedHasMore: false,
     archivedSearch: "",
     archivedIndexLoading: false,
+    archivedIndexError: null,
     archivedSnapshotLoading: false,
     archivedIndexRequestId: 0,
     archivedSnapshotRequestId: 0,

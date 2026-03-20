@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createMonitorInitialState } from "../src/pages/monitor/index.js";
-import { buildExpandedGapIds, buildExpandedGaps } from "../src/widgets/causal-graph/index.js";
+import { buildExpandedGapIds, buildExpandedGaps } from "../src/widgets/causal-graph/model/expandedGaps.js";
 
 describe("monitorView helpers", () => {
   it("returns no expanded gaps when the user has not toggled any gap", () => {

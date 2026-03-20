@@ -6,6 +6,8 @@ export {
 } from "./lib/text";
 export { buildDatasetFromSessionLog } from "./model/datasetBuilder";
 export type {
+  ArchivedSessionIndexItem,
+  ArchivedSessionIndexResult,
   SessionEntrySnapshot,
   SessionLogSnapshot,
   SubagentSnapshot,

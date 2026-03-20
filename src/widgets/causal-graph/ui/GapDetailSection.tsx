@@ -1,19 +1,25 @@
-import type { EventRecord, SelectionState } from "../../../entities/run";
+import type { EventRecord, GraphSceneRow, SelectionState } from "../../../entities/run";
 import { StatusChip } from "../../../shared/ui";
-
-interface ExpandedGap {
-  gapId: string;
-  label: string;
-  hiddenEvents: EventRecord[];
-}
+import { buildExpandedGapIds, buildExpandedGaps } from "../model/expandedGaps";
 
 interface GapDetailSectionProps {
-  expandedGaps: ExpandedGap[];
+  rows: GraphSceneRow[];
+  toggledGapIds: string[];
+  events: EventRecord[];
   onSelect: (selection: SelectionState) => void;
   onCollapseGap: (gapId: string) => void;
 }
 
-export function GapDetailSection({ expandedGaps, onSelect, onCollapseGap }: GapDetailSectionProps) {
+export function GapDetailSection({
+  rows,
+  toggledGapIds,
+  events,
+  onSelect,
+  onCollapseGap,
+}: GapDetailSectionProps) {
+  const expandedGapIds = buildExpandedGapIds(rows, toggledGapIds);
+  const expandedGaps = buildExpandedGaps(rows, expandedGapIds, events);
+
   if (!expandedGaps.length) {
     return null;
   }

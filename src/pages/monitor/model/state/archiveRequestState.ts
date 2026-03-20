@@ -5,6 +5,7 @@ export function beginArchivedIndexRequest(state: MonitorState, requestId: number
   return {
     ...state,
     archivedIndexLoading: true,
+    archivedIndexError: null,
     archivedIndexRequestId: requestId,
   };
 }
@@ -29,16 +30,27 @@ export function resolveArchivedIndexRequest(
     archivedTotal: result.total,
     archivedHasMore: result.hasMore,
     archivedIndexLoading: false,
+    archivedIndexError: null,
   };
 }
 
 export function finishArchivedIndexRequest(
   state: MonitorState,
   requestId: number,
+  error?: string | null,
 ): MonitorState {
-  return requestId === state.archivedIndexRequestId
-    ? { ...state, archivedIndexLoading: false }
-    : state;
+  if (requestId !== state.archivedIndexRequestId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    archivedIndex: error ? [] : state.archivedIndex,
+    archivedTotal: error ? 0 : state.archivedTotal,
+    archivedHasMore: error ? false : state.archivedHasMore,
+    archivedIndexLoading: false,
+    archivedIndexError: error ?? null,
+  };
 }
 
 export function beginArchivedSnapshotRequest(

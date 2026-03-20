@@ -48,4 +48,23 @@ export interface TimedSubagentSnapshot extends SubagentSnapshot {
   updatedTs: number;
 }
 
+export interface ArchivedSessionIndexItem {
+  sessionId: string;
+  workspacePath: string;
+  originPath: string;
+  displayName: string;
+  startedAt: string;
+  updatedAt: string;
+  model: string | null;
+  messageCount: number;
+  filePath: string;
+  firstUserMessage: string | null;
+}
+
+export interface ArchivedSessionIndexResult {
+  items: ArchivedSessionIndexItem[];
+  total: number;
+  hasMore: boolean;
+}
+
 export const NEW_THREAD_TITLE = "새 스레드";

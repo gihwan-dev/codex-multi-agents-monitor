@@ -17,6 +17,15 @@ export function normalizeImportPayload(
 ): RunDataset {
   const events = normalizeImportEvents(payload.events, options);
   const durationMs = resolveImportDurationMs(payload.run, events);
+  const promptAssembly = payload.promptAssembly?.layers.length
+    ? {
+        ...payload.promptAssembly,
+        layers: payload.promptAssembly.layers.map((layer) => ({
+          ...layer,
+          rawContent: options.allowRaw && !options.noRawStorage ? layer.rawContent : null,
+        })),
+      }
+    : undefined;
 
   const normalized: RunDataset = {
     project: payload.project,
@@ -26,6 +35,7 @@ export function normalizeImportPayload(
     events,
     edges: payload.edges,
     artifacts: normalizeImportArtifacts(payload.artifacts, options),
+    ...(promptAssembly ? { promptAssembly } : {}),
   };
 
   return {

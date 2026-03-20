@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ArchivedSessionIndexItem } from "../../../entities/run";
+import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 import { deriveArchiveIndexTitle } from "../../../entities/session-log";
 import { groupArchivedSessionsByWorkspace } from "../lib/archiveGroups";
 
@@ -8,6 +8,7 @@ interface ArchivedSessionListProps {
   total: number;
   hasMore: boolean;
   indexLoading: boolean;
+  errorMessage: string | null;
   search: string;
   onSearch: (query: string) => void;
   onLoadMore: () => void;
@@ -19,6 +20,7 @@ export function ArchivedSessionList({
   total,
   hasMore,
   indexLoading,
+  errorMessage,
   search,
   onSearch,
   onLoadMore,
@@ -149,13 +151,19 @@ export function ArchivedSessionList({
           </>
         ) : null}
 
-        {!indexLoading && !searchPending && items.length === 0 ? (
+        {!indexLoading && !searchPending && errorMessage ? (
+          <output className="archive-list__error" aria-live="polite">
+            {errorMessage}
+          </output>
+        ) : null}
+
+        {!indexLoading && !searchPending && !errorMessage && items.length === 0 ? (
           <p className="archive-list__empty">
             {localSearch ? "No matching archived sessions." : "No archived sessions found."}
           </p>
         ) : null}
 
-        {hasMore && !indexLoading && !searchPending ? (
+        {hasMore && !indexLoading && !searchPending && !errorMessage ? (
           <div ref={sentinelRef} className="archive-list__sentinel" aria-hidden="true" />
         ) : null}
       </div>

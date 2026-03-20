@@ -91,6 +91,17 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+.workspace__main > .summary-strip,
+.workspace__main > .graph-toolbar {
+  border-left-width: 0;
+  border-right-width: 0;
+}
+
+.workspace__main > .summary-strip,
+.workspace__main > .graph-toolbar {
+  border-radius: 0;
+}
+
 .summary-strip--inline {
   display: flex;
   align-items: center;
@@ -197,6 +208,34 @@
   color: var(--color-text-secondary);
 }
 
+select {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-soft);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text);
+}
+
+.shortcut-dialog {
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 18px;
+  background: rgba(20, 24, 33, 0.98);
+  color: var(--color-text);
+}
+
+.shortcut-dialog h2 {
+  font-size: 0.92rem;
+}
+
+.shortcut-dialog ul {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 18px;
+  padding-left: 18px;
+}
+
 .resize-handle {
   width: 2px;
   min-height: 100%;
@@ -209,6 +248,12 @@
   .top-bar {
     grid-template-columns: 1fr;
     border-radius: 16px;
+  }
+
+  .summary-strip,
+  .graph-toolbar {
+    border-width: 1px;
+    border-radius: 14px;
   }
 
   .graph-toolbar__row--primary,

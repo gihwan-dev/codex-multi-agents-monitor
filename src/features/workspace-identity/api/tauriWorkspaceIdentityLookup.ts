@@ -1,4 +1,4 @@
-import type { WorkspaceIdentityOverride } from "../../../entities/run";
+import type { WorkspaceIdentityOverride } from "../../../entities/workspace";
 import { invokeTauri } from "../../../shared/api";
 
 export type WorkspaceIdentityLookup = Record<string, Partial<WorkspaceIdentityOverride>>;
