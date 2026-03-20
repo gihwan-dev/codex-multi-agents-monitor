@@ -1,12 +1,10 @@
-import type {
-  RunDataset,
-  RunFilters,
-  SelectionState,
-} from "../../../../entities/run";
 import {
   FIXTURE_DATASETS,
   FIXTURE_IMPORT_TEXT,
-} from "../../../../shared/testing/fixtures";
+  type RunDataset,
+  type RunFilters,
+  type SelectionState,
+} from "../../../../entities/run";
 import { buildConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 

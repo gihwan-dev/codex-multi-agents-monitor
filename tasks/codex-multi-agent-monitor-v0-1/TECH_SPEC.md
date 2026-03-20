@@ -39,7 +39,8 @@
 - `src/features/` owns user actions: archive session, import run, follow live, search focus, workspace identity override, view-mode toggles.
 - `src/entities/` owns run/session/workspace/archive-session and session-log models, selectors, and adapters.
 - `src/shared/domain/` is removed and must not be recreated.
-- `src/shared/*` keeps primitives, theme, lib helpers, and testing assets only.
+- `src/shared/*` keeps primitives, theme, lib helpers, and generic testing helpers only.
+- entity-owned fixture/runtime samples stay with the owning `src/entities/*` slice to avoid `shared -> entities` imports.
 
 ```mermaid
 flowchart TB
@@ -136,7 +137,8 @@ flowchart LR
 - `src/features/archive-session/`, `src/features/import-run/`, `src/features/follow-live/`, `src/features/search-focus/`, `src/features/workspace-identity/`, `src/features/view-mode-toggle/`는 user action slices를 담당한다.
 - `src/entities/run/`, `src/entities/session-log/`, `src/entities/workspace/`, `src/entities/archive-session/`는 normalized models, selectors, adapters를 담당한다.
 - `src/shared/domain/`과 `src/app/session-log-loader/` 계열 shim은 제거됐고 다시 만들지 않는다.
-- `src/shared/ui/`, `src/shared/lib/`, `src/shared/testing/`, `src/theme/*`는 공용 primitive, helper, fixture, token layer를 담당한다.
+- `src/shared/ui/`, `src/shared/lib/`, `src/shared/testing/`, `src/theme/*`는 공용 primitive, helper, generic testing utility, token layer를 담당한다.
+- `src/entities/*`는 자기 도메인 fixture/runtime sample도 소유할 수 있으며, 상위 레이어는 entity public API를 통해 소비한다.
 
 `FSD boundary note`: `../../docs/architecture/frontend-fsd.md`
 

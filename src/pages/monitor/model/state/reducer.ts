@@ -1,5 +1,5 @@
+import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run";
 import { applyLiveFrame } from "../../../../features/follow-live";
-import { LIVE_FIXTURE_FRAMES } from "../../../../shared/testing/fixtures";
 import {
   buildCollapsedGapIds,
   buildDatasetActivationPatch,

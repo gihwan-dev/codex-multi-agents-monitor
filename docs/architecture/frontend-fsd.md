@@ -30,8 +30,8 @@ flowchart TB
 - `pages/monitor`가 active dataset, selection, live state, archive state를 모아 screen-level orchestration을 만든다.
 - `widgets/run-tree`, `widgets/causal-graph`, `widgets/inspector`, `widgets/monitor-shell`, `widgets/bottom-drawer`가 페이지에서 받은 model을 렌더링한다.
 - `features/archive-session`, `features/import-run`, `features/follow-live`, `features/workspace-identity`, `features/search-focus`가 사용자 의도를 액션으로 바꾼다.
-- `entities/session-log`, `entities/run`, `entities/workspace`, `entities/archive-session`이 normalized data, selectors, DTO를 소유한다.
-- `shared/ui`, `shared/lib`, `shared/testing`, `shared/theme`가 화면과 도메인에 공통인 토큰, primitive, helper, fixture를 제공한다.
+- `entities/session-log`, `entities/run`, `entities/workspace`, `entities/archive-session`이 normalized data, selectors, DTO, entity-owned fixture/runtime sample을 소유한다.
+- `shared/ui`, `shared/lib`, `shared/testing`, `shared/theme`가 화면과 도메인에 공통인 토큰, primitive, helper, generic testing utility를 제공한다.
 
 ### 시퀀스 다이어그램
 ```mermaid

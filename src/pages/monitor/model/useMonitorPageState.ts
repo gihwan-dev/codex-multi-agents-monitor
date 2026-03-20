@@ -5,8 +5,8 @@ import {
   useReducer,
   useRef,
 } from "react";
+import { LIVE_FIXTURE_FRAMES } from "../../../entities/run";
 import { loadArchivedSessionIndex, loadSessionLogDatasets } from "../../../entities/session-log";
-import { LIVE_FIXTURE_FRAMES } from "../../../shared/testing/fixtures";
 import { useMonitorKeyboardShortcuts } from "../lib/useMonitorKeyboardShortcuts";
 import { createMonitorActions } from "./createMonitorActions";
 import { deriveMonitorViewState } from "./deriveMonitorViewState";

@@ -1,9 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildGraphSceneModel, type GraphSceneModel, type RunFilters } from "../src/entities/run";
+import {
+  buildGraphSceneModel,
+  FIXTURE_DATASETS,
+  type GraphSceneModel,
+  type RunFilters,
+} from "../src/entities/run";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
-import { FIXTURE_DATASETS } from "../src/shared/testing/fixtures";
 import { CausalGraphView } from "../src/widgets/causal-graph";
 import {
   buildContinuationGuideYs,

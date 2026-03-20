@@ -4,6 +4,8 @@ import {
   buildSummaryFacts,
   buildWorkspaceTreeModel,
   calculateSummaryMetrics,
+  FIXTURE_DATASETS,
+  FIXTURE_IMPORT_TEXT,
   hasRawPayload,
 } from "../../src/entities/run/index.js";
 import {
@@ -13,7 +15,6 @@ import {
 } from "../../src/features/import-run/index.js";
 import { createMonitorInitialState, monitorStateReducer } from "../../src/pages/monitor/model/state/index.js";
 import { formatDuration } from "../../src/shared/lib/format/index.js";
-import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../src/shared/testing/fixtures/index.js";
 import { buildGraphSceneModel } from "../../src/widgets/causal-graph/index.js";
 import { buildInspectorCausalSummary } from "../../src/widgets/causal-inspector/index.js";
 

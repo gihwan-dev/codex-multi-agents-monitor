@@ -23,7 +23,7 @@
 - The baseline toolchain is locked to `Biome + Vitest + Playwright + Storybook`. Bootstrap records the contract only; implementation adds missing scripts or config later.
 - Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/app/styles/layout.css` is not a widget feature stylesheet.
 - FE target layers are `app / pages / widgets / features / entities / shared`.
-- `src/app/` is bootstrap only, `src/pages/monitor/` owns page orchestration, `src/widgets/` owns screen blocks, `src/features/` owns user actions, `src/entities/` owns normalized models, and `src/shared/` owns primitives, helpers, testing, and theme layers.
+- `src/app/` is bootstrap only, `src/pages/monitor/` owns page orchestration, `src/widgets/` owns screen blocks, `src/features/` owns user actions, `src/entities/` owns normalized models plus entity-owned fixture/runtime samples, and `src/shared/` owns primitives, helpers, generic testing utilities, and theme layers.
 - `src/shared/domain/` and `src/app/session-log-loader/` are removed legacy paths and must not be recreated.
 - Custom thin primitives under `src/shared/ui/` are the only approved component source for v0.1.
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.

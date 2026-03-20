@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildGraphSceneModel, type RunFilters, type SelectionState } from "../src/entities/run/index.js";
+import {
+  buildGraphSceneModel,
+  FIXTURE_DATASETS,
+  type RunFilters,
+  type SelectionState,
+} from "../src/entities/run/index.js";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log/index.js";
-import { FIXTURE_DATASETS } from "../src/shared/testing/fixtures/index.js";
 import {
   buildEventRects,
   computeLaneMetrics,

@@ -20,8 +20,8 @@
   - `src/pages/monitor`: monitor page composition and page-local orchestration
   - `src/widgets/*`: screen-scale blocks such as run tree, graph, inspector, shell, drawer, top bar
   - `src/features/*`: user actions and interaction slices such as archive session, import run, follow live, search focus, workspace identity override
-  - `src/entities/*`: core run, session-log, workspace, and trace-event models/selectors
-  - `src/shared/*`: token-aware primitives, lib helpers, testing assets, config, and theme layers
+  - `src/entities/*`: core run, session-log, workspace, and trace-event models/selectors plus entity-owned fixture/runtime samples
+  - `src/shared/*`: token-aware primitives, lib helpers, generic testing helpers, config, and theme layers
   - Legacy paths such as `src/shared/domain`, `src/app/sessionLogLoader`, `src/features/run-list`, `src/features/run-detail`, `src/features/inspector`, `src/features/ingestion`, and `src/features/fixtures` must not be recreated
 
 # Architecture Boundaries
