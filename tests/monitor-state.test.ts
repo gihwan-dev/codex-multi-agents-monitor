@@ -206,6 +206,17 @@ describe("live 상태 전이", () => {
     expect(pausedFromStaleState.followLiveByRunId[liveRun.run.traceId]).toBe(false);
     expect(pausedFromStaleState.liveConnectionByRunId[liveRun.run.traceId]).toBe("stale");
   });
+
+  it("알 수 없는 run에도 set-follow-live는 연결 상태를 즉시 기록한다", () => {
+    const nextState = monitorStateReducer(createMonitorInitialState(), {
+      type: "set-follow-live",
+      traceId: "missing-trace",
+      value: true,
+    });
+
+    expect(nextState.followLiveByRunId["missing-trace"]).toBe(true);
+    expect(nextState.liveConnectionByRunId["missing-trace"]).toBe("live");
+  });
 });
 
 describe("archive 요청 상태", () => {

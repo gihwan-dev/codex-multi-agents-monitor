@@ -153,6 +153,35 @@ describe("completedRunParser", () => {
     ).toThrow(/unknown producer event/i);
   });
 
+  it("중복된 lane id를 가진 payload를 거부한다", () => {
+    const fixture = JSON.parse(FIXTURE_IMPORT_TEXT);
+
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...fixture,
+          lanes: [fixture.lanes[0], { ...fixture.lanes[0] }],
+        }),
+      ),
+    ).toThrow(/duplicate lane id/i);
+  });
+
+  it("존재하지 않는 selectedByDefaultId를 거부한다", () => {
+    const fixture = JSON.parse(FIXTURE_IMPORT_TEXT);
+
+    expect(() =>
+      parseCompletedRunPayload(
+        JSON.stringify({
+          ...fixture,
+          run: {
+            ...fixture.run,
+            selectedByDefaultId: "missing-event",
+          },
+        }),
+      ),
+    ).toThrow(/selectedByDefaultId/i);
+  });
+
   it("시작 시각보다 빠른 종료 시각을 가진 event를 거부한다", () => {
     expect(() =>
       parseCompletedRunPayload(

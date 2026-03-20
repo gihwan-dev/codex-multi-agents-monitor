@@ -1,104 +1,30 @@
-import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run";
-import { applyLiveFrame } from "../../../../features/follow-live";
 import {
-  buildCollapsedGapIds,
-  buildDatasetActivationPatch,
-  buildFilterMap,
-  buildFollowLiveMap,
-  createDefaultFilters,
-  defaultSelectionForDataset,
-  LIVE_FIXTURE_TRACE_ID,
-  resolveDatasetDrawerTab,
-  toggleGapIds,
-  upsertDataset,
-} from "./helpers";
-import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
+  beginArchivedIndexRequest,
+  beginArchivedSnapshotRequest,
+  finishArchivedIndexRequest,
+  finishArchivedSnapshotRequest,
+  resolveArchivedIndexRequest,
+  resolveArchivedSnapshotRequest,
+} from "./archiveRequestState";
+import {
+  applyFixtureFrameState,
+  importDatasetState,
+  replaceDatasetsState,
+  setActiveRunState,
+  setFilterState,
+  setFollowLiveState,
+  toggleFollowLiveState,
+  toggleGapState,
+} from "./datasetState";
 import type { MonitorAction, MonitorState } from "./types";
-
-function replaceDatasets(state: MonitorState, datasets: MonitorState["datasets"]) {
-  if (!datasets.length) {
-    return state;
-  }
-
-  const activeDataset =
-    datasets.find((item) => item.run.traceId === state.activeRunId) ?? datasets[0];
-
-  return {
-    ...state,
-    datasets,
-    activeRunId: activeDataset.run.traceId,
-    selection: defaultSelectionForDataset(activeDataset),
-    followLiveByRunId: buildFollowLiveMap(datasets),
-    liveConnectionByRunId: buildConnectionMap(datasets),
-    filtersByRunId: buildFilterMap(datasets),
-    collapsedGapIds: buildCollapsedGapIds(datasets),
-    ...resolveDatasetDrawerTab(state, activeDataset),
-    appliedLiveFrames: 0,
-  };
-}
-
-function applyFixtureFrame(state: MonitorState) {
-  if (state.appliedLiveFrames >= LIVE_FIXTURE_FRAMES.length) {
-    return state;
-  }
-
-  const traceId = LIVE_FIXTURE_TRACE_ID;
-  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
-  if (!dataset) {
-    return state;
-  }
-
-  const snapshot = applyLiveFrame(
-    dataset,
-    LIVE_FIXTURE_FRAMES[state.appliedLiveFrames],
-  );
-  const latestEvent = snapshot.dataset.events[snapshot.dataset.events.length - 1];
-  const followLive = state.followLiveByRunId[traceId] ?? false;
-
-  return {
-    ...state,
-    datasets: state.datasets.map((item) =>
-      item.run.traceId === traceId ? snapshot.dataset : item,
-    ),
-    liveConnectionByRunId: updateLiveConnectionMap(
-      state.liveConnectionByRunId,
-      traceId,
-      snapshot.dataset,
-      followLive,
-      snapshot.connection,
-    ),
-    selection:
-      followLive &&
-      state.activeRunId === traceId &&
-      latestEvent
-        ? { kind: "event" as const, id: latestEvent.eventId }
-        : state.selection,
-    appliedLiveFrames: state.appliedLiveFrames + 1,
-  };
-}
 
 export function monitorStateReducer(
   state: MonitorState,
   action: MonitorAction,
 ): MonitorState {
   switch (action.type) {
-    case "set-active-run": {
-      const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
-      if (!dataset) {
-        return {
-          ...state,
-          activeRunId: action.traceId,
-          selection: null,
-        };
-      }
-
-      return {
-        ...state,
-        activeRunId: action.traceId,
-        selection: defaultSelectionForDataset(dataset),
-        ...resolveDatasetDrawerTab(state, dataset),
-      };
-    }
+    case "set-active-run":
+      return setActiveRunState(state, action.traceId);
     case "set-selection":
       return { ...state, selection: action.selection };
     case "set-drawer-tab":
@@ -111,67 +37,14 @@ export function monitorStateReducer(
       return { ...state, drawerOpen: action.open };
     case "toggle-inspector":
       return { ...state, inspectorOpen: !state.inspectorOpen };
-    case "toggle-follow-live": {
-      const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
-      if (!dataset || dataset.run.liveMode !== "live") {
-        return state;
-      }
-
-      const nextFollow = !(state.followLiveByRunId[action.traceId] ?? false);
-      return {
-        ...state,
-        followLiveByRunId: {
-          ...state.followLiveByRunId,
-          [action.traceId]: nextFollow,
-        },
-        liveConnectionByRunId: updateLiveConnectionMap(
-          state.liveConnectionByRunId,
-          action.traceId,
-          dataset,
-          nextFollow,
-        ),
-      };
-    }
-    case "set-follow-live": {
-      const dataset = state.datasets.find((item) => item.run.traceId === action.traceId);
-      return {
-        ...state,
-        followLiveByRunId: {
-          ...state.followLiveByRunId,
-          [action.traceId]: action.value,
-        },
-        liveConnectionByRunId: dataset
-          ? updateLiveConnectionMap(
-              state.liveConnectionByRunId,
-              action.traceId,
-              dataset,
-              action.value,
-            )
-          : {
-              ...state.liveConnectionByRunId,
-              [action.traceId]: action.value ? "live" : "paused",
-            },
-      };
-    }
+    case "toggle-follow-live":
+      return toggleFollowLiveState(state, action.traceId);
+    case "set-follow-live":
+      return setFollowLiveState(state, action.traceId, action.value);
     case "set-filter":
-      return {
-        ...state,
-        filtersByRunId: {
-          ...state.filtersByRunId,
-          [action.traceId]: {
-            ...(state.filtersByRunId[action.traceId] ?? createDefaultFilters()),
-            [action.key]: action.value,
-          },
-        },
-      };
+      return setFilterState(state, action.traceId, action.key, action.value);
     case "toggle-gap":
-      return {
-        ...state,
-        collapsedGapIds: {
-          ...state.collapsedGapIds,
-          [action.traceId]: toggleGapIds(state, action.traceId, action.gapId),
-        },
-      };
+      return toggleGapState(state, action.traceId, action.gapId);
     case "set-rail-width":
       return { ...state, railWidth: action.width };
     case "set-inspector-width":
@@ -192,62 +65,28 @@ export function monitorStateReducer(
     case "toggle-shortcuts":
       return { ...state, shortcutHelpOpen: !state.shortcutHelpOpen };
     case "import-dataset":
-      return {
-        ...state,
-        datasets: upsertDataset(state, action.dataset),
-        ...buildDatasetActivationPatch(state, action.dataset),
-        drawerTab: "artifacts",
-        drawerOpen: true,
-      };
+      return importDatasetState(state, action.dataset);
     case "replace-datasets":
-      return replaceDatasets(state, action.datasets);
+      return replaceDatasetsState(state, action.datasets);
     case "apply-live-frame":
-      return applyFixtureFrame(state);
+      return applyFixtureFrameState(state);
     case "begin-archived-index-request":
-      return {
-        ...state,
-        archivedIndexLoading: true,
-        archivedIndexRequestId: action.requestId,
-      };
-    case "resolve-archived-index-request": {
-      if (action.requestId !== state.archivedIndexRequestId) {
-        return state;
-      }
-
-      return {
-        ...state,
-        archivedIndex: action.append
-          ? [...state.archivedIndex, ...action.result.items]
-          : action.result.items,
-        archivedTotal: action.result.total,
-        archivedHasMore: action.result.hasMore,
-        archivedIndexLoading: false,
-      };
-    }
+      return beginArchivedIndexRequest(state, action.requestId);
+    case "resolve-archived-index-request":
+      return resolveArchivedIndexRequest(
+        state,
+        action.requestId,
+        action.result,
+        action.append,
+      );
     case "finish-archived-index-request":
-      return action.requestId === state.archivedIndexRequestId
-        ? { ...state, archivedIndexLoading: false }
-        : state;
+      return finishArchivedIndexRequest(state, action.requestId);
     case "begin-archived-snapshot-request":
-      return {
-        ...state,
-        archivedSnapshotLoading: true,
-        archivedSnapshotRequestId: action.requestId,
-      };
+      return beginArchivedSnapshotRequest(state, action.requestId);
     case "resolve-archived-snapshot-request":
-      if (action.requestId !== state.archivedSnapshotRequestId) {
-        return state;
-      }
-      return {
-        ...state,
-        archivedSnapshotLoading: false,
-        datasets: upsertDataset(state, action.dataset),
-        ...buildDatasetActivationPatch(state, action.dataset),
-      };
+      return resolveArchivedSnapshotRequest(state, action.requestId, action.dataset);
     case "finish-archived-snapshot-request":
-      return action.requestId === state.archivedSnapshotRequestId
-        ? { ...state, archivedSnapshotLoading: false }
-        : state;
+      return finishArchivedSnapshotRequest(state, action.requestId);
     case "set-archived-search":
       return { ...state, archivedSearch: action.value };
     case "toggle-archive-section":
