@@ -255,6 +255,32 @@ describe("normalization and selectors", () => {
     expect(metrics.peakParallelism).toBe(2);
   });
 
+  it("falls back to the run duration when the dataset has no events", () => {
+    const source = FIXTURE_DATASETS[0];
+    expect(source).toBeDefined();
+    if (!source) {
+      throw new Error("fixture for empty-event summary test missing");
+    }
+
+    const dataset = {
+      ...source,
+      run: {
+        ...source.run,
+        durationMs: 42,
+      },
+      events: [],
+      edges: [],
+      artifacts: [],
+    };
+
+    const metrics = calculateSummaryMetrics(dataset);
+
+    expect(metrics.totalDurationMs).toBe(42);
+    expect(metrics.activeTimeMs).toBe(0);
+    expect(metrics.idleTimeMs).toBe(42);
+    expect(metrics.peakParallelism).toBe(1);
+  });
+
   it("builds a graph model that keeps the blocker path readable", () => {
     const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === "trace-fix-002");
     expect(dataset).toBeDefined();

@@ -263,6 +263,31 @@ describe("multi-agent scene model", () => {
     }
   });
 
+  it("keeps spawn topology inside the selection path for a focused subagent event", () => {
+    const dataset = buildMultiAgentDataset();
+    const focusedEvent = dataset.events.find(
+      (event) => event.laneId === "sub-hume:sub" && event.eventType === "agent.spawned",
+    );
+    expect(focusedEvent).toBeDefined();
+    if (!focusedEvent) {
+      throw new Error("expected focused subagent spawn event");
+    }
+
+    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, {
+      kind: "event",
+      id: focusedEvent.eventId,
+    });
+    const spawnEdges = dataset.edges.filter((edge) => edge.edgeType === "spawn");
+
+    expect(spawnEdges.length).toBe(3);
+
+    for (const edge of spawnEdges) {
+      expect(scene.selectionPath.edgeIds).toContain(edge.edgeId);
+      expect(scene.selectionPath.eventIds).toContain(edge.sourceEventId);
+      expect(scene.selectionPath.eventIds).toContain(edge.targetEventId);
+    }
+  });
+
   it("produces valid cardRect for subagent events in layout", () => {
     const dataset = buildMultiAgentDataset();
     const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
