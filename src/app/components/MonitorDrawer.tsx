@@ -41,7 +41,12 @@ export function MonitorDrawer({
       title="Bottom drawer"
       className="drawer drawer--open"
       actions={
-        <button type="button" className="button button--ghost" onClick={onCloseDrawer}>
+        <button
+          type="button"
+          className="button button--ghost"
+          aria-label="Close drawer"
+          onClick={onCloseDrawer}
+        >
           Close
         </button>
       }
