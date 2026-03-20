@@ -71,4 +71,98 @@ describe("createMonitorViewActions", () => {
       selection: { kind: "event", id: latestEventId },
     });
   });
+
+  it("활성 live run을 pause하면 follow-live를 끈다", () => {
+    const state = createMonitorInitialState();
+    const activeDataset = requireLiveDataset();
+    const dispatch = vi.fn();
+    const actions = createMonitorViewActions({
+      drawerOpen: state.drawerOpen,
+      dispatch,
+      activeDataset,
+      activeFollowLive: true,
+    });
+
+    actions.pauseFollowLive();
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-follow-live",
+      traceId: activeDataset.run.traceId,
+      value: false,
+    });
+  });
+
+  it("이미 멈춘 run을 pause하면 추가 action을 보내지 않는다", () => {
+    const state = createMonitorInitialState();
+    const activeDataset = requireLiveDataset();
+    const dispatch = vi.fn();
+    const actions = createMonitorViewActions({
+      drawerOpen: state.drawerOpen,
+      dispatch,
+      activeDataset,
+      activeFollowLive: false,
+    });
+
+    actions.pauseFollowLive();
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("drawer tab 변경 시 기본 open 값으로 현재 drawer 상태를 사용한다", () => {
+    const state = createMonitorInitialState();
+    const activeDataset = requireLiveDataset();
+    const dispatch = vi.fn();
+    const actions = createMonitorViewActions({
+      drawerOpen: state.drawerOpen,
+      dispatch,
+      activeDataset,
+      activeFollowLive: false,
+    });
+
+    actions.setDrawerTab("raw");
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-drawer-tab",
+      tab: "raw",
+      open: state.drawerOpen,
+    });
+  });
+
+  it("rail resize는 최소 폭보다 작게 줄어들지 않는다", () => {
+    const state = createMonitorInitialState();
+    const activeDataset = requireLiveDataset();
+    const dispatch = vi.fn();
+    const actions = createMonitorViewActions({
+      drawerOpen: state.drawerOpen,
+      dispatch,
+      activeDataset,
+      activeFollowLive: false,
+    });
+
+    actions.resizeRail(100);
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-rail-width",
+      width: 220,
+    });
+  });
+
+  it("inspector resize는 최소 폭보다 작게 줄어들지 않는다", () => {
+    const state = createMonitorInitialState();
+    const activeDataset = requireLiveDataset();
+    const dispatch = vi.fn();
+    const actions = createMonitorViewActions({
+      drawerOpen: state.drawerOpen,
+      dispatch,
+      activeDataset,
+      activeFollowLive: false,
+    });
+
+    actions.resizeInspector(120);
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-inspector-width",
+      width: 256,
+    });
+  });
 });
