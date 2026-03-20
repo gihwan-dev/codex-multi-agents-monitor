@@ -36,7 +36,7 @@ function makeSnapshot(overrides: Partial<SessionLogSnapshot> = {}): SessionLogSn
 }
 
 describe("promptAssembly mapping", () => {
-  it("maps promptAssembly layers from snapshot to dataset", () => {
+  it("keeps promptAssembly previews while redacting raw layers by default", () => {
     const snapshot = makeSnapshot({
       promptAssembly: [
         {
@@ -89,7 +89,8 @@ describe("promptAssembly mapping", () => {
     expect(assembly.layers[2].label).toBe("AGENTS.md");
 
     expect(assembly.layers[3].layerType).toBe("user");
-    expect(assembly.layers[3].rawContent).toBe("Hello world");
+    expect(assembly.layers[0].preview).toBe("You are a helpful assistant...");
+    expect(assembly.layers.every((layer) => layer.rawContent === null)).toBe(true);
   });
 
   it("returns undefined promptAssembly when no layers present", () => {

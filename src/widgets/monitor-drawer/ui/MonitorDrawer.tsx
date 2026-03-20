@@ -5,7 +5,7 @@ import {
 } from "../../../entities/run";
 import { formatCurrency, formatTokens } from "../../../shared/lib/format";
 import { Panel } from "../../../shared/ui";
-import { PromptAssemblyView } from "../../causal-inspector";
+import { PromptAssemblyView } from "../../prompt-assembly";
 import "./monitor-drawer.css";
 
 interface MonitorDrawerState {
@@ -117,7 +117,10 @@ export function MonitorDrawer({
       {drawerState.drawerTab === "context" ? (
         <div className="drawer__body">
           {activeDataset.promptAssembly ? (
-            <PromptAssemblyView assembly={activeDataset.promptAssembly} />
+            <PromptAssemblyView
+              assembly={activeDataset.promptAssembly}
+              rawEnabled={activeDataset.run.rawIncluded}
+            />
           ) : (
             <p className="drawer__empty">No prompt assembly data available.</p>
           )}

@@ -3,8 +3,6 @@ import {
   calculateSummaryMetrics,
   type EdgeRecord,
   type EventRecord,
-  type PromptAssembly,
-  type PromptLayerType,
   type RunDataset,
   type RunStatus,
 } from "../../run";
@@ -27,6 +25,7 @@ import {
   readStringArray,
 } from "../lib/toolPreview";
 import { buildLaneEventsFromEntries } from "./eventBuilder";
+import { buildPromptAssembly } from "./promptAssembly";
 import type {
   SessionLogSnapshot,
 } from "./types";
@@ -321,7 +320,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
     events: allEvents,
     edges: allEdges,
     artifacts: [],
-    promptAssembly: buildPromptAssembly(snapshot),
+    promptAssembly: buildPromptAssembly(snapshot, { includeRaw: false }),
   };
 
   return {
@@ -330,24 +329,6 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       ...dataset.run,
       summaryMetrics: calculateSummaryMetrics(dataset),
     },
-  };
-}
-
-function buildPromptAssembly(snapshot: SessionLogSnapshot): PromptAssembly | undefined {
-  const layers = snapshot.promptAssembly;
-  if (!layers || layers.length === 0) {
-    return undefined;
-  }
-  return {
-    layers: layers.map((layer, index) => ({
-      layerId: `${snapshot.sessionId}:layer:${index}`,
-      layerType: layer.layerType as PromptLayerType,
-      label: layer.label,
-      preview: layer.preview,
-      contentLength: layer.contentLength,
-      rawContent: layer.rawContent,
-    })),
-    totalContentLength: layers.reduce((sum, layer) => sum + layer.contentLength, 0),
   };
 }
 

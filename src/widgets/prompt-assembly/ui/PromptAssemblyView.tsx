@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { PromptAssembly, PromptLayerType } from "../../../entities/run";
-import "./promptAssembly.css";
+import "./prompt-assembly.css";
 
 const DYNAMIC_LAYER_TYPES: ReadonlySet<PromptLayerType> = new Set([
   "user",
@@ -11,17 +11,23 @@ const DYNAMIC_LAYER_TYPES: ReadonlySet<PromptLayerType> = new Set([
   "delegated",
 ]);
 
+const HIDDEN_RAW_MESSAGE = "Raw context hidden by default.";
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
   return kb < 100 ? `${kb.toFixed(1)} KB` : `${Math.round(kb)} KB`;
 }
 
+interface PromptAssemblyViewProps {
+  assembly: PromptAssembly;
+  rawEnabled: boolean;
+}
+
 export function PromptAssemblyView({
   assembly,
-}: {
-  assembly: PromptAssembly;
-}) {
+  rawEnabled,
+}: PromptAssemblyViewProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const toggleLayer = (layerId: string) => {
@@ -49,6 +55,7 @@ export function PromptAssemblyView({
         const isExpanded = expandedIds.has(layer.layerId);
         const isDynamic = DYNAMIC_LAYER_TYPES.has(layer.layerType);
         const cssType = layer.layerType;
+        const rawVisible = rawEnabled && layer.rawContent !== null;
 
         return (
           <div
@@ -75,7 +82,11 @@ export function PromptAssemblyView({
 
             {isExpanded ? (
               <div className="layer-card__content">
-                <pre>{layer.rawContent}</pre>
+                {rawVisible ? (
+                  <pre>{layer.rawContent}</pre>
+                ) : (
+                  <p className="layer-card__content-note">{HIDDEN_RAW_MESSAGE}</p>
+                )}
               </div>
             ) : null}
           </div>

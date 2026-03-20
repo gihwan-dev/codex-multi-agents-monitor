@@ -49,7 +49,6 @@
   opacity: 1;
 }
 
-/* Layer type border colors */
 .layer-card--system { border-left: 3px solid var(--color-text-tertiary, #737b88); }
 .layer-card--permissions { border-left: 3px solid var(--color-text-tertiary, #737b88); }
 .layer-card--app-context { border-left: 3px solid var(--color-text-tertiary, #737b88); }
@@ -155,7 +154,8 @@
   overflow-y: auto;
 }
 
-.layer-card__content pre {
+.layer-card__content pre,
+.layer-card__content-note {
   font-size: 12px;
   font-family: var(--font-mono, monospace);
   color: var(--color-text-secondary);

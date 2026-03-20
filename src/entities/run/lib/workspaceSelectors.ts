@@ -1,9 +1,9 @@
 import { formatRelativeTime } from "../../../shared/lib/format";
 import type {
   EventRecord,
-  QuickFilterSummary,
   RunDataset,
   WorkspaceIdentityOverrideMap,
+  WorkspaceQuickFilterKey,
   WorkspaceRunRow,
   WorkspaceThreadGroup,
   WorkspaceTreeItem,
@@ -42,7 +42,7 @@ function latestActivityTimestamp(dataset: RunDataset) {
   );
 }
 
-function matchesQuickFilter(dataset: RunDataset, filter: QuickFilterSummary["key"]) {
+function matchesQuickFilter(dataset: RunDataset, filter: WorkspaceQuickFilterKey) {
   if (filter === "all") {
     return true;
   }
@@ -91,7 +91,7 @@ function resolveWorkspaceIdentity(
 export function buildWorkspaceTreeModel(
   datasets: RunDataset[],
   search: string,
-  quickFilter: QuickFilterSummary["key"],
+  quickFilter: WorkspaceQuickFilterKey,
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap = {},
 ): WorkspaceTreeModel {
   const referenceTimestamp =
@@ -99,24 +99,6 @@ export function buildWorkspaceTreeModel(
       ? Math.max(...datasets.map((dataset) => latestActivityTimestamp(dataset)))
       : 0;
   const normalizedSearch = search.trim().toLowerCase();
-  const quickFilters: QuickFilterSummary[] = [
-    { key: "all", label: "All", count: datasets.length },
-    {
-      key: "live",
-      label: "Live",
-      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "live")).length,
-    },
-    {
-      key: "waiting",
-      label: "Waiting",
-      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "waiting")).length,
-    },
-    {
-      key: "failed",
-      label: "Failed",
-      count: datasets.filter((dataset) => matchesQuickFilter(dataset, "failed")).length,
-    },
-  ];
 
   const workspaceMap = new Map<string, WorkspaceTreeItem>();
   datasets
@@ -173,7 +155,6 @@ export function buildWorkspaceTreeModel(
     });
 
   return {
-    quickFilters,
     workspaces: [...workspaceMap.values()]
       .map((workspace) => ({
         ...workspace,

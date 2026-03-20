@@ -183,7 +183,7 @@ export interface PromptLayer {
   label: string;
   preview: string;
   contentLength: number;
-  rawContent: string;
+  rawContent: string | null;
 }
 
 export interface PromptAssembly {
@@ -218,11 +218,7 @@ export interface AnomalyJump {
   emphasis: "default" | "warning" | "danger" | "accent";
 }
 
-export interface QuickFilterSummary {
-  key: "all" | "live" | "waiting" | "failed";
-  label: string;
-  count: number;
-}
+export type WorkspaceQuickFilterKey = "all" | "live" | "waiting" | "failed";
 
 export interface WorkspaceIdentityOverride {
   originPath: string;
@@ -258,7 +254,6 @@ export interface WorkspaceTreeItem {
 }
 
 export interface WorkspaceTreeModel {
-  quickFilters: QuickFilterSummary[];
   workspaces: WorkspaceTreeItem[];
 }
 

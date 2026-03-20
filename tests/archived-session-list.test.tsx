@@ -7,6 +7,7 @@ import { ArchivedSessionList } from "../src/widgets/workspace-run-tree/index.js"
 
 let container: HTMLDivElement;
 let root: Root;
+let observerInstances: IntersectionObserverStub[];
 
 const baseItem = {
   sessionId: "session-1",
@@ -21,13 +22,39 @@ const baseItem = {
   firstUserMessage: "Check archive search behavior",
 };
 
-function installIntersectionObserverStub() {
-  class IntersectionObserverStub {
-    observe() {}
-    disconnect() {}
+class IntersectionObserverStub {
+  callback: IntersectionObserverCallback;
+  target: Element | null = null;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+    observerInstances.push(this);
   }
 
-  vi.stubGlobal("IntersectionObserver", IntersectionObserverStub);
+  observe(target: Element) {
+    this.target = target;
+  }
+
+  disconnect() {}
+
+  trigger(isIntersecting = true) {
+    if (!this.target) {
+      return;
+    }
+
+    this.callback(
+      [{ isIntersecting, target: this.target } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
+  }
+}
+
+function installIntersectionObserverStub() {
+  observerInstances = [];
+  vi.stubGlobal(
+    "IntersectionObserver",
+    IntersectionObserverStub as unknown as typeof IntersectionObserver,
+  );
 }
 
 async function renderArchivedSessionList(props?: Partial<ComponentProps<typeof ArchivedSessionList>>) {
@@ -52,6 +79,18 @@ async function renderArchivedSessionList(props?: Partial<ComponentProps<typeof A
   });
 
   return { onSearch, onLoadMore, onSelect };
+}
+
+async function updateSearchInput(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+
+  valueSetter?.call(input, value);
+  await act(async () => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 beforeEach(() => {
@@ -85,10 +124,7 @@ describe("ArchivedSessionList", () => {
       throw new Error("archive search input missing");
     }
 
-    await act(async () => {
-      input.value = "planner";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await updateSearchInput(input, "planner");
 
     expect(container.querySelector(".archive-list__sentinel")).toBeNull();
     expect(onSearch).not.toHaveBeenCalled();
@@ -118,5 +154,46 @@ describe("ArchivedSessionList", () => {
 
     expect(input?.value).toBe("planner");
     expect(container.querySelector(".archive-list__sentinel")).not.toBeNull();
+  });
+
+  it("load-more sentinel이 교차되면 다음 페이지를 요청한다", async () => {
+    const { onLoadMore } = await renderArchivedSessionList();
+
+    expect(observerInstances).toHaveLength(1);
+
+    await act(async () => {
+      observerInstances[0]?.trigger(true);
+    });
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("workspace 그룹을 펼치고 archived session을 선택할 수 있다", async () => {
+    const { onSelect } = await renderArchivedSessionList({ hasMore: false, total: 1 });
+    const workspaceButton = container.querySelector<HTMLButtonElement>(
+      ".archive-list__workspace .run-list__workspace-row",
+    );
+
+    expect(workspaceButton).not.toBeNull();
+    if (!workspaceButton) {
+      throw new Error("archive workspace button missing");
+    }
+
+    await act(async () => {
+      workspaceButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const sessionButton = container.querySelector<HTMLButtonElement>(".archive-list__workspace .run-row");
+    expect(sessionButton?.textContent).toContain("Check archive search behavior");
+
+    if (!sessionButton) {
+      throw new Error("archive session button missing");
+    }
+
+    await act(async () => {
+      sessionButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSelect).toHaveBeenCalledWith(baseItem.filePath);
   });
 });
