@@ -1,6 +1,4 @@
-import type { RunStatus } from "../../entities/run";
-
-const STATUS_LABELS: Record<RunStatus, string> = {
+const STATUS_LABELS = {
   queued: "Queued",
   running: "Running",
   waiting: "Waiting",
@@ -11,9 +9,11 @@ const STATUS_LABELS: Record<RunStatus, string> = {
   cancelled: "Cancelled",
   stale: "Stale",
   disconnected: "Disconnected",
-};
+} as const;
 
-const STATUS_SHAPES: Record<RunStatus, string> = {
+export type StatusChipStatus = keyof typeof STATUS_LABELS;
+
+const STATUS_SHAPES: Record<StatusChipStatus, string> = {
   queued: "status-chip__glyph--queued",
   running: "status-chip__glyph--running",
   waiting: "status-chip__glyph--waiting",
@@ -27,7 +27,7 @@ const STATUS_SHAPES: Record<RunStatus, string> = {
 };
 
 interface StatusChipProps {
-  status: RunStatus;
+  status: StatusChipStatus;
   subtle?: boolean;
 }
 

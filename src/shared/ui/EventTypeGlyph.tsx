@@ -19,9 +19,8 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
-import type { EventType } from "../../entities/run";
 
-const ICON_MAP: Record<EventType, LucideIcon> = {
+const ICON_MAP = {
   "run.started": Play,
   "run.finished": CheckCircle,
   "run.failed": XCircle,
@@ -40,9 +39,11 @@ const ICON_MAP: Record<EventType, LucideIcon> = {
   "user.prompt": MessageSquare,
   "turn.started": CornerDownRight,
   "turn.finished": CornerUpRight,
-};
+} satisfies Record<string, LucideIcon>;
 
-const COLOR_CLASSES: Record<EventType, string> = {
+export type EventTypeGlyphType = keyof typeof ICON_MAP;
+
+const COLOR_CLASSES: Record<EventTypeGlyphType, string> = {
   "run.started": "event-icon--run-started",
   "run.finished": "event-icon--run-finished",
   "run.failed": "event-icon--run-failed",
@@ -68,7 +69,7 @@ export function EventTypeGlyph({
   size = 14,
   className,
 }: {
-  eventType: EventType;
+  eventType: EventTypeGlyphType;
   size?: number;
   className?: string;
 }) {
