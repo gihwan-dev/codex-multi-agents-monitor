@@ -3,9 +3,9 @@
  * Usage: node scripts/generate-social-preview.mjs
  * Requires: @playwright/test (already in devDependencies)
  */
-import { chromium } from "@playwright/test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "@playwright/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(__dirname, "..", "docs", "social-preview.png");
