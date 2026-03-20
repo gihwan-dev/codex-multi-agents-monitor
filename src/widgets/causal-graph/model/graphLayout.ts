@@ -1,8 +1,6 @@
 import type { GraphSceneModel } from "../../../entities/run";
 import {
-  assignPortSlots,
   buildEdgeRouteLayouts,
-  buildOrthogonalRoute,
   choosePortPair,
   computeVisibleEdgeRoutes,
 } from "./graphEdgeRouting";
@@ -14,7 +12,7 @@ import type {
   VisibleRowRange,
 } from "./graphLayoutTypes";
 
-export { assignPortSlots, buildOrthogonalRoute, choosePortPair, computeVisibleEdgeRoutes };
+export { choosePortPair, computeVisibleEdgeRoutes };
 export type {
   EdgeRouteLayout,
   EventLayout,

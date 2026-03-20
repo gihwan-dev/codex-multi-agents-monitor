@@ -2,11 +2,19 @@ import type { GraphSceneEdgeBundle } from "../../../entities/run";
 import type {
   EdgeRouteLayout,
   EventLayout,
-  Point,
   PortSide,
   Rect,
   RoutePort,
 } from "./graphLayoutTypes";
+import {
+  buildRoutePort,
+  getSortAxis,
+  movePoint,
+  rectCenterX,
+  rectCenterY,
+  simplifyOrthogonalPoints,
+  toSvgPath,
+} from "./graphRouteGeometry";
 
 const PORT_SLOT_SPACING = 12;
 const PORT_EDGE_PADDING = 12;
@@ -47,7 +55,7 @@ export function choosePortPair(
     : { orientation: "vertical", sourceSide: "top", targetSide: "bottom" };
 }
 
-export function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
+function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
   const assignments = new Map<string, number>();
   const groups = new Map<string, Array<{ routeKey: string; axis: number }>>();
 
@@ -77,7 +85,7 @@ export function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
   return assignments;
 }
 
-export function buildOrthogonalRoute(
+function buildOrthogonalRoute(
   sourcePort: RoutePort,
   targetPort: RoutePort,
   trunkNudge: number,
@@ -140,11 +148,13 @@ export function buildEdgeRouteLayouts(
       route.source,
       route.sourceSide,
       portSlots.get(`${route.bundle.id}:source`) ?? 0,
+      PORT_EDGE_PADDING,
     );
     const targetPort = buildRoutePort(
       route.target,
       route.targetSide,
       portSlots.get(`${route.bundle.id}:target`) ?? 0,
+      PORT_EDGE_PADDING,
     );
 
     return {
@@ -220,96 +230,4 @@ function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
   });
 
   return nudges;
-}
-
-function buildRoutePort(layout: EventLayout, side: PortSide, offset: number): RoutePort {
-  const centerX = rectCenterX(layout.cardRect);
-  const centerY = rectCenterY(layout.cardRect);
-
-  if (side === "top" || side === "bottom") {
-    return {
-      eventId: layout.eventId,
-      side,
-      x: clamp(
-        centerX + offset,
-        layout.cardRect.x + PORT_EDGE_PADDING,
-        layout.cardRect.x + layout.cardRect.width - PORT_EDGE_PADDING,
-      ),
-      y: side === "top" ? layout.cardRect.y : layout.cardRect.y + layout.cardRect.height,
-      offset,
-    };
-  }
-
-  return {
-    eventId: layout.eventId,
-    side,
-    x: side === "left" ? layout.cardRect.x : layout.cardRect.x + layout.cardRect.width,
-    y: clamp(
-      centerY + offset,
-      layout.cardRect.y + PORT_EDGE_PADDING,
-      layout.cardRect.y + layout.cardRect.height - PORT_EDGE_PADDING,
-    ),
-    offset,
-  };
-}
-
-function getSortAxis(rect: Rect, side: PortSide): number {
-  return side === "top" || side === "bottom" ? rectCenterX(rect) : rectCenterY(rect);
-}
-
-function movePoint(point: Point, side: PortSide, distance: number): Point {
-  switch (side) {
-    case "top":
-      return { x: point.x, y: point.y - distance };
-    case "right":
-      return { x: point.x + distance, y: point.y };
-    case "bottom":
-      return { x: point.x, y: point.y + distance };
-    case "left":
-      return { x: point.x - distance, y: point.y };
-  }
-}
-
-function simplifyOrthogonalPoints(points: Point[]): Point[] {
-  const result: Point[] = [];
-
-  points.forEach((point) => {
-    const previous = result[result.length - 1];
-    if (previous && previous.x === point.x && previous.y === point.y) {
-      return;
-    }
-
-    result.push(point);
-    if (result.length < 3) {
-      return;
-    }
-
-    const a = result[result.length - 3];
-    const b = result[result.length - 2];
-    const c = result[result.length - 1];
-
-    if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) {
-      result.splice(result.length - 2, 1);
-    }
-  });
-
-  return result;
-}
-
-function toSvgPath(points: Point[]): string {
-  return points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-}
-
-function rectCenterX(rect: Rect) {
-  return rect.x + rect.width / 2;
-}
-
-function rectCenterY(rect: Rect) {
-  return rect.y + rect.height / 2;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
