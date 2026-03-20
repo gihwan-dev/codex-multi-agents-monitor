@@ -3,6 +3,7 @@ import {
   type LiveConnection,
   type LiveWatchFrame,
   type RunDataset,
+  type RunStatus,
 } from "../../../entities/run";
 
 interface LiveWatchSnapshot {
@@ -10,19 +11,27 @@ interface LiveWatchSnapshot {
   connection: Exclude<LiveConnection, "paused">;
 }
 
+const TERMINAL_RUN_STATUSES = new Set<RunStatus>(["done", "failed", "cancelled"]);
+
+function resolveLatestObservedTs(dataset: RunDataset, events: RunDataset["events"]) {
+  return events.reduce(
+    (latestTs, event) => Math.max(latestTs, event.endTs ?? event.startTs),
+    dataset.run.endTs ?? dataset.run.startTs,
+  );
+}
+
 export function applyLiveFrame(dataset: RunDataset, frame: LiveWatchFrame): LiveWatchSnapshot {
   const events = [...dataset.events, ...frame.events];
   const runStatus = frame.status ?? dataset.run.status;
-  const lastEvent = frame.events.length ? frame.events[frame.events.length - 1] : null;
+  const latestObservedTs = resolveLatestObservedTs(dataset, events);
   const nextDataset: RunDataset = {
     ...dataset,
     events,
     run: {
       ...dataset.run,
       status: runStatus,
-      endTs: frame.status === "done" ? lastEvent?.endTs ?? dataset.run.endTs : null,
-      durationMs:
-        (lastEvent?.endTs ?? dataset.run.endTs ?? dataset.run.startTs) - dataset.run.startTs,
+      endTs: TERMINAL_RUN_STATUSES.has(runStatus) ? latestObservedTs : dataset.run.endTs,
+      durationMs: Math.max(dataset.run.durationMs, latestObservedTs - dataset.run.startTs, 0),
     },
   };
 
