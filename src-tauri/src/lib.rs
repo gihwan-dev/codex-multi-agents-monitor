@@ -118,10 +118,7 @@ fn load_recent_session_snapshots() -> Vec<SessionLogSnapshot> {
 fn resolve_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity> {
     let git_metadata_path = repo_path.join(".git");
     if git_metadata_path.is_dir() {
-        return Ok(build_workspace_identity(
-            normalize_path(repo_path)?,
-            false,
-        ));
+        return Ok(build_workspace_identity(normalize_path(repo_path)?, false));
     }
 
     if git_metadata_path.is_file() {
@@ -374,12 +371,14 @@ fn read_session_snapshot(
         return Ok(None);
     }
 
-    let session_meta =
-        serde_json::from_str::<Value>(&first_line).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let payload = session_meta
         .get("payload")
         .and_then(Value::as_object)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing"))?;
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing")
+        })?;
 
     if payload.get("source").and_then(Value::as_str).is_none() {
         return Ok(None);
@@ -411,7 +410,8 @@ fn read_session_snapshot(
     let mut prompt_assembly = Vec::new();
 
     // Extract base_instructions from session_meta
-    if let Some(bi_text) = payload.get("base_instructions")
+    if let Some(bi_text) = payload
+        .get("base_instructions")
         .and_then(|bi| bi.get("text"))
         .and_then(Value::as_str)
     {
@@ -498,18 +498,22 @@ fn resolve_session_workspace_identity(
     workspace_path: &Path,
     projects_root: &Path,
 ) -> io::Result<WorkspaceIdentity> {
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
     if let Ok(identity) = resolve_workspace_identity(workspace_path) {
-        if Path::new(&identity.origin_path).starts_with(projects_root) {
+        if Path::new(&identity.origin_path).starts_with(&normalized_projects_root) {
             return Ok(identity);
         }
     }
 
-    let inferred_origin = infer_projects_origin(workspace_path, projects_root).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "workspace does not resolve into Documents/Projects",
-        )
-    })?;
+    let inferred_origin = infer_projects_origin(workspace_path, &normalized_projects_root)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "workspace does not resolve into Documents/Projects",
+            )
+        })?;
 
     Ok(build_workspace_identity(
         inferred_origin.clone(),
@@ -519,22 +523,57 @@ fn resolve_session_workspace_identity(
 
 fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<PathBuf> {
     let normalized_workspace = normalize_path(workspace_path).ok()?;
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
+    if let Some(conductor_origin) =
+        infer_conductor_workspace_origin(&normalized_workspace, &normalized_projects_root)
+    {
+        return Some(conductor_origin);
+    }
+
     let workspace_file_name = normalized_workspace.file_name()?.to_str()?;
 
-    let candidate = if normalized_workspace.starts_with(projects_root) {
+    let candidate = if normalized_workspace.starts_with(&normalized_projects_root) {
         normalized_workspace
     } else {
-        projects_root.join(workspace_file_name)
+        normalized_projects_root.join(workspace_file_name)
     };
 
     let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
-    if normalized_candidate.starts_with(projects_root) {
+    if normalized_candidate.starts_with(&normalized_projects_root) {
         Some(normalized_candidate)
     } else {
         None
     }
 }
 
+fn infer_conductor_workspace_origin(
+    workspace_path: &Path,
+    projects_root: &Path,
+) -> Option<PathBuf> {
+    let repo_dir = workspace_path.parent()?;
+    let workspaces_dir = repo_dir.parent()?;
+    let conductor_dir = workspaces_dir.parent()?;
+
+    if workspaces_dir.file_name()?.to_str()? != "workspaces" {
+        return None;
+    }
+    if conductor_dir.file_name()?.to_str()? != "conductor" {
+        return None;
+    }
+
+    let repo_name = repo_dir.file_name()?.to_str()?;
+
+    let candidate = projects_root.join(repo_name);
+    let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
+
+    if normalized_candidate.starts_with(projects_root) {
+        Some(normalized_candidate)
+    } else {
+        None
+    }
+}
 
 fn classify_developer_content(text: &str) -> (String, String) {
     if text.starts_with("<permissions") {
@@ -560,13 +599,20 @@ fn classify_user_context(text: &str) -> (String, String) {
         ("environment".into(), "Environment Context".into())
     } else if trimmed.starts_with("Automation:") {
         ("automation".into(), "Automation Envelope".into())
-    } else if trimmed.get(..26).map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN")).unwrap_or(false) {
+    } else if trimmed
+        .get(..26)
+        .map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN"))
+        .unwrap_or(false)
+    {
         ("delegated".into(), "Delegated Plan".into())
     } else if trimmed.starts_with("<skill>") {
         let name = extract_skill_name(trimmed);
         ("skill".into(), format!("Skill: {name}"))
     } else if trimmed.starts_with("<subagent_notification>") {
-        ("subagent-notification".into(), "Subagent Notification".into())
+        (
+            "subagent-notification".into(),
+            "Subagent Notification".into(),
+        )
     } else if trimmed.starts_with("<turn_aborted>") {
         ("system".into(), "Turn Aborted".into())
     } else {
@@ -609,7 +655,10 @@ fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemblyLayer>) {
         };
 
         // Skip per-turn data: user prompts, skills, subagent notifications
-        if matches!(layer_type.as_str(), "user" | "skill" | "subagent-notification") {
+        if matches!(
+            layer_type.as_str(),
+            "user" | "skill" | "subagent-notification"
+        ) {
             continue;
         }
 
@@ -679,7 +728,10 @@ fn extract_message_text(content: &Value) -> Option<String> {
         match item {
             Value::String(value) if !value.trim().is_empty() => parts.push(value.trim().to_owned()),
             Value::Object(value) => {
-                let content_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
+                let content_type = value
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
 
                 if content_type == "input_image" {
                     parts.push("[Image]".to_owned());
@@ -760,13 +812,11 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                     .get("arguments")
                     .and_then(Value::as_str)
                     .and_then(|args| {
-                        serde_json::from_str::<Value>(args)
-                            .ok()
-                            .and_then(|v| {
-                                v.get("cmd")
-                                    .and_then(Value::as_str)
-                                    .map(|c| truncate_utf8_safe(c, 500))
-                            })
+                        serde_json::from_str::<Value>(args).ok().and_then(|v| {
+                            v.get("cmd")
+                                .and_then(Value::as_str)
+                                .map(|c| truncate_utf8_safe(c, 500))
+                        })
                     })
                     .or_else(|| {
                         payload
@@ -774,8 +824,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                             .and_then(Value::as_str)
                             .map(|args| truncate_utf8_safe(args, 500))
                     }),
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => payload
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
+                | "send_input" => payload
                     .get("arguments")
                     .and_then(Value::as_str)
                     .map(|args| truncate_utf8_safe(args, 2000)),
@@ -853,8 +903,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                         }
                     })
                 }
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => payload
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
+                | "send_input" => payload
                     .get("arguments")
                     .and_then(Value::as_str)
                     .or_else(|| payload.get("input").and_then(Value::as_str))
@@ -1046,9 +1096,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
         }
         "token_count" => {
             let info = payload.get("info").and_then(Value::as_object)?;
-            let last_usage = info
-                .get("last_token_usage")
-                .and_then(Value::as_object)?;
+            let last_usage = info.get("last_token_usage").and_then(Value::as_object)?;
             let input = last_usage
                 .get("input_tokens")
                 .and_then(Value::as_u64)
@@ -1310,12 +1358,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
         .unwrap_or_default()
         .to_owned();
-    let display_name = Path::new(&workspace_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|n| !n.is_empty())
-        .unwrap_or("unknown")
-        .to_owned();
+    let (origin_path, display_name) = resolve_archived_workspace_identity(&workspace_path);
 
     let mut model: Option<String> = None;
     let mut first_user_message: Option<String> = None;
@@ -1332,9 +1375,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
             Err(_) => continue,
         };
 
-        if model.is_none()
-            && entry.get("type").and_then(Value::as_str) == Some("turn_context")
-        {
+        if model.is_none() && entry.get("type").and_then(Value::as_str) == Some("turn_context") {
             model = entry
                 .get("payload")
                 .and_then(|p| p.get("model"))
@@ -1365,7 +1406,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
     Ok(Some(ArchivedSessionIndex {
         session_id,
         workspace_path: workspace_path.clone(),
-        origin_path: workspace_path,
+        origin_path,
         display_name,
         started_at: started_at.clone(),
         updated_at: started_at,
@@ -1421,7 +1462,8 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
     let mut prompt_assembly = Vec::new();
 
     // Extract base_instructions from session_meta
-    if let Some(bi_text) = payload.get("base_instructions")
+    if let Some(bi_text) = payload
+        .get("base_instructions")
         .and_then(|bi| bi.get("text"))
         .and_then(Value::as_str)
     {
@@ -1618,6 +1660,25 @@ mod tests {
     }
 
     #[test]
+    fn infers_conductor_workspace_origin_from_repo_segment() {
+        let temp_dir = TempDir::new("conductor-origin");
+        let projects_root = temp_dir.path.join("Documents/Projects");
+        let origin_repo_path = projects_root.join("React-Dashboard");
+        let workspace_path = temp_dir
+            .path
+            .join("conductor/workspaces/React-Dashboard/kyiv");
+
+        fs::create_dir_all(origin_repo_path.join(".git")).expect("origin git dir should exist");
+
+        let inferred_origin = infer_projects_origin(&workspace_path, &projects_root)
+            .expect("conductor workspace should resolve to origin repo");
+        let expected_origin_path =
+            normalize_path(&origin_repo_path).expect("origin path should normalize");
+
+        assert_eq!(inferred_origin, expected_origin_path);
+    }
+
+    #[test]
     fn rejects_linked_worktree_without_commondir() {
         let temp_dir = TempDir::new("missing-commondir");
         let repo_path = temp_dir.path.join("broken-worktree");
@@ -1625,10 +1686,14 @@ mod tests {
 
         fs::create_dir_all(&repo_path).expect("repo dir should exist");
         fs::create_dir_all(&git_dir).expect("git dir should exist");
-        fs::write(repo_path.join(".git"), format!("gitdir: {}\n", git_dir.display()))
-            .expect("gitdir file should be written");
+        fs::write(
+            repo_path.join(".git"),
+            format!("gitdir: {}\n", git_dir.display()),
+        )
+        .expect("gitdir file should be written");
 
-        let error = resolve_workspace_identity(&repo_path).expect_err("missing commondir should fail");
+        let error =
+            resolve_workspace_identity(&repo_path).expect_err("missing commondir should fail");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 
@@ -1691,7 +1756,11 @@ mod tests {
         assert_eq!(snapshot.model, Some("gpt-5.3-codex-spark".to_owned()));
 
         // Only subagent's own entries: task_started, user message, task_complete
-        assert_eq!(snapshot.entries.len(), 3, "fork context entries should be stripped");
+        assert_eq!(
+            snapshot.entries.len(),
+            3,
+            "fork context entries should be stripped"
+        );
         assert_eq!(snapshot.entries[0].entry_type, "task_started");
         assert_eq!(snapshot.entries[1].entry_type, "message");
         assert_eq!(snapshot.entries[1].role.as_deref(), Some("user"));
@@ -1759,7 +1828,11 @@ mod tests {
 
         assert_eq!(snapshot.agent_nickname, "Hume");
         // Only subagent entries: task_started, assistant message, task_complete
-        assert_eq!(snapshot.entries.len(), 3, "fork context with single incomplete turn should be stripped");
+        assert_eq!(
+            snapshot.entries.len(),
+            3,
+            "fork context with single incomplete turn should be stripped"
+        );
         assert_eq!(snapshot.entries[0].entry_type, "task_started");
         assert_eq!(snapshot.entries[1].entry_type, "message");
         assert_eq!(snapshot.entries[1].role.as_deref(), Some("assistant"));
