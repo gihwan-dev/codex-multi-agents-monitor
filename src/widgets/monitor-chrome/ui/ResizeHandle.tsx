@@ -18,7 +18,7 @@ export function ResizeHandle({
       type="button"
       aria-label={label}
       title={label}
-      className="resize-handle min-h-full w-[2px] cursor-col-resize border-0 bg-white/8 p-0 transition-colors hover:bg-[var(--color-active)]/40 focus-visible:bg-[var(--color-active)]/55 max-[720px]:hidden"
+      className="resize-handle relative min-h-full w-[var(--resize-handle-hit-width)] cursor-ew-resize border-0 bg-transparent p-0 touch-none select-none max-[720px]:hidden after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:bg-white/8 after:transition-colors after:content-[''] hover:after:bg-[var(--color-active)]/40 focus-visible:after:bg-[var(--color-active)]/55"
       data-slot="resize-handle"
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {
@@ -29,6 +29,8 @@ export function ResizeHandle({
         }
       }}
       onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
         const startX = event.clientX;
         const startWidth = position;
         const handleMove = (moveEvent: PointerEvent) => {
@@ -38,9 +40,11 @@ export function ResizeHandle({
         const handleUp = () => {
           window.removeEventListener("pointermove", handleMove);
           window.removeEventListener("pointerup", handleUp);
+          window.removeEventListener("pointercancel", handleUp);
         };
         window.addEventListener("pointermove", handleMove);
         window.addEventListener("pointerup", handleUp);
+        window.addEventListener("pointercancel", handleUp);
       }}
     />
   );

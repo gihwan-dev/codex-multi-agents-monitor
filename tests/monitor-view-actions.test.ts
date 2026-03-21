@@ -147,7 +147,7 @@ describe("createMonitorViewActions", () => {
     });
   });
 
-  it("inspector resize는 최소 폭보다 작게 줄어들지 않는다", () => {
+  it("inspector resize는 handle만 남길 정도까지 줄어들 수 있다", () => {
     const state = createMonitorInitialState();
     const activeDataset = requireLiveDataset();
     const dispatch = vi.fn();
@@ -158,11 +158,11 @@ describe("createMonitorViewActions", () => {
       activeFollowLive: false,
     });
 
-    actions.resizeInspector(120);
+    actions.resizeInspector(-20);
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "set-inspector-width",
-      width: 256,
+      width: 0,
     });
   });
 });

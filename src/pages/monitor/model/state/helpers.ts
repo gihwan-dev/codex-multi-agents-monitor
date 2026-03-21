@@ -11,7 +11,7 @@ export const DEFAULT_ACTIVE_RUN_ID = "trace-fix-002";
 export const DEFAULT_RAIL_WIDTH = 236;
 export const DEFAULT_INSPECTOR_WIDTH = 288;
 export const MIN_RAIL_WIDTH = 220;
-export const MIN_INSPECTOR_WIDTH = 256;
+export const MIN_INSPECTOR_WIDTH = 0;
 export const ARCHIVE_PAGE_SIZE = 50;
 export const LIVE_FIXTURE_TRACE_ID = "trace-fix-006";
 

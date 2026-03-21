@@ -106,7 +106,11 @@ export function MonitorPage() {
       />
 
       <div className={`workspace ${isCompactViewport ? "workspace--stacked" : ""}`.trim()}>
-        <aside className="workspace__rail" aria-label="Run list" style={{ width: state.railWidth }}>
+        <aside
+          className="workspace__rail"
+          aria-label="Run list"
+          style={{ width: `calc(${state.railWidth}px + var(--resize-handle-hit-width))` }}
+        >
           <div className="workspace__rail-pane">
             <WorkspaceRunTree
               datasets={state.datasets}
@@ -179,7 +183,11 @@ export function MonitorPage() {
         </main>
 
         {!isCompactViewport ? (
-          <aside className="workspace__inspector" aria-label="Inspector" style={{ width: state.inspectorWidth }}>
+          <aside
+            className="workspace__inspector"
+            aria-label="Inspector"
+            style={{ width: `calc(${state.inspectorWidth}px + var(--resize-handle-hit-width))` }}
+          >
             <ResizeHandle
               label="Resize inspector"
               reverse

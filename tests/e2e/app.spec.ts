@@ -171,8 +171,7 @@ test("rail and inspector resize beyond the previous width caps", async ({ page }
   await expect
     .poll(() =>
       page.getByRole("complementary", { name: "Run list" }).evaluate((element) => {
-        const width = (element as HTMLElement).style.width;
-        return Number.parseFloat(width);
+        return Number.parseFloat(window.getComputedStyle(element).width);
       }),
     )
     .toBeGreaterThan(340);
@@ -186,8 +185,7 @@ test("rail and inspector resize beyond the previous width caps", async ({ page }
   await expect
     .poll(() =>
       page.getByRole("complementary", { name: "Inspector" }).evaluate((element) => {
-        const width = (element as HTMLElement).style.width;
-        return Number.parseFloat(width);
+        return Number.parseFloat(window.getComputedStyle(element).width);
       }),
     )
     .toBeGreaterThan(380);
