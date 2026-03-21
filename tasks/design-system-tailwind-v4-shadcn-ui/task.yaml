@@ -27,6 +27,7 @@ required_docs:
   - UX_BEHAVIOR_ACCESSIBILITY.md
   - DESIGN_REFERENCES/
   - TECH_SPEC.md
+  - IMPLEMENTATION_CONTRACT.md
   - MIGRATION.md
   - VERIFICATION.md
   - ROLLBACK.md
@@ -37,6 +38,7 @@ source_of_truth:
   ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
   design_references: DESIGN_REFERENCES/manifest.json
   architecture: TECH_SPEC.md
+  implementation: IMPLEMENTATION_CONTRACT.md
   migration: MIGRATION.md
   execution: EXECUTION_PLAN.md
   verification: VERIFICATION.md
@@ -54,4 +56,4 @@ ids:
 delivery_strategy: ui-first
 execution_topology: keep-local
 validation_gate: blocking
-current_phase: design
+current_phase: implementation

@@ -64,14 +64,14 @@ GitHub issue [#4](https://github.com/gihwan-dev/codex-multi-agents-monitor/issue
 ## Validation gate status
 
 - gate: blocking
-- state: design packet complete, implementation bootstrap not yet cleared
-- handoff note: post-design bootstrap에서 `IMPLEMENTATION_CONTRACT.md`와 `source_of_truth.implementation`가 추가될 수 있다.
-- blocking concerns:
-  - `../../docs/ai/ENGINEERING_RULES.md`와 기존 task supplement가 Tailwind/shadcn 도입을 금지하고 있으므로 `SLICE-1` 첫 diff에서 repo baseline과 새 implementation supplement를 함께 갱신해야 한다.
+- state: bootstrap cleared, ready for `SLICE-1`
+- implementation contract: `IMPLEMENTATION_CONTRACT.md`가 task implementation SSOT로 추가됐다.
+- active concern:
   - GitHub issue `#4`는 theme-ready architecture까지만, `#5`는 full theme UX/productization을 담당하는 것으로 문서와 execution slice를 함께 유지해야 한다.
 
 ## Implementation slices
 
+- `BOOTSTRAP`: repo baseline, implementation supplement, execution gate를 구현 상태로 전환
 - `SLICE-1`: Tailwind v4 foundation, token bridge, Storybook visual foundation
 - `SLICE-2`: shadcn primitives + monitor composites story coverage
 - `SLICE-3`: top chrome and shared control surface adoption

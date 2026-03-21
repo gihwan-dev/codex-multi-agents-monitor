@@ -31,12 +31,10 @@
 
 ## Blocking issues
 
-- repo baseline `../../docs/ai/ENGINEERING_RULES.md`는 현재 Tailwind와 heavyweight UI kit 도입을 금지한다. `SLICE-1` 전에 same-diff update가 필요하다.
-- 기존 task supplement `tasks/codex-multi-agent-monitor-v0-1/IMPLEMENTATION_CONTRACT.md`도 repo-local primitive baseline을 전제로 하므로, 새 implementation supplement 없이는 execution이 안전하지 않다.
-- theme scope는 확정됐다. issue `#4`는 `theme-ready architecture + Storybook preview`, issue `#5`는 full theme UX/productization을 담당한다. 구현 중 이 경계를 깨면 replan 해야 한다.
-- post-design bootstrap에서 `IMPLEMENTATION_CONTRACT.md`와 `source_of_truth.implementation`가 추가될 예정이므로, implementation은 그 supplement가 생기기 전까지 시작하지 않는다.
+- Bootstrap cleared: repo baseline `../../docs/ai/ENGINEERING_RULES.md`와 task supplement `IMPLEMENTATION_CONTRACT.md`가 같은 styling contract를 공유한다.
+- Theme scope는 확정됐다. issue `#4`는 `theme-ready architecture + Storybook preview`, issue `#5`는 full theme UX/productization을 담당한다. 구현 중 이 경계를 깨면 replan 해야 한다.
 
 ## Proceed verdict
 
-- verdict: blocking
-- reason: UX packet과 migration plan은 준비됐지만, implementation bootstrap이 완료되기 전에는 execution을 시작하면 안 된다.
+- verdict: advisory
+- reason: UX packet, migration plan, repo baseline, task supplement가 정렬됐고 다음 실행 대상은 `SLICE-1`이다.

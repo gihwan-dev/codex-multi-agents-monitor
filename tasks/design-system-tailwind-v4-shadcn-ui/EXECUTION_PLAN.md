@@ -2,6 +2,17 @@
 
 ## Execution slices
 
+### BOOTSTRAP - Implementation gate and baseline unlock
+
+- Change boundary: repo baseline rules, task implementation supplement, execution gate sync
+- Expected file count: 3 or fewer repo-tracked files per pass
+- Validation owner: implementer
+- Focused validation plan: bootstrap doc sync review plus one low-cost check
+- Split decision: keep repo baseline update, supplement creation, and bundle metadata sync in separate small passes if needed
+- Target-file append forbidden trigger: bootstrap starts carrying Tailwind runtime code or Storybook surface code
+- Stop / replan conditions:
+  - repo baseline and task supplement disagree on the new styling stack
+  - blocking issues remain unresolved after the doc sync
 ### SLICE-1 - Tailwind v4 foundation and visual bootstrap
 
 - Change boundary: Tailwind v4/Vite setup, root CSS entry, semantic token bridge, Storybook preview foundation
@@ -76,6 +87,7 @@
 
 ## Verification
 
+- `BOOTSTRAP` runs task-doc sync plus `pnpm lint` before the slice closes.
 - `SLICE-1` and `SLICE-2` forbid real app or integration work. Visual and mock-state verification only.
 - `SLICE-3` to `SLICE-6` run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm storybook:build`, and `pnpm build` as the closeout baseline unless an earlier stop/replan trigger fires.
 - Dense parallel fixture and import drawer fixture are mandatory manual checks for `SLICE-4` and `SLICE-5`.
@@ -84,6 +96,7 @@
 ## Stop / Replan conditions
 
 - repo baseline docs and implementation supplement disagree on the new styling stack
+- bootstrap gate is not cleared
 - Storybook stories lag behind real-surface migration
 - dark/light token architecture scope expands from `theme-ready` to full productized theme UX without an explicit scope update
 - graph readability or keyboard/focus parity regresses on migrated fixtures
