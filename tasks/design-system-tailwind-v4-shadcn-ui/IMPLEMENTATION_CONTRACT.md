@@ -27,6 +27,7 @@
 - shadcn/ui is an open-code source, not a kit runtime. Initialize once, then add only the components needed by the current slice. Do not use `add --all --overwrite`.
 - `main.tsx` and `.storybook/preview.ts` must import the same root styling entry so app and Storybook share the exact Tailwind/token baseline.
 - The FE boundary contract remains `app / pages / widgets / features / entities / shared`. Tailwind adoption does not change import direction or public API rules.
+- DOM selector policy is a task-level contract: tests prefer `role/name/label/text`, and `data-slot` or domain `data-*` metadata are reserved for graph/canvas/tree-style structural surfaces. `className` is not a supported testing contract.
 
 # Allowed Core Libraries
 

@@ -18,7 +18,8 @@ export function ResizeHandle({
       type="button"
       aria-label={label}
       title={label}
-      className="resize-handle"
+      className="resize-handle min-h-full w-[2px] cursor-col-resize border-0 bg-white/8 p-0 transition-colors hover:bg-[var(--color-active)]/40 focus-visible:bg-[var(--color-active)]/55 max-[720px]:hidden"
+      data-slot="resize-handle"
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {
           onKeyboard(position + (reverse ? 16 : -16));

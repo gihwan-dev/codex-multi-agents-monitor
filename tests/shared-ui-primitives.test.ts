@@ -32,16 +32,17 @@ describe("shared ui primitives", () => {
       root.render(createElement(StatusChip, { status: "blocked", subtle: true }));
     });
 
-    const chip = container.querySelector<HTMLElement>(".status-chip");
-    const glyph = container.querySelector<HTMLElement>(".status-chip__glyph");
+    const chip = container.querySelector<HTMLElement>('[data-slot="monitor-status-chip"]');
+    const glyph = container.querySelector<HTMLElement>('[data-slot="monitor-status-glyph"]');
 
     expect(chip).not.toBeNull();
     expect(chip?.textContent).toContain("Blocked");
-    expect(chip?.classList.contains("status-chip--subtle")).toBe(true);
-    expect(glyph?.classList.contains("status-chip__glyph--blocked")).toBe(true);
+    expect(chip?.dataset.subtle).toBe("true");
+    expect(chip?.dataset.status).toBe("blocked");
+    expect(glyph?.dataset.status).toBe("blocked");
   });
 
-  it("EventTypeGlyph는 이벤트 타입에 맞는 아이콘 클래스를 렌더링한다", async () => {
+  it("EventTypeGlyph는 이벤트 타입에 맞는 semantic metadata를 렌더링한다", async () => {
     await act(async () => {
       root.render(
         createElement(EventTypeGlyph, {
@@ -52,11 +53,11 @@ describe("shared ui primitives", () => {
       );
     });
 
-    const icon = container.querySelector<SVGElement>("svg");
+    const icon = container.querySelector<SVGElement>('[data-slot="event-type-glyph"]');
 
     expect(icon).not.toBeNull();
     expect(icon?.getAttribute("width")).toBe("18");
-    expect(icon?.getAttribute("class")).toContain("event-icon--tool-finished");
+    expect(icon?.dataset.eventType).toBe("tool.finished");
     expect(icon?.getAttribute("class")).toContain("extra");
   });
 });

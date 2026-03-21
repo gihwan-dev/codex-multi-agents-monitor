@@ -1,9 +1,17 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { DrawerTab } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../shared/ui/primitives";
+import {
   CausalGraphView,
-  GapDetailSection,
 } from "../../../widgets/causal-graph";
 import { CausalInspectorPane } from "../../../widgets/causal-inspector";
 import {
@@ -38,9 +46,10 @@ export function MonitorPage() {
   } = useMonitorPageState();
   const searchRef = useRef<HTMLInputElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
+  const shortcutTriggerRef = useRef<HTMLElement | null>(null);
+  const previousShortcutOpenRef = useRef(state.shortcutHelpOpen);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
-  const toggledGapIds = state.collapsedGapIds[activeDataset.run.traceId] ?? [];
 
   useSearchFocusShortcut(searchRef);
 
@@ -56,6 +65,16 @@ export function MonitorPage() {
       drawerTriggerRef.current?.focus();
     });
   };
+  const toggleShortcuts = (target?: HTMLElement | null) => {
+    if (!state.shortcutHelpOpen) {
+      shortcutTriggerRef.current =
+        target ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+      actions.toggleShortcuts();
+      return;
+    }
+
+    actions.toggleShortcuts();
+  };
   const drawerState = {
     drawerOpen: state.drawerOpen,
     drawerTab: state.drawerTab,
@@ -64,6 +83,13 @@ export function MonitorPage() {
     importText: state.importText,
     exportText: state.exportText,
   };
+
+  useEffect(() => {
+    if (previousShortcutOpenRef.current && !state.shortcutHelpOpen) {
+      shortcutTriggerRef.current?.focus();
+    }
+    previousShortcutOpenRef.current = state.shortcutHelpOpen;
+  }, [state.shortcutHelpOpen]);
 
   return (
     <div className="monitor-shell">
@@ -76,7 +102,7 @@ export function MonitorPage() {
           actions.exportDataset(false);
         }}
         onToggleFollowLive={actions.toggleFollowLive}
-        onToggleShortcuts={actions.toggleShortcuts}
+        onToggleShortcuts={toggleShortcuts}
       />
 
       <div className={`workspace ${isCompactViewport ? "workspace--stacked" : ""}`.trim()}>
@@ -126,16 +152,6 @@ export function MonitorPage() {
             followLive={activeFollowLive}
             liveMode={activeDataset.run.liveMode}
             onPauseFollowLive={actions.pauseFollowLive}
-            toggledGapIds={toggledGapIds}
-            onToggleGap={actions.toggleGap}
-          />
-
-          <GapDetailSection
-            rows={graphScene.rows}
-            toggledGapIds={toggledGapIds}
-            events={activeDataset.events}
-            onSelect={actions.selectItem}
-            onCollapseGap={actions.toggleGap}
           />
 
           {isCompactViewport ? (
@@ -182,10 +198,29 @@ export function MonitorPage() {
         ) : null}
       </div>
 
-      {state.shortcutHelpOpen ? (
-        <dialog open aria-modal="true" aria-label="Keyboard shortcuts" className="shortcut-dialog">
-          <h2>Shortcut help</h2>
-          <ul>
+      <Dialog
+        open={state.shortcutHelpOpen}
+        onOpenChange={(open) => {
+          if (open !== state.shortcutHelpOpen) {
+            toggleShortcuts();
+          }
+        }}
+      >
+        <DialogContent
+          aria-label="Keyboard shortcuts"
+          className="max-w-[22rem] border-white/10 bg-[linear-gradient(180deg,rgba(20,24,33,0.98),rgba(17,21,30,0.98))] text-foreground"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            shortcutTriggerRef.current?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Shortcut help</DialogTitle>
+            <DialogDescription>
+              Keep the graph flow in view without leaving the keyboard.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="grid gap-2 pl-5 text-sm text-muted-foreground">
             <li>`/` search focus</li>
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
@@ -193,11 +228,13 @@ export function MonitorPage() {
             <li>`?` shortcuts help</li>
             <li>`Cmd/Ctrl + K` shortcuts help</li>
           </ul>
-          <button type="button" className="button" onClick={actions.toggleShortcuts}>
-            Close
-          </button>
-        </dialog>
-      ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => toggleShortcuts()}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

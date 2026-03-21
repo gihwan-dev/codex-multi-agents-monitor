@@ -19,6 +19,7 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
+import { cn } from "../../lib";
 
 const ICON_MAP = {
   "run.started": Play,
@@ -32,10 +33,10 @@ const ICON_MAP = {
   "llm.finished": Brain,
   "tool.started": Wrench,
   "tool.finished": SquareCheckBig,
-  "handoff": ArrowRightLeft,
-  "transfer": Forward,
-  "error": AlertTriangle,
-  "note": StickyNote,
+  handoff: ArrowRightLeft,
+  transfer: Forward,
+  error: AlertTriangle,
+  note: StickyNote,
   "user.prompt": MessageSquare,
   "turn.started": CornerDownRight,
   "turn.finished": CornerUpRight,
@@ -44,24 +45,24 @@ const ICON_MAP = {
 export type EventTypeGlyphType = keyof typeof ICON_MAP;
 
 const COLOR_CLASSES: Record<EventTypeGlyphType, string> = {
-  "run.started": "event-icon--run-started",
-  "run.finished": "event-icon--run-finished",
-  "run.failed": "event-icon--run-failed",
-  "run.cancelled": "event-icon--run-cancelled",
-  "agent.spawned": "event-icon--agent-spawned",
-  "agent.state_changed": "event-icon--agent-state-changed",
-  "agent.finished": "event-icon--agent-finished",
-  "llm.started": "event-icon--llm-started",
-  "llm.finished": "event-icon--llm-finished",
-  "tool.started": "event-icon--tool-started",
-  "tool.finished": "event-icon--tool-finished",
-  "handoff": "event-icon--handoff",
-  "transfer": "event-icon--transfer",
-  "error": "event-icon--error",
-  "note": "event-icon--note",
-  "user.prompt": "event-icon--user-prompt",
-  "turn.started": "event-icon--turn-started",
-  "turn.finished": "event-icon--turn-finished",
+  "run.started": "text-[var(--color-active)]",
+  "run.finished": "text-[var(--color-success)]",
+  "run.failed": "text-[var(--color-failed)]",
+  "run.cancelled": "text-[var(--color-text-tertiary)]",
+  "agent.spawned": "text-[var(--color-active)]",
+  "agent.state_changed": "text-[var(--color-handoff)]",
+  "agent.finished": "text-[var(--color-text-secondary)]",
+  "llm.started": "text-[var(--color-text-secondary)]",
+  "llm.finished": "text-[var(--color-text-secondary)]",
+  "tool.started": "text-[var(--color-transfer)]",
+  "tool.finished": "text-[var(--color-success)]",
+  handoff: "text-[var(--color-handoff)]",
+  transfer: "text-[var(--color-transfer)]",
+  error: "text-[var(--color-failed)]",
+  note: "text-[var(--color-text-tertiary)]",
+  "user.prompt": "text-[var(--color-active)]",
+  "turn.started": "text-[var(--color-text-tertiary)]",
+  "turn.finished": "text-[var(--color-text-tertiary)]",
 };
 
 export function EventTypeGlyph({
@@ -77,7 +78,9 @@ export function EventTypeGlyph({
   return (
     <Icon
       size={size}
-      className={[COLOR_CLASSES[eventType], className].filter(Boolean).join(" ")}
+      data-slot="event-type-glyph"
+      data-event-type={eventType}
+      className={cn(COLOR_CLASSES[eventType], className)}
       aria-hidden="true"
       strokeWidth={2}
     />

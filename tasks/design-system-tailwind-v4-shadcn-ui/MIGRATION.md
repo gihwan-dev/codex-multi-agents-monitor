@@ -74,3 +74,9 @@ Exit criteria:
 - redesigning graph semantics from scratch
 - introducing a new global state/store layer
 - bundling theme toggle productization from issue `#5` unless scope is explicitly merged later
+
+## Handoff to issue #5
+
+- theme token structure now supports `dark` and `light` previews through `data-theme`
+- Storybook and app share the same root styling entry and semantic token contract
+- the remaining product work is runtime theme selection UI, persistence, and system preference sync

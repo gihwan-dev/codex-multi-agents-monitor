@@ -4,9 +4,14 @@ import {
   type RunDataset,
 } from "../../../entities/run";
 import { formatCurrency, formatTokens } from "../../../shared/lib/format";
-import { Panel } from "../../../shared/ui";
+import { InspectorTabs, Panel } from "../../../shared/ui";
+import {
+  Button,
+  Checkbox,
+  ScrollArea,
+  Textarea,
+} from "../../../shared/ui/primitives";
 import { PromptAssemblyView } from "../../prompt-assembly";
-import "./monitor-drawer.css";
 
 interface MonitorDrawerState {
   drawerOpen: boolean;
@@ -41,102 +46,122 @@ export function MonitorDrawer({
   onCloseDrawer,
 }: MonitorDrawerProps) {
   if (!drawerState.drawerOpen) {
-    return <div className="drawer drawer--closed" aria-hidden="true" />;
+    return <div aria-hidden="true" />;
   }
+
+  const tabOptions = DRAWER_TABS.filter((tab) => rawTabAvailable || tab !== "raw").map(
+    (tab) => ({
+      value: tab,
+      label: tab,
+    }),
+  );
 
   return (
     <Panel
+      panelSlot="monitor-drawer"
       title="Bottom drawer"
-      className="drawer drawer--open"
+      className="absolute inset-0 z-10 max-h-full overflow-hidden rounded-none border-x-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
       actions={
-        <button
+        <Button
           type="button"
-          className="button button--ghost"
+          variant="outline"
+          size="sm"
+          className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
           aria-label="Close drawer"
           onClick={onCloseDrawer}
         >
           Close
-        </button>
+        </Button>
       }
     >
-      <div className="tabs">
-        {DRAWER_TABS.filter((tab) => rawTabAvailable || tab !== "raw").map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={`tabs__pill ${drawerState.drawerTab === tab ? "tabs__pill--active" : ""}`.trim()}
-            onClick={(event) => onSetDrawerTab(tab, event.currentTarget)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <InspectorTabs
+        value={drawerState.drawerTab}
+        options={tabOptions}
+        onValueChange={(value) => onSetDrawerTab(value as DrawerTab)}
+      />
+
       {drawerState.drawerTab === "artifacts" ? (
-        <div className="drawer__body">
-          {activeDataset.artifacts.length ? (
-            activeDataset.artifacts.map((item) => (
-              <article key={item.artifactId} className="artifact-card">
-                <strong>{item.title}</strong>
-                <p>{item.preview}</p>
-              </article>
-            ))
-          ) : (
-            <p className="drawer__empty">No artifacts yet.</p>
-          )}
-        </div>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="grid gap-3 pr-3">
+            {activeDataset.artifacts.length ? (
+              activeDataset.artifacts.map((item) => (
+                <article
+                  key={item.artifactId}
+                  className="grid gap-2 rounded-[12px] border border-white/8 bg-white/[0.025] px-3 py-3"
+                >
+                  <strong className="text-sm font-semibold">{item.title}</strong>
+                  <p className="text-sm leading-6 text-muted-foreground">{item.preview}</p>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No artifacts yet.</p>
+            )}
+          </div>
+        </ScrollArea>
       ) : null}
+
       {drawerState.drawerTab === "import" ? (
-        <div className="drawer__body">
-          <label className="checkbox">
-            <input
-              type="checkbox"
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              aria-labelledby="monitor-drawer-raw-opt-in"
               checked={drawerState.allowRawImport}
-              onChange={(event) => onAllowRawChange(event.target.checked)}
+              onCheckedChange={(checked) => onAllowRawChange(checked === true)}
+              className="border-white/12 bg-white/[0.03]"
             />
-            Raw opt-in
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
+            <span id="monitor-drawer-raw-opt-in">Raw opt-in</span>
+          </div>
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              aria-labelledby="monitor-drawer-no-raw-storage"
               checked={drawerState.noRawStorage}
-              onChange={(event) => onNoRawChange(event.target.checked)}
+              onCheckedChange={(checked) => onNoRawChange(checked === true)}
+              className="border-white/12 bg-white/[0.03]"
             />
-            No raw storage
-          </label>
-          <textarea
-            className="import-textarea"
+            <span id="monitor-drawer-no-raw-storage">No raw storage</span>
+          </div>
+          <Textarea
+            className="min-h-[12rem] flex-1 border-white/10 bg-white/[0.03] font-mono text-[0.78rem] text-foreground"
             aria-label="JSON payload to import"
             value={drawerState.importText}
             onChange={(event) => onImportTextChange(event.target.value)}
           />
-          <button type="button" className="button" onClick={onImport}>
+          <Button type="button" className="w-fit" onClick={onImport}>
             Parse and import
-          </button>
+          </Button>
         </div>
       ) : null}
+
       {drawerState.drawerTab === "context" ? (
-        <div className="drawer__body">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-white/8 bg-white/[0.02]">
           {activeDataset.promptAssembly ? (
             <PromptAssemblyView
               assembly={activeDataset.promptAssembly}
               rawEnabled={activeDataset.run.rawIncluded}
             />
           ) : (
-            <p className="drawer__empty">No prompt assembly data available.</p>
+            <div className="px-4 py-3 text-sm text-muted-foreground">
+              No prompt assembly data available.
+            </div>
           )}
         </div>
       ) : null}
+
       {drawerState.drawerTab === "raw" ? (
-        <pre className="drawer__pre">
+        <pre className="min-h-[12rem] flex-1 overflow-auto rounded-[12px] border border-white/8 bg-white/[0.03] p-3 text-[0.78rem] leading-6 font-mono text-muted-foreground">
           {activeDataset.run.rawIncluded
             ? JSON.stringify(activeDataset, null, 2)
             : "Raw payload hidden by default."}
         </pre>
       ) : null}
+
       {drawerState.drawerTab === "log" ? (
-        <pre className="drawer__pre">{drawerState.exportText || "No export generated yet."}</pre>
+        <pre className="min-h-[12rem] flex-1 overflow-auto rounded-[12px] border border-white/8 bg-white/[0.03] p-3 text-[0.78rem] leading-6 font-mono text-muted-foreground">
+          {drawerState.exportText || "No export generated yet."}
+        </pre>
       ) : null}
-      <div className="drawer__footer">
+
+      <div className="flex flex-wrap justify-end gap-2 text-[0.8rem] tabular-nums text-muted-foreground">
         <span>{formatTokens(activeDataset.run.summaryMetrics.tokens)}</span>
         <span>{formatCurrency(activeDataset.run.summaryMetrics.costUsd)}</span>
       </div>

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "../../theme/tokens.css";
-@import "../../theme/primitives.css";
 @import "../../theme/motion.css";
 
 @theme inline {

@@ -20,7 +20,8 @@ const GAP_THRESHOLD_MS = 30_000;
 const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
-  return `// ${formatDuration(durationMs)} hidden · ${idleLaneCount} lanes idle //`;
+  const laneLabel = idleLaneCount === 1 ? "lane" : "lanes";
+  return `${formatDuration(durationMs)} idle · ${idleLaneCount} ${laneLabel} idle`;
 }
 
 function buildGraphLanes(dataset: RunDataset) {

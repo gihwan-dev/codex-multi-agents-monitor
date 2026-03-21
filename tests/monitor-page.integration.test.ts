@@ -112,11 +112,11 @@ describe("MonitorPage integration", () => {
       expect(container.textContent).toContain("Archive");
     });
 
-    const archiveCount = container.querySelector<HTMLElement>(".archive-section .run-list__workspace-count");
+    const archiveCount = container.querySelector<HTMLElement>('[data-slot="archive-count"]');
     expect(archiveCount?.textContent).toBe("1");
 
     const archiveSectionToggle = container.querySelector<HTMLButtonElement>(
-      ".archive-section .archive-section__header",
+      '[data-slot="archive-section-toggle"]',
     );
     expect(archiveSectionToggle).not.toBeNull();
     if (!archiveSectionToggle) {
@@ -133,9 +133,7 @@ describe("MonitorPage integration", () => {
 
     expect(container.textContent).toContain("Archived workspace");
 
-    const searchInput = container.querySelector<HTMLInputElement>(
-      '.run-list__search[aria-label="Search workspaces and runs"]',
-    );
+    const searchInput = container.querySelector<HTMLInputElement>('[aria-label="Search workspaces and runs"]');
     expect(searchInput).not.toBeNull();
     if (!searchInput) {
       throw new Error("monitor search input missing");
@@ -153,15 +151,49 @@ describe("MonitorPage integration", () => {
       dispatchKeydown("?");
     });
 
-    expect(container.textContent).toContain("Shortcut help");
+    expect(document.body.textContent).toContain("Shortcut help");
 
     await act(async () => {
       dispatchKeydown("?");
     });
 
-    expect(container.textContent).not.toContain("Shortcut help");
+    expect(document.body.textContent).not.toContain("Shortcut help");
 
-    const importButton = container.querySelector<HTMLButtonElement>(".run-list__header .button--ghost");
+    const helpButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Help",
+    );
+    expect(helpButton).not.toBeNull();
+    if (!helpButton) {
+      throw new Error("help button missing");
+    }
+
+    helpButton.focus();
+
+    await act(async () => {
+      helpButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const closeHelpButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter(
+      (button) => button.textContent?.trim() === "Close",
+    );
+    const closeHelpButton = closeHelpButtons.at(-1) ?? null;
+    expect(closeHelpButton).not.toBeNull();
+    if (!closeHelpButton) {
+      throw new Error("close help button missing");
+    }
+
+    await act(async () => {
+      closeHelpButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).not.toContain("Shortcut help");
+    });
+
+    const importButton =
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent?.trim() === "Import",
+      ) ?? null;
     expect(importButton).not.toBeNull();
     if (!importButton) {
       throw new Error("import button missing");

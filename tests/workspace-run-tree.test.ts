@@ -35,7 +35,7 @@ async function renderWorkspaceRunTree() {
     );
   });
 
-  return container.querySelector<HTMLElement>(".run-list__tree");
+  return container.querySelector<HTMLElement>('[data-slot="run-tree"]');
 }
 
 beforeEach(() => {

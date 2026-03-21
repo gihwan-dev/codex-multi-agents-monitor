@@ -48,6 +48,8 @@
 - Read order before implementation: task `README.md`, `docs/architecture/frontend-fsd.md`, `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`, `TECH_SPEC.md`, `IMPLEMENTATION_CONTRACT.md`, then `EXECUTION_PLAN.md`.
 - Use split-first file boundaries from `TECH_SPEC.md`; do not append major responsibilities onto starter files.
 - Prefer Tailwind utilities, shadcn open-code primitives, and repo-local monitor wrappers over new legacy selector layers.
+- DOM test contracts must prefer accessible queries in this order: role, name, label, then text. Use `data-slot` and domain `data-*` metadata only for graph, canvas, tree, and similarly structural surfaces that do not expose a stable semantic role on their own.
+- Treat `className` as a styling concern only. Do not add or preserve utility or marker classes as a testing API.
 - Preserve preview-first masking, explicit raw opt-in, and `wait_reason` visibility requirements in all slices.
 - Preserve the FSD boundary contract and do not reintroduce legacy compatibility shims or a `shared/domain` catch-all.
 - If a slice needs a new core dependency, update this file and the task implementation contract in the same change.
@@ -109,6 +111,7 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Mixing `npm`, `yarn`, or other package managers with `pnpm`
 - Adding a second state or cache layer that overlaps with local React state responsibilities
 - Reintroducing legacy selector growth in `src/theme/primitives.css` or new widget `.css` files after the Tailwind baseline lands
+- Reintroducing test-only marker classes or class-selector-based DOM contracts in components or tests
 - Introducing a second component kit alongside shadcn open-code primitives
 - Default raw prompt or tool payload persistence
 - Reintroducing `src/shared/domain` or other deleted compatibility surfaces as permanent catch-all modules

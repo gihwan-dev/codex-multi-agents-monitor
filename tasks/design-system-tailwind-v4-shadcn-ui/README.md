@@ -63,8 +63,8 @@ GitHub issue [#4](https://github.com/gihwan-dev/codex-multi-agents-monitor/issue
 
 ## Validation gate status
 
-- gate: blocking
-- state: bootstrap cleared, ready for `SLICE-1`
+- gate: cleared
+- state: implementation slices complete, ready for `#5` handoff
 - implementation contract: `IMPLEMENTATION_CONTRACT.md`가 task implementation SSOT로 추가됐다.
 - active concern:
   - GitHub issue `#4`는 theme-ready architecture까지만, `#5`는 full theme UX/productization을 담당하는 것으로 문서와 execution slice를 함께 유지해야 한다.
@@ -78,3 +78,9 @@ GitHub issue [#4](https://github.com/gihwan-dev/codex-multi-agents-monitor/issue
 - `SLICE-4`: rail, summary, inspector, drawer migration
 - `SLICE-5`: graph-adjacent shell migration and primitive CSS retirement
 - `SLICE-6`: widget CSS retirement audit, theme-ready handoff, rollback and verification closeout
+
+## Current result
+
+- Tailwind v4 + shadcn/ui foundation, primitive layer, monitor composites, and main monitor screens are all migrated.
+- Legacy widget presentation CSS and `src/theme/primitives.css` are retired.
+- Remaining work is explicitly scoped to GitHub issue [#5](https://github.com/gihwan-dev/codex-multi-agents-monitor/issues/5): runtime theme toggle UX, persistence, and product polish.
