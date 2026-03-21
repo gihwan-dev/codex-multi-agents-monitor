@@ -1,6 +1,7 @@
-:root {
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
   --color-bg: #0f1115;
   --color-panel: #141821;
@@ -22,7 +23,45 @@
   --color-stale: #fb7185;
   --color-disconnected: #94a3b8;
   --color-surface-raised: rgba(255, 255, 255, 0.06);
+  --color-primary-foreground: #08111d;
   --shadow-panel: 0 24px 72px rgba(5, 8, 12, 0.42);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-panel: 12px;
+  --radius-soft: 10px;
+  --radius-pill: 999px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+  --color-bg: #f4f7fb;
+  --color-panel: #ffffff;
+  --color-surface: #eef2f7;
+  --color-surface-muted: #e3e9f2;
+  --color-border: rgba(15, 23, 42, 0.12);
+  --color-text: #101827;
+  --color-text-primary: #101827;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748b;
+  --color-text-muted: rgba(15, 23, 42, 0.62);
+  --color-active: #2563eb;
+  --color-success: #059669;
+  --color-waiting: #d97706;
+  --color-blocked: #ea580c;
+  --color-failed: #dc2626;
+  --color-handoff: #7c3aed;
+  --color-transfer: #0891b2;
+  --color-stale: #db2777;
+  --color-disconnected: #64748b;
+  --color-surface-raised: rgba(15, 23, 42, 0.04);
+  --color-primary-foreground: #eff6ff;
+  --shadow-panel: 0 18px 48px rgba(15, 23, 42, 0.08);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -44,6 +83,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family: var(--font-sans);
   line-height: 1.5;
   color: var(--color-text);
   background:
