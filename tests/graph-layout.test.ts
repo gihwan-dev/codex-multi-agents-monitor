@@ -324,6 +324,10 @@ describe("graphLayout", () => {
       createElement(CausalGraphView, {
         scene,
         onSelect: () => undefined,
+        selectionNavigationRequestId: 0,
+        selectionNavigationRunId: null,
+        runTraceId: dataset.run.traceId,
+        selectionRevealTarget: null,
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
@@ -406,6 +410,8 @@ function makeEventRow(eventId: string, laneId: string, title: string): GraphScen
     durationLabel: "1s",
     inPath: false,
     selected: false,
+    eventType: "note",
+    toolName: null,
   };
 }
 
@@ -590,6 +596,10 @@ describe("multi-agent rendering diagnostic", () => {
       createElement(CausalGraphView, {
         scene,
         onSelect: () => undefined,
+        selectionNavigationRequestId: 0,
+        selectionNavigationRunId: null,
+        runTraceId: dataset.run.traceId,
+        selectionRevealTarget: null,
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
@@ -662,6 +672,10 @@ describe("errored subagent rendering", () => {
       createElement(CausalGraphView, {
         scene,
         onSelect: () => undefined,
+        selectionNavigationRequestId: 0,
+        selectionNavigationRunId: null,
+        runTraceId: dataset.run.traceId,
+        selectionRevealTarget: null,
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,

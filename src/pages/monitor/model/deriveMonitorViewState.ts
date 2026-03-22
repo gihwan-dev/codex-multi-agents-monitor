@@ -4,7 +4,9 @@ import {
   buildInspectorCausalSummary,
   buildSummaryFacts,
   type GraphSceneModel,
+  type GraphSelectionRevealTarget,
   hasRawPayload,
+  type SelectionState,
 } from "../../../entities/run";
 import { deriveArchiveIndexTitle } from "../../../entities/session-log";
 import type { MonitorState } from "./state";
@@ -39,6 +41,55 @@ const EMPTY_GRAPH_SCENE: GraphSceneModel = {
   hiddenLaneCount: 0,
   latestVisibleEventId: null,
 };
+
+function buildSelectionRevealTarget(
+  activeDataset: ReturnType<typeof resolveActiveDataset>,
+  selection: SelectionState | null,
+  graphScene: GraphSceneModel,
+): GraphSelectionRevealTarget | null {
+  if (!activeDataset || !selection) {
+    return null;
+  }
+
+  const visibleEventIds = new Set(
+    graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : [])),
+  );
+
+  if (selection.kind === "event") {
+    return visibleEventIds.has(selection.id)
+      ? { kind: "event", eventId: selection.id }
+      : null;
+  }
+
+  if (selection.kind === "edge") {
+    const edge = activeDataset.edges.find((item) => item.edgeId === selection.id);
+    if (
+      !edge ||
+      !visibleEventIds.has(edge.sourceEventId) ||
+      !visibleEventIds.has(edge.targetEventId)
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "edge",
+      edgeId: edge.edgeId,
+      sourceEventId: edge.sourceEventId,
+      targetEventId: edge.targetEventId,
+    };
+  }
+
+  const artifact = activeDataset.artifacts.find((item) => item.artifactId === selection.id);
+  if (!artifact || !visibleEventIds.has(artifact.producerEventId)) {
+    return null;
+  }
+
+  return {
+    kind: "artifact",
+    artifactId: artifact.artifactId,
+    producerEventId: artifact.producerEventId,
+  };
+}
 
 function resolveActiveSessionFilePath(state: MonitorState) {
   if (state.selectionLoadState?.filePath) {
@@ -149,6 +200,7 @@ export function deriveMonitorViewState(state: MonitorState) {
     selectionLoadingPresentation,
     rawTabAvailable: activeDataset ? hasRawPayload(activeDataset) : false,
     graphScene,
+    selectionRevealTarget: buildSelectionRevealTarget(activeDataset, state.selection, graphScene),
     inspectorSummary: activeDataset
       ? buildInspectorCausalSummary(
           activeDataset,

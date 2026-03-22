@@ -11,6 +11,7 @@ import {
 import {
   applyFixtureFrameState,
   importDatasetState,
+  navigateSelectionState,
   replaceDatasetsState,
   setActiveRunState,
   setFollowLiveState,
@@ -39,6 +40,8 @@ export function monitorStateReducer(
       return setActiveRunState(state, action.traceId);
     case "set-selection":
       return { ...state, selection: action.selection };
+    case "navigate-selection":
+      return navigateSelectionState(state, action.selection);
     case "set-drawer-tab":
       return {
         ...state,

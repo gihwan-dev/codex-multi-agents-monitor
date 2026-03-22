@@ -24,6 +24,13 @@ export function createMonitorViewActions({
     selectRun(traceId: string) {
       dispatch({ type: "set-active-run", traceId });
     },
+    navigateToItem(selection: SelectionState) {
+      if (!activeDataset) {
+        return;
+      }
+
+      dispatch({ type: "navigate-selection", selection });
+    },
     selectItem(selection: SelectionState) {
       if (!activeDataset) {
         return;

@@ -13,6 +13,31 @@ import {
 import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 
+function getActiveDataset(state: MonitorState) {
+  return state.datasets.find((item) => item.run.traceId === state.activeRunId) ?? null;
+}
+
+function shouldPauseFollowLiveForManualNavigation(
+  state: MonitorState,
+  selection: MonitorState["selection"],
+) {
+  const activeDataset = getActiveDataset(state);
+  if (
+    !activeDataset ||
+    activeDataset.run.liveMode !== "live" ||
+    !(state.followLiveByRunId[activeDataset.run.traceId] ?? false) ||
+    !selection
+  ) {
+    return false;
+  }
+
+  if (selection.kind !== "event") {
+    return true;
+  }
+
+  return activeDataset.events[activeDataset.events.length - 1]?.eventId !== selection.id;
+}
+
 export function setActiveRunState(state: MonitorState, traceId: string): MonitorState {
   const dataset = state.datasets.find((item) => item.run.traceId === traceId);
   if (!dataset) {
@@ -20,6 +45,8 @@ export function setActiveRunState(state: MonitorState, traceId: string): Monitor
       ...state,
       activeRunId: traceId,
       selection: null,
+      selectionNavigationRequestId: 0,
+      selectionNavigationRunId: null,
     };
   }
 
@@ -29,6 +56,8 @@ export function setActiveRunState(state: MonitorState, traceId: string): Monitor
     ...state,
     activeRunId: traceId,
     selection: activationSelectionForDataset(dataset),
+    selectionNavigationRequestId: 0,
+    selectionNavigationRunId: null,
     followLiveByRunId: followLive
       ? {
           ...state.followLiveByRunId,
@@ -44,6 +73,37 @@ export function setActiveRunState(state: MonitorState, traceId: string): Monitor
         )
       : state.liveConnectionByRunId,
     ...resolveDatasetDrawerTab(state, dataset),
+  };
+}
+
+export function navigateSelectionState(
+  state: MonitorState,
+  selection: NonNullable<MonitorState["selection"]>,
+): MonitorState {
+  const activeDataset = getActiveDataset(state);
+  const shouldPauseFollowLive = shouldPauseFollowLiveForManualNavigation(state, selection);
+
+  return {
+    ...state,
+    selection,
+    selectionNavigationRequestId: state.selectionNavigationRequestId + 1,
+    selectionNavigationRunId: activeDataset?.run.traceId ?? null,
+    followLiveByRunId:
+      shouldPauseFollowLive && activeDataset
+        ? {
+            ...state.followLiveByRunId,
+            [activeDataset.run.traceId]: false,
+          }
+        : state.followLiveByRunId,
+    liveConnectionByRunId:
+      shouldPauseFollowLive && activeDataset
+        ? updateLiveConnectionMap(
+            state.liveConnectionByRunId,
+            activeDataset.run.traceId,
+            activeDataset,
+            false,
+          )
+        : state.liveConnectionByRunId,
   };
 }
 
@@ -141,6 +201,8 @@ export function replaceDatasetsState(
     datasets,
     activeRunId: activeDataset.run.traceId,
     selection: activationSelectionForDataset(activeDataset),
+    selectionNavigationRequestId: 0,
+    selectionNavigationRunId: null,
     followLiveByRunId: buildFollowLiveMap(datasets),
     liveConnectionByRunId: buildConnectionMap(datasets),
     collapsedGapIds: buildCollapsedGapIds(datasets),

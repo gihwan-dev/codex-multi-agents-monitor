@@ -39,6 +39,7 @@ export function MonitorPage() {
     archivedIndexError,
     rawTabAvailable,
     graphScene,
+    selectionRevealTarget,
     inspectorSummary,
     summaryFacts,
     anomalyJumps,
@@ -185,7 +186,7 @@ export function MonitorPage() {
               />
               <MonitorGraphToolbar
                 anomalyJumps={chromeState.anomalyJumps}
-                onJump={actions.selectItem}
+                onJump={actions.navigateToItem}
               />
             </div>
           ) : null}
@@ -223,6 +224,10 @@ export function MonitorPage() {
             <CausalGraphView
               scene={graphScene}
               onSelect={actions.selectItem}
+              selectionNavigationRequestId={state.selectionNavigationRequestId}
+              selectionNavigationRunId={state.selectionNavigationRunId}
+              runTraceId={displayDataset.run.traceId}
+              selectionRevealTarget={selectionRevealTarget}
               followLive={activeFollowLive}
               liveMode={displayDataset.run.liveMode}
               onPauseFollowLive={actions.pauseFollowLive}
@@ -233,7 +238,7 @@ export function MonitorPage() {
             <CausalInspectorPane
               compact
               summary={inspectorSummary}
-              onSelectJump={actions.selectItem}
+              onSelectJump={actions.navigateToItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
               open={state.inspectorOpen}
@@ -268,7 +273,7 @@ export function MonitorPage() {
             />
             <CausalInspectorPane
               summary={inspectorSummary}
-              onSelectJump={actions.selectItem}
+              onSelectJump={actions.navigateToItem}
               onOpenDrawer={(tab) => openDrawer(tab)}
               onToggleOpen={actions.toggleInspector}
               open={state.inspectorOpen}

@@ -1,5 +1,16 @@
-import { type CSSProperties, useId, useLayoutEffect, useRef } from "react";
-import type { GraphSceneModel, LiveMode, SelectionState } from "../../../entities/run";
+import {
+  type CSSProperties,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+} from "react";
+import type {
+  GraphSceneModel,
+  GraphSelectionRevealTarget,
+  LiveMode,
+  SelectionState,
+} from "../../../entities/run";
 import { Panel } from "../../../shared/ui";
 import {
   buildContinuationGuideYs,
@@ -20,6 +31,10 @@ import { useGraphViewportState } from "./useGraphViewportState";
 interface CausalGraphViewProps {
   scene: GraphSceneModel;
   onSelect: (selection: SelectionState) => void;
+  selectionNavigationRequestId: number;
+  selectionNavigationRunId: string | null;
+  runTraceId: string;
+  selectionRevealTarget: GraphSelectionRevealTarget | null;
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
@@ -30,6 +45,10 @@ interface CausalGraphViewProps {
 export function CausalGraphView({
   scene,
   onSelect,
+  selectionNavigationRequestId,
+  selectionNavigationRunId,
+  runTraceId,
+  selectionRevealTarget,
   followLive,
   liveMode,
   onPauseFollowLive,
@@ -37,6 +56,7 @@ export function CausalGraphView({
   laneHeaderHeightOverride,
 }: CausalGraphViewProps) {
   const followScrollTargetRef = useRef<{ top: number; left: number } | null>(null);
+  const lastHandledNavigationRequestIdRef = useRef(0);
   const {
     availableCanvasHeight,
     laneHeaderHeight,
@@ -83,6 +103,7 @@ export function CausalGraphView({
     500,
   );
   const scrollElement = scrollRef.current;
+  const navigationScrollElement = scrollRef.current;
   const stickyTop = laneHeaderHeightOverride ?? laneHeaderHeight;
 
   useLayoutEffect(() => {
@@ -145,6 +166,57 @@ export function CausalGraphView({
     stickyTop,
   ]);
 
+  useEffect(() => {
+    if (
+      selectionNavigationRequestId === 0 ||
+      selectionNavigationRunId !== runTraceId ||
+      selectionNavigationRequestId <= lastHandledNavigationRequestIdRef.current
+    ) {
+      return;
+    }
+
+    const element = navigationScrollElement;
+    if (!element || availableCanvasHeight <= 0) {
+      return;
+    }
+
+    const revealRange = resolveSelectionRevealRange(selectionRevealTarget, layout);
+    lastHandledNavigationRequestIdRef.current = selectionNavigationRequestId;
+    if (!revealRange) {
+      return;
+    }
+
+    const visibleTop = element.scrollTop;
+    const visibleBottom = visibleTop + availableCanvasHeight;
+    if (revealRange.top >= visibleTop && revealRange.bottom <= visibleBottom) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, renderedContentHeight - availableCanvasHeight);
+    const nextScrollTop = clamp(
+      revealRange.anchorY - availableCanvasHeight / 2,
+      0,
+      maxScrollTop,
+    );
+    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+
+    element.scrollTo({
+      top: nextScrollTop,
+      behavior,
+    });
+    scheduleScrollTopUpdate(nextScrollTop);
+  }, [
+    availableCanvasHeight,
+    layout,
+    navigationScrollElement,
+    renderedContentHeight,
+    runTraceId,
+    scheduleScrollTopUpdate,
+    selectionNavigationRunId,
+    selectionNavigationRequestId,
+    selectionRevealTarget,
+  ]);
+
   const handleScroll = () => {
     const element = scrollRef.current;
     if (!element) {
@@ -162,7 +234,7 @@ export function CausalGraphView({
     } else if (followLive && liveMode === "live" && scene.latestVisibleEventId) {
       const eventLayout = layout.eventById.get(scene.latestVisibleEventId);
       if (eventLayout) {
-        const stickyTop =
+        const nextStickyTop =
           laneHeaderHeightOverride ?? laneStripRef.current?.offsetHeight ?? laneHeaderHeight;
         if (element.clientHeight <= 0 || element.clientWidth <= 0) {
           return;
@@ -173,7 +245,7 @@ export function CausalGraphView({
           scrollLeft: element.scrollLeft,
           viewportHeight: element.clientHeight,
           viewportWidth: element.clientWidth,
-          stickyTop,
+          stickyTop: nextStickyTop,
           stickyLeft: TIME_GUTTER,
           contentHeight: renderedContentHeight,
           contentWidth: layout.contentWidth,
@@ -262,4 +334,63 @@ export function CausalGraphView({
       </div>
     </Panel>
   );
+}
+
+function resolveSelectionRevealRange(
+  selectionRevealTarget: GraphSelectionRevealTarget | null,
+  layout: ReturnType<typeof buildGraphLayoutSnapshot>,
+) {
+  if (!selectionRevealTarget) {
+    return null;
+  }
+
+  if (selectionRevealTarget.kind === "event") {
+    return getEventRevealRange(layout, selectionRevealTarget.eventId);
+  }
+
+  if (selectionRevealTarget.kind === "artifact") {
+    return getEventRevealRange(layout, selectionRevealTarget.producerEventId);
+  }
+
+  const sourceRange = getEventRevealRange(layout, selectionRevealTarget.sourceEventId);
+  const targetRange = getEventRevealRange(layout, selectionRevealTarget.targetEventId);
+  if (!sourceRange || !targetRange) {
+    return null;
+  }
+
+  const top = Math.min(sourceRange.top, targetRange.top);
+  const bottom = Math.max(sourceRange.bottom, targetRange.bottom);
+  return {
+    top,
+    bottom,
+    anchorY: top + (bottom - top) / 2,
+  };
+}
+
+function getEventRevealRange(
+  layout: ReturnType<typeof buildGraphLayoutSnapshot>,
+  eventId: string,
+) {
+  const eventLayout = layout.eventById.get(eventId);
+  if (!eventLayout) {
+    return null;
+  }
+
+  return {
+    top: eventLayout.cardRect.y,
+    bottom: eventLayout.cardRect.y + eventLayout.cardRect.height,
+    anchorY: eventLayout.rowAnchorY,
+  };
+}
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }

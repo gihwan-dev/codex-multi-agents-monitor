@@ -73,6 +73,8 @@ type DatasetActivationPatch = Pick<
   MonitorState,
   | "activeRunId"
   | "selection"
+  | "selectionNavigationRequestId"
+  | "selectionNavigationRunId"
   | "collapsedGapIds"
   | "followLiveByRunId"
   | "liveConnectionByRunId"
@@ -96,6 +98,8 @@ export function buildDatasetActivationPatch(
   return {
     activeRunId: dataset.run.traceId,
     selection: activationSelectionForDataset(dataset),
+    selectionNavigationRequestId: 0,
+    selectionNavigationRunId: null,
     collapsedGapIds: {
       ...state.collapsedGapIds,
       [dataset.run.traceId]: [],
@@ -151,6 +155,8 @@ export function createMonitorInitialState(): MonitorState {
     hydratedDatasetsByFilePath: {},
     activeRunId: activeDataset.run.traceId,
     selection: defaultSelectionForDataset(activeDataset),
+    selectionNavigationRequestId: 0,
+    selectionNavigationRunId: null,
     drawerTab: "artifacts",
     drawerOpen: false,
     inspectorOpen: !compactViewport,
