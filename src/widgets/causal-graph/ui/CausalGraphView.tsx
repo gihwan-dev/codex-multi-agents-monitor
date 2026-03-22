@@ -9,8 +9,8 @@ import {
   computeVisibleRowRange,
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
-  resolveFollowLiveScrollTarget,
   ROW_GAP,
+  resolveFollowLiveScrollTarget,
   TIME_GUTTER,
 } from "../model/graphLayout";
 import { CausalGraphCanvas } from "./CausalGraphCanvas";
@@ -82,6 +82,8 @@ export function CausalGraphView({
     availableCanvasHeight,
     500,
   );
+  const scrollElement = scrollRef.current;
+  const stickyTop = laneHeaderHeightOverride ?? laneHeaderHeight;
 
   useLayoutEffect(() => {
     if (!followLive || liveMode !== "live" || !scene.latestVisibleEventId) {
@@ -89,14 +91,12 @@ export function CausalGraphView({
       return;
     }
 
-    const element = scrollRef.current;
+    const element = scrollElement;
     const eventLayout = layout.eventById.get(scene.latestVisibleEventId);
     if (!element || !eventLayout) {
       return;
     }
 
-    const stickyTop =
-      laneHeaderHeightOverride ?? laneStripRef.current?.offsetHeight ?? laneHeaderHeight;
     const nextViewportHeight = element.clientHeight;
     const nextViewportWidth = element.clientWidth;
     if (nextViewportHeight <= 0 || nextViewportWidth <= 0) {
@@ -137,12 +137,12 @@ export function CausalGraphView({
     }
   }, [
     followLive,
-    laneHeaderHeight,
-    laneHeaderHeightOverride,
     layout,
     liveMode,
     renderedContentHeight,
     scene.latestVisibleEventId,
+    scrollElement,
+    stickyTop,
   ]);
 
   const handleScroll = () => {
