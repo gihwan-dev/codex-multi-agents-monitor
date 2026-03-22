@@ -149,6 +149,40 @@ describe("graphLayout", () => {
     expect(stableTarget).toEqual(visibleScroll);
   });
 
+  it("converges on a stable left target when the viewport is narrower than the card area", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const narrowTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 360,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+    const stableTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: narrowTarget.top,
+      scrollLeft: narrowTarget.left,
+      viewportHeight: 240,
+      viewportWidth: 360,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(narrowTarget.left).toBe(latestEventLayout.cardRect.x - TIME_GUTTER);
+    expect(stableTarget).toEqual(narrowTarget);
+  });
+
   it("builds continuation guides only below the real content height", () => {
     const contentHeight = 420;
     const renderedContentHeight = 760;

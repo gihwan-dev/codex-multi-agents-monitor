@@ -60,21 +60,27 @@ export function resolveFollowLiveScrollTarget(
   eventLayout: EventLayout,
   viewport: FollowLiveViewport,
 ) {
-  const visibleBottom = viewport.scrollTop + Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
+  const visibleHeight = Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
+  const visibleWidth = Math.max(viewport.viewportWidth - viewport.stickyLeft, 0);
+  const visibleBottom = viewport.scrollTop + visibleHeight;
   const visibleLeft = viewport.scrollLeft + viewport.stickyLeft;
   const visibleRight = viewport.scrollLeft + viewport.viewportWidth;
   const cardBottom = eventLayout.cardRect.y + eventLayout.cardRect.height;
   const cardRight = eventLayout.cardRect.x + eventLayout.cardRect.width;
 
   let top = viewport.scrollTop;
-  if (eventLayout.cardRect.y < viewport.scrollTop) {
+  if (eventLayout.cardRect.height > visibleHeight) {
+    top = eventLayout.cardRect.y;
+  } else if (eventLayout.cardRect.y < viewport.scrollTop) {
     top = eventLayout.cardRect.y;
   } else if (cardBottom > visibleBottom) {
-    top = cardBottom - Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
+    top = cardBottom - visibleHeight;
   }
 
   let left = viewport.scrollLeft;
-  if (eventLayout.cardRect.x < visibleLeft) {
+  if (eventLayout.cardRect.width > visibleWidth) {
+    left = eventLayout.cardRect.x - viewport.stickyLeft;
+  } else if (eventLayout.cardRect.x < visibleLeft) {
     left = eventLayout.cardRect.x - viewport.stickyLeft;
   } else if (cardRight > visibleRight) {
     left = cardRight - viewport.viewportWidth;
@@ -83,7 +89,7 @@ export function resolveFollowLiveScrollTarget(
   return {
     top: clampScrollOffset(
       top,
-      viewport.contentHeight - Math.max(viewport.viewportHeight - viewport.stickyTop, 0),
+      viewport.contentHeight - visibleHeight,
     ),
     left: clampScrollOffset(left, viewport.contentWidth - viewport.viewportWidth),
   };

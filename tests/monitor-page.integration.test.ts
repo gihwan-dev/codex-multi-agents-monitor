@@ -666,6 +666,7 @@ describe("MonitorPage integration", () => {
       const latestScrollOptions = latestScrollCall as ScrollToOptions;
       expect(latestScrollOptions.top ?? 0).toBeGreaterThan(0);
       expect(latestScrollOptions.left ?? 0).toBeGreaterThan(0);
+      expect(container.textContent).not.toContain("Following paused");
 
       const graphScroll = container.querySelector<HTMLElement>('[data-slot="graph-scroll"]');
       expect(graphScroll).not.toBeNull();
@@ -673,9 +674,11 @@ describe("MonitorPage integration", () => {
         throw new Error("graph scroll container missing");
       }
 
+      const currentScrollTop = (graphScroll as HTMLElement & { scrollTop: number }).scrollTop;
       await act(async () => {
-        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollTop = 0;
         (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollLeft = 0;
+        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollTop =
+          currentScrollTop;
         graphScroll.dispatchEvent(new Event("scroll"));
       });
 
@@ -690,11 +693,12 @@ describe("MonitorPage integration", () => {
       });
       await vi.waitFor(() => {
         expect(container.textContent).toContain("stale");
+        expect(container.textContent).toContain("Resume follow");
       });
       expect(scrollToSpy.mock.calls.length).toBe(scrollCountWhilePaused);
 
       const resumeButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
-        (button) => button.textContent?.trim() === "Follow live",
+        (button) => button.textContent?.trim() === "Resume follow",
       );
       expect(resumeButton).not.toBeNull();
       if (!resumeButton) {

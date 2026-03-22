@@ -117,7 +117,7 @@ export function MonitorTopBar({
               : "border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
           }
         >
-          {dataset.run.liveMode === "live" && liveConnection === "paused"
+          {dataset.run.liveMode === "live" && !followLive
             ? "Resume follow"
             : "Follow live"}
         </Button>
