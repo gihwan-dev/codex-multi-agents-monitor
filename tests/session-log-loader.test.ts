@@ -135,6 +135,23 @@ describe("sessionLogLoader", () => {
     expect(title).toBe("사이드바 UI 개선해주라. 이미지 처럼 단순한 그냥 트리 구조로.");
   });
 
+  it("ignores environment context noise when deriving the visible title", () => {
+    const title = deriveSessionLogTitle([
+      makeMessageEntry(
+        "2026-03-09T15:03:12.000Z",
+        "user",
+        "<environment_context> <cwd>/Users/choegihwan/Documents/Projects/exem-ui/packages/ui</cwd> <shell>zsh</shell> </environment_context>",
+      ),
+      makeMessageEntry(
+        "2026-03-09T15:03:18.000Z",
+        "user",
+        "List the instruction sources you loaded.",
+      ),
+    ]);
+
+    expect(title).toBe("List the instruction sources you loaded.");
+  });
+
   it("flattens markdown skill links into the visible chat title form", () => {
     const title = deriveSessionLogTitle([
       makeMessageEntry(

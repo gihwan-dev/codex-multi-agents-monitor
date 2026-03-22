@@ -1,8 +1,10 @@
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use serde_json::Value;
+#[cfg(test)]
+use std::collections::HashSet;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     env,
     fs::{self, File},
     io::{self, BufRead, BufReader, Read, Seek, SeekFrom},
@@ -17,6 +19,7 @@ const RECENT_INDEX_TAIL_ENTRY_LIMIT: usize = 120;
 const RECENT_INDEX_TAIL_BYTES: u64 = 131_072;
 const ARCHIVED_INDEX_SCAN_LIMIT: usize = 50;
 const DEFAULT_THREAD_TITLE: &str = "새 스레드";
+const LIVE_SESSION_SOURCES: &[&str] = &["desktop", "cli", "vscode"];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -122,6 +125,22 @@ struct ArchivedSessionIndexResult {
 
 struct ArchivedIndexCache(Mutex<Option<Vec<ArchivedSessionIndex>>>);
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LiveThreadRow {
+    session_id: String,
+    rollout_path: String,
+    source: String,
+    workspace_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LiveSessionCandidate {
+    session_id: String,
+    file_path: PathBuf,
+    workspace_path: String,
+    workspace_identity: WorkspaceIdentity,
+}
+
 #[tauri::command]
 fn resolve_workspace_identities(repo_paths: Vec<String>) -> HashMap<String, WorkspaceIdentity> {
     repo_paths
@@ -177,25 +196,21 @@ fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexIte
     let codex_home = resolve_codex_home()?;
     let projects_root = resolve_projects_root()?;
     let sessions_root = codex_home.join("sessions");
-    let archived_thread_ids = load_archived_thread_ids(&codex_home).unwrap_or_default();
-    let mut session_files = Vec::new();
-    collect_jsonl_files(&sessions_root, &mut session_files)?;
-    sort_session_files_by_recent_activity(&mut session_files);
+    let candidates = load_live_session_candidates(&codex_home, &sessions_root, &projects_root)?;
 
     let mut items = Vec::new();
 
-    for session_file in &session_files {
+    for candidate in candidates {
         if items.len() >= MAX_RECENT_SESSIONS {
-            continue;
+            break;
         }
 
-        let item = match read_recent_index_entry(session_file, &projects_root) {
+        let item = match read_recent_index_entry(&candidate) {
             Ok(Some(item)) => item,
             Ok(None) => continue,
             Err(_) => continue,
         };
-
-        if archived_thread_ids.contains(&item.session_id) {
+        if should_hide_recent_boot_thread(&item) {
             continue;
         }
 
@@ -205,6 +220,88 @@ fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexIte
     Ok(items)
 }
 
+fn load_live_session_candidates(
+    codex_home: &Path,
+    sessions_root: &Path,
+    projects_root: &Path,
+) -> io::Result<Vec<LiveSessionCandidate>> {
+    let state_database = resolve_codex_state_database(codex_home)?;
+    let connection = Connection::open_with_flags(
+        state_database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sqlite_error)?;
+    let canonical_sessions_root = fs::canonicalize(sessions_root)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT id, rollout_path, source, cwd
+             FROM threads
+             WHERE archived = 0
+             ORDER BY updated_at DESC, id DESC",
+        )
+        .map_err(map_sqlite_error)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(LiveThreadRow {
+                session_id: row.get(0)?,
+                rollout_path: row.get(1)?,
+                source: row.get(2)?,
+                workspace_path: row.get(3)?,
+            })
+        })
+        .map_err(map_sqlite_error)?;
+
+    let mut candidates = Vec::new();
+    for row in rows {
+        let row = row.map_err(map_sqlite_error)?;
+        let Some(candidate) =
+            build_live_session_candidate(row, &canonical_sessions_root, projects_root)?
+        else {
+            continue;
+        };
+        candidates.push(candidate);
+    }
+
+    Ok(candidates)
+}
+
+fn build_live_session_candidate(
+    row: LiveThreadRow,
+    canonical_sessions_root: &Path,
+    projects_root: &Path,
+) -> io::Result<Option<LiveSessionCandidate>> {
+    if !is_supported_live_session_source(&row.source) {
+        return Ok(None);
+    }
+    if row.workspace_path.trim().is_empty() || row.rollout_path.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let canonical_file_path = match fs::canonicalize(Path::new(&row.rollout_path)) {
+        Ok(path) => path,
+        Err(_) => return Ok(None),
+    };
+    if !canonical_file_path.starts_with(canonical_sessions_root) {
+        return Ok(None);
+    }
+
+    let workspace_identity = match resolve_live_session_workspace_identity(
+        Path::new(&row.workspace_path),
+        projects_root,
+    ) {
+        Ok(identity) => identity,
+        Err(_) => return Ok(None),
+    };
+
+    Ok(Some(LiveSessionCandidate {
+        session_id: row.session_id,
+        file_path: canonical_file_path,
+        workspace_path: row.workspace_path,
+        workspace_identity,
+    }))
+}
+
+#[cfg(test)]
 fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<String>> {
     let state_database = resolve_codex_state_database(codex_home)?;
     let connection = Connection::open_with_flags(
@@ -257,6 +354,7 @@ fn map_sqlite_error(error: rusqlite::Error) -> io::Error {
     io::Error::other(error)
 }
 
+#[cfg(test)]
 fn sort_session_files_by_recent_activity(files: &mut [PathBuf]) {
     files.sort_by(|left, right| {
         recent_file_modified_at(right)
@@ -305,17 +403,17 @@ fn load_recent_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogS
         return None;
     }
 
-    let archived_thread_ids = load_archived_thread_ids(&codex_home).unwrap_or_default();
-    let mut snapshot = read_session_snapshot(&canonical_path, &projects_root).ok()??;
-    if archived_thread_ids.contains(&snapshot.session_id) {
-        return None;
-    }
+    let candidate = load_live_session_candidates(&codex_home, &sessions_root, &projects_root)
+        .ok()?
+        .into_iter()
+        .find(|item| item.file_path == canonical_path)?;
+    let mut snapshot = read_session_snapshot(&candidate.file_path, &projects_root).ok()??;
 
     let mut session_files = Vec::new();
     collect_jsonl_files(&sessions_root, &mut session_files).ok()?;
 
     for session_file in &session_files {
-        if fs::canonicalize(session_file).ok().as_ref() == Some(&canonical_path) {
+        if fs::canonicalize(session_file).ok().as_ref() == Some(&candidate.file_path) {
             continue;
         }
 
@@ -335,10 +433,9 @@ fn load_recent_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogS
 }
 
 fn read_recent_index_entry(
-    session_file: &Path,
-    projects_root: &Path,
+    candidate: &LiveSessionCandidate,
 ) -> io::Result<Option<RecentSessionIndexItem>> {
-    let file = File::open(session_file)?;
+    let file = File::open(&candidate.file_path)?;
     let mut reader = BufReader::new(file);
     let mut first_line = String::new();
     if reader.read_line(&mut first_line)? == 0 {
@@ -351,42 +448,12 @@ fn read_recent_index_entry(
         Some(payload) => payload,
         None => return Ok(None),
     };
-
-    if payload
-        .get("source")
-        .and_then(|source| source.get("subagent"))
-        .is_some()
-    {
-        return Ok(None);
-    }
-
-    if payload.get("source").and_then(Value::as_str).is_none() {
-        return Ok(None);
-    }
-
-    let workspace_path = payload
-        .get("cwd")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "session cwd missing"))?;
     let started_at = payload
         .get("timestamp")
         .and_then(Value::as_str)
         .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
         .unwrap_or_default()
         .to_owned();
-    let session_id = payload
-        .get("id")
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| session_file.display().to_string());
-
-    let workspace_identity =
-        resolve_live_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
-    let Some(workspace_identity) = workspace_identity else {
-        return Ok(None);
-    };
 
     let mut prefix_entries = Vec::new();
     let mut model: Option<String> = None;
@@ -414,7 +481,7 @@ fn read_recent_index_entry(
     }
 
     let tail_entries = read_tail_entry_snapshots(
-        session_file,
+        &candidate.file_path,
         RECENT_INDEX_TAIL_BYTES,
         RECENT_INDEX_TAIL_ENTRY_LIMIT,
     )?;
@@ -428,19 +495,25 @@ fn read_recent_index_entry(
     let last_event_summary = derive_recent_index_last_summary(&tail_entries);
 
     Ok(Some(RecentSessionIndexItem {
-        session_id,
-        workspace_path: workspace_path.to_owned(),
-        origin_path: workspace_identity.origin_path,
-        display_name: workspace_identity.display_name,
+        session_id: candidate.session_id.clone(),
+        workspace_path: candidate.workspace_path.clone(),
+        origin_path: candidate.workspace_identity.origin_path.clone(),
+        display_name: candidate.workspace_identity.display_name.clone(),
         started_at,
         updated_at,
         model,
-        file_path: session_file.display().to_string(),
+        file_path: candidate.file_path.display().to_string(),
         first_user_message,
         title,
         status,
         last_event_summary,
     }))
+}
+
+fn should_hide_recent_boot_thread(item: &RecentSessionIndexItem) -> bool {
+    item.title == DEFAULT_THREAD_TITLE
+        && item.first_user_message.is_none()
+        && item.last_event_summary == "No event summary yet."
 }
 
 fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnapshot>> {
@@ -609,7 +682,10 @@ fn read_session_snapshot(
             io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing")
         })?;
 
-    if payload.get("source").and_then(Value::as_str).is_none() {
+    let Some(source) = payload.get("source").and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    if !is_supported_live_session_source(source) {
         return Ok(None);
     }
 
@@ -734,15 +810,47 @@ fn resolve_live_session_workspace_identity(
         ));
     }
 
-    let workspace_identity = resolve_session_workspace_identity(workspace_path, projects_root)?;
-    if !Path::new(&workspace_identity.origin_path).exists() {
+    if is_documents_archives_workspace_path(workspace_path) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "archived project workspaces are excluded from live sessions",
+        ));
+    }
+
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
+    if let Ok(identity) = resolve_workspace_identity(workspace_path) {
+        let origin_path = normalize_path(Path::new(&identity.origin_path))
+            .unwrap_or_else(|_| PathBuf::from(identity.origin_path.clone()));
+
+        if origin_path.starts_with(&normalized_projects_root) && origin_path.exists() {
+            return Ok(identity);
+        }
+    }
+
+    let inferred_origin = infer_live_projects_origin(workspace_path, &normalized_projects_root)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "live session workspace does not resolve into Documents/Projects",
+            )
+        })?;
+
+    if !inferred_origin.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             "live session workspace origin missing",
         ));
     }
 
-    Ok(workspace_identity)
+    let normalized_workspace =
+        normalize_path(workspace_path).unwrap_or_else(|_| workspace_path.to_path_buf());
+
+    Ok(build_workspace_identity(
+        inferred_origin.clone(),
+        inferred_origin != normalized_workspace,
+    ))
 }
 
 fn resolve_session_workspace_identity(
@@ -777,15 +885,41 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     let normalized_projects_root =
         normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
 
-    let workspace_file_name = normalized_workspace.file_name()?.to_str()?;
-
     let candidate = if normalized_workspace.starts_with(&normalized_projects_root) {
-        normalized_workspace
+        let relative = normalized_workspace
+            .strip_prefix(&normalized_projects_root)
+            .ok()?;
+        let first_segment = relative.components().next()?;
+        normalized_projects_root.join(first_segment.as_os_str())
     } else {
+        let workspace_file_name = normalized_workspace.file_name()?.to_str()?;
         normalized_projects_root.join(workspace_file_name)
     };
 
     let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
+    if normalized_candidate.starts_with(&normalized_projects_root) {
+        Some(normalized_candidate)
+    } else {
+        None
+    }
+}
+
+fn infer_live_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<PathBuf> {
+    let normalized_workspace = normalize_path(workspace_path).ok()?;
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
+    if !normalized_workspace.starts_with(&normalized_projects_root) {
+        return None;
+    }
+
+    let relative = normalized_workspace
+        .strip_prefix(&normalized_projects_root)
+        .ok()?;
+    let first_segment = relative.components().next()?;
+    let candidate = normalized_projects_root.join(first_segment.as_os_str());
+    let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
+
     if normalized_candidate.starts_with(&normalized_projects_root) {
         Some(normalized_candidate)
     } else {
@@ -802,6 +936,21 @@ fn is_conductor_workspace_path(workspace_path: &Path) -> bool {
     segments
         .windows(4)
         .any(|window| matches!(window, ["conductor", "workspaces", _, _]))
+}
+
+fn is_documents_archives_workspace_path(workspace_path: &Path) -> bool {
+    let segments: Vec<&str> = workspace_path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+
+    segments
+        .windows(2)
+        .any(|window| matches!(window, ["Documents", "Archives"]))
+}
+
+fn is_supported_live_session_source(source: &str) -> bool {
+    LIVE_SESSION_SOURCES.contains(&source)
 }
 
 fn classify_developer_content(text: &str) -> (String, String) {
@@ -905,6 +1054,8 @@ fn is_system_boilerplate_text(text: &str) -> bool {
     let trimmed = text.trim();
     trimmed.starts_with("# AGENTS.md instructions")
         || trimmed.starts_with("Automation:")
+        || trimmed.starts_with("<environment_context>")
+        || trimmed.starts_with("<permissions")
         || trimmed.starts_with("<skill>")
         || trimmed.starts_with("<subagent_notification>")
         || trimmed.starts_with("<turn_aborted>")
@@ -2129,7 +2280,13 @@ mod tests {
             .execute_batch(
                 "CREATE TABLE threads (
                     id TEXT PRIMARY KEY,
-                    archived INTEGER NOT NULL
+                    rollout_path TEXT NOT NULL DEFAULT '',
+                    updated_at INTEGER NOT NULL DEFAULT 0,
+                    source TEXT NOT NULL DEFAULT '',
+                    cwd TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    first_user_message TEXT NOT NULL DEFAULT '',
+                    archived INTEGER NOT NULL DEFAULT 0
                 );",
             )
             .expect("threads table should be created");
@@ -2142,6 +2299,57 @@ mod tests {
                 )
                 .expect("archived thread should be inserted");
         }
+    }
+
+    fn insert_thread_row(
+        path: &Path,
+        session_id: &str,
+        rollout_path: &Path,
+        source: &str,
+        workspace_path: &Path,
+        updated_at: i64,
+    ) {
+        insert_thread_row_with_archive_flag(
+            path,
+            session_id,
+            rollout_path,
+            source,
+            workspace_path,
+            updated_at,
+            false,
+        );
+    }
+
+    fn insert_thread_row_with_archive_flag(
+        path: &Path,
+        session_id: &str,
+        rollout_path: &Path,
+        source: &str,
+        workspace_path: &Path,
+        updated_at: i64,
+        archived: bool,
+    ) {
+        let connection = Connection::open(path).expect("state database should open");
+        connection
+            .execute(
+                "INSERT INTO threads (
+                    id,
+                    rollout_path,
+                    updated_at,
+                    source,
+                    cwd,
+                    archived
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (
+                    session_id,
+                    rollout_path.display().to_string(),
+                    updated_at,
+                    source,
+                    workspace_path.display().to_string(),
+                    if archived { 1_i64 } else { 0_i64 },
+                ),
+            )
+            .expect("thread row should be inserted");
     }
 
     fn write_session_lines<I, S>(path: &Path, lines: I)
@@ -2161,8 +2369,31 @@ mod tests {
         fs::create_dir_all(path.join(".git")).expect("workspace git dir should exist");
     }
 
+    fn create_linked_worktree(origin_repo_path: &Path, worktree_repo_path: &Path, name: &str) {
+        let worktree_git_dir = origin_repo_path.join(".git/worktrees").join(name);
+
+        fs::create_dir_all(origin_repo_path.join(".git")).expect("origin git dir should exist");
+        fs::create_dir_all(&worktree_git_dir).expect("worktree git dir should exist");
+        fs::create_dir_all(worktree_repo_path).expect("worktree repo should exist");
+        fs::write(
+            worktree_repo_path.join(".git"),
+            format!("gitdir: {}\n", worktree_git_dir.display()),
+        )
+        .expect("gitdir file should be written");
+        fs::write(worktree_git_dir.join("commondir"), "../..\n")
+            .expect("commondir file should be written");
+    }
+
     fn session_meta_line(session_id: &str, workspace_path: &Path) -> String {
-        session_meta_line_with_fork(session_id, workspace_path, None)
+        session_meta_line_with_source(session_id, workspace_path, "desktop")
+    }
+
+    fn session_meta_line_with_source(
+        session_id: &str,
+        workspace_path: &Path,
+        source: &str,
+    ) -> String {
+        session_meta_line_with_source_and_fork(session_id, workspace_path, source, None)
     }
 
     fn session_meta_line_with_fork(
@@ -2170,12 +2401,26 @@ mod tests {
         workspace_path: &Path,
         forked_from_id: Option<&str>,
     ) -> String {
+        session_meta_line_with_source_and_fork(
+            session_id,
+            workspace_path,
+            "desktop",
+            forked_from_id,
+        )
+    }
+
+    fn session_meta_line_with_source_and_fork(
+        session_id: &str,
+        workspace_path: &Path,
+        source: &str,
+        forked_from_id: Option<&str>,
+    ) -> String {
         let forked_from = forked_from_id
             .map(|value| format!(r#","forked_from_id":"{value}""#))
             .unwrap_or_default();
 
         format!(
-            r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}"{forked_from},"source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
+            r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}"{forked_from},"source":"{source}","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
             workspace_path.display()
         )
     }
@@ -2297,6 +2542,28 @@ mod tests {
     }
 
     #[test]
+    fn resolves_live_existing_codex_worktree_to_origin_identity() {
+        let temp_dir = TempDir::new("live-codex-worktree");
+        let projects_root = temp_dir.path.join("Documents/Projects");
+        let origin_repo_path = projects_root.join("exem-ui");
+        let workspace_path = temp_dir.path.join(".codex/worktrees/fcaf/exem-ui");
+
+        fs::create_dir_all(&projects_root).expect("projects root should exist");
+        create_linked_worktree(&origin_repo_path, &workspace_path, "fcaf");
+
+        let identity = resolve_live_session_workspace_identity(&workspace_path, &projects_root)
+            .expect("existing codex worktrees should resolve to the origin repo");
+        let expected_origin_path = normalize_path(&origin_repo_path)
+            .expect("origin path should normalize")
+            .display()
+            .to_string();
+
+        assert_eq!(identity.display_name, "exem-ui");
+        assert_eq!(identity.origin_path, expected_origin_path);
+        assert!(identity.is_worktree);
+    }
+
+    #[test]
     fn skips_conductor_archived_index_entries() {
         let temp_dir = TempDir::new("archived-index-conductor");
         let session_file = temp_dir.path.join("rollout.jsonl");
@@ -2405,8 +2672,10 @@ mod tests {
         let ctx = RecentSessionTestContext::new("recent-index");
         let workspace_path = ctx.projects_root.join("demo-app");
         let session_file = ctx.sessions_root.join("session.jsonl");
+        let state_database = ctx.codex_home.join("state_1.sqlite");
 
         create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
             vec![
@@ -2418,6 +2687,14 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Working on the lightweight summary."}]}}"#
                     .to_owned(),
             ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-001",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
         );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
@@ -2448,8 +2725,10 @@ mod tests {
             .temp_root
             .join("conductor/workspaces/React-Dashboard/kyiv");
         let session_file = ctx.sessions_root.join("conductor.jsonl");
+        let state_database = ctx.codex_home.join("state_2.sqlite");
 
         fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
             vec![
@@ -2457,6 +2736,14 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Should never appear"}]}}"#
                     .to_owned(),
             ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-conductor",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_801,
         );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
@@ -2469,8 +2756,10 @@ mod tests {
         let ctx = RecentSessionTestContext::new("recent-index-missing-origin");
         let workspace_path = ctx.temp_root.join("tmp/ghost-workspace");
         let session_file = ctx.sessions_root.join("missing-origin.jsonl");
+        let state_database = ctx.codex_home.join("state_3.sqlite");
 
         fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
             vec![
@@ -2478,6 +2767,14 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"This workspace should be rejected"}]}}"#
                     .to_owned(),
             ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-missing-origin",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_801,
         );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
@@ -2490,8 +2787,10 @@ mod tests {
         let ctx = RecentSessionTestContext::new("recent-index-automation");
         let workspace_path = ctx.projects_root.join("automation-demo");
         let session_file = ctx.sessions_root.join("automation.jsonl");
+        let state_database = ctx.codex_home.join("state_4.sqlite");
 
         create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
             vec![
@@ -2503,6 +2802,14 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"event_msg","payload":{"type":"task_complete","last_agent_message":"done"}}"#
                     .to_owned(),
             ],
+        );
+        insert_thread_row(
+            &state_database,
+            "automation-session",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
         );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
@@ -2518,6 +2825,220 @@ mod tests {
     }
 
     #[test]
+    fn skips_exec_recent_index_entries() {
+        let ctx = RecentSessionTestContext::new("recent-index-exec");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let session_file = ctx.sessions_root.join("exec-session.jsonl");
+        let state_database = ctx.codex_home.join("state_5.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line_with_source("session-exec", &workspace_path, "exec"),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"This exec session should stay hidden"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-exec",
+            &session_file,
+            "exec",
+            &workspace_path,
+            1_742_428_802,
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn keeps_recent_index_entries_from_existing_codex_worktrees() {
+        let ctx = RecentSessionTestContext::new("recent-index-worktree-live");
+        let origin_workspace = ctx.projects_root.join("Obsidian-frontend-journey");
+        let workspace_path = ctx
+            .temp_root
+            .join(".codex/worktrees/5594/Obsidian-frontend-journey");
+        let session_file = ctx.sessions_root.join("live-worktree-session.jsonl");
+        let state_database = ctx.codex_home.join("state_6.sqlite");
+
+        create_linked_worktree(&origin_workspace, &workspace_path, "5594");
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line_with_source("session-worktree", &workspace_path, "vscode"),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Automation: Dialy Diary Automation\n# Daily Diary\nCodex app live sessions should keep valid worktrees visible."}]}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Prepared the daily diary draft."}]}}"#
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-worktree",
+            &session_file,
+            "vscode",
+            &workspace_path,
+            1_742_428_802,
+        );
+
+        let item = load_recent_session_index_from_disk()
+            .expect("recent index should load")
+            .into_iter()
+            .next()
+            .expect("existing worktree session should remain visible");
+
+        assert_eq!(item.session_id, "session-worktree");
+        assert_eq!(item.display_name, "Obsidian-frontend-journey");
+        assert_eq!(item.origin_path, origin_workspace.display().to_string());
+    }
+
+    #[test]
+    fn skips_stale_codex_worktree_recent_index_entries() {
+        let ctx = RecentSessionTestContext::new("recent-index-worktree-stale");
+        let workspace_path = ctx.temp_root.join(".codex/worktrees/6971/exem-ui");
+        let session_file = ctx.sessions_root.join("stale-worktree-session.jsonl");
+        let state_database = ctx.codex_home.join("state_6.sqlite");
+
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line_with_source("session-stale-worktree", &workspace_path, "vscode"),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"This stale worktree session should stay hidden"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-stale-worktree",
+            &session_file,
+            "vscode",
+            &workspace_path,
+            1_742_428_802,
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn collapses_nested_project_workspace_and_skips_environment_context_titles() {
+        let ctx = RecentSessionTestContext::new("recent-index-nested-project");
+        let workspace_root = ctx.projects_root.join("exem-ui");
+        let nested_workspace = workspace_root.join("packages/ui");
+        let session_file = ctx.sessions_root.join("nested-project.jsonl");
+        let state_database = ctx.codex_home.join("state_7.sqlite");
+
+        create_git_workspace(&workspace_root);
+        fs::create_dir_all(&nested_workspace).expect("nested workspace path should exist");
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("session-nested", &nested_workspace),
+                r##"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /Users/choegihwan/Documents/Projects/exem-ui"}]}}"##
+                    .to_owned(),
+                r##"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context> <cwd>/Users/choegihwan/Documents/Projects/exem-ui/packages/ui</cwd> <shell>zsh</shell> </environment_context>"}]}}"##
+                    .to_owned(),
+                r##"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"List the instruction sources you loaded."}]}}"##
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-nested",
+            &session_file,
+            "desktop",
+            &nested_workspace,
+            1_742_428_803,
+        );
+
+        let item = load_recent_session_index_from_disk()
+            .expect("recent index should load")
+            .into_iter()
+            .next()
+            .expect("recent index entry should exist");
+
+        assert_eq!(item.display_name, "exem-ui");
+        assert_eq!(item.origin_path, workspace_root.display().to_string());
+        assert_eq!(item.title, "List the instruction sources you loaded.");
+        assert_eq!(
+            item.first_user_message.as_deref(),
+            Some("List the instruction sources you loaded.")
+        );
+    }
+
+    #[test]
+    fn skips_recent_index_entries_from_archived_projects_workspace_paths() {
+        let ctx = RecentSessionTestContext::new("recent-index-archived-projects");
+        let workspace_path = ctx
+            .temp_root
+            .join("Documents/Archives/Projects/mfo_v5_starter");
+        let session_file = ctx.sessions_root.join("archived-project.jsonl");
+        let state_database = ctx.codex_home.join("state_8.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line_with_source("session-archived-project", &workspace_path, "vscode"),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived workspace should stay hidden"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-archived-project",
+            &session_file,
+            "vscode",
+            &workspace_path,
+            1_742_428_802,
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn skips_boot_only_recent_threads_without_meaningful_activity() {
+        let ctx = RecentSessionTestContext::new("recent-index-boot-only");
+        let workspace_path = ctx.projects_root.join("exem-ui");
+        let session_file = ctx.sessions_root.join("boot-only.jsonl");
+        let state_database = ctx.codex_home.join("state_10.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![session_meta_line_with_source(
+                "session-boot-only",
+                &workspace_path,
+                "cli",
+            )],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-boot-only",
+            &session_file,
+            "cli",
+            &workspace_path,
+            1_742_428_800,
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
     fn excludes_archived_threads_from_recent_index() {
         let ctx = RecentSessionTestContext::new("recent-index-archived");
         let workspace_path = ctx.projects_root.join("demo-app");
@@ -2526,8 +3047,7 @@ mod tests {
         let state_database = ctx.codex_home.join("state_9.sqlite");
 
         create_git_workspace(&workspace_path);
-        fs::create_dir_all(&ctx.codex_home).expect("codex home should exist");
-        create_state_database(&state_database, &["session-archived"]);
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &archived_session_file,
             vec![
@@ -2544,6 +3064,23 @@ mod tests {
                     .to_owned(),
             ],
         );
+        insert_thread_row_with_archive_flag(
+            &state_database,
+            "session-archived",
+            &archived_session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_801,
+            true,
+        );
+        insert_thread_row(
+            &state_database,
+            "session-visible",
+            &visible_session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_802,
+        );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
 
@@ -2559,8 +3096,7 @@ mod tests {
         let state_database = ctx.codex_home.join("state_11.sqlite");
 
         create_git_workspace(&workspace_path);
-        fs::create_dir_all(&ctx.codex_home).expect("codex home should exist");
-        create_state_database(&state_database, &["session-archived"]);
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
             vec![
@@ -2568,6 +3104,15 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived thread should not hydrate"}]}}"#
                     .to_owned(),
             ],
+        );
+        insert_thread_row_with_archive_flag(
+            &state_database,
+            "session-archived",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_801,
+            true,
         );
 
         let snapshot =
@@ -2583,8 +3128,10 @@ mod tests {
         let selected_file = ctx.sessions_root.join("selected.jsonl");
         let matched_subagent_file = ctx.sessions_root.join("matched-sub.jsonl");
         let unrelated_subagent_file = ctx.sessions_root.join("other-sub.jsonl");
+        let state_database = ctx.codex_home.join("state_12.sqlite");
 
         create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
         write_session_lines(
             &selected_file,
             vec![
@@ -2609,6 +3156,14 @@ mod tests {
                 r#"{"timestamp":"2026-03-20T00:02:00.000Z","type":"session_meta","payload":{"id":"sub-999","source":{"subagent":{"thread_spawn":{"parent_thread_id":"other-parent","depth":1,"agent_nickname":"Noether","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:02:00.000Z"}}"#.to_owned(),
                 r#"{"timestamp":"2026-03-20T00:02:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Unrelated child"}]}}"#.to_owned(),
             ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-001",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_802,
         );
 
         let snapshot =
