@@ -305,7 +305,12 @@ fn load_recent_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogS
         return None;
     }
 
+    let archived_thread_ids = load_archived_thread_ids(&codex_home).unwrap_or_default();
     let mut snapshot = read_session_snapshot(&canonical_path, &projects_root).ok()??;
+    if archived_thread_ids.contains(&snapshot.session_id) {
+        return None;
+    }
+
     let mut session_files = Vec::new();
     collect_jsonl_files(&sessions_root, &mut session_files).ok()?;
 
@@ -378,7 +383,7 @@ fn read_recent_index_entry(
         .unwrap_or_else(|| session_file.display().to_string());
 
     let workspace_identity =
-        resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
+        resolve_live_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
     let Some(workspace_identity) = workspace_identity else {
         return Ok(None);
     };
@@ -1359,7 +1364,8 @@ fn extract_turn_context_model(entry: &Value) -> Option<String> {
         return None;
     }
 
-    entry.get("payload")
+    entry
+        .get("payload")
         .and_then(|payload| payload.get("model"))
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
@@ -1411,7 +1417,10 @@ fn collapse_whitespace(text: &str) -> String {
 }
 
 fn sanitize_summary_text(text: &str) -> String {
-    collapse_whitespace(text).trim().trim_start_matches('$').to_owned()
+    collapse_whitespace(text)
+        .trim()
+        .trim_start_matches('$')
+        .to_owned()
 }
 
 fn extract_first_user_message(entries: &[SessionEntrySnapshot]) -> Option<String> {
@@ -1453,8 +1462,7 @@ fn derive_recent_index_status(entries: &[SessionEntrySnapshot]) -> String {
                 .as_deref()
                 .map(|text| {
                     let trimmed = text.trim();
-                    trimmed.starts_with("<turn_aborted>")
-                        || !is_system_boilerplate_text(trimmed)
+                    trimmed.starts_with("<turn_aborted>") || !is_system_boilerplate_text(trimmed)
                 })
                 .unwrap_or(false)
     });
@@ -1515,8 +1523,13 @@ fn derive_recent_index_last_summary(entries: &[SessionEntrySnapshot]) -> String 
                     }
                 }
             }
-            "function_call_output" | "task_complete" | "agent_message" | "agent_reasoning"
-            | "item_completed" | "turn_aborted" | "thread_rolled_back" => {
+            "function_call_output"
+            | "task_complete"
+            | "agent_message"
+            | "agent_reasoning"
+            | "item_completed"
+            | "turn_aborted"
+            | "thread_rolled_back" => {
                 if let Some(text) = entry.text.as_deref() {
                     let trimmed = text.trim();
                     if !trimmed.is_empty() {
@@ -1697,10 +1710,12 @@ fn filter_archived_index(
 
 #[tauri::command]
 async fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapshot> {
-    tauri::async_runtime::spawn_blocking(move || load_archived_session_snapshot_from_disk(&file_path))
-        .await
-        .ok()
-        .flatten()
+    tauri::async_runtime::spawn_blocking(move || {
+        load_archived_session_snapshot_from_disk(&file_path)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 fn load_archived_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogSnapshot> {
@@ -2058,6 +2073,17 @@ mod tests {
         original: Option<std::ffi::OsString>,
     }
 
+    struct RecentSessionTestContext {
+        _temp_dir: TempDir,
+        _env_lock: std::sync::MutexGuard<'static, ()>,
+        _home_guard: EnvVarGuard,
+        _codex_home_guard: EnvVarGuard,
+        temp_root: PathBuf,
+        codex_home: PathBuf,
+        sessions_root: PathBuf,
+        projects_root: PathBuf,
+    }
+
     impl TempDir {
         fn new(name: &str) -> Self {
             let timestamp = SystemTime::now()
@@ -2118,8 +2144,67 @@ mod tests {
         }
     }
 
-    fn write_session_file(path: &Path, lines: &[&str]) {
-        fs::write(path, lines.join("\n")).expect("session file should be written");
+    fn write_session_lines<I, S>(path: &Path, lines: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let contents = lines
+            .into_iter()
+            .map(|line| line.as_ref().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(path, contents).expect("session file should be written");
+    }
+
+    fn create_git_workspace(path: &Path) {
+        fs::create_dir_all(path.join(".git")).expect("workspace git dir should exist");
+    }
+
+    fn session_meta_line(session_id: &str, workspace_path: &Path) -> String {
+        session_meta_line_with_fork(session_id, workspace_path, None)
+    }
+
+    fn session_meta_line_with_fork(
+        session_id: &str,
+        workspace_path: &Path,
+        forked_from_id: Option<&str>,
+    ) -> String {
+        let forked_from = forked_from_id
+            .map(|value| format!(r#","forked_from_id":"{value}""#))
+            .unwrap_or_default();
+
+        format!(
+            r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}"{forked_from},"source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
+            workspace_path.display()
+        )
+    }
+
+    impl RecentSessionTestContext {
+        fn new(name: &str) -> Self {
+            let env_lock = TEST_ENV_MUTEX.lock().expect("test env mutex should lock");
+            let temp_dir = TempDir::new(name);
+            let home_root = normalize_path(&temp_dir.path).expect("temp path should normalize");
+            let home_guard = EnvVarGuard::set("HOME", &home_root);
+            let codex_home = home_root.join(".codex");
+            let codex_home_guard = EnvVarGuard::set("CODEX_HOME", &codex_home);
+            let sessions_root = codex_home.join("sessions");
+            let projects_root = home_root.join("Documents/Projects");
+
+            fs::create_dir_all(&sessions_root).expect("sessions root should exist");
+            fs::create_dir_all(&projects_root).expect("projects root should exist");
+
+            Self {
+                _temp_dir: temp_dir,
+                _env_lock: env_lock,
+                _home_guard: home_guard,
+                _codex_home_guard: codex_home_guard,
+                temp_root: home_root,
+                codex_home,
+                sessions_root,
+                projects_root,
+            }
+        }
     }
 
     #[test]
@@ -2216,9 +2301,9 @@ mod tests {
         let temp_dir = TempDir::new("archived-index-conductor");
         let session_file = temp_dir.path.join("rollout.jsonl");
 
-        write_session_file(
+        write_session_lines(
             &session_file,
-            &[
+            [
                 r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
             ],
         );
@@ -2234,9 +2319,9 @@ mod tests {
         let temp_dir = TempDir::new("archived-full-conductor");
         let session_file = temp_dir.path.join("rollout.jsonl");
 
-        write_session_file(
+        write_session_lines(
             &session_file,
-            &[
+            [
                 r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
             ],
         );
@@ -2317,33 +2402,23 @@ mod tests {
 
     #[test]
     fn builds_recent_index_entry_from_lightweight_session_scan() {
-        let _env_lock = TEST_ENV_MUTEX.lock().expect("test env mutex should lock");
-        let temp_dir = TempDir::new("recent-index");
-        let home_root = normalize_path(&temp_dir.path).expect("temp path should normalize");
-        let _home_guard = EnvVarGuard::set("HOME", &home_root);
-        let codex_home = home_root.join(".codex");
-        let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", &codex_home);
-        let sessions_root = codex_home.join("sessions");
-        let projects_root = home_root.join("Documents/Projects");
-        let workspace_path = projects_root.join("demo-app");
-        let session_file = sessions_root.join("session.jsonl");
+        let ctx = RecentSessionTestContext::new("recent-index");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let session_file = ctx.sessions_root.join("session.jsonl");
 
-        fs::create_dir_all(workspace_path.join(".git")).expect("workspace git dir should exist");
-        fs::create_dir_all(&sessions_root).expect("sessions root should exist");
-        fs::write(
+        create_git_workspace(&workspace_path);
+        write_session_lines(
             &session_file,
-            [
-                format!(
-                    r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"session-001","source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
-                    workspace_path.display()
-                ),
-                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#.to_owned(),
-                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Ship the recent-index flow"}]}}"#.to_owned(),
-                r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Working on the lightweight summary."}]}}"#.to_owned(),
-            ]
-            .join("\n"),
-        )
-        .expect("session file should be written");
+            vec![
+                session_meta_line("session-001", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Ship the recent-index flow"}]}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Working on the lightweight summary."}]}}"#
+                    .to_owned(),
+            ],
+        );
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
         let item = items
@@ -2356,84 +2431,189 @@ mod tests {
         assert_eq!(item.model.as_deref(), Some("gpt-5"));
         assert_eq!(item.title, "Ship the recent-index flow");
         assert_eq!(item.status, "done");
-        assert_eq!(item.last_event_summary, "Working on the lightweight summary.");
-        assert_eq!(item.first_user_message.as_deref(), Some("Ship the recent-index flow"));
+        assert_eq!(
+            item.last_event_summary,
+            "Working on the lightweight summary."
+        );
+        assert_eq!(
+            item.first_user_message.as_deref(),
+            Some("Ship the recent-index flow")
+        );
+    }
+
+    #[test]
+    fn skips_conductor_recent_index_entries() {
+        let ctx = RecentSessionTestContext::new("recent-index-conductor");
+        let workspace_path = ctx
+            .temp_root
+            .join("conductor/workspaces/React-Dashboard/kyiv");
+        let session_file = ctx.sessions_root.join("conductor.jsonl");
+
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("session-conductor", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Should never appear"}]}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn skips_recent_index_entries_when_origin_workspace_is_missing() {
+        let ctx = RecentSessionTestContext::new("recent-index-missing-origin");
+        let workspace_path = ctx.temp_root.join("tmp/ghost-workspace");
+        let session_file = ctx.sessions_root.join("missing-origin.jsonl");
+
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("session-missing-origin", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"This workspace should be rejected"}]}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn keeps_recent_automation_sessions_when_workspace_identity_is_valid() {
+        let ctx = RecentSessionTestContext::new("recent-index-automation");
+        let workspace_path = ctx.projects_root.join("automation-demo");
+        let session_file = ctx.sessions_root.join("automation.jsonl");
+
+        create_git_workspace(&workspace_path);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("automation-session", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Automation: Daily Diary Automation\n# Daily Diary\nAI 에이전트 활동 로그와 Obsidian 볼트 변경사항을 종합한다."}]}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"event_msg","payload":{"type":"task_complete","last_agent_message":"done"}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+        let item = items
+            .into_iter()
+            .next()
+            .expect("automation session should remain visible");
+
+        assert_eq!(item.session_id, "automation-session");
+        assert_eq!(item.display_name, "automation-demo");
+        assert_eq!(item.title, DEFAULT_THREAD_TITLE);
+        assert!(item.first_user_message.is_none());
+    }
+
+    #[test]
+    fn excludes_archived_threads_from_recent_index() {
+        let ctx = RecentSessionTestContext::new("recent-index-archived");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let archived_session_file = ctx.sessions_root.join("archived-live.jsonl");
+        let visible_session_file = ctx.sessions_root.join("visible-live.jsonl");
+        let state_database = ctx.codex_home.join("state_9.sqlite");
+
+        create_git_workspace(&workspace_path);
+        fs::create_dir_all(&ctx.codex_home).expect("codex home should exist");
+        create_state_database(&state_database, &["session-archived"]);
+        write_session_lines(
+            &archived_session_file,
+            vec![
+                session_meta_line("session-archived", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived thread should stay hidden"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        write_session_lines(
+            &visible_session_file,
+            vec![
+                session_meta_line("session-visible", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Visible thread should remain"}]}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].session_id, "session-visible");
+    }
+
+    #[test]
+    fn rejects_archived_threads_from_recent_snapshot_loading() {
+        let ctx = RecentSessionTestContext::new("recent-snapshot-archived");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let session_file = ctx.sessions_root.join("archived-selected.jsonl");
+        let state_database = ctx.codex_home.join("state_11.sqlite");
+
+        create_git_workspace(&workspace_path);
+        fs::create_dir_all(&ctx.codex_home).expect("codex home should exist");
+        create_state_database(&state_database, &["session-archived"]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("session-archived", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived thread should not hydrate"}]}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let snapshot =
+            load_recent_session_snapshot_from_disk(session_file.to_string_lossy().as_ref());
+
+        assert!(snapshot.is_none());
     }
 
     #[test]
     fn loads_selected_recent_snapshot_and_matching_subagents_only() {
-        let _env_lock = TEST_ENV_MUTEX.lock().expect("test env mutex should lock");
-        let temp_dir = TempDir::new("recent-detail");
-        let home_root = normalize_path(&temp_dir.path).expect("temp path should normalize");
-        let _home_guard = EnvVarGuard::set("HOME", &home_root);
-        let codex_home = home_root.join(".codex");
-        let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", &codex_home);
-        let sessions_root = codex_home.join("sessions");
-        let projects_root = home_root.join("Documents/Projects");
-        let workspace_path = projects_root.join("demo-app");
-        let selected_file = sessions_root.join("selected.jsonl");
-        let matched_subagent_file = sessions_root.join("matched-sub.jsonl");
-        let unrelated_subagent_file = sessions_root.join("other-sub.jsonl");
+        let ctx = RecentSessionTestContext::new("recent-detail");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let selected_file = ctx.sessions_root.join("selected.jsonl");
+        let matched_subagent_file = ctx.sessions_root.join("matched-sub.jsonl");
+        let unrelated_subagent_file = ctx.sessions_root.join("other-sub.jsonl");
 
-        fs::create_dir_all(workspace_path.join(".git")).expect("workspace git dir should exist");
-        fs::create_dir_all(&sessions_root).expect("sessions root should exist");
-
-        fs::write(
+        create_git_workspace(&workspace_path);
+        write_session_lines(
             &selected_file,
-            [
-                format!(
-                    r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"session-001","forked_from_id":"fork-001","source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
-                    workspace_path.display()
-                ),
-                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#.to_owned(),
-                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect only this session"}]}}"#.to_owned(),
-            ]
-            .join("\n"),
-        )
-        .expect("selected file should be written");
-        fs::write(
+            vec![
+                session_meta_line_with_fork("session-001", &workspace_path, Some("fork-001")),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect only this session"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        write_session_lines(
             &matched_subagent_file,
-            [
+            vec![
                 r#"{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{"id":"sub-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Euler","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:01:00.000Z"}}"#.to_owned(),
                 r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#.to_owned(),
                 r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Matched child"}]}}"#.to_owned(),
-            ]
-            .join("\n"),
-        )
-        .expect("matched subagent file should be written");
-        fs::write(
+            ],
+        );
+        write_session_lines(
             &unrelated_subagent_file,
-            [
+            vec![
                 r#"{"timestamp":"2026-03-20T00:02:00.000Z","type":"session_meta","payload":{"id":"sub-999","source":{"subagent":{"thread_spawn":{"parent_thread_id":"other-parent","depth":1,"agent_nickname":"Noether","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:02:00.000Z"}}"#.to_owned(),
                 r#"{"timestamp":"2026-03-20T00:02:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Unrelated child"}]}}"#.to_owned(),
-            ]
-            .join("\n"),
-        )
-        .expect("unrelated subagent file should be written");
+            ],
+        );
 
-        let mut snapshot = read_session_snapshot(&selected_file, &projects_root)
-            .expect("selected recent snapshot should parse")
-            .expect("selected recent snapshot should exist");
-
-        let mut session_files = Vec::new();
-        collect_jsonl_files(&sessions_root, &mut session_files)
-            .expect("session files should be discoverable");
-        for session_file in &session_files {
-            if session_file == &selected_file {
-                continue;
-            }
-
-            if let Ok(Some(sub)) = read_subagent_snapshot(session_file) {
-                if sub.parent_thread_id == snapshot.session_id
-                    || snapshot
-                        .forked_from_id
-                        .as_ref()
-                        .is_some_and(|fid| sub.parent_thread_id == *fid)
-                {
-                    snapshot.subagents.push(sub);
-                }
-            }
-        }
+        let snapshot =
+            load_recent_session_snapshot_from_disk(selected_file.to_string_lossy().as_ref())
+                .expect("selected recent snapshot should exist");
 
         assert_eq!(snapshot.session_id, "session-001");
         assert_eq!(snapshot.subagents.len(), 1);
