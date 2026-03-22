@@ -25,6 +25,48 @@
   --color-surface-raised: rgba(255, 255, 255, 0.06);
   --color-primary-foreground: #08111d;
   --shadow-panel: 0 24px 72px rgba(5, 8, 12, 0.42);
+  --color-chrome-border: rgba(166, 175, 189, 0.18);
+  --color-chrome-border-strong: rgba(166, 175, 189, 0.24);
+  --color-chrome-border-subtle: rgba(166, 175, 189, 0.12);
+  --color-surface-tint: rgba(255, 255, 255, 0.03);
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-live-pulse-shadow: rgba(77, 163, 255, 0.3);
+  --color-graph-lane-line: rgba(166, 175, 189, 0.18);
+  --color-graph-guide-selected: rgba(77, 163, 255, 0.34);
+  --color-graph-guide-active: rgba(166, 175, 189, 0.24);
+  --color-graph-guide-default: rgba(166, 175, 189, 0.12);
+  --color-graph-guide-continuation: rgba(166, 175, 189, 0.075);
+  --color-graph-edge-neutral: rgba(166, 175, 189, 0.34);
+  --color-graph-edge-merge: rgba(243, 246, 251, 0.72);
+  --color-graph-port-outline: rgba(20, 24, 33, 0.96);
+  --color-graph-gap-fill: rgba(255, 255, 255, 0.06);
+  --color-graph-gap-border: rgba(255, 255, 255, 0.22);
+  --color-graph-connector: rgba(166, 175, 189, 0.045);
+  --color-graph-card-border: rgba(255, 255, 255, 0.08);
+  --color-graph-card-border-in-path: rgba(77, 163, 255, 0.28);
+  --color-graph-card-border-selected: rgba(77, 163, 255, 0.58);
+  --color-graph-lane-role-bg: rgba(255, 255, 255, 0.06);
+  --color-graph-card-muted-accent: rgba(166, 175, 189, 0.4);
+  --color-graph-card-note-accent: rgba(166, 175, 189, 0.25);
+  --color-prompt-layer-fill: rgba(255, 255, 255, 0.025);
+  --color-prompt-layer-hover: rgba(255, 255, 255, 0.03);
+  --color-prompt-layer-divider: rgba(255, 255, 255, 0.08);
+  --color-prompt-layer-mix-base: rgba(255, 255, 255, 0.02);
+  --gradient-app-background:
+    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 28%),
+    radial-gradient(circle at top right, rgba(245, 196, 81, 0.07), transparent 24%),
+    linear-gradient(160deg, #0b0d11 0%, var(--color-bg) 35%, #0a0d12 100%);
+  --gradient-monitor-header: linear-gradient(180deg, rgba(18, 22, 31, 0.96), rgba(13, 17, 24, 0.96));
+  --gradient-panel-surface: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(17, 21, 30, 0.96));
+  --gradient-dialog-surface: linear-gradient(180deg, rgba(20, 24, 33, 0.98), rgba(17, 21, 30, 0.98));
+  --gradient-graph-sticky: linear-gradient(180deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.92));
+  --gradient-graph-time: linear-gradient(90deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.88));
+  --gradient-graph-card-surface: linear-gradient(180deg, rgba(24, 29, 39, 1), rgba(16, 20, 29, 1));
+  --gradient-graph-card-user: linear-gradient(180deg, rgba(77, 163, 255, 0.06), rgba(16, 20, 29, 1));
+  --gradient-graph-card-error: linear-gradient(180deg, rgba(255, 107, 107, 0.06), rgba(16, 20, 29, 1));
+  --shadow-graph-card: 0 18px 34px rgba(4, 8, 14, 0.26);
+  --shadow-graph-card-in-path: inset 0 0 0 1px rgba(77, 163, 255, 0.12), 0 18px 34px rgba(4, 8, 14, 0.26);
+  --shadow-graph-card-selected: 0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -62,6 +104,48 @@
   --color-surface-raised: rgba(15, 23, 42, 0.04);
   --color-primary-foreground: #eff6ff;
   --shadow-panel: 0 18px 48px rgba(15, 23, 42, 0.08);
+  --color-chrome-border: rgba(15, 23, 42, 0.12);
+  --color-chrome-border-strong: rgba(15, 23, 42, 0.18);
+  --color-chrome-border-subtle: rgba(15, 23, 42, 0.08);
+  --color-surface-tint: rgba(255, 255, 255, 0.78);
+  --color-surface-hover: rgba(241, 245, 249, 0.92);
+  --color-live-pulse-shadow: rgba(37, 99, 235, 0.22);
+  --color-graph-lane-line: rgba(100, 116, 139, 0.18);
+  --color-graph-guide-selected: rgba(37, 99, 235, 0.28);
+  --color-graph-guide-active: rgba(100, 116, 139, 0.22);
+  --color-graph-guide-default: rgba(100, 116, 139, 0.12);
+  --color-graph-guide-continuation: rgba(100, 116, 139, 0.08);
+  --color-graph-edge-neutral: rgba(71, 85, 105, 0.34);
+  --color-graph-edge-merge: rgba(51, 65, 85, 0.58);
+  --color-graph-port-outline: rgba(255, 255, 255, 0.96);
+  --color-graph-gap-fill: rgba(226, 232, 240, 0.62);
+  --color-graph-gap-border: rgba(100, 116, 139, 0.22);
+  --color-graph-connector: rgba(100, 116, 139, 0.08);
+  --color-graph-card-border: rgba(148, 163, 184, 0.24);
+  --color-graph-card-border-in-path: rgba(37, 99, 235, 0.28);
+  --color-graph-card-border-selected: rgba(37, 99, 235, 0.52);
+  --color-graph-lane-role-bg: rgba(15, 23, 42, 0.05);
+  --color-graph-card-muted-accent: rgba(100, 116, 139, 0.42);
+  --color-graph-card-note-accent: rgba(100, 116, 139, 0.22);
+  --color-prompt-layer-fill: rgba(255, 255, 255, 0.82);
+  --color-prompt-layer-hover: rgba(241, 245, 249, 0.92);
+  --color-prompt-layer-divider: rgba(15, 23, 42, 0.08);
+  --color-prompt-layer-mix-base: rgba(255, 255, 255, 0.75);
+  --gradient-app-background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 28%),
+    radial-gradient(circle at top right, rgba(217, 119, 6, 0.08), transparent 24%),
+    linear-gradient(160deg, #fbfdff 0%, var(--color-bg) 38%, #edf3fa 100%);
+  --gradient-monitor-header: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 245, 251, 0.96));
+  --gradient-panel-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98));
+  --gradient-dialog-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 253, 0.98));
+  --gradient-graph-sticky: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 253, 0.94));
+  --gradient-graph-time: linear-gradient(90deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 253, 0.9));
+  --gradient-graph-card-surface: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(245, 248, 253, 1));
+  --gradient-graph-card-user: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(245, 248, 253, 1));
+  --gradient-graph-card-error: linear-gradient(180deg, rgba(220, 38, 38, 0.06), rgba(245, 248, 253, 1));
+  --shadow-graph-card: 0 16px 30px rgba(15, 23, 42, 0.1);
+  --shadow-graph-card-in-path: inset 0 0 0 1px rgba(37, 99, 235, 0.1), 0 16px 30px rgba(15, 23, 42, 0.1);
+  --shadow-graph-card-selected: 0 0 0 1px rgba(37, 99, 235, 0.24), 0 16px 30px rgba(15, 23, 42, 0.12);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -86,10 +170,7 @@ body {
   font-family: var(--font-sans);
   line-height: 1.5;
   color: var(--color-text);
-  background:
-    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(245, 196, 81, 0.07), transparent 24%),
-    linear-gradient(160deg, #0b0d11 0%, var(--color-bg) 35%, #0a0d12 100%);
+  background: var(--gradient-app-background);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

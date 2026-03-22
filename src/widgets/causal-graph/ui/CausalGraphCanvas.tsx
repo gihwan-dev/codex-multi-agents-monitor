@@ -18,7 +18,7 @@ const EDGE_COLORS: Record<string, string> = {
   handoff: "var(--color-handoff)",
   transfer: "var(--color-transfer)",
   spawn: "var(--color-active)",
-  merge: "rgba(243, 246, 251, 0.72)",
+  merge: "var(--color-graph-edge-merge)",
 };
 
 const GRAPH_STATUS_COLORS: Record<RunStatus, string> = {
@@ -111,7 +111,7 @@ export function CausalGraphCanvas({
             y1={0}
             x2={layout.laneCenterById.get(lane.laneId) ?? 0}
             y2={renderedContentHeight}
-            stroke="rgba(166, 175, 189, 0.18)"
+            stroke="var(--color-graph-lane-line)"
             strokeWidth={2}
             strokeDasharray="3 8"
           />
@@ -139,10 +139,10 @@ export function CausalGraphCanvas({
               y2={guideY}
               stroke={
                 row.selected
-                  ? "rgba(77, 163, 255, 0.34)"
+                  ? "var(--color-graph-guide-selected)"
                   : row.inPath
-                    ? "rgba(166, 175, 189, 0.24)"
-                    : "rgba(166, 175, 189, 0.12)"
+                    ? "var(--color-graph-guide-active)"
+                    : "var(--color-graph-guide-default)"
               }
               strokeWidth={row.selected || row.inPath ? 1.25 : 1}
               strokeDasharray="2 6"
@@ -165,7 +165,7 @@ export function CausalGraphCanvas({
               y1={guideY}
               x2={layout.contentWidth}
               y2={guideY}
-              stroke="rgba(166, 175, 189, 0.075)"
+              stroke="var(--color-graph-guide-continuation)"
               strokeWidth={1}
               strokeDasharray="2 7"
             />
@@ -177,7 +177,7 @@ export function CausalGraphCanvas({
             return null;
           }
 
-          const color = EDGE_COLORS[bundle.edgeType] ?? "rgba(166, 175, 189, 0.34)";
+          const color = EDGE_COLORS[bundle.edgeType] ?? "var(--color-graph-edge-neutral)";
           const strokeWidth = bundle.inPath || bundle.selected ? 3.5 : 2.5;
           const dashArray =
             bundle.edgeType === "handoff"
@@ -217,7 +217,7 @@ export function CausalGraphCanvas({
                 cy={route.sourcePort.y}
                 r={4}
                 fill="currentColor"
-                stroke="rgba(20, 24, 33, 0.96)"
+                stroke="var(--color-graph-port-outline)"
                 strokeWidth={1.5}
               />
               <circle
@@ -227,7 +227,7 @@ export function CausalGraphCanvas({
                 cy={route.targetPort.y}
                 r={4}
                 fill="currentColor"
-                stroke="rgba(20, 24, 33, 0.96)"
+                stroke="var(--color-graph-port-outline)"
                 strokeWidth={1.5}
               />
             </g>
@@ -259,18 +259,15 @@ export function CausalGraphCanvas({
                 className="absolute inset-y-0 right-0"
                 style={{
                   left: TIME_GUTTER,
-                  background: "rgba(255, 255, 255, 0.06)",
-                  borderTop: "1px dashed rgba(255, 255, 255, 0.22)",
-                  borderBottom: "1px dashed rgba(255, 255, 255, 0.22)",
+                  background: "var(--color-graph-gap-fill)",
+                  borderTop: "1px dashed var(--color-graph-gap-border)",
+                  borderBottom: "1px dashed var(--color-graph-gap-border)",
                 }}
               />
               <div
                 data-slot="graph-gap-time"
                 className="sticky left-0 z-[3] flex min-h-full items-center px-3 text-[0.74rem] font-mono text-muted-foreground"
-                style={{
-                  background:
-                    "linear-gradient(90deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.88))",
-                }}
+                style={{ background: "var(--gradient-graph-time)" }}
               />
               <div
                 className="relative z-[1] flex items-center justify-center"
@@ -290,10 +287,7 @@ export function CausalGraphCanvas({
               <div
                 data-slot="graph-event-time"
                 className="sticky left-0 z-[3] flex min-h-full items-center px-3 text-[0.74rem] font-mono text-muted-foreground"
-                style={{
-                  background:
-                    "linear-gradient(90deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.88))",
-                }}
+                style={{ background: "var(--gradient-graph-time)" }}
               >
                 <div className="flex items-baseline gap-1.5 whitespace-nowrap tabular-nums">
                   <strong>{row.timeLabel}</strong>
@@ -317,7 +311,11 @@ export function CausalGraphCanvas({
                       <>
                         <span
                           aria-hidden="true"
-                          className="absolute inset-y-0 left-1/2 z-0 w-0.5 -translate-x-1/2 bg-[linear-gradient(180deg,rgba(166,175,189,0.045),rgba(166,175,189,0))]"
+                          className="absolute inset-y-0 left-1/2 z-0 w-0.5 -translate-x-1/2"
+                          style={{
+                            background:
+                              "linear-gradient(180deg, var(--color-graph-connector), transparent)",
+                          }}
                         />
                         <button
                           type="button"
@@ -441,29 +439,28 @@ function buildCardStyle(
     minHeight: 80,
     borderWidth: 1,
     borderStyle: "solid",
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-    borderRightColor: "rgba(255, 255, 255, 0.08)",
-    borderBottomColor: "rgba(255, 255, 255, 0.08)",
-    borderLeftColor: "rgba(255, 255, 255, 0.08)",
-    background: "linear-gradient(180deg, rgba(24, 29, 39, 1), rgba(16, 20, 29, 1))",
-    boxShadow: "0 18px 34px rgba(4, 8, 14, 0.26)",
+    borderTopColor: "var(--color-graph-card-border)",
+    borderRightColor: "var(--color-graph-card-border)",
+    borderBottomColor: "var(--color-graph-card-border)",
+    borderLeftColor: "var(--color-graph-card-border)",
+    background: "var(--gradient-graph-card-surface)",
+    boxShadow: "var(--shadow-graph-card)",
   };
 
   if (inPath) {
-    base.borderTopColor = "rgba(77, 163, 255, 0.28)";
-    base.borderRightColor = "rgba(77, 163, 255, 0.28)";
-    base.borderBottomColor = "rgba(77, 163, 255, 0.28)";
-    base.borderLeftColor = "rgba(77, 163, 255, 0.28)";
-    base.boxShadow =
-      "inset 0 0 0 1px rgba(77, 163, 255, 0.12), 0 18px 34px rgba(4, 8, 14, 0.26)";
+    base.borderTopColor = "var(--color-graph-card-border-in-path)";
+    base.borderRightColor = "var(--color-graph-card-border-in-path)";
+    base.borderBottomColor = "var(--color-graph-card-border-in-path)";
+    base.borderLeftColor = "var(--color-graph-card-border-in-path)";
+    base.boxShadow = "var(--shadow-graph-card-in-path)";
   }
 
   if (selected) {
-    base.borderTopColor = "rgba(77, 163, 255, 0.58)";
-    base.borderRightColor = "rgba(77, 163, 255, 0.58)";
-    base.borderBottomColor = "rgba(77, 163, 255, 0.58)";
-    base.borderLeftColor = "rgba(77, 163, 255, 0.58)";
-    base.boxShadow = "0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26)";
+    base.borderTopColor = "var(--color-graph-card-border-selected)";
+    base.borderRightColor = "var(--color-graph-card-border-selected)";
+    base.borderBottomColor = "var(--color-graph-card-border-selected)";
+    base.borderLeftColor = "var(--color-graph-card-border-selected)";
+    base.boxShadow = "var(--shadow-graph-card-selected)";
   }
 
   switch (eventType) {
@@ -471,8 +468,7 @@ function buildCardStyle(
       base.borderLeftWidth = 3;
       base.borderLeftStyle = "solid";
       base.borderLeftColor = "var(--color-active)";
-      base.background =
-        "linear-gradient(180deg, rgba(77, 163, 255, 0.06), rgba(16, 20, 29, 1))";
+      base.background = "var(--gradient-graph-card-user)";
       break;
     case "tool.started":
       base.borderLeftWidth = 3;
@@ -496,19 +492,18 @@ function buildCardStyle(
     case "agent.finished":
       base.borderLeftWidth = 3;
       base.borderLeftStyle = "solid";
-      base.borderLeftColor = "rgba(166, 175, 189, 0.4)";
+      base.borderLeftColor = "var(--color-graph-card-muted-accent)";
       break;
     case "error":
       base.borderLeftWidth = 3;
       base.borderLeftStyle = "solid";
       base.borderLeftColor = "var(--color-failed)";
-      base.background =
-        "linear-gradient(180deg, rgba(255, 107, 107, 0.06), rgba(16, 20, 29, 1))";
+      base.background = "var(--gradient-graph-card-error)";
       break;
     case "note":
       base.borderLeftWidth = 3;
       base.borderLeftStyle = "solid";
-      base.borderLeftColor = "rgba(166, 175, 189, 0.25)";
+      base.borderLeftColor = "var(--color-graph-card-note-accent)";
       base.opacity = 0.85;
       break;
     case "turn.started":

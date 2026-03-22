@@ -304,7 +304,7 @@ export function CausalGraphView({
         <div
           ref={scrollRef}
           data-slot="graph-scroll"
-          className="h-full min-h-0 overflow-auto border-t border-white/8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full min-h-0 overflow-auto border-t border-[color:var(--color-chrome-border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           onScroll={handleScroll}
         >
           <CausalGraphLaneStrip

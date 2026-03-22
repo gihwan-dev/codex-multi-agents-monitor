@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { ThemeProvider } from "../../../shared/theme";
 import { MonitorPage } from "./MonitorPage";
 
 const meta = {
@@ -42,7 +43,11 @@ function StoryScenario({
     }
   }, [openButtonLabel, selectRunLabel]);
 
-  return <MonitorPage />;
+  return (
+    <ThemeProvider>
+      <MonitorPage />
+    </ThemeProvider>
+  );
 }
 
 function clickButton(label: string) {

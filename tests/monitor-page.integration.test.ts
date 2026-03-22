@@ -13,6 +13,7 @@ import {
 import { applyLiveFrame } from "../src/features/follow-live/index.js";
 import { MonitorPage } from "../src/pages/monitor/index.js";
 import { createMonitorInitialState } from "../src/pages/monitor/model/state/helpers.js";
+import { THEME_STORAGE_KEY, ThemeProvider } from "../src/shared/theme/index.js";
 
 vi.mock("../src/entities/session-log/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/entities/session-log/index.js")>();
@@ -232,6 +233,12 @@ function dispatchKeydown(key: string) {
   );
 }
 
+async function renderMonitorPage() {
+  await act(async () => {
+    root.render(createElement(ThemeProvider, null, createElement(MonitorPage)));
+  });
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -263,10 +270,30 @@ beforeEach(() => {
     configurable: true,
     value: scrollToSpy,
   });
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => {},
+  });
+  Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+    configurable: true,
+    value: () => false,
+  });
+  Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+    configurable: true,
+    value: () => {},
+  });
+  Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", {
+    configurable: true,
+    value: () => {},
+  });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
     return 1;
   });
+  vi.stubGlobal("PointerEvent", MouseEvent as unknown as typeof PointerEvent);
+  window.localStorage.clear();
+  delete document.documentElement.dataset.theme;
+  delete document.body.dataset.theme;
 });
 
 afterEach(async () => {
@@ -279,16 +306,21 @@ afterEach(async () => {
   vi.clearAllMocks();
   delete window.__TAURI_INTERNALS__;
   delete (HTMLElement.prototype as { scrollTo?: () => void }).scrollTo;
+  delete (HTMLElement.prototype as { scrollIntoView?: () => void }).scrollIntoView;
+  delete (HTMLElement.prototype as { hasPointerCapture?: () => boolean }).hasPointerCapture;
+  delete (HTMLElement.prototype as { setPointerCapture?: () => void }).setPointerCapture;
+  delete (HTMLElement.prototype as { releasePointerCapture?: () => void }).releasePointerCapture;
   vi.unstubAllGlobals();
+  window.localStorage.clear();
+  delete document.documentElement.dataset.theme;
+  delete document.body.dataset.theme;
 });
 
 describe("MonitorPage integration", () => {
   it("웹 런타임에서는 fixture 데모를 유지하고 Tauri 로더를 호출하지 않는다", async () => {
     delete window.__TAURI_INTERNALS__;
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     expect(mockedLoadRecentSessionIndex).not.toHaveBeenCalled();
     expect(mockedLoadArchivedSessionIndex).not.toHaveBeenCalled();
@@ -296,6 +328,9 @@ describe("MonitorPage integration", () => {
       "FIX-002 Waiting chain run",
     );
     expect(container.textContent).not.toContain("Preparing recent sessions");
+    expect(
+      container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]')?.textContent,
+    ).toContain("Theme");
   });
 
   it("kicks off mount loading and keeps keyboard, drawer, and focus behavior intact", async () => {
@@ -310,9 +345,7 @@ describe("MonitorPage integration", () => {
     mockedLoadRecentSessionSnapshot.mockResolvedValue(null);
     mockedLoadArchivedSessionIndex.mockReturnValue(archivedIndexRequest.promise);
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(mockedLoadRecentSessionIndex).toHaveBeenCalledTimes(1);
@@ -336,6 +369,9 @@ describe("MonitorPage integration", () => {
     });
     expect(container.textContent).toContain("Select a recent or archived run to inspect.");
     expect(container.textContent).not.toContain("Loading selected run");
+    expect(
+      container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]')?.textContent,
+    ).toContain("Theme");
 
     const archiveCount = container.querySelector<HTMLElement>('[data-slot="archive-count"]');
     expect(archiveCount?.textContent).toBe("1");
@@ -462,9 +498,7 @@ describe("MonitorPage integration", () => {
       .mockImplementationOnce(() => firstSnapshot.promise)
       .mockImplementationOnce(() => secondSnapshot.promise);
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(mockedLoadRecentSessionSnapshot).toHaveBeenCalledWith(firstItem.filePath);
@@ -522,9 +556,7 @@ describe("MonitorPage integration", () => {
       .mockImplementationOnce(() => firstSnapshot.promise)
       .mockImplementationOnce(() => secondSnapshot.promise);
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(mockedLoadRecentSessionSnapshot).toHaveBeenCalledWith(firstItem.filePath);
@@ -581,9 +613,7 @@ describe("MonitorPage integration", () => {
     });
     mockedLoadArchivedSessionSnapshot.mockImplementationOnce(() => archiveSnapshot.promise);
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
@@ -647,9 +677,7 @@ describe("MonitorPage integration", () => {
     const restoreViewportMetrics = installGraphViewportMetrics();
 
     try {
-      await act(async () => {
-        root.render(createElement(MonitorPage));
-      });
+      await renderMonitorPage();
 
       const liveRunButton = container.querySelector<HTMLButtonElement>(
         '[data-run-id="trace-fix-006"]',
@@ -788,9 +816,7 @@ describe("MonitorPage integration", () => {
       .mockResolvedValueOnce(refreshedDataset)
       .mockResolvedValue(refreshedDataset);
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
@@ -816,5 +842,49 @@ describe("MonitorPage integration", () => {
           ?.getAttribute("data-selected"),
       ).toBe("true");
     });
+
+  it("persists theme changes from the top bar select", async () => {
+    delete window.__TAURI_INTERNALS__;
+
+    await renderMonitorPage();
+
+    const themeTrigger = container.querySelector<HTMLElement>(
+      '[data-slot="select-trigger"][aria-label="Theme"]',
+    );
+    expect(themeTrigger).not.toBeNull();
+    if (!themeTrigger) {
+      throw new Error("theme trigger missing");
+    }
+
+    await act(async () => {
+      themeTrigger.focus();
+      themeTrigger.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-slot="select-item"]')).not.toBeNull();
+    });
+
+    const lightOption = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="select-item"]'),
+    ).find((item) => item.textContent?.trim() === "Light");
+    expect(lightOption).not.toBeNull();
+    if (!lightOption) {
+      throw new Error("light theme option missing");
+    }
+
+    await act(async () => {
+      lightOption.click();
+    });
+
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(themeTrigger.textContent).toContain("Light");
   });
 });

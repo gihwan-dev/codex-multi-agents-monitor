@@ -1,11 +1,13 @@
 import type { RefObject } from "react";
-import { Button, 
+import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,} from "../../../shared/ui/primitives";
+  DialogTitle,
+} from "../../../shared/ui/primitives";
 
 interface MonitorShortcutsDialogProps {
   open: boolean;
@@ -29,7 +31,8 @@ export function MonitorShortcutsDialog({
     >
       <DialogContent
         aria-label="Keyboard shortcuts"
-        className="max-w-[22rem] border-white/10 bg-[linear-gradient(180deg,rgba(20,24,33,0.98),rgba(17,21,30,0.98))] text-foreground"
+        className="max-w-[22rem] border-[color:var(--color-chrome-border)] text-foreground"
+        style={{ background: "var(--gradient-dialog-surface)" }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           shortcutTriggerRef.current?.focus();

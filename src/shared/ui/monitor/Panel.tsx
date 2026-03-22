@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
 import { cn } from "../../lib";
 
 interface PanelProps extends PropsWithChildren {
@@ -8,6 +8,7 @@ interface PanelProps extends PropsWithChildren {
   className?: string;
   titleClassName?: string;
   headerClassName?: string;
+  style?: CSSProperties;
 }
 
 export function Panel({
@@ -17,16 +18,19 @@ export function Panel({
   className,
   titleClassName,
   headerClassName,
+  style,
   children,
 }: PanelProps) {
   return (
     <section
       data-slot={panelSlot ?? "monitor-panel"}
       className={cn(
-        "flex min-h-0 min-w-0 flex-col gap-3 border border-white/8 bg-[linear-gradient(180deg,rgba(22,27,37,0.98),rgba(17,21,30,0.96))] p-4 text-foreground shadow-none",
+        "flex min-h-0 min-w-0 flex-col gap-3 border p-4 text-foreground shadow-none",
+        "border-[color:var(--color-chrome-border)]",
         "rounded-[var(--radius-panel)]",
         className,
       )}
+      style={{ background: "var(--gradient-panel-surface)", ...style }}
     >
       {(title || actions) && (
         <header

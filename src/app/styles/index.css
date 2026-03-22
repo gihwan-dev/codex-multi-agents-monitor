@@ -2,6 +2,12 @@
 @import "../../theme/tokens.css";
 @import "../../theme/motion.css";
 
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

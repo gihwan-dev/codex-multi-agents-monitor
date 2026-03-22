@@ -1,6 +1,7 @@
 import type { Preview } from "@storybook/react-vite";
 import "../src/app/styles/index.css";
 import "../src/app/styles/layout.css";
+import { applyThemePreferenceToDocument, type ThemePreference } from "../src/shared/theme";
 
 const preview: Preview = {
   layout: "fullscreen",
@@ -12,6 +13,7 @@ const preview: Preview = {
       toolbar: {
         icon: "paintbrush",
         items: [
+          { value: "system", title: "System" },
           { value: "dark", title: "Dark" },
           { value: "light", title: "Light" },
         ],
@@ -20,9 +22,8 @@ const preview: Preview = {
   },
   decorators: [
     (Story, context) => {
-      const theme = context.globals.theme ?? "dark";
-      document.documentElement.dataset.theme = theme;
-      document.body.dataset.theme = theme;
+      const theme = (context.globals.theme ?? "dark") as ThemePreference;
+      applyThemePreferenceToDocument(theme);
 
       return Story();
     },
