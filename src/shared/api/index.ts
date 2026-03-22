@@ -1,1 +1,1 @@
-export { invokeTauri } from "./tauri";
+export { canInvokeTauriRuntime, invokeTauri } from "./tauri";

@@ -139,6 +139,9 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  window.__TAURI_INTERNALS__ = {
+    invoke: vi.fn(),
+  };
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
     value: () => {},
@@ -156,11 +159,27 @@ afterEach(async () => {
   container.remove();
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   vi.clearAllMocks();
+  delete window.__TAURI_INTERNALS__;
   delete (HTMLElement.prototype as { scrollTo?: () => void }).scrollTo;
   vi.unstubAllGlobals();
 });
 
 describe("MonitorPage integration", () => {
+  it("웹 런타임에서는 fixture 데모를 유지하고 Tauri 로더를 호출하지 않는다", async () => {
+    delete window.__TAURI_INTERNALS__;
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    expect(mockedLoadRecentSessionIndex).not.toHaveBeenCalled();
+    expect(mockedLoadArchivedSessionIndex).not.toHaveBeenCalled();
+    expect(container.querySelector("header h1")?.textContent).toBe(
+      "FIX-002 Waiting chain run",
+    );
+    expect(container.textContent).not.toContain("Preparing recent sessions");
+  });
+
   it("kicks off mount loading and keeps keyboard, drawer, and focus behavior intact", async () => {
     const recentIndexRequest = createDeferred<Array<never>>();
     const archivedIndexRequest = createDeferred<{

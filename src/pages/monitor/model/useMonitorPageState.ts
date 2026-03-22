@@ -11,6 +11,7 @@ import {
   loadRecentSessionIndex,
   loadRecentSessionSnapshot,
 } from "../../../entities/session-log";
+import { canInvokeTauriRuntime } from "../../../shared/api";
 import { useMonitorKeyboardShortcuts } from "../lib/useMonitorKeyboardShortcuts";
 import { createMonitorActions } from "./createMonitorActions";
 import { deriveMonitorViewState } from "./deriveMonitorViewState";
@@ -130,6 +131,10 @@ export function useMonitorPageState() {
   );
 
   useEffect(() => {
+    if (!canInvokeTauriRuntime()) {
+      return;
+    }
+
     requestRecentIndex();
   }, []);
 
@@ -179,6 +184,10 @@ export function useMonitorPageState() {
   });
 
   useEffect(() => {
+    if (!canInvokeTauriRuntime()) {
+      return;
+    }
+
     requestArchiveIndex(0, false);
   }, []);
 
