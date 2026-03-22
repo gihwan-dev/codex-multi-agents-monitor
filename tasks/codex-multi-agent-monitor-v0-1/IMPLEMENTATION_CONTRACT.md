@@ -6,6 +6,7 @@
 - `UX_SPEC.md`
 - `UX_BEHAVIOR_ACCESSIBILITY.md`
 - `docs/architecture/frontend-fsd.md`
+- `docs/architecture/tauri-backend-modular-monolith.md`
 - `TECH_SPEC.md`
 - `EXECUTION_PLAN.md`
 - `ACCEPTANCE.feature`
@@ -28,6 +29,13 @@
 - Custom thin primitives under `src/shared/ui/` are the only approved component source for v0.1.
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.
 - `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, `docs/architecture/frontend-fsd.md`, this file, and the UX docs as required pre-read inputs for every slice.
+- Backend refactor work under `src-tauri/src/` now follows `commands / application / domain / infrastructure / state / support`.
+- `src-tauri/src/lib.rs` is bootstrap only: `mod` wiring, `manage(...)`, `generate_handler!`, and `run()` only.
+- Tauri command handlers belong in `src-tauri/src/commands/` and must stay thin adapters over application services.
+- Filesystem, SQLite, JSONL, and git/worktree access belong in `src-tauri/src/infrastructure/`.
+- Serialized DTO and ingest/search policy belong in `src-tauri/src/domain/`.
+- Tauri-managed mutable cache state belongs in `src-tauri/src/state/`.
+- Backend helper aggregation files such as `common.rs`, `utils.rs`, or `shared.rs` are banned.
 
 # Allowed Core Libraries
 
@@ -62,6 +70,7 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - `SLICE-3`: `widget extraction review`, `storybook smoke check`, `layout density review`
 - `SLICE-4`: `entity and loader split review`, `normalization smoke check`, `fixture boundary review`
 - Every slice still closes against the repo-level command contract in `docs/ai/ENGINEERING_RULES.md`.
+- Backend modular-monolith slices additionally close against `cargo check`, `cargo clippy -- -D warnings`, and `cargo test` in `src-tauri/`.
 
 # Open Risks
 
@@ -69,4 +78,5 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - Source schema drift may omit or reshape `wait_reason`, handoff, transfer, or usage fields.
 - Preview-first masking can regress if import or live-watch code stores raw payload too early.
 - `shared/domain` and `session-log-loader` naming can leak back in if future slices reintroduce compatibility shims.
+- `lib.rs` can regress into a god-file again if future backend work bypasses `commands/application/infrastructure` boundaries.
 - The current environment still blocks full Playwright browser navigation, so end-to-end coverage remains limited to built-artifact smoke plus contract assertions.
