@@ -57,6 +57,8 @@ export function MonitorPage() {
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
   const displayDataset = selectionLoadState ? null : activeDataset;
   const displayRawTabAvailable = displayDataset ? rawTabAvailable : false;
+  const chromeDataset = activeDataset;
+  const hideGraphChrome = Boolean(selectionLoadState && chromeDataset);
 
   useSearchFocusShortcut(searchRef);
 
@@ -107,7 +109,7 @@ export function MonitorPage() {
       ) : null}
 
       <MonitorTopBar
-        dataset={displayDataset}
+        dataset={chromeDataset}
         followLive={activeFollowLive}
         liveConnection={activeLiveConnection}
         onExport={(target) => {
@@ -165,8 +167,11 @@ export function MonitorPage() {
           aria-label="Graph canvas"
           aria-busy={Boolean(selectionLoadState)}
         >
-          {displayDataset ? (
-            <>
+          {chromeDataset ? (
+            <div
+              className={hideGraphChrome ? "pointer-events-none invisible" : undefined}
+              aria-hidden={hideGraphChrome || undefined}
+            >
               <MonitorSummaryStrip
                 facts={summaryFacts}
                 activeFocus={inspectorSummary?.title ?? null}
@@ -175,7 +180,7 @@ export function MonitorPage() {
                 anomalyJumps={anomalyJumps}
                 onJump={actions.selectItem}
               />
-            </>
+            </div>
           ) : null}
 
           {!displayDataset ? (
@@ -191,6 +196,9 @@ export function MonitorPage() {
                       title={selectionLoadingPresentation.title}
                       message={selectionLoadingPresentation.message}
                       phaseLabel={selectionLoadingPresentation.phaseLabel}
+                      targetEyebrow={selectionLoadingPresentation.targetEyebrow}
+                      targetTitle={selectionLoadingPresentation.targetTitle}
+                      targetMeta={selectionLoadingPresentation.targetMeta}
                       skeletonRows={3}
                     />
                   </div>

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadArchivedSessionIndex,
+  loadArchivedSessionSnapshot,
   loadRecentSessionIndex,
   loadRecentSessionSnapshot,
 } from "../src/entities/session-log/index.js";
@@ -13,11 +14,13 @@ import { createMonitorInitialState } from "../src/pages/monitor/model/state/help
 
 vi.mock("../src/entities/session-log/index.js", () => ({
   loadArchivedSessionIndex: vi.fn(),
+  loadArchivedSessionSnapshot: vi.fn(),
   loadRecentSessionIndex: vi.fn(),
   loadRecentSessionSnapshot: vi.fn(),
 }));
 
 const mockedLoadArchivedSessionIndex = vi.mocked(loadArchivedSessionIndex);
+const mockedLoadArchivedSessionSnapshot = vi.mocked(loadArchivedSessionSnapshot);
 const mockedLoadRecentSessionIndex = vi.mocked(loadRecentSessionIndex);
 const mockedLoadRecentSessionSnapshot = vi.mocked(loadRecentSessionSnapshot);
 
@@ -89,6 +92,29 @@ function buildRecentDataset(sessionId: string) {
       traceId: sessionId,
       title: `Run ${sessionId}`,
       isArchived: false,
+    },
+  };
+}
+
+function buildArchivedDataset(sessionId: string) {
+  const dataset = buildRecentDataset(sessionId);
+
+  return {
+    ...dataset,
+    project: {
+      ...dataset.project,
+      name: "Archived workspace",
+      projectId: "/tmp/archive-workspace",
+      repoPath: "/tmp/archive-workspace",
+    },
+    session: {
+      ...dataset.session,
+      title: `Archived ${sessionId}`,
+    },
+    run: {
+      ...dataset.run,
+      title: `Archived ${sessionId}`,
+      isArchived: true,
     },
   };
 }
@@ -316,6 +342,9 @@ describe("MonitorPage integration", () => {
     expect(mockedLoadRecentSessionSnapshot).toHaveBeenNthCalledWith(2, secondItem.filePath);
     expect(secondRecentButton()?.getAttribute("data-active")).toBe("true");
     expect(container.textContent).toContain("Preparing run details");
+    expect(container.textContent).toContain("Recent session");
+    expect(container.textContent).toContain("Run recent-002");
+    expect(container.textContent).toContain("Recent workspace");
 
     await act(async () => {
       secondSnapshot.resolve(buildRecentDataset("recent-002"));
@@ -333,5 +362,123 @@ describe("MonitorPage integration", () => {
     expect(
       container.querySelector('[data-run-id="recent-001"]')?.getAttribute("data-active"),
     ).toBe("false");
+  });
+
+  it("hydrated session에서 다른 session으로 전환해도 상단 chrome 레이아웃이 빈 상태로 되돌아가지 않는다", async () => {
+    const firstSnapshot = createDeferred<ReturnType<typeof buildRecentDataset> | null>();
+    const secondSnapshot = createDeferred<ReturnType<typeof buildRecentDataset> | null>();
+    const firstItem = buildRecentSessionIndexItem("recent-001");
+    const secondItem = buildRecentSessionIndexItem("recent-002");
+
+    mockedLoadRecentSessionIndex.mockResolvedValue([firstItem, secondItem]);
+    mockedLoadArchivedSessionIndex.mockResolvedValue({
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockedLoadRecentSessionSnapshot
+      .mockImplementationOnce(() => firstSnapshot.promise)
+      .mockImplementationOnce(() => secondSnapshot.promise);
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    await vi.waitFor(() => {
+      expect(mockedLoadRecentSessionSnapshot).toHaveBeenCalledWith(firstItem.filePath);
+    });
+
+    await act(async () => {
+      firstSnapshot.resolve(buildRecentDataset("recent-001"));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
+    });
+
+    const secondRecentButton = container.querySelector<HTMLButtonElement>(
+      '[data-run-id="recent-002"]',
+    );
+    expect(secondRecentButton).not.toBeNull();
+    if (!secondRecentButton) {
+      throw new Error("second recent button missing");
+    }
+
+    await act(async () => {
+      secondRecentButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
+    expect(container.textContent).toContain("Preparing run details");
+    expect(container.textContent).not.toContain("Ready to inspect");
+
+    await act(async () => {
+      secondSnapshot.resolve(buildRecentDataset("recent-002"));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-002");
+    });
+  });
+
+  it("archive session으로 전환할 때도 상단 chrome을 유지하고 로딩 카드에 대상을 보여준다", async () => {
+    const archiveSnapshot = createDeferred<ReturnType<typeof buildArchivedDataset> | null>();
+    const recentItem = buildRecentSessionIndexItem("recent-001");
+
+    mockedLoadRecentSessionIndex.mockResolvedValue([recentItem]);
+    mockedLoadRecentSessionSnapshot.mockResolvedValue(buildRecentDataset("recent-001"));
+    mockedLoadArchivedSessionIndex.mockResolvedValue({
+      items: [buildArchivedSessionIndexItem()],
+      total: 1,
+      hasMore: false,
+    });
+    mockedLoadArchivedSessionSnapshot.mockImplementationOnce(() => archiveSnapshot.promise);
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
+    });
+
+    const archiveSectionToggle = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-section-toggle"]',
+    );
+    expect(archiveSectionToggle).not.toBeNull();
+    if (!archiveSectionToggle) {
+      throw new Error("archive section toggle missing");
+    }
+
+    await act(async () => {
+      archiveSectionToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const archiveSessionButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-session-item"]',
+    );
+    expect(archiveSessionButton).not.toBeNull();
+    if (!archiveSessionButton) {
+      throw new Error("archive session button missing");
+    }
+
+    await act(async () => {
+      archiveSessionButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
+    expect(container.textContent).toContain("Archived session");
+    expect(container.textContent).toContain("Check archive search behavior");
+    expect(container.textContent).toContain("Archived workspace");
+
+    await act(async () => {
+      archiveSnapshot.resolve(buildArchivedDataset("session-archive-001"));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe(
+        "Archived session-archive-001",
+      );
+    });
   });
 });

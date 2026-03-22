@@ -4,6 +4,9 @@ export interface MonitorLoadingPresentation {
   title: string;
   message: string;
   phaseLabel: string;
+  targetEyebrow?: string;
+  targetTitle?: string;
+  targetMeta?: string;
 }
 
 interface LoadingStateBlockProps extends MonitorLoadingPresentation {
@@ -23,6 +26,9 @@ export function LoadingStateBlock({
   title,
   message,
   phaseLabel,
+  targetEyebrow,
+  targetTitle,
+  targetMeta,
   announce = false,
   className,
   compact = false,
@@ -49,6 +55,36 @@ export function LoadingStateBlock({
       aria-live={announce ? "polite" : undefined}
       aria-atomic={announce ? "true" : undefined}
     >
+      {targetTitle ? (
+        <div className="grid gap-1 rounded-[14px] border border-white/8 bg-white/[0.03] px-3 py-3">
+          {targetEyebrow ? (
+            <span className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+              {targetEyebrow}
+            </span>
+          ) : null}
+          <strong
+            className={cn(
+              "truncate text-sm font-semibold text-foreground",
+              compact && "text-[0.82rem]",
+            )}
+            title={targetTitle}
+          >
+            {targetTitle}
+          </strong>
+          {targetMeta ? (
+            <p
+              className={cn(
+                "truncate text-[0.82rem] text-muted-foreground",
+                compact && "text-[0.74rem]",
+              )}
+              title={targetMeta}
+            >
+              {targetMeta}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid gap-1">
         <h3
           className={cn(
