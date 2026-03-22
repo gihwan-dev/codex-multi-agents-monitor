@@ -9,6 +9,7 @@ import type {
   ArchivedSessionIndexResult,
   RecentSessionIndexItem,
 } from "../../../../entities/session-log";
+import type { SelectionLoadState } from "./selectionLoadState";
 
 export interface MonitorState {
   datasets: RunDataset[];
@@ -33,6 +34,7 @@ export interface MonitorState {
   recentIndexLoading: boolean;
   recentIndexReady: boolean;
   recentIndexError: string | null;
+  selectionLoadState: SelectionLoadState | null;
   recentSnapshotLoadingId: string | null;
   recentSnapshotRequestId: number;
   archivedIndex: ArchivedSessionIndexItem[];
@@ -69,12 +71,14 @@ export type MonitorAction =
   | { type: "resolve-recent-index-request"; items: RecentSessionIndexItem[] }
   | { type: "finish-recent-index-request"; error?: string | null }
   | { type: "begin-recent-snapshot-request"; requestId: number; filePath: string }
+  | { type: "begin-recent-snapshot-build"; requestId: number; filePath: string }
   | {
       type: "resolve-recent-snapshot-request";
       requestId: number;
       filePath: string;
       dataset: RunDataset;
     }
+  | { type: "cancel-recent-snapshot-request"; requestId: number }
   | { type: "finish-recent-snapshot-request"; requestId: number }
   | { type: "apply-live-frame" }
   | { type: "begin-archived-index-request"; requestId: number }
@@ -89,13 +93,15 @@ export type MonitorAction =
       requestId: number;
       error?: string | null;
     }
-  | { type: "begin-archived-snapshot-request"; requestId: number }
+  | { type: "begin-archived-snapshot-request"; requestId: number; filePath: string }
+  | { type: "begin-archived-snapshot-build"; requestId: number; filePath: string }
   | {
       type: "resolve-archived-snapshot-request";
       requestId: number;
       filePath: string;
       dataset: RunDataset;
     }
+  | { type: "cancel-archived-snapshot-request"; requestId: number }
   | { type: "finish-archived-snapshot-request"; requestId: number }
   | { type: "set-archived-search"; value: string }
   | { type: "toggle-archive-section" };

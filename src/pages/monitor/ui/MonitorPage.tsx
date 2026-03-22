@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { DrawerTab } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
-import { Panel } from "../../../shared/ui";
+import { LoadingStateBlock, Panel } from "../../../shared/ui";
 import {
   Button,
   Dialog,
@@ -33,12 +33,13 @@ export function MonitorPage() {
   const {
     state,
     activeDataset,
+    activeSessionFilePath,
     activeFollowLive,
     activeLiveConnection,
     recentIndexReady,
-    recentIndexLoading,
     recentIndexError,
-    recentSnapshotLoadingId,
+    selectionLoadState,
+    selectionLoadingPresentation,
     archivedIndexLoading,
     archivedIndexError,
     rawTabAvailable,
@@ -54,6 +55,8 @@ export function MonitorPage() {
   const previousShortcutOpenRef = useRef(state.shortcutHelpOpen);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
+  const displayDataset = selectionLoadState ? null : activeDataset;
+  const displayRawTabAvailable = displayDataset ? rawTabAvailable : false;
 
   useSearchFocusShortcut(searchRef);
 
@@ -97,8 +100,14 @@ export function MonitorPage() {
 
   return (
     <div className="monitor-shell">
+      {selectionLoadState ? (
+        <output className="sr-only" aria-live="polite" aria-atomic="true">
+          {selectionLoadState.announcement}
+        </output>
+      ) : null}
+
       <MonitorTopBar
-        dataset={activeDataset}
+        dataset={displayDataset}
         followLive={activeFollowLive}
         liveConnection={activeLiveConnection}
         onExport={(target) => {
@@ -120,7 +129,6 @@ export function MonitorPage() {
               datasets={state.datasets}
               recentIndex={state.recentIndex}
               recentIndexReady={recentIndexReady}
-              recentSnapshotLoadingId={recentSnapshotLoadingId}
               activeRunId={state.activeRunId}
               onSelectRun={actions.selectRun}
               onSelectRecentRun={actions.selectRecentSession}
@@ -132,6 +140,7 @@ export function MonitorPage() {
               archivedHasMore={state.archivedHasMore}
               archivedIndexLoading={archivedIndexLoading}
               archivedIndexError={archivedIndexError}
+              activeArchivedFilePath={activeSessionFilePath}
               archivedSearch={state.archivedSearch}
               archiveSectionOpen={state.archiveSectionOpen}
               onToggleArchiveSection={actions.toggleArchiveSection}
@@ -139,9 +148,6 @@ export function MonitorPage() {
               onArchiveLoadMore={() => actions.loadArchiveIndex(true)}
               onArchiveSelect={actions.selectArchivedSession}
             />
-            {recentIndexLoading && !recentIndexReady ? (
-              <p className="run-list__workspace-count">Loading recent sessions…</p>
-            ) : null}
             {recentIndexError && !state.recentIndex.length ? (
               <p className="archive-list__error">{recentIndexError}</p>
             ) : null}
@@ -154,33 +160,56 @@ export function MonitorPage() {
           />
         </aside>
 
-        <main className="workspace__main" aria-label="Graph canvas">
-          <MonitorSummaryStrip facts={summaryFacts} activeFocus={inspectorSummary?.title ?? null} />
-          <MonitorGraphToolbar
-            anomalyJumps={anomalyJumps}
-            onJump={actions.selectItem}
-          />
+        <main
+          className="workspace__main"
+          aria-label="Graph canvas"
+          aria-busy={Boolean(selectionLoadState)}
+        >
+          {displayDataset ? (
+            <>
+              <MonitorSummaryStrip
+                facts={summaryFacts}
+                activeFocus={inspectorSummary?.title ?? null}
+              />
+              <MonitorGraphToolbar
+                anomalyJumps={anomalyJumps}
+                onJump={actions.selectItem}
+              />
+            </>
+          ) : null}
 
-          {!activeDataset ? (
+          {!displayDataset ? (
             <Panel
               panelSlot="graph-panel"
-              title="Graph"
+              title={selectionLoadingPresentation?.title ?? "Graph"}
               className="flex-1 overflow-hidden rounded-none border-x-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
             >
-              <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-muted-foreground">
-                {recentSnapshotLoadingId
-                  ? "Loading the selected session detail without blocking the UI."
-                  : "Choose a recent or archived session to hydrate its graph view."}
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6">
+                {selectionLoadingPresentation ? (
+                  <div className="w-full max-w-xl">
+                    <LoadingStateBlock
+                      title={selectionLoadingPresentation.title}
+                      message={selectionLoadingPresentation.message}
+                      phaseLabel={selectionLoadingPresentation.phaseLabel}
+                      skeletonRows={3}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid max-w-lg gap-2 text-center text-sm text-muted-foreground">
+                    <p className="text-sm font-medium text-foreground">Select a run</p>
+                    <p>Select a recent or archived run to inspect.</p>
+                  </div>
+                )}
               </div>
             </Panel>
           ) : null}
 
-          {activeDataset ? (
+          {displayDataset ? (
             <CausalGraphView
               scene={graphScene}
               onSelect={actions.selectItem}
               followLive={activeFollowLive}
-              liveMode={activeDataset.run.liveMode}
+              liveMode={displayDataset.run.liveMode}
               onPauseFollowLive={actions.pauseFollowLive}
             />
           ) : null}
@@ -198,8 +227,8 @@ export function MonitorPage() {
 
           <MonitorDrawer
             drawerState={drawerState}
-            activeDataset={activeDataset}
-            rawTabAvailable={rawTabAvailable}
+            activeDataset={displayDataset}
+            rawTabAvailable={displayRawTabAvailable}
             onSetDrawerTab={openDrawer}
             onImport={actions.importPayload}
             onImportTextChange={actions.setImportText}

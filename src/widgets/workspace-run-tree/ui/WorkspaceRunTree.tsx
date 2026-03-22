@@ -17,7 +17,6 @@ interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
   recentIndex: RecentSessionIndexItem[];
   recentIndexReady: boolean;
-  recentSnapshotLoadingId: string | null;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
   onSelectRecentRun: (filePath: string) => void;
@@ -29,6 +28,7 @@ interface WorkspaceRunTreeProps {
   archivedHasMore: boolean;
   archivedIndexLoading: boolean;
   archivedIndexError: string | null;
+  activeArchivedFilePath: string | null;
   archivedSearch: string;
   archiveSectionOpen: boolean;
   onToggleArchiveSection: () => void;
@@ -41,7 +41,6 @@ export function WorkspaceRunTree({
   datasets,
   recentIndex,
   recentIndexReady,
-  recentSnapshotLoadingId,
   activeRunId,
   onSelectRun,
   onSelectRecentRun,
@@ -53,6 +52,7 @@ export function WorkspaceRunTree({
   archivedHasMore,
   archivedIndexLoading,
   archivedIndexError,
+  activeArchivedFilePath,
   archivedSearch,
   archiveSectionOpen,
   onToggleArchiveSection,
@@ -65,7 +65,9 @@ export function WorkspaceRunTree({
     expandedWorkspaceIds,
     handleTreeKeyDown,
     model,
+    optimisticActiveRunId,
     search,
+    selectRecentRun,
     selectRun,
     setSearch,
     toggleWorkspace,
@@ -74,9 +76,9 @@ export function WorkspaceRunTree({
     datasets,
     recentIndex,
     recentIndexReady,
-    recentSnapshotLoadingId,
     activeRunId,
     onSelectRun,
+    onSelectRecentRun,
     workspaceIdentityOverrides,
   });
 
@@ -172,19 +174,19 @@ export function WorkspaceRunTree({
                         type="button"
                         data-slot="run-tree-item"
                         data-run-id={run.id}
-                        data-active={activeRunId === run.id ? "true" : "false"}
+                        data-active={optimisticActiveRunId === run.id ? "true" : "false"}
                         data-tree-id={treeId}
                         role="treeitem"
                         aria-level={2}
                         tabIndex={activeTreeId === treeId ? 0 : -1}
                         className={cn(
                           "grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.82rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground",
-                          activeRunId === run.id &&
+                          optimisticActiveRunId === run.id &&
                             "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground",
                         )}
                         onClick={() => {
                           if (run.filePath) {
-                            onSelectRecentRun(run.filePath);
+                            selectRecentRun(workspace.id, run.id, run.filePath);
                             return;
                           }
                           selectRun(workspace.id, run.id);
@@ -199,11 +201,6 @@ export function WorkspaceRunTree({
                             {run.title}
                           </strong>
                           <StatusChip status={run.status} subtle />
-                          {run.loading ? (
-                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.66rem] uppercase tracking-[0.08em] text-muted-foreground">
-                              Loading
-                            </span>
-                          ) : null}
                         </div>
                         <div className="flex min-w-0 items-center gap-1 text-[0.72rem] text-[var(--color-text-tertiary)]">
                           <span className="shrink-0">{run.relativeTime}</span>
@@ -257,6 +254,7 @@ export function WorkspaceRunTree({
               hasMore={archivedHasMore}
               indexLoading={archivedIndexLoading}
               errorMessage={archivedIndexError}
+              activeFilePath={activeArchivedFilePath}
               search={archivedSearch}
               onSearch={onArchiveSearch}
               onLoadMore={onArchiveLoadMore}

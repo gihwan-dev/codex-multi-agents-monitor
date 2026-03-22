@@ -131,6 +131,7 @@ export function createMonitorInitialState(): MonitorState {
     recentIndexLoading: false,
     recentIndexReady: false,
     recentIndexError: null,
+    selectionLoadState: null,
     recentSnapshotLoadingId: null,
     recentSnapshotRequestId: 0,
     archivedIndex: [],

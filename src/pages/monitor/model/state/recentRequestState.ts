@@ -7,13 +7,24 @@ import {
   upsertDataset,
 } from "./helpers";
 import { buildConnectionMap } from "./liveConnection";
+import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
 export function beginRecentIndexRequest(state: MonitorState): MonitorState {
+  const datasets = stripFixtureDatasets(state.datasets);
+  const fixtureActive = isFixtureDatasetTraceId(state.activeRunId);
+
   return {
     ...state,
+    datasets,
     recentIndexLoading: true,
     recentIndexError: null,
+    selectionLoadState: createSelectionLoadState("recent", null, "indexing_recent"),
+    activeRunId: fixtureActive ? "" : state.activeRunId,
+    selection: fixtureActive ? null : state.selection,
+    followLiveByRunId: buildFollowLiveMap(datasets),
+    liveConnectionByRunId: buildConnectionMap(datasets),
+    collapsedGapIds: buildCollapsedGapIds(datasets),
   };
 }
 
@@ -32,6 +43,10 @@ export function resolveRecentIndexRequest(
     recentIndexLoading: false,
     recentIndexReady: true,
     recentIndexError: null,
+    selectionLoadState:
+      state.selectionLoadState?.phase === "indexing_recent"
+        ? null
+        : state.selectionLoadState,
     activeRunId: nextActiveRunId,
     selection: fixtureActive ? null : state.selection,
     followLiveByRunId: buildFollowLiveMap(datasets),
@@ -49,6 +64,10 @@ export function finishRecentIndexRequest(
     recentIndexLoading: false,
     recentIndexReady: true,
     recentIndexError: error ?? null,
+    selectionLoadState:
+      state.selectionLoadState?.phase === "indexing_recent"
+        ? null
+        : state.selectionLoadState,
   };
 }
 
@@ -57,10 +76,39 @@ export function beginRecentSnapshotRequest(
   requestId: number,
   filePath: string,
 ): MonitorState {
+  const activeRecentItem =
+    state.recentIndex.find((item) => item.filePath === filePath) ?? null;
+
   return {
     ...state,
+    activeRunId: activeRecentItem?.sessionId ?? state.activeRunId,
+    selection: null,
     recentSnapshotLoadingId: filePath,
     recentSnapshotRequestId: requestId,
+    selectionLoadState: createSelectionLoadState(
+      "recent",
+      filePath,
+      "loading_snapshot",
+    ),
+  };
+}
+
+export function beginRecentSnapshotBuild(
+  state: MonitorState,
+  requestId: number,
+  filePath: string,
+): MonitorState {
+  if (requestId !== state.recentSnapshotRequestId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    selectionLoadState: createSelectionLoadState(
+      "recent",
+      filePath,
+      "building_graph",
+    ),
   };
 }
 
@@ -77,6 +125,7 @@ export function resolveRecentSnapshotRequest(
   const nextState = {
     ...state,
     recentSnapshotLoadingId: null,
+    selectionLoadState: null,
     hydratedDatasetsByFilePath: {
       ...state.hydratedDatasetsByFilePath,
       [filePath]: dataset,
@@ -90,11 +139,24 @@ export function resolveRecentSnapshotRequest(
   };
 }
 
+export function cancelRecentSnapshotRequest(
+  state: MonitorState,
+  requestId: number,
+): MonitorState {
+  return {
+    ...state,
+    recentSnapshotLoadingId: null,
+    recentSnapshotRequestId: requestId,
+    selectionLoadState:
+      state.selectionLoadState?.source === "recent" ? null : state.selectionLoadState,
+  };
+}
+
 export function finishRecentSnapshotRequest(
   state: MonitorState,
   requestId: number,
 ): MonitorState {
   return requestId === state.recentSnapshotRequestId
-    ? { ...state, recentSnapshotLoadingId: null }
+    ? { ...state, recentSnapshotLoadingId: null, selectionLoadState: null }
     : state;
 }

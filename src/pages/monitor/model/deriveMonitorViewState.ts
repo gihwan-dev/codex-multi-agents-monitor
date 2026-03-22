@@ -7,6 +7,7 @@ import {
   hasRawPayload,
 } from "../../../entities/run";
 import type { MonitorState } from "./state";
+import { describeSelectionLoadState } from "./state/selectionLoadState";
 
 function resolveActiveDataset(state: MonitorState) {
   return (
@@ -29,14 +30,31 @@ const EMPTY_GRAPH_SCENE: GraphSceneModel = {
   latestVisibleEventId: null,
 };
 
+function resolveActiveSessionFilePath(state: MonitorState) {
+  if (state.selectionLoadState?.filePath) {
+    return state.selectionLoadState.filePath;
+  }
+
+  return (
+    Object.entries(state.hydratedDatasetsByFilePath).find(
+      ([, dataset]) => dataset.run.traceId === state.activeRunId,
+    )?.[0] ?? null
+  );
+}
+
 export function deriveMonitorViewState(state: MonitorState) {
   const activeDataset = resolveActiveDataset(state);
   const graphScene = activeDataset
     ? buildGraphSceneModel(activeDataset, state.selection)
     : EMPTY_GRAPH_SCENE;
+  const selectionLoadState = state.selectionLoadState;
+  const selectionLoadingPresentation =
+    describeSelectionLoadState(selectionLoadState);
+  const activeSessionFilePath = resolveActiveSessionFilePath(state);
 
   return {
     activeDataset,
+    activeSessionFilePath,
     activeFollowLive: activeDataset
       ? state.followLiveByRunId[activeDataset.run.traceId] ?? false
       : false,
@@ -48,9 +66,10 @@ export function deriveMonitorViewState(state: MonitorState) {
     recentIndexReady: state.recentIndexReady,
     recentIndexLoading: state.recentIndexLoading,
     recentIndexError: state.recentIndexError,
-    recentSnapshotLoadingId: state.recentSnapshotLoadingId,
     archivedIndexLoading: state.archivedIndexLoading,
     archivedIndexError: state.archivedIndexError,
+    selectionLoadState,
+    selectionLoadingPresentation,
     rawTabAvailable: activeDataset ? hasRawPayload(activeDataset) : false,
     graphScene,
     inspectorSummary: activeDataset

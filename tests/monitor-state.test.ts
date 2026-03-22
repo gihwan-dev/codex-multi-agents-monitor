@@ -339,28 +339,41 @@ describe("archive 요청 상태", () => {
     const firstRequest = monitorStateReducer(initialState, {
       type: "begin-archived-snapshot-request",
       requestId: 1,
+      filePath: "/tmp/stale-archive.json",
     });
     const latestRequest = monitorStateReducer(firstRequest, {
       type: "begin-archived-snapshot-request",
       requestId: 2,
+      filePath: "/tmp/fresh-archive.json",
+    });
+    const buildState = monitorStateReducer(latestRequest, {
+      type: "begin-archived-snapshot-build",
+      requestId: 2,
+      filePath: "/tmp/fresh-archive.json",
     });
 
-    const staleResolved = monitorStateReducer(latestRequest, {
+    const staleResolved = monitorStateReducer(buildState, {
       type: "resolve-archived-snapshot-request",
       requestId: 1,
       filePath: "/tmp/stale-archive.json",
       dataset: buildArchivedDataset("stale-archive"),
     });
-    const currentResolved = monitorStateReducer(latestRequest, {
+    const currentResolved = monitorStateReducer(buildState, {
       type: "resolve-archived-snapshot-request",
       requestId: 2,
       filePath: "/tmp/fresh-archive.json",
       dataset: buildArchivedDataset("fresh-archive"),
     });
 
-    expect(staleResolved.activeRunId).toBe(latestRequest.activeRunId);
+    expect(buildState.selectionLoadState).toMatchObject({
+      source: "archived",
+      filePath: "/tmp/fresh-archive.json",
+      phase: "building_graph",
+    });
+    expect(staleResolved.activeRunId).toBe(buildState.activeRunId);
     expect(currentResolved.activeRunId).toBe("fresh-archive");
     expect(currentResolved.datasets[0]?.run.traceId).toBe("fresh-archive");
+    expect(currentResolved.selectionLoadState).toBeNull();
   });
 
   it("오래된 snapshot 완료는 최신 snapshot loading 상태를 덮어쓰지 않는다", () => {
@@ -368,10 +381,12 @@ describe("archive 요청 상태", () => {
     const firstRequest = monitorStateReducer(initialState, {
       type: "begin-archived-snapshot-request",
       requestId: 1,
+      filePath: "/tmp/stale-archive.json",
     });
     const latestRequest = monitorStateReducer(firstRequest, {
       type: "begin-archived-snapshot-request",
       requestId: 2,
+      filePath: "/tmp/fresh-archive.json",
     });
 
     const staleFinished = monitorStateReducer(latestRequest, {
@@ -387,8 +402,51 @@ describe("archive 요청 상태", () => {
     expect(currentFinished.archivedSnapshotLoading).toBe(false);
   });
 
-  it("recent index가 도착하면 fixture 목록을 내리고 첫 recent session을 활성 후보로 삼는다", () => {
+  it("archive snapshot 취소는 loading 상태를 비우고 이전 resolve를 무효화한다", () => {
+    const pendingState = monitorStateReducer(createMonitorInitialState(), {
+      type: "begin-archived-snapshot-request",
+      requestId: 3,
+      filePath: "/tmp/archive-cancel.json",
+    });
+    const cancelledState = monitorStateReducer(pendingState, {
+      type: "cancel-archived-snapshot-request",
+      requestId: 4,
+    });
+    const staleResolved = monitorStateReducer(cancelledState, {
+      type: "resolve-archived-snapshot-request",
+      requestId: 3,
+      filePath: "/tmp/archive-cancel.json",
+      dataset: buildArchivedDataset("archive-cancelled"),
+    });
+
+    expect(cancelledState.archivedSnapshotLoading).toBe(false);
+    expect(cancelledState.selectionLoadState).toBeNull();
+    expect(staleResolved.datasets).toEqual(cancelledState.datasets);
+  });
+
+  it("recent index 로드 시작은 fixture 목록을 내리고 준비 상태를 표시한다", () => {
     const initialState = createMonitorInitialState();
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "begin-recent-index-request",
+    });
+
+    expect(nextState.recentIndexLoading).toBe(true);
+    expect(nextState.datasets).toEqual([]);
+    expect(nextState.activeRunId).toBe("");
+    expect(nextState.selection).toBeNull();
+    expect(nextState.selectionLoadState).toMatchObject({
+      source: "recent",
+      filePath: null,
+      phase: "indexing_recent",
+      announcement: "Preparing recent sessions",
+    });
+  });
+
+  it("recent index resolve는 recent 목록을 채우고 snapshot hydrate 전까지 empty 상태를 유지한다", () => {
+    const initialState = monitorStateReducer(createMonitorInitialState(), {
+      type: "begin-recent-index-request",
+    });
 
     const nextState = monitorStateReducer(initialState, {
       type: "resolve-recent-index-request",
@@ -397,16 +455,22 @@ describe("archive 요청 상태", () => {
 
     expect(nextState.recentIndexReady).toBe(true);
     expect(nextState.recentIndex).toHaveLength(1);
-    expect(nextState.activeRunId).toBe("recent-001");
+    expect(nextState.activeRunId).toBe("");
     expect(nextState.datasets).toEqual([]);
     expect(nextState.selection).toBeNull();
+    expect(nextState.selectionLoadState).toBeNull();
   });
 
   it("recent snapshot resolve는 cache를 채우고 최신 요청만 반영한다", () => {
-    const initialState = monitorStateReducer(createMonitorInitialState(), {
+    const initialState = monitorStateReducer(
+      monitorStateReducer(createMonitorInitialState(), {
+        type: "begin-recent-index-request",
+      }),
+      {
       type: "resolve-recent-index-request",
       items: [buildRecentIndexItem("recent-001")],
-    });
+      },
+    );
     const pendingState = monitorStateReducer(initialState, {
       type: "begin-recent-snapshot-request",
       requestId: 1,
@@ -417,25 +481,67 @@ describe("archive 요청 상태", () => {
       requestId: 2,
       filePath: "/tmp/recent-002.jsonl",
     });
+    const buildState = monitorStateReducer(latestState, {
+      type: "begin-recent-snapshot-build",
+      requestId: 2,
+      filePath: "/tmp/recent-002.jsonl",
+    });
 
-    const staleResolved = monitorStateReducer(latestState, {
+    const staleResolved = monitorStateReducer(buildState, {
       type: "resolve-recent-snapshot-request",
       requestId: 1,
       filePath: "/tmp/recent-001.jsonl",
       dataset: buildArchivedDataset("recent-001"),
     });
-    const currentResolved = monitorStateReducer(latestState, {
+    const currentResolved = monitorStateReducer(buildState, {
       type: "resolve-recent-snapshot-request",
       requestId: 2,
       filePath: "/tmp/recent-002.jsonl",
       dataset: buildArchivedDataset("recent-002"),
     });
 
-    expect(staleResolved.datasets).toEqual(latestState.datasets);
+    expect(buildState.selectionLoadState).toMatchObject({
+      source: "recent",
+      filePath: "/tmp/recent-002.jsonl",
+      phase: "building_graph",
+    });
+    expect(staleResolved.datasets).toEqual(buildState.datasets);
     expect(currentResolved.activeRunId).toBe("recent-002");
     expect(currentResolved.hydratedDatasetsByFilePath["/tmp/recent-002.jsonl"]?.run.traceId).toBe(
       "recent-002",
     );
+    expect(currentResolved.selectionLoadState).toBeNull();
+  });
+
+  it("recent snapshot 취소는 loading 상태를 비우고 이전 resolve를 무효화한다", () => {
+    const initialState = monitorStateReducer(
+      monitorStateReducer(createMonitorInitialState(), {
+        type: "begin-recent-index-request",
+      }),
+      {
+        type: "resolve-recent-index-request",
+        items: [buildRecentIndexItem("recent-001")],
+      },
+    );
+    const pendingState = monitorStateReducer(initialState, {
+      type: "begin-recent-snapshot-request",
+      requestId: 5,
+      filePath: "/tmp/recent-001.jsonl",
+    });
+    const cancelledState = monitorStateReducer(pendingState, {
+      type: "cancel-recent-snapshot-request",
+      requestId: 6,
+    });
+    const staleResolved = monitorStateReducer(cancelledState, {
+      type: "resolve-recent-snapshot-request",
+      requestId: 5,
+      filePath: "/tmp/recent-001.jsonl",
+      dataset: buildArchivedDataset("recent-cancelled"),
+    });
+
+    expect(cancelledState.recentSnapshotLoadingId).toBeNull();
+    expect(cancelledState.selectionLoadState).toBeNull();
+    expect(staleResolved.datasets).toEqual(cancelledState.datasets);
   });
 
   it("dataset 교체는 run별 UI 상태를 재초기화하고 raw drawer fallback을 적용한다", () => {

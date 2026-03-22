@@ -1,6 +1,8 @@
 import {
   beginArchivedIndexRequest,
+  beginArchivedSnapshotBuild,
   beginArchivedSnapshotRequest,
+  cancelArchivedSnapshotRequest,
   finishArchivedIndexRequest,
   finishArchivedSnapshotRequest,
   resolveArchivedIndexRequest,
@@ -17,7 +19,9 @@ import {
 } from "./datasetState";
 import {
   beginRecentIndexRequest,
+  beginRecentSnapshotBuild,
   beginRecentSnapshotRequest,
+  cancelRecentSnapshotRequest,
   finishRecentIndexRequest,
   finishRecentSnapshotRequest,
   resolveRecentIndexRequest,
@@ -81,6 +85,8 @@ export function monitorStateReducer(
       return finishRecentIndexRequest(state, action.error);
     case "begin-recent-snapshot-request":
       return beginRecentSnapshotRequest(state, action.requestId, action.filePath);
+    case "begin-recent-snapshot-build":
+      return beginRecentSnapshotBuild(state, action.requestId, action.filePath);
     case "resolve-recent-snapshot-request":
       return resolveRecentSnapshotRequest(
         state,
@@ -88,6 +94,8 @@ export function monitorStateReducer(
         action.filePath,
         action.dataset,
       );
+    case "cancel-recent-snapshot-request":
+      return cancelRecentSnapshotRequest(state, action.requestId);
     case "finish-recent-snapshot-request":
       return finishRecentSnapshotRequest(state, action.requestId);
     case "apply-live-frame":
@@ -104,7 +112,9 @@ export function monitorStateReducer(
     case "finish-archived-index-request":
       return finishArchivedIndexRequest(state, action.requestId, action.error);
     case "begin-archived-snapshot-request":
-      return beginArchivedSnapshotRequest(state, action.requestId);
+      return beginArchivedSnapshotRequest(state, action.requestId, action.filePath);
+    case "begin-archived-snapshot-build":
+      return beginArchivedSnapshotBuild(state, action.requestId, action.filePath);
     case "resolve-archived-snapshot-request":
       return resolveArchivedSnapshotRequest(
         state,
@@ -112,6 +122,8 @@ export function monitorStateReducer(
         action.filePath,
         action.dataset,
       );
+    case "cancel-archived-snapshot-request":
+      return cancelArchivedSnapshotRequest(state, action.requestId);
     case "finish-archived-snapshot-request":
       return finishArchivedSnapshotRequest(state, action.requestId);
     case "set-archived-search":

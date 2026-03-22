@@ -17,6 +17,7 @@ interface CreateMonitorArchiveActionsOptions {
     search?: string,
   ) => void;
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
+  cancelPendingSelectionLoad: () => void;
   hydratedDatasetsByFilePath: Record<string, RunDataset>;
 }
 
@@ -31,12 +32,12 @@ export function createMonitorArchiveActions({
   dispatch,
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
+  cancelPendingSelectionLoad,
   hydratedDatasetsByFilePath,
 }: CreateMonitorArchiveActionsOptions) {
   function startSnapshotRequest() {
     const requestId = archiveSnapshotRequestIdRef.current + 1;
     archiveSnapshotRequestIdRef.current = requestId;
-    dispatch({ type: "begin-archived-snapshot-request", requestId });
     return requestId;
   }
 
@@ -52,6 +53,11 @@ export function createMonitorArchiveActions({
         return;
       }
 
+      dispatch({
+        type: "begin-archived-snapshot-build",
+        requestId,
+        filePath,
+      });
       startTransition(() => {
         dispatch({
           type: "resolve-archived-snapshot-request",
@@ -75,6 +81,7 @@ export function createMonitorArchiveActions({
       requestArchiveIndex(0, false, toOptionalSearch(query));
     },
     selectArchivedSession(filePath: string) {
+      cancelPendingSelectionLoad();
       const cachedDataset = hydratedDatasetsByFilePath[filePath];
       if (cachedDataset) {
         dispatch({ type: "set-active-run", traceId: cachedDataset.run.traceId });
@@ -82,6 +89,11 @@ export function createMonitorArchiveActions({
       }
 
       const requestId = startSnapshotRequest();
+      dispatch({
+        type: "begin-archived-snapshot-request",
+        requestId,
+        filePath,
+      });
       void loadArchiveSnapshot(filePath, requestId);
     },
   };

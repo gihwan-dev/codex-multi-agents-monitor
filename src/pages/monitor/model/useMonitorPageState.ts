@@ -32,6 +32,22 @@ export function useMonitorPageState() {
   const archiveSnapshotRequestIdRef = useRef(0);
   const derivedState = deriveMonitorViewState(state);
 
+  const cancelPendingSelectionLoad = useEffectEvent(() => {
+    const nextRecentRequestId = recentSnapshotRequestIdRef.current + 1;
+    recentSnapshotRequestIdRef.current = nextRecentRequestId;
+    dispatch({
+      type: "cancel-recent-snapshot-request",
+      requestId: nextRecentRequestId,
+    });
+
+    const nextArchivedRequestId = archiveSnapshotRequestIdRef.current + 1;
+    archiveSnapshotRequestIdRef.current = nextArchivedRequestId;
+    dispatch({
+      type: "cancel-archived-snapshot-request",
+      requestId: nextArchivedRequestId,
+    });
+  });
+
   const requestRecentIndex = useEffectEvent(() => {
     dispatch({ type: "begin-recent-index-request" });
 
@@ -51,6 +67,8 @@ export function useMonitorPageState() {
   });
 
   const requestRecentSnapshot = useEffectEvent((filePath: string) => {
+    cancelPendingSelectionLoad();
+
     const cachedDataset = state.hydratedDatasetsByFilePath[filePath];
     if (cachedDataset) {
       dispatch({ type: "set-active-run", traceId: cachedDataset.run.traceId });
@@ -67,6 +85,11 @@ export function useMonitorPageState() {
         return;
       }
 
+      dispatch({
+        type: "begin-recent-snapshot-build",
+        requestId,
+        filePath,
+      });
       startTransition(() => {
         dispatch({
           type: "resolve-recent-snapshot-request",
@@ -170,6 +193,7 @@ export function useMonitorPageState() {
       requestRecentSnapshot,
       requestArchiveIndex,
       archiveSnapshotRequestIdRef,
+      cancelPendingSelectionLoad,
     }),
   };
 }

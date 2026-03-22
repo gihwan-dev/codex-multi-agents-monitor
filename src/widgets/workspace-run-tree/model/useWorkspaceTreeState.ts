@@ -17,9 +17,9 @@ interface UseWorkspaceTreeStateArgs {
   datasets: RunDataset[];
   recentIndex: RecentSessionIndexItem[];
   recentIndexReady: boolean;
-  recentSnapshotLoadingId: string | null;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
+  onSelectRecentRun: (filePath: string) => void;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }
 
@@ -27,14 +27,15 @@ export function useWorkspaceTreeState({
   datasets,
   recentIndex,
   recentIndexReady,
-  recentSnapshotLoadingId,
   activeRunId,
   onSelectRun,
+  onSelectRecentRun,
   workspaceIdentityOverrides,
 }: UseWorkspaceTreeStateArgs) {
   const [search, setSearch] = useState("");
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([]);
   const [activeTreeId, setActiveTreeId] = useState("");
+  const [optimisticActiveRunId, setOptimisticActiveRunId] = useState(activeRunId);
   const treeRef = useRef<HTMLDivElement>(null);
   const deferredSearch = useDeferredValue(search);
   const model = useMemo(
@@ -43,7 +44,6 @@ export function useWorkspaceTreeState({
         datasets,
         recentIndex,
         recentIndexReady,
-        recentSnapshotLoadingId,
         search: deferredSearch,
         workspaceIdentityOverrides,
       }),
@@ -51,7 +51,6 @@ export function useWorkspaceTreeState({
       datasets,
       recentIndex,
       recentIndexReady,
-      recentSnapshotLoadingId,
       deferredSearch,
       workspaceIdentityOverrides,
     ],
@@ -62,6 +61,7 @@ export function useWorkspaceTreeState({
   );
 
   useEffect(() => {
+    setOptimisticActiveRunId((current) => (current === activeRunId ? current : activeRunId));
     setExpandedWorkspaceIds((current) => {
       const nextExpanded = resolveExpandedWorkspaceIds(model.workspaces, current);
       return areWorkspaceIdsEqual(current, nextExpanded) ? current : nextExpanded;
@@ -120,16 +120,29 @@ export function useWorkspaceTreeState({
   };
 
   const selectRun = (workspaceId: string, runId: string) => {
+    setOptimisticActiveRunId(runId);
     setActiveTreeId(buildRunTreeId(workspaceId, runId));
     onSelectRun(runId);
+  };
+
+  const selectRecentRun = (
+    workspaceId: string,
+    runId: string,
+    filePath: string,
+  ) => {
+    setOptimisticActiveRunId(runId);
+    setActiveTreeId(buildRunTreeId(workspaceId, runId));
+    onSelectRecentRun(filePath);
   };
 
   return {
     activeTreeId,
     expandedWorkspaceIds,
     handleTreeKeyDown,
+    optimisticActiveRunId,
     model,
     search,
+    selectRecentRun,
     selectRun,
     setSearch,
     toggleWorkspace,

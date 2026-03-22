@@ -222,7 +222,6 @@ export interface WorkspaceRunRow {
   relativeTime: string;
   liveMode: LiveMode;
   filePath?: string | null;
-  loading?: boolean;
 }
 
 export interface WorkspaceThreadGroup {

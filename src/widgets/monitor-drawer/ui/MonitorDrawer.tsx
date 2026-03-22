@@ -58,7 +58,7 @@ export function MonitorDrawer({
   const dataset = activeDataset;
   const noDatasetPlaceholder = (
     <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-muted-foreground">
-      Load a run to inspect drawer content.
+      Select a run to inspect drawer content.
     </div>
   );
 
@@ -167,7 +167,7 @@ export function MonitorDrawer({
             ? JSON.stringify(dataset, null, 2)
             : dataset
               ? "Raw payload hidden by default."
-              : "Load a run to inspect drawer content."}
+              : "Select a run to inspect drawer content."}
         </pre>
       ) : null}
 

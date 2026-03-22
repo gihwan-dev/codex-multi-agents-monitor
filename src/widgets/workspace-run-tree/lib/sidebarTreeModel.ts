@@ -110,7 +110,6 @@ function buildDatasetSource(
 function buildRecentSource(
   item: RecentSessionIndexItem,
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap,
-  recentSnapshotLoadingId: string | null,
 ): SidebarRunSource {
   const startedAt = new Date(item.startedAt).getTime();
   const updatedAt = new Date(item.updatedAt).getTime();
@@ -140,7 +139,6 @@ function buildRecentSource(
       relativeTime: "",
       liveMode: "imported",
       filePath: item.filePath,
-      loading: recentSnapshotLoadingId === item.filePath,
     },
   };
 }
@@ -230,7 +228,6 @@ interface BuildSidebarTreeModelOptions {
   datasets: RunDataset[];
   recentIndex: RecentSessionIndexItem[];
   recentIndexReady: boolean;
-  recentSnapshotLoadingId: string | null;
   search: string;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }
@@ -239,7 +236,6 @@ export function buildSidebarTreeModel({
   datasets,
   recentIndex,
   recentIndexReady,
-  recentSnapshotLoadingId,
   search,
   workspaceIdentityOverrides,
 }: BuildSidebarTreeModelOptions): WorkspaceTreeModel {
@@ -252,9 +248,7 @@ export function buildSidebarTreeModel({
 
   const recentSessionIds = new Set(recentIndex.map((item) => item.sessionId));
   const sources: SidebarRunSource[] = [
-    ...recentIndex.map((item) =>
-      buildRecentSource(item, workspaceIdentityOverrides, recentSnapshotLoadingId),
-    ),
+    ...recentIndex.map((item) => buildRecentSource(item, workspaceIdentityOverrides)),
     ...datasets
       .filter((dataset) => !recentSessionIds.has(dataset.run.traceId))
       .map((dataset) => buildDatasetSource(dataset, workspaceIdentityOverrides)),

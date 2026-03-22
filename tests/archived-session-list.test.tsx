@@ -70,6 +70,7 @@ async function renderArchivedSessionList(props?: Partial<ComponentProps<typeof A
         hasMore: true,
         indexLoading: false,
         errorMessage: null,
+        activeFilePath: null,
         search: "",
         onSearch,
         onLoadMore,
@@ -202,6 +203,32 @@ describe("ArchivedSessionList", () => {
     });
 
     expect(onSelect).toHaveBeenCalledWith(baseItem.filePath);
+  });
+
+  it("active file path와 일치하는 archived session을 즉시 강조한다", async () => {
+    await renderArchivedSessionList({
+      hasMore: false,
+      total: 1,
+      activeFilePath: baseItem.filePath,
+    });
+    const workspaceButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-workspace-toggle"]',
+    );
+
+    expect(workspaceButton).not.toBeNull();
+    if (!workspaceButton) {
+      throw new Error("archive workspace button missing");
+    }
+
+    await act(async () => {
+      workspaceButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const sessionButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-session-item"]',
+    );
+
+    expect(sessionButton?.getAttribute("data-active")).toBe("true");
   });
 
   it("archive 에러가 있으면 empty copy 대신 에러를 보여준다", async () => {

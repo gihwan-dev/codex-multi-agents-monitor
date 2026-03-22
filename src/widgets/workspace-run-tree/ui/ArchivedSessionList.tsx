@@ -12,6 +12,7 @@ interface ArchivedSessionListProps {
   hasMore: boolean;
   indexLoading: boolean;
   errorMessage: string | null;
+  activeFilePath: string | null;
   search: string;
   onSearch: (query: string) => void;
   onLoadMore: () => void;
@@ -24,6 +25,7 @@ export function ArchivedSessionList({
   hasMore,
   indexLoading,
   errorMessage,
+  activeFilePath,
   search,
   onSearch,
   onLoadMore,
@@ -140,7 +142,12 @@ export function ArchivedSessionList({
                       type="button"
                       data-slot="archive-session-item"
                       data-file-path={session.filePath}
-                      className="grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.8rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                      data-active={activeFilePath === session.filePath ? "true" : "false"}
+                      className={cn(
+                        "grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.8rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground",
+                        activeFilePath === session.filePath &&
+                          "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground",
+                      )}
                       onClick={() => onSelect(session.filePath)}
                       title={session.workspacePath}
                     >

@@ -1,4 +1,5 @@
 import { buildDatasetActivationPatch, upsertDataset } from "./helpers";
+import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
 export function beginArchivedIndexRequest(state: MonitorState, requestId: number): MonitorState {
@@ -56,11 +57,36 @@ export function finishArchivedIndexRequest(
 export function beginArchivedSnapshotRequest(
   state: MonitorState,
   requestId: number,
+  filePath: string,
 ): MonitorState {
   return {
     ...state,
     archivedSnapshotLoading: true,
     archivedSnapshotRequestId: requestId,
+    selectionLoadState: createSelectionLoadState(
+      "archived",
+      filePath,
+      "loading_snapshot",
+    ),
+  };
+}
+
+export function beginArchivedSnapshotBuild(
+  state: MonitorState,
+  requestId: number,
+  filePath: string,
+): MonitorState {
+  if (requestId !== state.archivedSnapshotRequestId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    selectionLoadState: createSelectionLoadState(
+      "archived",
+      filePath,
+      "building_graph",
+    ),
   };
 }
 
@@ -77,6 +103,7 @@ export function resolveArchivedSnapshotRequest(
   const nextState = {
     ...state,
     archivedSnapshotLoading: false,
+    selectionLoadState: null,
     hydratedDatasetsByFilePath: {
       ...state.hydratedDatasetsByFilePath,
       [filePath]: dataset,
@@ -90,11 +117,24 @@ export function resolveArchivedSnapshotRequest(
   };
 }
 
+export function cancelArchivedSnapshotRequest(
+  state: MonitorState,
+  requestId: number,
+): MonitorState {
+  return {
+    ...state,
+    archivedSnapshotLoading: false,
+    archivedSnapshotRequestId: requestId,
+    selectionLoadState:
+      state.selectionLoadState?.source === "archived" ? null : state.selectionLoadState,
+  };
+}
+
 export function finishArchivedSnapshotRequest(
   state: MonitorState,
   requestId: number,
 ): MonitorState {
   return requestId === state.archivedSnapshotRequestId
-    ? { ...state, archivedSnapshotLoading: false }
+    ? { ...state, archivedSnapshotLoading: false, selectionLoadState: null }
     : state;
 }

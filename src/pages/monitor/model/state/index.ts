@@ -8,6 +8,11 @@ export {
 } from "./helpers";
 export { monitorStateReducer } from "./reducer";
 export type {
+  SelectionLoadPhase,
+  SelectionLoadSource,
+  SelectionLoadState,
+} from "./selectionLoadState";
+export type {
   MonitorAction,
   MonitorState,
 } from "./types";

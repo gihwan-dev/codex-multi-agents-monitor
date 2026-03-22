@@ -7,6 +7,7 @@ export { deriveMonitorViewState } from "./model/deriveMonitorViewState";
 export type {
   MonitorAction,
   MonitorState,
+  SelectionLoadState,
 } from "./model/state";
 export {
   createMonitorInitialState,

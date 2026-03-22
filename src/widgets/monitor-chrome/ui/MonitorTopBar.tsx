@@ -27,18 +27,15 @@ export function MonitorTopBar({
             Graph-first run workbench
           </p>
           <p className="truncate text-[0.82rem] text-muted-foreground">
-            Recent sessions
+            Ready to inspect
           </p>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="grid gap-1">
             <h1 className="min-w-0 truncate text-[clamp(1.18rem,2vw,1.5rem)] font-semibold">
-              Loading selected run…
+              Select a run
             </h1>
-            <Badge
-              variant="outline"
-              className="h-8 rounded-full border-white/8 bg-white/[0.04] px-3 text-[0.78rem] font-medium text-muted-foreground"
-            >
-              Summary first
-            </Badge>
+            <p className="text-[0.82rem] text-muted-foreground">
+              Select a recent or archived run to inspect.
+            </p>
           </div>
         </div>
 
