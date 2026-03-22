@@ -3,7 +3,7 @@ import type { LiveWatchFrame } from "../src/entities/run/index.js";
 import {
   FIXTURE_DATASETS,
   LIVE_FIXTURE_FRAMES,
-} from "../src/entities/run/testing.js";
+} from "../src/entities/run/index.js";
 import { applyLiveFrame } from "../src/features/follow-live/index.js";
 
 function requireLiveDataset() {

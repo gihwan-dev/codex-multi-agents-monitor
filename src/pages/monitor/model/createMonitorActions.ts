@@ -1,8 +1,6 @@
 import type {
   Dispatch,
-  MutableRefObject,
 } from "react";
-import { createMonitorArchiveActions } from "./createMonitorArchiveActions";
 import { createMonitorImportExportActions } from "./createMonitorImportExportActions";
 import { createMonitorViewActions } from "./createMonitorViewActions";
 import type {
@@ -15,14 +13,10 @@ interface CreateMonitorActionsOptions {
   dispatch: Dispatch<MonitorAction>;
   activeDataset: MonitorState["datasets"][number] | null;
   activeFollowLive: boolean;
+  loadArchiveIndex: (append: boolean) => void;
+  searchArchive: (query: string) => void;
+  selectArchivedSession: (filePath: string) => void;
   requestRecentSnapshot: (filePath: string) => void;
-  requestArchiveIndex: (
-    offset: number,
-    append: boolean,
-    search?: string,
-  ) => void;
-  archiveSnapshotRequestIdRef: MutableRefObject<number>;
-  cancelPendingSelectionLoad: () => void;
 }
 
 export function createMonitorActions({
@@ -30,10 +24,10 @@ export function createMonitorActions({
   dispatch,
   activeDataset,
   activeFollowLive,
+  loadArchiveIndex,
+  searchArchive,
+  selectArchivedSession,
   requestRecentSnapshot,
-  requestArchiveIndex,
-  archiveSnapshotRequestIdRef,
-  cancelPendingSelectionLoad,
 }: CreateMonitorActionsOptions) {
   const viewActions = createMonitorViewActions({
     drawerOpen: state.drawerOpen,
@@ -48,20 +42,13 @@ export function createMonitorActions({
     dispatch,
     activeDataset,
   });
-  const archiveActions = createMonitorArchiveActions({
-    archivedIndexLength: state.archivedIndex.length,
-    archivedSearch: state.archivedSearch,
-    dispatch,
-    requestArchiveIndex,
-    archiveSnapshotRequestIdRef,
-    cancelPendingSelectionLoad,
-    hydratedDatasetsByFilePath: state.hydratedDatasetsByFilePath,
-  });
 
   return {
     ...viewActions,
     ...importExportActions,
-    ...archiveActions,
+    loadArchiveIndex,
+    searchArchive,
+    selectArchivedSession,
     selectRecentSession: requestRecentSnapshot,
   };
 }

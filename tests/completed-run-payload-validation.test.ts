@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawImportPayload } from "../src/entities/run/index.js";
-import { FIXTURE_IMPORT_TEXT } from "../src/entities/run/testing.js";
+import { FIXTURE_IMPORT_TEXT } from "../src/entities/run/index.js";
 import { parseCompletedRunPayload } from "../src/features/import-run/index.js";
 
 function buildFixture(): RawImportPayload {

@@ -8,9 +8,6 @@
     "target": "ES2022"
   },
   "include": [
-    "src/shared/domain/**/*.ts",
-    "src/features/fixtures/**/*.ts",
-    "src/features/ingestion/**/*.ts",
     "tests/**/*.ts"
   ]
 }

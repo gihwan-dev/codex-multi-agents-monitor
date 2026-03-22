@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { isEditableKeyboardTarget } from "../src/pages/monitor/index.js";
+import { isEditableKeyboardTarget } from "./helpers/monitorTestApi.js";
 
 describe("단축키 대상 판별", () => {
   it("입력 요소는 편집 가능한 대상으로 본다", () => {

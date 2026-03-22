@@ -13,7 +13,7 @@ import {
 import {
   createMonitorImportExportActions,
   createMonitorInitialState,
-} from "../src/pages/monitor/index.js";
+} from "./helpers/monitorTestApi.js";
 
 vi.mock("../src/features/import-run/index.js", () => ({
   buildExportPayload: vi.fn(),

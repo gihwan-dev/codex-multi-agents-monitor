@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMonitorInitialState,
   monitorStateReducer,
-} from "../src/pages/monitor/index.js";
+} from "./helpers/monitorTestApi.js";
 
 function requireDataset(traceId: string) {
   const dataset = createMonitorInitialState().datasets.find((item) => item.run.traceId === traceId);
