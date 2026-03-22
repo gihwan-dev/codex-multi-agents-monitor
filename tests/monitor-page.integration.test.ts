@@ -3,12 +3,14 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LIVE_FIXTURE_FRAMES } from "../src/entities/run/testing.js";
 import {
   loadArchivedSessionIndex,
   loadArchivedSessionSnapshot,
   loadRecentSessionIndex,
   loadRecentSessionSnapshot,
 } from "../src/entities/session-log/index.js";
+import { applyLiveFrame } from "../src/features/follow-live/index.js";
 import { MonitorPage } from "../src/pages/monitor/index.js";
 import { createMonitorInitialState } from "../src/pages/monitor/model/state/helpers.js";
 
@@ -162,6 +164,37 @@ function buildRecentDataset(sessionId: string) {
       traceId: sessionId,
       title: `Run ${sessionId}`,
       isArchived: false,
+    },
+  };
+}
+
+function buildLiveRecentDataset(sessionId: string) {
+  const baseDataset = createMonitorInitialState().datasets.find(
+    (dataset) => dataset.run.traceId === "trace-fix-006",
+  );
+  if (!baseDataset) {
+    throw new Error("live dataset missing");
+  }
+
+  return {
+    ...baseDataset,
+    project: {
+      ...baseDataset.project,
+      name: "Recent workspace",
+      projectId: "/tmp/recent-workspace",
+      repoPath: "/tmp/recent-workspace",
+    },
+    session: {
+      ...baseDataset.session,
+      sessionId,
+      title: `Session ${sessionId}`,
+    },
+    run: {
+      ...baseDataset.run,
+      traceId: sessionId,
+      title: `Run ${sessionId}`,
+      isArchived: false,
+      liveMode: "live" as const,
     },
   };
 }
@@ -715,5 +748,57 @@ describe("MonitorPage integration", () => {
     } finally {
       restoreViewportMetrics();
     }
+  });
+
+  it("recent running session은 follow-live를 활성화하고 폴링된 최신 이벤트를 선택한다", async () => {
+    const recentItem = {
+      ...buildRecentSessionIndexItem("recent-live-001"),
+      status: "running" as const,
+    };
+    const initialDataset = buildLiveRecentDataset("recent-live-001");
+    const refreshedDataset = applyLiveFrame(
+      initialDataset,
+      LIVE_FIXTURE_FRAMES[0],
+    ).dataset;
+
+    mockedLoadRecentSessionIndex.mockResolvedValue([recentItem]);
+    mockedLoadArchivedSessionIndex.mockResolvedValue({
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockedLoadRecentSessionSnapshot
+      .mockResolvedValueOnce(initialDataset)
+      .mockResolvedValueOnce(refreshedDataset)
+      .mockResolvedValue(refreshedDataset);
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
+    });
+    await vi.waitFor(() => {
+      expect(mockedLoadRecentSessionSnapshot.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    const followButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Follow live",
+    );
+    expect(followButton).not.toBeNull();
+    expect(followButton?.disabled).toBe(false);
+    expect(container.textContent).toContain("Live watch");
+    expect(container.textContent).not.toContain("Resume follow");
+
+    await vi.waitFor(() => {
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            '[data-slot="graph-event-card"][data-event-id="fix6-follow-up"]',
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
+    });
   });
 });

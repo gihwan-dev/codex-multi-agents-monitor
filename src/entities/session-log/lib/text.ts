@@ -49,8 +49,22 @@ export function deriveSessionLogStatus(
       !isSystemBoilerplate(trimmed, skipImplementPlan)
     );
   });
+  const latestTaskStartedTs = findLatestEntryTimestamp(
+    entries,
+    (entry) => entry.entryType === "task_started",
+  );
+  const latestTaskCompleteTs = findLatestEntryTimestamp(
+    entries,
+    (entry) => entry.entryType === "task_complete",
+  );
+  const hasOpenTask =
+    latestTaskStartedTs !== null &&
+    (latestTaskCompleteTs === null || latestTaskStartedTs > latestTaskCompleteTs);
 
   if (!latestMessage) {
+    if (hasOpenTask) {
+      return "running";
+    }
     return hasAbort ? "interrupted" : "done";
   }
 
@@ -72,6 +86,10 @@ export function deriveSessionLogStatus(
     }
   }
 
+  if (hasOpenTask) {
+    return "running";
+  }
+
   if (latestMessage.role === "user") {
     const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
     if (msgTs === null) {
@@ -91,6 +109,14 @@ export function deriveSessionLogStatus(
   }
 
   return "done";
+}
+
+function findLatestEntryTimestamp(
+  entries: SessionEntrySnapshot[],
+  predicate: (entry: SessionEntrySnapshot) => boolean,
+) {
+  const latestEntry = [...entries].reverse().find(predicate);
+  return latestEntry ? parseRequiredTimestamp(latestEntry.timestamp) : null;
 }
 
 export function isSystemBoilerplate(

@@ -24,6 +24,7 @@ import {
   cancelRecentSnapshotRequest,
   finishRecentIndexRequest,
   finishRecentSnapshotRequest,
+  refreshRecentSnapshot,
   resolveRecentIndexRequest,
   resolveRecentSnapshotRequest,
 } from "./recentRequestState";
@@ -94,6 +95,8 @@ export function monitorStateReducer(
         action.filePath,
         action.dataset,
       );
+    case "refresh-recent-snapshot":
+      return refreshRecentSnapshot(state, action.filePath, action.dataset);
     case "cancel-recent-snapshot-request":
       return cancelRecentSnapshotRequest(state, action.requestId);
     case "finish-recent-snapshot-request":

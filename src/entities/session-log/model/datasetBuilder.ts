@@ -38,6 +38,8 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
 
   const displayTitle = deriveSessionLogTitle(snapshot.entries);
   const status = deriveSessionLogStatus(snapshot.entries);
+  const liveMode =
+    !snapshot.isArchived && status === "running" ? "live" : "imported";
   const mainLaneId = `${snapshot.sessionId}:main`;
   const userLaneId = `${snapshot.sessionId}:user`;
   const resolvedModel = snapshot.model ?? "unknown";
@@ -162,7 +164,7 @@ export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDat
       endTs: status === "running" ? null : updatedTs,
       durationMs: Math.max(updatedTs - startTs, 1_000),
       environment: "Desktop",
-      liveMode: "imported",
+      liveMode,
       summaryMetrics: {
         totalDurationMs: 0,
         activeTimeMs: 0,

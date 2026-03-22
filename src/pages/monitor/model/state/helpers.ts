@@ -1,6 +1,6 @@
 import type { RunDataset, SelectionState } from "../../../../entities/run";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run";
-import { buildConnectionMap } from "./liveConnection";
+import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 
 export const DEFAULT_ACTIVE_RUN_ID = "trace-fix-002";
@@ -52,10 +52,30 @@ export function resolveDatasetDrawerTab(
   };
 }
 
+type DatasetActivationPatch = Pick<
+  MonitorState,
+  | "activeRunId"
+  | "selection"
+  | "collapsedGapIds"
+  | "followLiveByRunId"
+  | "liveConnectionByRunId"
+  | "drawerTab"
+>;
+
 export function buildDatasetActivationPatch(
   state: MonitorState,
   dataset: RunDataset,
-) {
+): DatasetActivationPatch {
+  const followLive = dataset.run.liveMode === "live";
+  const liveConnectionByRunId = followLive
+    ? updateLiveConnectionMap(
+        state.liveConnectionByRunId,
+        dataset.run.traceId,
+        dataset,
+        true,
+      )
+    : state.liveConnectionByRunId;
+
   return {
     activeRunId: dataset.run.traceId,
     selection: defaultSelectionForDataset(dataset),
@@ -65,8 +85,9 @@ export function buildDatasetActivationPatch(
     },
     followLiveByRunId: {
       ...state.followLiveByRunId,
-      [dataset.run.traceId]: false,
+      [dataset.run.traceId]: followLive,
     },
+    liveConnectionByRunId,
     ...resolveDatasetDrawerTab(state, dataset),
   };
 }

@@ -195,6 +195,76 @@ describe("sessionLogLoader", () => {
     expect(status).toBe("running");
   });
 
+  it("builds recent running sessions as live datasets", () => {
+    const dataset = expectDataset(
+      buildSnapshot([
+        makeMessageEntry(
+          "2026-03-15T00:54:44.000Z",
+          "assistant",
+          "이전 수정은 반영했습니다.",
+        ),
+        makeMessageEntry(
+          "2026-03-15T01:00:00.000Z",
+          "user",
+          "지금도 계속 작업 중인 세션이야",
+        ),
+      ]),
+    );
+
+    expect(dataset.run.status).toBe("running");
+    expect(dataset.run.liveMode).toBe("live");
+  });
+
+  it("keeps a session live while a started turn is still producing assistant output", () => {
+    const dataset = expectDataset(
+      buildSnapshot([
+        {
+          timestamp: "2026-03-15T00:59:59.000Z",
+          entryType: "task_started",
+          role: null,
+          text: null,
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+        makeMessageEntry(
+          "2026-03-15T01:00:00.000Z",
+          "user",
+          "실시간 세션이 아직 끝나지 않았어",
+        ),
+        makeMessageEntry(
+          "2026-03-15T01:00:05.000Z",
+          "assistant",
+          "지금 계속 진행 중이야",
+        ),
+      ]),
+    );
+
+    expect(dataset.run.status).toBe("running");
+    expect(dataset.run.liveMode).toBe("live");
+  });
+
+  it("keeps archived snapshots out of live mode even when entries look running", () => {
+    const dataset = expectDataset({
+      ...buildSnapshot([
+        makeMessageEntry(
+          "2026-03-15T00:54:44.000Z",
+          "assistant",
+          "이전 수정은 반영했습니다.",
+        ),
+        makeMessageEntry(
+          "2026-03-15T01:00:00.000Z",
+          "user",
+          "보관된 세션은 live가 아니어야 해",
+        ),
+      ]),
+      isArchived: true,
+    });
+
+    expect(dataset.run.status).toBe("running");
+    expect(dataset.run.liveMode).toBe("imported");
+  });
+
   it("marks user-only entries as done when task_complete follows", () => {
     const status = deriveSessionLogStatus([
       {

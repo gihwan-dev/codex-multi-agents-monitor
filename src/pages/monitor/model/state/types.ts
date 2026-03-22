@@ -78,6 +78,11 @@ export type MonitorAction =
       filePath: string;
       dataset: RunDataset;
     }
+  | {
+      type: "refresh-recent-snapshot";
+      filePath: string;
+      dataset: RunDataset;
+    }
   | { type: "cancel-recent-snapshot-request"; requestId: number }
   | { type: "finish-recent-snapshot-request"; requestId: number }
   | { type: "apply-live-frame" }
