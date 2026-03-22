@@ -32,16 +32,17 @@ export function CausalGraphLaneStrip({
     <div
       ref={laneStripRef}
       data-slot="graph-lane-strip"
-      className="sticky top-0 z-[4] grid items-center border-b border-white/8 bg-[linear-gradient(180deg,rgba(20,24,33,0.98),rgba(20,24,33,0.92))]"
-      style={{ gridTemplateColumns, width: layout.contentWidth }}
+      className="sticky top-0 z-[4] grid items-center border-b border-[color:var(--color-chrome-border)]"
+      style={{
+        background: "var(--gradient-graph-sticky)",
+        gridTemplateColumns,
+        width: layout.contentWidth,
+      }}
     >
       <div
         data-slot="graph-time-header"
         className="sticky left-0 z-[3] px-3 py-2 text-[0.76rem] uppercase tracking-[0.06em] text-muted-foreground"
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(20, 24, 33, 0.98), rgba(20, 24, 33, 0.88))",
-        }}
+        style={{ background: "var(--gradient-graph-time)" }}
       >
         Time (dur)
       </div>
@@ -50,7 +51,7 @@ export function CausalGraphLaneStrip({
           key={lane.laneId}
           data-slot="graph-lane-header"
           data-lane-id={lane.laneId}
-          className="relative flex min-h-12 items-center overflow-hidden border-l border-white/6 px-3.5 py-2"
+          className="relative flex min-h-12 items-center overflow-hidden border-l border-[color:var(--color-chrome-border-subtle)] px-3.5 py-2"
         >
           <span
             aria-hidden="true"
@@ -63,7 +64,7 @@ export function CausalGraphLaneStrip({
           <div className="relative flex min-w-0 flex-1 items-center justify-center gap-2">
             <strong className="truncate">{lane.name}</strong>
             {lane.role !== "session" && lane.role !== "user" ? (
-              <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[0.68rem] font-medium text-[var(--color-text-muted)]">
+              <span className="rounded bg-[color:var(--color-graph-lane-role-bg)] px-1.5 py-0.5 text-[0.68rem] font-medium text-[var(--color-text-muted)]">
                 {lane.role}
               </span>
             ) : null}

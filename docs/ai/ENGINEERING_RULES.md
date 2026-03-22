@@ -13,6 +13,7 @@
 - Validation stack: `Biome`, `Vitest`, `Playwright`, `Storybook`.
 - State and data strategy: feature-local React state, page-local orchestration, reducer, or context plus fixture-backed selectors. Do not introduce an external global state or cache layer by default.
 - Styling and design-system direction: semantic token source paths are `src/theme/tokens.css` and `src/theme/motion.css`. The root styling entry lives in `src/app/styles/index.css` and exposes semantic tokens to Tailwind CSS v4 via `@theme inline`. `src/theme/primitives.css` is a migration bridge and deletion target, not a long-term source of truth.
+- Runtime theme contract: global theme state lives under `src/shared/theme/` via a repo-local `ThemeProvider`, persists `system | dark | light` preference under `codex-monitor-theme-preference`, resolves onto document `data-theme` before React mounts, and exposes the user-facing control in the monitor top bar. Do not add a second class-based theme source of truth.
 - Component source: shared UI primitives live in `src/shared/ui/primitives/` as shadcn/ui open-code components plus repo-local variants. Monitor-specific wrappers such as `StatusChip`, `MetricPill`, `PanelSection`, and `InspectorTabs` live in `src/shared/ui/monitor/`. Do not introduce a second component kit.
 - Screenshot and visual review tooling: `Storybook` is the component review and screenshot baseline, and `Playwright` covers interaction and end-to-end validation.
 - Backend architecture direction: the Tauri crate follows `lib.rs -> commands -> application -> domain/infrastructure` with dedicated `state` and `support` modules. `src-tauri/src/lib.rs` is bootstrap-only and must not regain use-case logic.
@@ -107,10 +108,6 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
   - Why deferred: motion scope is intentionally narrow in v0.1.
   - Trigger: minimal motion tokens cannot be maintained with repo-local assets alone.
   - Needed input: concrete motion requirements that exceed the documented token contract.
-- Full theme feature
-  - Why deferred: issue `#4` only establishes theme-ready architecture and Storybook preview parity.
-  - Trigger: issue `#5` begins implementation for user-facing theme toggle, persistence, and system sync.
-  - Needed input: approved runtime ThemeProvider contract and product location for theme controls.
 
 ## Banned/Avoid
 

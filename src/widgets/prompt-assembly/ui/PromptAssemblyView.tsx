@@ -93,20 +93,21 @@ export function PromptAssemblyView({
             data-layer-type={layer.layerType}
             data-dynamic={isDynamic ? "true" : "false"}
             className={cn(
-              "min-h-14 shrink-0 overflow-hidden rounded-md border border-white/8 bg-white/[0.025]",
+              "min-h-14 shrink-0 overflow-hidden rounded-md border",
+              "border-[color:var(--color-chrome-border)] bg-[color:var(--color-prompt-layer-fill)]",
               !isDynamic && "opacity-80",
             )}
             style={{
               borderLeftColor: accent,
               borderLeftWidth: "3px",
-              backgroundColor: `color-mix(in srgb, ${accent} 4%, rgba(255,255,255,0.02))`,
+              backgroundColor: `color-mix(in srgb, ${accent} 4%, var(--color-prompt-layer-mix-base))`,
             }}
           >
             <button
               type="button"
               data-slot="prompt-layer-toggle"
               data-layer-id={layer.layerId}
-              className="flex min-h-10 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-white/[0.03]"
+              className="flex min-h-10 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[color:var(--color-prompt-layer-hover)]"
               onClick={() => toggleLayer(layer.layerId)}
               aria-expanded={isExpanded}
               aria-label={`${isExpanded ? "Collapse" : "Expand"} ${layer.label}`}
@@ -139,7 +140,7 @@ export function PromptAssemblyView({
             {isExpanded ? (
               <div
                 data-slot="prompt-layer-content"
-                className="max-h-96 overflow-y-auto border-t border-white/8 px-3 py-3"
+                className="max-h-96 overflow-y-auto border-t border-[color:var(--color-prompt-layer-divider)] px-3 py-3"
               >
                 {rawVisible ? (
                   <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-6 font-mono text-muted-foreground">

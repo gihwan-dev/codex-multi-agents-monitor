@@ -1,6 +1,10 @@
 import type { LiveConnection, RunDataset } from "../../../entities/run";
+import { ThemePreferenceSelect } from "../../../shared/theme";
 import { StatusChip } from "../../../shared/ui";
 import { Badge, Button } from "../../../shared/ui/primitives";
+
+const chromeActionClassName =
+  "border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] text-foreground hover:bg-[color:var(--color-surface-hover)]";
 
 interface MonitorTopBarProps {
   actionsDisabled?: boolean;
@@ -23,7 +27,13 @@ export function MonitorTopBar({
 }: MonitorTopBarProps) {
   if (!dataset) {
     return (
-      <header className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border border-white/8 bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(13,17,24,0.96))] px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+      <header
+        className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+        style={{
+          background: "var(--gradient-monitor-header)",
+          borderColor: "var(--color-chrome-border)",
+        }}
+      >
         <div className="grid min-w-0 gap-1.5">
           <p className="text-[0.7rem] uppercase tracking-[0.08em] text-muted-foreground">
             Graph-first run workbench
@@ -46,17 +56,18 @@ export function MonitorTopBar({
             type="button"
             variant="outline"
             disabled
-            className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+            className={chromeActionClassName}
           >
             Follow live
           </Button>
           <Button type="button" disabled className="bg-primary text-primary-foreground">
             Export
           </Button>
+          <ThemePreferenceSelect />
           <Button
             type="button"
             variant="outline"
-            className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+            className={chromeActionClassName}
             onClick={(event) => onToggleShortcuts(event.currentTarget)}
           >
             Help
@@ -67,7 +78,13 @@ export function MonitorTopBar({
   }
 
   return (
-    <header className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border border-white/8 bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(13,17,24,0.96))] px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+    <header
+      className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+      style={{
+        background: "var(--gradient-monitor-header)",
+        borderColor: "var(--color-chrome-border)",
+      }}
+    >
       <div className="grid min-w-0 gap-1.5">
         <p className="text-[0.7rem] uppercase tracking-[0.08em] text-muted-foreground">
           Graph-first run workbench
@@ -82,7 +99,7 @@ export function MonitorTopBar({
           <StatusChip status={dataset.run.status} />
           <Badge
             variant="outline"
-            className="h-8 rounded-full border-white/8 bg-white/[0.04] px-3 text-[0.78rem] font-medium text-muted-foreground"
+            className="h-8 rounded-full border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] px-3 text-[0.78rem] font-medium text-muted-foreground"
           >
             {dataset.run.liveMode === "live" ? "Live watch" : "Imported run"}
           </Badge>
@@ -97,7 +114,7 @@ export function MonitorTopBar({
           {dataset.run.liveMode === "live" ? (
             <Badge
               variant="outline"
-              className="h-8 rounded-full border-white/10 bg-white/[0.04] px-3 text-[0.78rem] font-medium text-foreground"
+              className="h-8 rounded-full border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] px-3 text-[0.78rem] font-medium text-foreground"
             >
               {liveConnection === "paused" ? "Following paused" : liveConnection}
             </Badge>
@@ -114,7 +131,7 @@ export function MonitorTopBar({
           className={
             followLive
               ? "bg-[color:color-mix(in_srgb,var(--color-active)_18%,transparent)] text-foreground hover:bg-[color:color-mix(in_srgb,var(--color-active)_24%,transparent)]"
-              : "border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+              : chromeActionClassName
           }
         >
           {dataset.run.liveMode === "live" && !followLive
@@ -129,10 +146,11 @@ export function MonitorTopBar({
         >
           Export
         </Button>
+        <ThemePreferenceSelect />
         <Button
           type="button"
           variant="outline"
-          className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+          className={chromeActionClassName}
           onClick={(event) => onToggleShortcuts(event.currentTarget)}
         >
           Help

@@ -197,7 +197,7 @@ export function MonitorPage() {
               title={selectionLoadingPresentation?.title ?? "Graph"}
               className="flex-1 overflow-hidden rounded-none border-x-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
             >
-              <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6">
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] px-4 py-6">
                 {selectionLoadingPresentation ? (
                   <div className="w-full max-w-xl">
                     <LoadingStateBlock

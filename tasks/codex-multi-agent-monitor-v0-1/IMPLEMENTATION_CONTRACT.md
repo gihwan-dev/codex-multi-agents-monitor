@@ -28,6 +28,7 @@
 - `src/shared/domain/` and `src/app/session-log-loader/` are removed legacy paths and must not be recreated.
 - Custom thin primitives under `src/shared/ui/` are the only approved component source for v0.1.
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.
+- Runtime theme state now lives in `src/shared/theme/` with a repo-local `ThemeProvider`. It persists `system | dark | light` under `codex-monitor-theme-preference`, applies resolved `data-theme` to the document before React mount, and exposes the user-facing control from the monitor top bar instead of a separate settings screen.
 - `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, `docs/architecture/frontend-fsd.md`, this file, and the UX docs as required pre-read inputs for every slice.
 - Backend refactor work under `src-tauri/src/` now follows `commands / application / domain / infrastructure / state / support`.
 - `src-tauri/src/lib.rs` is bootstrap only: `mod` wiring, `manage(...)`, `generate_handler!`, and `run()` only.

@@ -3,7 +3,7 @@ import { MonitorPage } from "./MonitorPage";
 
 const meta = {
   title: "Screens/MonitorPage",
-  render: () => <MonitorPage />,
+  render: () => <StoryScenario />,
 };
 
 export default meta;
