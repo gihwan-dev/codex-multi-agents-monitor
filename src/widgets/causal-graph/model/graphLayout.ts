@@ -41,6 +41,54 @@ export function computeRenderedContentHeight(
   return Math.max(contentHeight, Math.max(EVENT_ROW_HEIGHT, availableCanvasHeight));
 }
 
+interface FollowLiveViewport {
+  scrollTop: number;
+  scrollLeft: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  stickyTop: number;
+  stickyLeft: number;
+  contentHeight: number;
+  contentWidth: number;
+}
+
+function clampScrollOffset(value: number, max: number) {
+  return Math.min(Math.max(value, 0), Math.max(max, 0));
+}
+
+export function resolveFollowLiveScrollTarget(
+  eventLayout: EventLayout,
+  viewport: FollowLiveViewport,
+) {
+  const visibleBottom = viewport.scrollTop + Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
+  const visibleLeft = viewport.scrollLeft + viewport.stickyLeft;
+  const visibleRight = viewport.scrollLeft + viewport.viewportWidth;
+  const cardBottom = eventLayout.cardRect.y + eventLayout.cardRect.height;
+  const cardRight = eventLayout.cardRect.x + eventLayout.cardRect.width;
+
+  let top = viewport.scrollTop;
+  if (eventLayout.cardRect.y < viewport.scrollTop) {
+    top = eventLayout.cardRect.y;
+  } else if (cardBottom > visibleBottom) {
+    top = cardBottom - Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
+  }
+
+  let left = viewport.scrollLeft;
+  if (eventLayout.cardRect.x < visibleLeft) {
+    left = eventLayout.cardRect.x - viewport.stickyLeft;
+  } else if (cardRight > visibleRight) {
+    left = cardRight - viewport.viewportWidth;
+  }
+
+  return {
+    top: clampScrollOffset(
+      top,
+      viewport.contentHeight - Math.max(viewport.viewportHeight - viewport.stickyTop, 0),
+    ),
+    left: clampScrollOffset(left, viewport.contentWidth - viewport.viewportWidth),
+  };
+}
+
 export function buildContinuationGuideYs(
   contentHeight: number,
   renderedContentHeight: number,

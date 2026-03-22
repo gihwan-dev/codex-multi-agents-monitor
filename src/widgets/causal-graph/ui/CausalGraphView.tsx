@@ -1,4 +1,4 @@
-import { type CSSProperties, useId } from "react";
+import { type CSSProperties, useId, useLayoutEffect, useRef } from "react";
 import type { GraphSceneModel, LiveMode, SelectionState } from "../../../entities/run";
 import { Panel } from "../../../shared/ui";
 import {
@@ -9,6 +9,7 @@ import {
   computeVisibleRowRange,
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
+  resolveFollowLiveScrollTarget,
   ROW_GAP,
   TIME_GUTTER,
 } from "../model/graphLayout";
@@ -35,12 +36,14 @@ export function CausalGraphView({
   viewportHeightOverride,
   laneHeaderHeightOverride,
 }: CausalGraphViewProps) {
+  const followScrollTargetRef = useRef<{ top: number; left: number } | null>(null);
   const {
     availableCanvasHeight,
-    handleScroll,
+    laneHeaderHeight,
     laneStripRef,
     scrollRef,
     scrollTop,
+    scheduleScrollTopUpdate,
     viewportRef,
     viewportWidth,
   } = useGraphViewportState({
@@ -79,6 +82,117 @@ export function CausalGraphView({
     availableCanvasHeight,
     500,
   );
+
+  useLayoutEffect(() => {
+    if (!followLive || liveMode !== "live" || !scene.latestVisibleEventId) {
+      followScrollTargetRef.current = null;
+      return;
+    }
+
+    const element = scrollRef.current;
+    const eventLayout = layout.eventById.get(scene.latestVisibleEventId);
+    if (!element || !eventLayout) {
+      return;
+    }
+
+    const stickyTop =
+      laneHeaderHeightOverride ?? laneStripRef.current?.offsetHeight ?? laneHeaderHeight;
+    const nextViewportHeight = element.clientHeight;
+    const nextViewportWidth = element.clientWidth;
+    if (nextViewportHeight <= 0 || nextViewportWidth <= 0) {
+      return;
+    }
+
+    const followTarget = resolveFollowLiveScrollTarget(eventLayout, {
+      scrollTop: element.scrollTop,
+      scrollLeft: element.scrollLeft,
+      viewportHeight: nextViewportHeight,
+      viewportWidth: nextViewportWidth,
+      stickyTop,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: renderedContentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    const needsScroll =
+      Math.abs(followTarget.top - element.scrollTop) > 1 ||
+      Math.abs(followTarget.left - element.scrollLeft) > 1;
+    if (!needsScroll) {
+      followScrollTargetRef.current = null;
+      return;
+    }
+
+    followScrollTargetRef.current = followTarget;
+    element.scrollTo({
+      top: followTarget.top,
+      left: followTarget.left,
+      behavior: "auto",
+    });
+
+    if (
+      Math.abs(followTarget.top - element.scrollTop) <= 1 &&
+      Math.abs(followTarget.left - element.scrollLeft) <= 1
+    ) {
+      followScrollTargetRef.current = null;
+    }
+  }, [
+    followLive,
+    laneHeaderHeight,
+    laneHeaderHeightOverride,
+    layout,
+    liveMode,
+    renderedContentHeight,
+    scene.latestVisibleEventId,
+  ]);
+
+  const handleScroll = () => {
+    const element = scrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    const followTarget = followScrollTargetRef.current;
+    if (followTarget) {
+      const reachedFollowTarget =
+        Math.abs(followTarget.top - element.scrollTop) <= 1 &&
+        Math.abs(followTarget.left - element.scrollLeft) <= 1;
+      if (reachedFollowTarget) {
+        followScrollTargetRef.current = null;
+      }
+    } else if (followLive && liveMode === "live" && scene.latestVisibleEventId) {
+      const eventLayout = layout.eventById.get(scene.latestVisibleEventId);
+      if (eventLayout) {
+        const stickyTop =
+          laneHeaderHeightOverride ?? laneStripRef.current?.offsetHeight ?? laneHeaderHeight;
+        if (element.clientHeight <= 0 || element.clientWidth <= 0) {
+          return;
+        }
+
+        const followViewport = resolveFollowLiveScrollTarget(eventLayout, {
+          scrollTop: element.scrollTop,
+          scrollLeft: element.scrollLeft,
+          viewportHeight: element.clientHeight,
+          viewportWidth: element.clientWidth,
+          stickyTop,
+          stickyLeft: TIME_GUTTER,
+          contentHeight: renderedContentHeight,
+          contentWidth: layout.contentWidth,
+        });
+        const latestEventInView =
+          Math.abs(followViewport.top - element.scrollTop) <= 1 &&
+          Math.abs(followViewport.left - element.scrollLeft) <= 1;
+        if (!latestEventInView) {
+          followScrollTargetRef.current = null;
+          onPauseFollowLive();
+        }
+      } else {
+        followScrollTargetRef.current = null;
+        onPauseFollowLive();
+      }
+    }
+
+    scheduleScrollTopUpdate(element.scrollTop);
+  };
 
   const gridTemplateColumns = `${TIME_GUTTER}px repeat(${scene.lanes.length || 1}, ${layout.laneMetrics.laneWidth}px)`;
 

@@ -21,6 +21,7 @@ import {
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
   ROW_GAP,
+  resolveFollowLiveScrollTarget,
   TIME_GUTTER,
 } from "../src/widgets/causal-graph/model/graphLayout";
 
@@ -87,6 +88,65 @@ describe("graphLayout", () => {
   it("uses the larger of content height and available canvas height", () => {
     expect(computeRenderedContentHeight(420, 360)).toBe(420);
     expect(computeRenderedContentHeight(420, 600)).toBe(600);
+  });
+
+  it("computes the minimal follow-live scroll target needed to reveal the latest card", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const target = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(target).toEqual({
+      top: latestEventLayout.cardRect.y + latestEventLayout.cardRect.height - (240 - 80),
+      left: latestEventLayout.cardRect.x + latestEventLayout.cardRect.width - 480,
+    });
+  });
+
+  it("does not move the viewport when the latest card is already visible", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const visibleScroll = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+    const stableTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: visibleScroll.top,
+      scrollLeft: visibleScroll.left,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(stableTarget).toEqual(visibleScroll);
   });
 
   it("builds continuation guides only below the real content height", () => {

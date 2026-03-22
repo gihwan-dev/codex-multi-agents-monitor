@@ -11,11 +11,11 @@ interface UseGraphViewportStateOptions {
 }
 
 export function useGraphViewportState({
-  followLive,
+  followLive: _followLive,
   laneHeaderHeightOverride,
-  latestVisibleEventId,
-  liveMode,
-  onPauseFollowLive,
+  latestVisibleEventId: _latestVisibleEventId,
+  liveMode: _liveMode,
+  onPauseFollowLive: _onPauseFollowLive,
   viewportHeightOverride,
 }: UseGraphViewportStateOptions) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -27,22 +27,6 @@ export function useGraphViewportState({
   const [scrollTop, setScrollTop] = useState(0);
   const scrollTopRef = useRef(0);
   const rafRef = useRef(0);
-
-  useEffect(() => {
-    if (!followLive || liveMode !== "live" || !latestVisibleEventId) {
-      return;
-    }
-
-    const element = scrollRef.current;
-    if (!element) {
-      return;
-    }
-
-    element.scrollTo({
-      top: element.scrollHeight,
-      behavior: "auto",
-    });
-  }, [followLive, latestVisibleEventId, liveMode]);
 
   useEffect(() => {
     const viewportElement = viewportRef.current;
@@ -96,20 +80,8 @@ export function useGraphViewportState({
     };
   }, []);
 
-  const handleScroll = () => {
-    const element = scrollRef.current;
-    if (!element) {
-      return;
-    }
-
-    if (followLive && liveMode === "live") {
-      const nearBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 32;
-      if (!nearBottom) {
-        onPauseFollowLive();
-      }
-    }
-
-    scrollTopRef.current = element.scrollTop;
+  const scheduleScrollTopUpdate = (nextScrollTop: number) => {
+    scrollTopRef.current = nextScrollTop;
     if (rafRef.current === 0) {
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
@@ -126,10 +98,11 @@ export function useGraphViewportState({
 
   return {
     availableCanvasHeight,
-    handleScroll,
+    laneHeaderHeight,
     laneStripRef,
     scrollRef,
     scrollTop,
+    scheduleScrollTopUpdate,
     viewportRef,
     viewportWidth,
   };
