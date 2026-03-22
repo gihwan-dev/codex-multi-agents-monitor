@@ -4,6 +4,7 @@ import {
   buildInspectorCausalSummary,
   buildSummaryFacts,
   type GraphSceneModel,
+  type GraphSelectionRevealTarget,
   hasRawPayload,
   type SelectionState,
 } from "../../../entities/run";
@@ -19,26 +20,6 @@ interface SelectionLoadingPresentation {
   targetTitle?: string;
   targetMeta?: string;
 }
-
-interface EventSelectionRevealTarget {
-  kind: "event";
-  eventId: string;
-}
-interface EdgeSelectionRevealTarget {
-  kind: "edge";
-  edgeId: string;
-  sourceEventId: string;
-  targetEventId: string;
-}
-interface ArtifactSelectionRevealTarget {
-  kind: "artifact";
-  artifactId: string;
-  producerEventId: string;
-}
-type SelectionRevealTarget =
-  | EventSelectionRevealTarget
-  | EdgeSelectionRevealTarget
-  | ArtifactSelectionRevealTarget;
 
 function resolveActiveDataset(state: MonitorState) {
   return (
@@ -65,7 +46,7 @@ function buildSelectionRevealTarget(
   activeDataset: ReturnType<typeof resolveActiveDataset>,
   selection: SelectionState | null,
   graphScene: GraphSceneModel,
-): SelectionRevealTarget | null {
+): GraphSelectionRevealTarget | null {
   if (!activeDataset || !selection) {
     return null;
   }

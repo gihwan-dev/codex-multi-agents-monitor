@@ -316,6 +316,29 @@ export interface GraphSceneModel {
   latestVisibleEventId: string | null;
 }
 
+export interface EventSelectionRevealTarget {
+  kind: "event";
+  eventId: string;
+}
+
+export interface EdgeSelectionRevealTarget {
+  kind: "edge";
+  edgeId: string;
+  sourceEventId: string;
+  targetEventId: string;
+}
+
+export interface ArtifactSelectionRevealTarget {
+  kind: "artifact";
+  artifactId: string;
+  producerEventId: string;
+}
+
+export type GraphSelectionRevealTarget =
+  | EventSelectionRevealTarget
+  | EdgeSelectionRevealTarget
+  | ArtifactSelectionRevealTarget;
+
 export interface LiveWatchFrame {
   delayMs: number;
   events: EventRecord[];

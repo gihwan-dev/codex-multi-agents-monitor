@@ -103,6 +103,7 @@ export function CausalGraphView({
     500,
   );
   const scrollElement = scrollRef.current;
+  const navigationScrollElement = scrollRef.current;
   const stickyTop = laneHeaderHeightOverride ?? laneHeaderHeight;
 
   useLayoutEffect(() => {
@@ -174,7 +175,7 @@ export function CausalGraphView({
       return;
     }
 
-    const element = scrollRef.current;
+    const element = navigationScrollElement;
     if (!element || availableCanvasHeight <= 0) {
       return;
     }
@@ -207,6 +208,7 @@ export function CausalGraphView({
   }, [
     availableCanvasHeight,
     layout,
+    navigationScrollElement,
     renderedContentHeight,
     runTraceId,
     scheduleScrollTopUpdate,

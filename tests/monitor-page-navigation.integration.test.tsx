@@ -3,11 +3,11 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MonitorPage } from "../src/pages/monitor/index.js";
 import {
   createMonitorInitialState,
   deriveMonitorViewState,
-  MonitorPage,
-} from "../src/pages/monitor/index.js";
+} from "./helpers/monitorTestApi.js";
 
 const CLIENT_HEIGHT = 220;
 const LANE_HEADER_HEIGHT = 80;
