@@ -1,3 +1,4 @@
+use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -7,9 +8,10 @@ use std::{
     io::{self, BufRead, BufReader},
     path::{Path, PathBuf},
     sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
-const MAX_RECENT_WORKSPACES: usize = 4;
+const MAX_RECENT_PARENT_SESSIONS: usize = 24;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,11 +143,11 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     let codex_home = resolve_codex_home()?;
     let projects_root = resolve_projects_root()?;
     let sessions_root = codex_home.join("sessions");
+    let archived_thread_ids = load_archived_thread_ids(&codex_home).unwrap_or_default();
     let mut session_files = Vec::new();
     collect_jsonl_files(&sessions_root, &mut session_files)?;
-    session_files.sort_by(|left, right| right.cmp(left));
+    sort_session_files_by_recent_activity(&mut session_files);
 
-    let mut seen_origin_paths = HashSet::new();
     let mut parent_snapshots = Vec::new();
     let mut subagent_snapshots = Vec::new();
 
@@ -159,7 +161,7 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
             Err(_) => continue,
         }
 
-        if parent_snapshots.len() >= MAX_RECENT_WORKSPACES {
+        if parent_snapshots.len() >= MAX_RECENT_PARENT_SESSIONS {
             continue;
         }
 
@@ -169,10 +171,14 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
             Err(_) => continue,
         };
 
-        if seen_origin_paths.insert(snapshot.origin_path.clone()) {
-            parent_snapshots.push(snapshot);
+        if archived_thread_ids.contains(&snapshot.session_id) {
+            continue;
         }
+
+        parent_snapshots.push(snapshot);
     }
+
+    retain_recent_parent_snapshots(&mut parent_snapshots);
 
     for parent in &mut parent_snapshots {
         let matched: Vec<SubagentSnapshot> = subagent_snapshots
@@ -190,6 +196,88 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     }
 
     Ok(parent_snapshots)
+}
+
+fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<String>> {
+    let state_database = resolve_codex_state_database(codex_home)?;
+    let connection = Connection::open_with_flags(
+        state_database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sqlite_error)?;
+    let mut statement = connection
+        .prepare("SELECT id FROM threads WHERE archived = 1")
+        .map_err(map_sqlite_error)?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(map_sqlite_error)?;
+
+    let mut archived_thread_ids = HashSet::new();
+    for row in rows {
+        archived_thread_ids.insert(row.map_err(map_sqlite_error)?);
+    }
+
+    Ok(archived_thread_ids)
+}
+
+fn resolve_codex_state_database(codex_home: &Path) -> io::Result<PathBuf> {
+    let mut candidates: Vec<PathBuf> = fs::read_dir(codex_home)?
+        .filter_map(|entry| entry.ok().map(|item| item.path()))
+        .filter(|path| {
+            path.extension().and_then(|value| value.to_str()) == Some("sqlite")
+                && path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|name| name == "state.sqlite" || name.starts_with("state_"))
+        })
+        .collect();
+
+    candidates.sort_by(|left, right| {
+        recent_file_modified_at(right)
+            .cmp(&recent_file_modified_at(left))
+            .then_with(|| right.cmp(left))
+    });
+
+    candidates.into_iter().next().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "codex state sqlite database missing",
+        )
+    })
+}
+
+fn map_sqlite_error(error: rusqlite::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, error)
+}
+
+fn sort_session_files_by_recent_activity(files: &mut [PathBuf]) {
+    files.sort_by(|left, right| {
+        recent_file_modified_at(right)
+            .cmp(&recent_file_modified_at(left))
+            .then_with(|| right.cmp(left))
+    });
+}
+
+fn recent_file_modified_at(path: &Path) -> SystemTime {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or(UNIX_EPOCH)
+}
+
+fn sort_snapshots_by_recent_activity(
+    left: &SessionLogSnapshot,
+    right: &SessionLogSnapshot,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then_with(|| right.started_at.cmp(&left.started_at))
+        .then_with(|| right.session_id.cmp(&left.session_id))
+}
+
+fn retain_recent_parent_snapshots(parent_snapshots: &mut Vec<SessionLogSnapshot>) {
+    parent_snapshots.sort_by(sort_snapshots_by_recent_activity);
+    parent_snapshots.truncate(MAX_RECENT_PARENT_SESSIONS);
 }
 
 fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -425,7 +513,7 @@ fn read_session_snapshot(
     }
 
     let workspace_identity =
-        resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
+        resolve_live_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
     let Some(workspace_identity) = workspace_identity else {
         return Ok(None);
     };
@@ -494,6 +582,28 @@ fn read_session_snapshot(
     }))
 }
 
+fn resolve_live_session_workspace_identity(
+    workspace_path: &Path,
+    projects_root: &Path,
+) -> io::Result<WorkspaceIdentity> {
+    if is_conductor_workspace_path(workspace_path) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conductor workspaces are excluded from live sessions",
+        ));
+    }
+
+    let workspace_identity = resolve_session_workspace_identity(workspace_path, projects_root)?;
+    if !Path::new(&workspace_identity.origin_path).exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "live session workspace origin missing",
+        ));
+    }
+
+    Ok(workspace_identity)
+}
+
 fn resolve_session_workspace_identity(
     workspace_path: &Path,
     projects_root: &Path,
@@ -526,12 +636,6 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     let normalized_projects_root =
         normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
 
-    if let Some(conductor_origin) =
-        infer_conductor_workspace_origin(&normalized_workspace, &normalized_projects_root)
-    {
-        return Some(conductor_origin);
-    }
-
     let workspace_file_name = normalized_workspace.file_name()?.to_str()?;
 
     let candidate = if normalized_workspace.starts_with(&normalized_projects_root) {
@@ -548,31 +652,15 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
     }
 }
 
-fn infer_conductor_workspace_origin(
-    workspace_path: &Path,
-    projects_root: &Path,
-) -> Option<PathBuf> {
-    let repo_dir = workspace_path.parent()?;
-    let workspaces_dir = repo_dir.parent()?;
-    let conductor_dir = workspaces_dir.parent()?;
+fn is_conductor_workspace_path(workspace_path: &Path) -> bool {
+    let segments: Vec<&str> = workspace_path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
 
-    if workspaces_dir.file_name()?.to_str()? != "workspaces" {
-        return None;
-    }
-    if conductor_dir.file_name()?.to_str()? != "conductor" {
-        return None;
-    }
-
-    let repo_name = repo_dir.file_name()?.to_str()?;
-
-    let candidate = projects_root.join(repo_name);
-    let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
-
-    if normalized_candidate.starts_with(projects_root) {
-        Some(normalized_candidate)
-    } else {
-        None
-    }
+    segments
+        .windows(4)
+        .any(|window| matches!(window, ["conductor", "workspaces", _, _]))
 }
 
 fn classify_developer_content(text: &str) -> (String, String) {
@@ -1346,6 +1434,9 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_default()
         .to_owned();
+    if is_conductor_workspace_path(Path::new(&workspace_path)) {
+        return Ok(None);
+    }
     let session_id = payload
         .get("id")
         .and_then(Value::as_str)
@@ -1441,6 +1532,9 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         .and_then(Value::as_str)
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_default();
+    if is_conductor_workspace_path(Path::new(workspace_path)) {
+        return Ok(None);
+    }
     let started_at = payload
         .get("timestamp")
         .and_then(Value::as_str)
@@ -1579,9 +1673,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
     use std::{
         sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
+        thread,
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -1609,6 +1705,53 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    fn build_parent_snapshot(
+        session_id: &str,
+        origin_path: &str,
+        started_at: &str,
+        updated_at: &str,
+    ) -> SessionLogSnapshot {
+        SessionLogSnapshot {
+            session_id: session_id.to_owned(),
+            forked_from_id: None,
+            workspace_path: origin_path.to_owned(),
+            origin_path: origin_path.to_owned(),
+            display_name: session_id.to_owned(),
+            started_at: started_at.to_owned(),
+            updated_at: updated_at.to_owned(),
+            model: None,
+            entries: Vec::new(),
+            subagents: Vec::new(),
+            is_archived: false,
+            prompt_assembly: Vec::new(),
+        }
+    }
+
+    fn create_state_database(path: &Path, archived_ids: &[&str]) {
+        let connection = Connection::open(path).expect("state database should be created");
+        connection
+            .execute_batch(
+                "CREATE TABLE threads (
+                    id TEXT PRIMARY KEY,
+                    archived INTEGER NOT NULL
+                );",
+            )
+            .expect("threads table should be created");
+
+        for thread_id in archived_ids {
+            connection
+                .execute(
+                    "INSERT INTO threads (id, archived) VALUES (?1, 1)",
+                    [thread_id],
+                )
+                .expect("archived thread should be inserted");
+        }
+    }
+
+    fn write_session_file(path: &Path, lines: &[&str]) {
+        fs::write(path, lines.join("\n")).expect("session file should be written");
     }
 
     #[test]
@@ -1660,22 +1803,155 @@ mod tests {
     }
 
     #[test]
-    fn infers_conductor_workspace_origin_from_repo_segment() {
-        let temp_dir = TempDir::new("conductor-origin");
+    fn identifies_conductor_workspace_path_from_segments() {
+        let workspace_path = Path::new("/Users/test/conductor/workspaces/React-Dashboard/hanoi");
+        let plain_path = Path::new("/Users/test/Documents/Projects/React-Dashboard");
+
+        assert!(is_conductor_workspace_path(workspace_path));
+        assert!(!is_conductor_workspace_path(plain_path));
+    }
+
+    #[test]
+    fn rejects_live_session_when_inferred_origin_path_is_missing() {
+        let temp_dir = TempDir::new("missing-live-origin");
         let projects_root = temp_dir.path.join("Documents/Projects");
-        let origin_repo_path = projects_root.join("React-Dashboard");
+        let workspace_path = temp_dir.path.join("tmp/codex-routing-smoke-missing");
+
+        fs::create_dir_all(&projects_root).expect("projects root should exist");
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+
+        let error = resolve_live_session_workspace_identity(&workspace_path, &projects_root)
+            .expect_err("missing origin path should be rejected for live sessions");
+
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn rejects_live_conductor_workspace_before_identity_resolution() {
+        let temp_dir = TempDir::new("live-conductor");
+        let projects_root = temp_dir.path.join("Documents/Projects");
         let workspace_path = temp_dir
             .path
             .join("conductor/workspaces/React-Dashboard/kyiv");
 
-        fs::create_dir_all(origin_repo_path.join(".git")).expect("origin git dir should exist");
+        fs::create_dir_all(&projects_root).expect("projects root should exist");
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
 
-        let inferred_origin = infer_projects_origin(&workspace_path, &projects_root)
-            .expect("conductor workspace should resolve to origin repo");
-        let expected_origin_path =
-            normalize_path(&origin_repo_path).expect("origin path should normalize");
+        let error = resolve_live_session_workspace_identity(&workspace_path, &projects_root)
+            .expect_err("conductor workspaces should be excluded from live sessions");
 
-        assert_eq!(inferred_origin, expected_origin_path);
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn skips_conductor_archived_index_entries() {
+        let temp_dir = TempDir::new("archived-index-conductor");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        write_session_file(
+            &session_file,
+            &[
+                r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
+            ],
+        );
+
+        let entry =
+            read_archived_index_entry(&session_file).expect("archived index read should succeed");
+
+        assert!(entry.is_none());
+    }
+
+    #[test]
+    fn skips_conductor_archived_snapshots() {
+        let temp_dir = TempDir::new("archived-full-conductor");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        write_session_file(
+            &session_file,
+            &[
+                r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
+            ],
+        );
+
+        let snapshot = read_archived_session_full(&session_file)
+            .expect("archived snapshot read should succeed");
+
+        assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn loads_archived_thread_ids_from_latest_state_database() {
+        let temp_dir = TempDir::new("state-database");
+        let older_database = temp_dir.path.join("state_4.sqlite");
+        let newer_database = temp_dir.path.join("state_5.sqlite");
+
+        create_state_database(&older_database, &["old-archived"]);
+        thread::sleep(Duration::from_millis(20));
+        create_state_database(&newer_database, &["new-archived", "newer-archived"]);
+
+        let archived_thread_ids =
+            load_archived_thread_ids(&temp_dir.path).expect("archived thread ids should load");
+
+        assert!(archived_thread_ids.contains("new-archived"));
+        assert!(archived_thread_ids.contains("newer-archived"));
+        assert!(!archived_thread_ids.contains("old-archived"));
+    }
+
+    #[test]
+    fn sorts_recent_session_files_by_modified_time_before_filename() {
+        let temp_dir = TempDir::new("recent-files");
+        let older_started = temp_dir.path.join("rollout-2026-03-20-old.jsonl");
+        let newer_started = temp_dir.path.join("rollout-2026-03-21-new.jsonl");
+
+        fs::write(&older_started, "old").expect("older file should be created");
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&newer_started, "new").expect("newer file should be created");
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&older_started, "old updated").expect("older file should be refreshed");
+
+        let mut files = vec![newer_started.clone(), older_started.clone()];
+        sort_session_files_by_recent_activity(&mut files);
+
+        assert_eq!(files[0], older_started);
+        assert_eq!(files[1], newer_started);
+    }
+
+    #[test]
+    fn retains_multiple_recent_parent_snapshots_from_the_same_origin() {
+        let mut snapshots = vec![
+            build_parent_snapshot(
+                "design-task",
+                "/projects/codex-multi-agent-monitor",
+                "2026-03-20T13:34:33.193Z",
+                "2026-03-21T14:54:48.938Z",
+            ),
+            build_parent_snapshot(
+                "follow-up-fix",
+                "/projects/codex-multi-agent-monitor",
+                "2026-03-21T14:40:19.429Z",
+                "2026-03-21T14:40:57.661Z",
+            ),
+            build_parent_snapshot(
+                "daily-diary",
+                "/projects/Obsidian-frontend-journey",
+                "2026-03-21T14:50:19.523Z",
+                "2026-03-21T14:50:28.647Z",
+            ),
+        ];
+
+        retain_recent_parent_snapshots(&mut snapshots);
+
+        assert_eq!(snapshots.len(), 3);
+        assert_eq!(snapshots[0].session_id, "design-task");
+        assert_eq!(snapshots[1].session_id, "daily-diary");
+        assert_eq!(snapshots[2].session_id, "follow-up-fix");
+        assert_eq!(
+            snapshots
+                .iter()
+                .filter(|snapshot| snapshot.origin_path == "/projects/codex-multi-agent-monitor")
+                .count(),
+            2,
+        );
     }
 
     #[test]
