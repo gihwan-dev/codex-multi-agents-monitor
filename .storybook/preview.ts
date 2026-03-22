@@ -1,7 +1,8 @@
 import type { Preview } from "@storybook/react-vite";
+import { createElement } from "react";
 import "../src/app/styles/index.css";
 import "../src/app/styles/layout.css";
-import { applyThemePreferenceToDocument, type ThemePreference } from "../src/shared/theme";
+import { initializeThemeDocument, isThemePreference, ThemeProvider } from "../src/shared/theme";
 
 const preview: Preview = {
   layout: "fullscreen",
@@ -22,10 +23,14 @@ const preview: Preview = {
   },
   decorators: [
     (Story, context) => {
-      const theme = (context.globals.theme ?? "dark") as ThemePreference;
-      applyThemePreferenceToDocument(theme);
+      const theme = isThemePreference(context.globals.theme) ? context.globals.theme : "dark";
+      initializeThemeDocument({ preference: theme });
 
-      return Story();
+      return createElement(
+        ThemeProvider,
+        { preferenceOverride: theme },
+        createElement(Story),
+      );
     },
   ],
 };

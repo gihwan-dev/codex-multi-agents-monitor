@@ -19,11 +19,23 @@ export function isThemePreference(value: unknown): value is ThemePreference {
   return value === "system" || value === "dark" || value === "light";
 }
 
+function getBrowserStorage(storage?: Storage): Storage | undefined {
+  if (storage) {
+    return storage;
+  }
+
+  try {
+    return getBrowserWindow()?.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 export function readStoredThemePreference(
-  storage: Storage | undefined = getBrowserWindow()?.localStorage,
+  storage?: Storage,
 ): ThemePreference {
   try {
-    const storedPreference = storage?.getItem(THEME_STORAGE_KEY);
+    const storedPreference = getBrowserStorage(storage)?.getItem(THEME_STORAGE_KEY);
     return isThemePreference(storedPreference) ? storedPreference : "system";
   } catch {
     return "system";
@@ -32,10 +44,10 @@ export function readStoredThemePreference(
 
 export function persistThemePreference(
   preference: ThemePreference,
-  storage: Storage | undefined = getBrowserWindow()?.localStorage,
+  storage?: Storage,
 ): void {
   try {
-    storage?.setItem(THEME_STORAGE_KEY, preference);
+    getBrowserStorage(storage)?.setItem(THEME_STORAGE_KEY, preference);
   } catch {
     // Local storage can be unavailable in locked-down browser contexts.
   }
@@ -98,10 +110,11 @@ export function initializeThemeDocument(
   options: {
     document?: Document;
     matchMediaSource?: MatchMediaSource;
+    preference?: ThemePreference;
     storage?: Storage;
   } = {},
 ): { preference: ThemePreference; resolvedTheme: ResolvedTheme } {
-  const preference = readStoredThemePreference(options.storage);
+  const preference = options.preference ?? readStoredThemePreference(options.storage);
   const resolvedTheme = applyThemePreferenceToDocument(preference, options);
   return { preference, resolvedTheme };
 }

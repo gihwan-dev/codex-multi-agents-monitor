@@ -328,9 +328,9 @@ describe("MonitorPage integration", () => {
       "FIX-002 Waiting chain run",
     );
     expect(container.textContent).not.toContain("Preparing recent sessions");
-    expect(
-      container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]')?.textContent,
-    ).toContain("Theme");
+    const themeTrigger = container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]');
+    expect(themeTrigger?.textContent).toContain("Theme");
+    expect(themeTrigger?.textContent).toContain("System");
   });
 
   it("kicks off mount loading and keeps keyboard, drawer, and focus behavior intact", async () => {
@@ -369,9 +369,9 @@ describe("MonitorPage integration", () => {
     });
     expect(container.textContent).toContain("Select a recent or archived run to inspect.");
     expect(container.textContent).not.toContain("Loading selected run");
-    expect(
-      container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]')?.textContent,
-    ).toContain("Theme");
+    const themeTrigger = container.querySelector('[data-slot="select-trigger"][aria-label="Theme"]');
+    expect(themeTrigger?.textContent).toContain("Theme");
+    expect(themeTrigger?.textContent).toContain("System");
 
     const archiveCount = container.querySelector<HTMLElement>('[data-slot="archive-count"]');
     expect(archiveCount?.textContent).toBe("1");
@@ -868,12 +868,12 @@ describe("MonitorPage integration", () => {
     });
 
     await vi.waitFor(() => {
-      expect(document.querySelector('[data-slot="select-item"]')).not.toBeNull();
+      expect(document.querySelector('[role="option"]')).not.toBeNull();
     });
 
-    const lightOption = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-slot="select-item"]'),
-    ).find((item) => item.textContent?.trim() === "Light");
+    const lightOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (item) => item.textContent?.trim() === "Light",
+    );
     expect(lightOption).not.toBeNull();
     if (!lightOption) {
       throw new Error("light theme option missing");
@@ -885,6 +885,7 @@ describe("MonitorPage integration", () => {
 
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.body.dataset.theme).toBe("light");
     expect(themeTrigger.textContent).toContain("Light");
   });
 });

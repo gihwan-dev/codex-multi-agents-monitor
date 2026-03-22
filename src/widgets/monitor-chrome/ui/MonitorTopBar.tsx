@@ -1,21 +1,7 @@
 import type { LiveConnection, RunDataset } from "../../../entities/run";
-import { type ThemePreference, useTheme } from "../../../shared/theme";
+import { ThemePreferenceSelect } from "../../../shared/theme";
 import { StatusChip } from "../../../shared/ui";
-import {
-  Badge,
-  Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../../shared/ui/primitives";
-
-const THEME_OPTIONS: Array<{ label: string; value: ThemePreference }> = [
-  { label: "System", value: "system" },
-  { label: "Dark", value: "dark" },
-  { label: "Light", value: "light" },
-];
+import { Badge, Button } from "../../../shared/ui/primitives";
 
 const chromeActionClassName =
   "border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] text-foreground hover:bg-[color:var(--color-surface-hover)]";
@@ -39,8 +25,6 @@ export function MonitorTopBar({
   onToggleFollowLive,
   onToggleShortcuts,
 }: MonitorTopBarProps) {
-  const { preference, setPreference } = useTheme();
-
   if (!dataset) {
     return (
       <header
@@ -79,10 +63,7 @@ export function MonitorTopBar({
           <Button type="button" disabled className="bg-primary text-primary-foreground">
             Export
           </Button>
-          <ThemePreferenceSelect
-            preference={preference}
-            onChange={setPreference}
-          />
+          <ThemePreferenceSelect />
           <Button
             type="button"
             variant="outline"
@@ -165,10 +146,7 @@ export function MonitorTopBar({
         >
           Export
         </Button>
-        <ThemePreferenceSelect
-          preference={preference}
-          onChange={setPreference}
-        />
+        <ThemePreferenceSelect />
         <Button
           type="button"
           variant="outline"
@@ -179,40 +157,5 @@ export function MonitorTopBar({
         </Button>
       </div>
     </header>
-  );
-}
-
-function ThemePreferenceSelect({
-  preference,
-  onChange,
-}: {
-  preference: ThemePreference;
-  onChange: (preference: ThemePreference) => void;
-}) {
-  return (
-    <Select
-      value={preference}
-      onValueChange={(value) => onChange(value as ThemePreference)}
-    >
-      <SelectTrigger
-        size="sm"
-        aria-label="Theme"
-        className="min-w-[10.5rem] border-[color:var(--color-chrome-border)] bg-[color:var(--color-surface-tint)] text-foreground hover:bg-[color:var(--color-surface-hover)]"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="text-[0.68rem] uppercase tracking-[0.05em] text-muted-foreground">
-            Theme
-          </span>
-          <SelectValue />
-        </span>
-      </SelectTrigger>
-      <SelectContent className="min-w-[10.5rem]">
-        {THEME_OPTIONS.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

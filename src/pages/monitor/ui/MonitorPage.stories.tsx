@@ -1,10 +1,9 @@
 import { useEffect } from "react";
-import { ThemeProvider } from "../../../shared/theme";
 import { MonitorPage } from "./MonitorPage";
 
 const meta = {
   title: "Screens/MonitorPage",
-  render: () => <MonitorPage />,
+  render: () => <StoryScenario />,
 };
 
 export default meta;
@@ -43,11 +42,7 @@ function StoryScenario({
     }
   }, [openButtonLabel, selectRunLabel]);
 
-  return (
-    <ThemeProvider>
-      <MonitorPage />
-    </ThemeProvider>
-  );
+  return <MonitorPage />;
 }
 
 function clickButton(label: string) {

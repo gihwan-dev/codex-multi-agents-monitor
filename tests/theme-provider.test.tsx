@@ -3,7 +3,12 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { THEME_STORAGE_KEY, ThemeProvider, useTheme } from "../src/shared/theme/index.js";
+import {
+  initializeThemeDocument,
+  THEME_STORAGE_KEY,
+  ThemeProvider,
+  useTheme,
+} from "../src/shared/theme/index.js";
 
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
@@ -132,6 +137,48 @@ afterEach(async () => {
 });
 
 describe("ThemeProvider", () => {
+  it("initializes the document theme before React mount", () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+
+    const result = initializeThemeDocument();
+
+    expect(result.preference).toBe("light");
+    expect(result.resolvedTheme).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.body.dataset.theme).toBe("light");
+  });
+
+  it("falls back safely when localStorage access throws", () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+
+    try {
+      const result = initializeThemeDocument({
+        matchMediaSource: {
+          matchMedia: () =>
+            ({
+              matches: false,
+            }) as MediaQueryList,
+        },
+      });
+
+      expect(result.preference).toBe("system");
+      expect(result.resolvedTheme).toBe("light");
+      expect(document.documentElement.dataset.theme).toBe("light");
+      expect(document.body.dataset.theme).toBe("light");
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window, "localStorage", originalDescriptor);
+      }
+    }
+  });
+
   it("saved preferences override the operating system theme", async () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, "light");
     installMatchMedia(true);

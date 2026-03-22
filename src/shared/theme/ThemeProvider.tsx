@@ -17,14 +17,25 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: PropsWithChildren) {
-  const [preference, setPreference] = useState<ThemePreference>(() => readStoredThemePreference());
+interface ThemeProviderProps extends PropsWithChildren {
+  preferenceOverride?: ThemePreference;
+}
+
+export function ThemeProvider({ children, preferenceOverride }: ThemeProviderProps) {
+  const [storedPreference, setStoredPreference] = useState<ThemePreference>(() =>
+    readStoredThemePreference(),
+  );
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() => getSystemTheme());
+  const preference = preferenceOverride ?? storedPreference;
   const resolvedTheme = preference === "system" ? systemTheme : preference;
 
   useEffect(() => {
-    persistThemePreference(preference);
-  }, [preference]);
+    if (preferenceOverride !== undefined) {
+      return;
+    }
+
+    persistThemePreference(storedPreference);
+  }, [preferenceOverride, storedPreference]);
 
   useEffect(() => {
     applyResolvedThemeToDocument(resolvedTheme);
@@ -60,6 +71,14 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       mediaQuery.removeListener(handleChange);
     };
   }, []);
+
+  const setPreference = (nextPreference: ThemePreference) => {
+    if (preferenceOverride !== undefined) {
+      return;
+    }
+
+    setStoredPreference(nextPreference);
+  };
 
   return (
     <ThemeContext.Provider value={{ preference, resolvedTheme, setPreference }}>
