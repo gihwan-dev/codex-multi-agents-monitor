@@ -247,7 +247,7 @@ fn resolve_codex_state_database(codex_home: &Path) -> io::Result<PathBuf> {
 }
 
 fn map_sqlite_error(error: rusqlite::Error) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, error)
+    io::Error::other(error)
 }
 
 fn sort_session_files_by_recent_activity(files: &mut [PathBuf]) {
