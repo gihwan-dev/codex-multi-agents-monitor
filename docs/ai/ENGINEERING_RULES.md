@@ -15,6 +15,7 @@
 - Styling and design-system direction: semantic token source paths are `src/theme/tokens.css` and `src/theme/motion.css`. The root styling entry lives in `src/app/styles/index.css` and exposes semantic tokens to Tailwind CSS v4 via `@theme inline`. `src/theme/primitives.css` is a migration bridge and deletion target, not a long-term source of truth.
 - Component source: shared UI primitives live in `src/shared/ui/primitives/` as shadcn/ui open-code components plus repo-local variants. Monitor-specific wrappers such as `StatusChip`, `MetricPill`, `PanelSection`, and `InspectorTabs` live in `src/shared/ui/monitor/`. Do not introduce a second component kit.
 - Screenshot and visual review tooling: `Storybook` is the component review and screenshot baseline, and `Playwright` covers interaction and end-to-end validation.
+- Backend architecture direction: the Tauri crate follows `lib.rs -> commands -> application -> domain/infrastructure` with dedicated `state` and `support` modules. `src-tauri/src/lib.rs` is bootstrap-only and must not regain use-case logic.
 - Module ownership:
   - `src/app`: bootstrap, providers, shell mount, and global wiring only
   - `src/pages/monitor`: monitor page composition and page-local orchestration
@@ -31,6 +32,10 @@
 - `src/app/styles/layout.css` is shell layout CSS only and must not absorb widget-specific styling responsibilities.
 - Parser, normalizer, storage adapter, and UI selectors must remain in separate modules.
 - Graph, waterfall, and map renderers share normalized selectors but do not share renderer implementation files.
+- `src-tauri/src/lib.rs` stays limited to `mod` wiring, Tauri `manage(...)`, `generate_handler!`, and `run()`.
+- Backend command handlers live under `src-tauri/src/commands/` and stay thin adapters: input parsing, `spawn_blocking`, `State` extraction, application dispatch, and response shaping only.
+- Backend use-case orchestration lives under `src-tauri/src/application/`; filesystem, SQLite, JSONL, and git/worktree access live under `src-tauri/src/infrastructure/`; serialized DTO and ingest/search policy live under `src-tauri/src/domain/`; Tauri-managed cache state lives under `src-tauri/src/state/`; cross-cutting leaf helpers live under `src-tauri/src/support/`.
+- Backend dependency direction is `commands -> application -> domain/infrastructure`, `infrastructure -> domain/support`, `state -> domain`, and `domain/support` must not depend on Tauri or upper layers.
 - Preview-first masking runs before persistence. Raw payload storage remains opt-in and export excludes raw by default.
 - `UX_SPEC.md` owns visual direction, tokens, layout intent, and screen flow. `UX_BEHAVIOR_ACCESSIBILITY.md` owns interaction, accessibility, live semantics, and approval criteria. Bootstrap docs only lock implementation stack and boundaries.
 
@@ -46,6 +51,7 @@
 # Coding Conventions
 
 - Read order before implementation: task `README.md`, `docs/architecture/frontend-fsd.md`, `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`, `TECH_SPEC.md`, `IMPLEMENTATION_CONTRACT.md`, then `EXECUTION_PLAN.md`.
+- When touching the Tauri backend, also read `docs/architecture/tauri-backend-modular-monolith.md` before editing Rust module boundaries.
 - Use split-first file boundaries from `TECH_SPEC.md`; do not append major responsibilities onto starter files.
 - Prefer Tailwind utilities, shadcn open-code primitives, and repo-local monitor wrappers over new legacy selector layers.
 - DOM test contracts must prefer accessible queries in this order: role, name, label, then text. Use `data-slot` and domain `data-*` metadata only for graph, canvas, tree, and similarly structural surfaces that do not expose a stable semantic role on their own.
@@ -115,6 +121,9 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Introducing a second component kit alongside shadcn open-code primitives
 - Default raw prompt or tool payload persistence
 - Reintroducing `src/shared/domain` or other deleted compatibility surfaces as permanent catch-all modules
+- Adding backend use-case logic directly to `src-tauri/src/lib.rs`
+- Letting a `#[tauri::command]` function perform filesystem, SQLite, JSONL, or git/worktree access directly instead of delegating to `application` and `infrastructure`
+- Adding backend catch-all files such as `src-tauri/src/common.rs`, `src-tauri/src/utils.rs`, or `src-tauri/src/shared.rs`
 - Optional libraries that bypass locked validation commands or replace the documented source-of-truth docs
 
 # Decision Update Rules
