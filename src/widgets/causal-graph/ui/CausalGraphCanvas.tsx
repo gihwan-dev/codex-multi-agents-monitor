@@ -439,51 +439,76 @@ function buildCardStyle(
 ): CSSProperties {
   const base: CSSProperties = {
     minHeight: 80,
-    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderTopColor: "rgba(255, 255, 255, 0.08)",
+    borderRightColor: "rgba(255, 255, 255, 0.08)",
+    borderBottomColor: "rgba(255, 255, 255, 0.08)",
+    borderLeftColor: "rgba(255, 255, 255, 0.08)",
     background: "linear-gradient(180deg, rgba(24, 29, 39, 1), rgba(16, 20, 29, 1))",
     boxShadow: "0 18px 34px rgba(4, 8, 14, 0.26)",
   };
 
   if (inPath) {
-    base.borderColor = "rgba(77, 163, 255, 0.28)";
+    base.borderTopColor = "rgba(77, 163, 255, 0.28)";
+    base.borderRightColor = "rgba(77, 163, 255, 0.28)";
+    base.borderBottomColor = "rgba(77, 163, 255, 0.28)";
+    base.borderLeftColor = "rgba(77, 163, 255, 0.28)";
     base.boxShadow =
       "inset 0 0 0 1px rgba(77, 163, 255, 0.12), 0 18px 34px rgba(4, 8, 14, 0.26)";
   }
 
   if (selected) {
-    base.borderColor = "rgba(77, 163, 255, 0.58)";
+    base.borderTopColor = "rgba(77, 163, 255, 0.58)";
+    base.borderRightColor = "rgba(77, 163, 255, 0.58)";
+    base.borderBottomColor = "rgba(77, 163, 255, 0.58)";
+    base.borderLeftColor = "rgba(77, 163, 255, 0.58)";
     base.boxShadow = "0 0 0 1px rgba(77, 163, 255, 0.28), 0 18px 34px rgba(4, 8, 14, 0.26)";
   }
 
   switch (eventType) {
     case "user.prompt":
-      base.borderLeft = "3px solid var(--color-active)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "var(--color-active)";
       base.background =
         "linear-gradient(180deg, rgba(77, 163, 255, 0.06), rgba(16, 20, 29, 1))";
       break;
     case "tool.started":
-      base.borderLeft = "3px solid var(--color-transfer)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "var(--color-transfer)";
       break;
     case "tool.finished":
-      base.borderLeft = "3px solid var(--color-success)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "var(--color-success)";
       break;
     case "llm.started":
       base.borderStyle = "dashed";
       base.opacity = 0.8;
       break;
     case "agent.spawned":
-      base.borderLeft = "3px solid var(--color-active)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "var(--color-active)";
       break;
     case "agent.finished":
-      base.borderLeft = "3px solid rgba(166, 175, 189, 0.4)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "rgba(166, 175, 189, 0.4)";
       break;
     case "error":
-      base.borderLeft = "3px solid var(--color-failed)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "var(--color-failed)";
       base.background =
         "linear-gradient(180deg, rgba(255, 107, 107, 0.06), rgba(16, 20, 29, 1))";
       break;
     case "note":
-      base.borderLeft = "3px solid rgba(166, 175, 189, 0.25)";
+      base.borderLeftWidth = 3;
+      base.borderLeftStyle = "solid";
+      base.borderLeftColor = "rgba(166, 175, 189, 0.25)";
       base.opacity = 0.85;
       break;
     case "turn.started":

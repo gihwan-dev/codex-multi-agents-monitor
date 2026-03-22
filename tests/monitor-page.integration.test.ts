@@ -3,12 +3,14 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LIVE_FIXTURE_FRAMES } from "../src/entities/run/index.js";
 import {
   loadArchivedSessionIndex,
   loadArchivedSessionSnapshot,
   loadRecentSessionIndex,
   loadRecentSessionSnapshot,
 } from "../src/entities/session-log/index.js";
+import { applyLiveFrame } from "../src/features/follow-live/index.js";
 import { MonitorPage } from "../src/pages/monitor/index.js";
 import { createMonitorInitialState } from "../src/pages/monitor/model/state/helpers.js";
 
@@ -31,6 +33,7 @@ const mockedLoadRecentSessionSnapshot = vi.mocked(loadRecentSessionSnapshot);
 
 let container: HTMLDivElement;
 let root: Root;
+let scrollToSpy: ReturnType<typeof vi.fn>;
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -39,6 +42,70 @@ function createDeferred<T>() {
   });
 
   return { promise, resolve };
+}
+
+function restorePrototypeProperty(
+  key: "clientHeight" | "clientWidth" | "offsetHeight",
+  descriptor?: PropertyDescriptor,
+) {
+  if (descriptor) {
+    Object.defineProperty(HTMLElement.prototype, key, descriptor);
+    return;
+  }
+
+  delete (HTMLElement.prototype as Record<string, unknown>)[key];
+}
+
+function installGraphViewportMetrics() {
+  const clientWidthDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "clientWidth",
+  );
+  const clientHeightDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "clientHeight",
+  );
+  const offsetHeightDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "offsetHeight",
+  );
+
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get() {
+      const slot = this.getAttribute?.("data-slot");
+      if (slot === "graph" || slot === "graph-scroll") {
+        return 480;
+      }
+      return clientWidthDescriptor?.get?.call(this) ?? 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get() {
+      const slot = this.getAttribute?.("data-slot");
+      if (slot === "graph" || slot === "graph-scroll") {
+        return 240;
+      }
+      return clientHeightDescriptor?.get?.call(this) ?? 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get() {
+      const slot = this.getAttribute?.("data-slot");
+      if (slot === "graph-lane-strip") {
+        return 80;
+      }
+      return offsetHeightDescriptor?.get?.call(this) ?? 0;
+    },
+  });
+
+  return () => {
+    restorePrototypeProperty("clientWidth", clientWidthDescriptor);
+    restorePrototypeProperty("clientHeight", clientHeightDescriptor);
+    restorePrototypeProperty("offsetHeight", offsetHeightDescriptor);
+  };
 }
 
 function buildArchivedSessionIndexItem() {
@@ -101,6 +168,37 @@ function buildRecentDataset(sessionId: string) {
   };
 }
 
+function buildLiveRecentDataset(sessionId: string) {
+  const baseDataset = createMonitorInitialState().datasets.find(
+    (dataset) => dataset.run.traceId === "trace-fix-006",
+  );
+  if (!baseDataset) {
+    throw new Error("live dataset missing");
+  }
+
+  return {
+    ...baseDataset,
+    project: {
+      ...baseDataset.project,
+      name: "Recent workspace",
+      projectId: "/tmp/recent-workspace",
+      repoPath: "/tmp/recent-workspace",
+    },
+    session: {
+      ...baseDataset.session,
+      sessionId,
+      title: `Session ${sessionId}`,
+    },
+    run: {
+      ...baseDataset.run,
+      traceId: sessionId,
+      title: `Run ${sessionId}`,
+      isArchived: false,
+      liveMode: "live" as const,
+    },
+  };
+}
+
 function buildArchivedDataset(sessionId: string) {
   const dataset = buildRecentDataset(sessionId);
 
@@ -142,9 +240,28 @@ beforeEach(() => {
   window.__TAURI_INTERNALS__ = {
     invoke: vi.fn(),
   };
+  scrollToSpy = vi.fn(function scrollTo(
+    this: HTMLElement,
+    options?: ScrollToOptions | number,
+    y?: number,
+  ) {
+    const left =
+      typeof options === "number"
+        ? options
+        : options?.left ?? (this as HTMLElement & { scrollLeft: number }).scrollLeft;
+    const top =
+      typeof options === "number"
+        ? y ?? (this as HTMLElement & { scrollTop: number }).scrollTop
+        : options?.top ?? (this as HTMLElement & { scrollTop: number }).scrollTop;
+    (this as HTMLElement & { scrollLeft: number }).scrollLeft = left;
+    (this as HTMLElement & { scrollTop: number }).scrollTop = top;
+    void act(() => {
+      this.dispatchEvent(new Event("scroll"));
+    });
+  });
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
-    value: () => {},
+    value: scrollToSpy,
   });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -158,6 +275,7 @@ afterEach(async () => {
   });
   container.remove();
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
+  vi.useRealTimers();
   vi.clearAllMocks();
   delete window.__TAURI_INTERNALS__;
   delete (HTMLElement.prototype as { scrollTo?: () => void }).scrollTo;
@@ -520,6 +638,183 @@ describe("MonitorPage integration", () => {
       expect(container.querySelector("header h1")?.textContent).toBe(
         "Archived session-archive-001",
       );
+    });
+  });
+
+  it("live frame append 시 최신 이벤트를 따라가고 manual scroll-away 시 paused/resume 상태를 반영한다", async () => {
+    vi.useFakeTimers();
+    delete window.__TAURI_INTERNALS__;
+    const restoreViewportMetrics = installGraphViewportMetrics();
+
+    try {
+      await act(async () => {
+        root.render(createElement(MonitorPage));
+      });
+
+      const liveRunButton = container.querySelector<HTMLButtonElement>(
+        '[data-run-id="trace-fix-006"]',
+      );
+      const initialLatestEventId =
+        createMonitorInitialState().datasets.find(
+          (dataset) => dataset.run.traceId === "trace-fix-006",
+        )?.events.at(-1)?.eventId ?? null;
+      expect(liveRunButton).not.toBeNull();
+      if (!liveRunButton) {
+        throw new Error("live run button missing");
+      }
+
+      await act(async () => {
+        liveRunButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      await vi.waitFor(() => {
+        expect(container.querySelector("header h1")?.textContent).toBe(
+          "FIX-006 Disconnected live watch run",
+        );
+      });
+      const graphScroll = container.querySelector<HTMLElement>('[data-slot="graph-scroll"]');
+      expect(graphScroll).not.toBeNull();
+      if (!graphScroll) {
+        throw new Error("graph scroll container missing");
+      }
+      await vi.waitFor(() => {
+        expect((graphScroll as HTMLElement & { scrollTop: number }).scrollTop).toBeGreaterThan(0);
+      });
+      if (!initialLatestEventId) {
+        throw new Error("initial latest fixture event missing");
+      }
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            `[data-slot="graph-event-card"][data-event-id="${initialLatestEventId}"]`,
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
+      expect(container.textContent).toContain("Live watch");
+      expect(container.textContent).toContain("Follow live");
+
+      const initialScrollCallCount = scrollToSpy.mock.calls.length;
+
+      await act(async () => {
+        vi.advanceTimersByTime(2_000);
+      });
+
+      await vi.waitFor(() => {
+        const followUpCard = container.querySelector<HTMLElement>(
+          '[data-slot="graph-event-card"][data-event-id="fix6-follow-up"]',
+        );
+        expect(followUpCard?.getAttribute("data-selected")).toBe("true");
+      });
+
+      expect(scrollToSpy.mock.calls.length).toBeGreaterThan(initialScrollCallCount);
+      const latestScrollCall = scrollToSpy.mock.calls.at(-1)?.[0];
+      expect(latestScrollCall).toMatchObject({
+        behavior: "auto",
+      });
+      if (
+        !latestScrollCall ||
+        typeof latestScrollCall !== "object" ||
+        latestScrollCall === null
+      ) {
+        throw new Error("follow-live scroll call missing");
+      }
+      const latestScrollOptions = latestScrollCall as ScrollToOptions;
+      expect(latestScrollOptions.top ?? 0).toBeGreaterThan(0);
+      expect(latestScrollOptions.left ?? 0).toBeGreaterThan(0);
+      expect(container.textContent).not.toContain("Following paused");
+
+      const currentScrollTop = (graphScroll as HTMLElement & { scrollTop: number }).scrollTop;
+      await act(async () => {
+        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollLeft = 0;
+        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollTop =
+          currentScrollTop;
+        graphScroll.dispatchEvent(new Event("scroll"));
+      });
+
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain("Following paused");
+        expect(container.textContent).toContain("Resume follow");
+      });
+
+      const scrollCountWhilePaused = scrollToSpy.mock.calls.length;
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain("stale");
+        expect(container.textContent).toContain("Resume follow");
+      });
+      expect(scrollToSpy.mock.calls.length).toBe(scrollCountWhilePaused);
+
+      const resumeButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent?.trim() === "Resume follow",
+      );
+      expect(resumeButton).not.toBeNull();
+      if (!resumeButton) {
+        throw new Error("resume button missing");
+      }
+
+      await act(async () => {
+        resumeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      await vi.waitFor(() => {
+        expect(scrollToSpy.mock.calls.length).toBeGreaterThan(scrollCountWhilePaused);
+      });
+    } finally {
+      restoreViewportMetrics();
+    }
+  });
+
+  it("recent running session은 follow-live를 활성화하고 폴링된 최신 이벤트를 선택한다", async () => {
+    const recentItem = {
+      ...buildRecentSessionIndexItem("recent-live-001"),
+      status: "running" as const,
+    };
+    const initialDataset = buildLiveRecentDataset("recent-live-001");
+    const refreshedDataset = applyLiveFrame(
+      initialDataset,
+      LIVE_FIXTURE_FRAMES[0],
+    ).dataset;
+
+    mockedLoadRecentSessionIndex.mockResolvedValue([recentItem]);
+    mockedLoadArchivedSessionIndex.mockResolvedValue({
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockedLoadRecentSessionSnapshot
+      .mockResolvedValueOnce(initialDataset)
+      .mockResolvedValueOnce(refreshedDataset)
+      .mockResolvedValue(refreshedDataset);
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
+    });
+    await vi.waitFor(() => {
+      expect(mockedLoadRecentSessionSnapshot.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    const followButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Follow live",
+    );
+    expect(followButton).not.toBeNull();
+    expect(followButton?.disabled).toBe(false);
+    expect(container.textContent).toContain("Live watch");
+    expect(container.textContent).not.toContain("Resume follow");
+
+    await vi.waitFor(() => {
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            '[data-slot="graph-event-card"][data-event-id="fix6-follow-up"]',
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
     });
   });
 });

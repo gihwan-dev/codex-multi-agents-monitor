@@ -1,6 +1,6 @@
 import type { RunDataset, SelectionState } from "../../../../entities/run";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run";
-import { buildConnectionMap } from "./liveConnection";
+import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 
 export const DEFAULT_ACTIVE_RUN_ID = "trace-fix-002";
@@ -40,6 +40,23 @@ export function defaultSelectionForDataset(
     : null;
 }
 
+export function liveSelectionForDataset(
+  dataset: RunDataset,
+): SelectionState | null {
+  const latestEvent = dataset.events[dataset.events.length - 1];
+  return latestEvent
+    ? { kind: "event", id: latestEvent.eventId }
+    : defaultSelectionForDataset(dataset);
+}
+
+export function activationSelectionForDataset(
+  dataset: RunDataset,
+): SelectionState | null {
+  return dataset.run.liveMode === "live"
+    ? liveSelectionForDataset(dataset)
+    : defaultSelectionForDataset(dataset);
+}
+
 export function resolveDatasetDrawerTab(
   state: MonitorState,
   dataset: RunDataset,
@@ -52,21 +69,42 @@ export function resolveDatasetDrawerTab(
   };
 }
 
+type DatasetActivationPatch = Pick<
+  MonitorState,
+  | "activeRunId"
+  | "selection"
+  | "collapsedGapIds"
+  | "followLiveByRunId"
+  | "liveConnectionByRunId"
+  | "drawerTab"
+>;
+
 export function buildDatasetActivationPatch(
   state: MonitorState,
   dataset: RunDataset,
-) {
+): DatasetActivationPatch {
+  const followLive = dataset.run.liveMode === "live";
+  const liveConnectionByRunId = followLive
+    ? updateLiveConnectionMap(
+        state.liveConnectionByRunId,
+        dataset.run.traceId,
+        dataset,
+        true,
+      )
+    : state.liveConnectionByRunId;
+
   return {
     activeRunId: dataset.run.traceId,
-    selection: defaultSelectionForDataset(dataset),
+    selection: activationSelectionForDataset(dataset),
     collapsedGapIds: {
       ...state.collapsedGapIds,
       [dataset.run.traceId]: [],
     },
     followLiveByRunId: {
       ...state.followLiveByRunId,
-      [dataset.run.traceId]: false,
+      [dataset.run.traceId]: followLive,
     },
+    liveConnectionByRunId,
     ...resolveDatasetDrawerTab(state, dataset),
   };
 }

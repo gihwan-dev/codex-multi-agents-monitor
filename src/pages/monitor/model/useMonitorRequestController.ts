@@ -25,6 +25,7 @@ export function useMonitorRequestController({
   const recentSnapshotRequestIdRef = useRef(0);
   const archiveIndexRequestIdRef = useRef(0);
   const archiveSnapshotRequestIdRef = useRef(0);
+  const recentLiveRefreshInFlightRef = useRef(false);
 
   const cancelPendingSelectionLoad = useEffectEvent(() => {
     const nextRecentRequestId = recentSnapshotRequestIdRef.current + 1;
@@ -93,6 +94,31 @@ export function useMonitorRequestController({
         });
       });
     });
+  });
+
+  const refreshRecentSnapshot = useEffectEvent((filePath: string) => {
+    if (recentLiveRefreshInFlightRef.current) {
+      return;
+    }
+
+    recentLiveRefreshInFlightRef.current = true;
+    loadRecentSessionSnapshot(filePath)
+      .then((dataset) => {
+        if (!dataset) {
+          return;
+        }
+
+        startTransition(() => {
+          dispatch({
+            type: "refresh-recent-snapshot",
+            filePath,
+            dataset,
+          });
+        });
+      })
+      .finally(() => {
+        recentLiveRefreshInFlightRef.current = false;
+      });
   });
 
   const requestArchiveIndex = useEffectEvent(
@@ -185,6 +211,7 @@ export function useMonitorRequestController({
   return {
     cancelPendingSelectionLoad,
     loadArchiveIndex,
+    refreshRecentSnapshot,
     requestArchiveIndex,
     requestRecentIndex,
     requestRecentSnapshot,

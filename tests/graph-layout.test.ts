@@ -21,6 +21,7 @@ import {
   EVENT_ROW_HEIGHT,
   GAP_ROW_HEIGHT,
   ROW_GAP,
+  resolveFollowLiveScrollTarget,
   TIME_GUTTER,
 } from "../src/widgets/causal-graph/model/graphLayout";
 
@@ -87,6 +88,99 @@ describe("graphLayout", () => {
   it("uses the larger of content height and available canvas height", () => {
     expect(computeRenderedContentHeight(420, 360)).toBe(420);
     expect(computeRenderedContentHeight(420, 600)).toBe(600);
+  });
+
+  it("anchors follow-live to the bottom of the timeline while keeping the latest card visible", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const target = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(target).toEqual({
+      top: layout.contentHeight - (240 - 80),
+      left: latestEventLayout.cardRect.x + latestEventLayout.cardRect.width - 480,
+    });
+  });
+
+  it("keeps the bottom-aligned follow-live target stable once it reaches the latest row", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const visibleScroll = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+    const stableTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: visibleScroll.top,
+      scrollLeft: visibleScroll.left,
+      viewportHeight: 240,
+      viewportWidth: 480,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(stableTarget).toEqual(visibleScroll);
+  });
+
+  it("converges on a stable left target when the viewport is narrower than the card area", () => {
+    const scene = createSyntheticScene();
+    const layout = buildGraphLayoutSnapshot(scene, 820);
+    const latestEventLayout = layout.eventById.get("target-c");
+    expect(latestEventLayout).toBeDefined();
+    if (!latestEventLayout) {
+      throw new Error("latest event layout missing");
+    }
+
+    const narrowTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: 0,
+      scrollLeft: 0,
+      viewportHeight: 240,
+      viewportWidth: 360,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+    const stableTarget = resolveFollowLiveScrollTarget(latestEventLayout, {
+      scrollTop: narrowTarget.top,
+      scrollLeft: narrowTarget.left,
+      viewportHeight: 240,
+      viewportWidth: 360,
+      stickyTop: 80,
+      stickyLeft: TIME_GUTTER,
+      contentHeight: layout.contentHeight,
+      contentWidth: layout.contentWidth,
+    });
+
+    expect(narrowTarget.left).toBe(latestEventLayout.cardRect.x - TIME_GUTTER);
+    expect(stableTarget).toEqual(narrowTarget);
   });
 
   it("builds continuation guides only below the real content height", () => {

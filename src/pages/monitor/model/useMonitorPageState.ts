@@ -21,6 +21,7 @@ export function useMonitorPageState() {
   const derivedState = deriveMonitorViewState(state);
   const {
     loadArchiveIndex,
+    refreshRecentSnapshot,
     requestArchiveIndex,
     requestRecentIndex,
     requestRecentSnapshot,
@@ -33,9 +34,12 @@ export function useMonitorPageState() {
 
   useMonitorBootstrap({
     activeDataset: derivedState.activeDataset,
+    activeFollowLive: derivedState.activeFollowLive,
+    activeSessionFilePath: derivedState.activeSessionFilePath,
     recentIndex: state.recentIndex,
     recentIndexReady: state.recentIndexReady,
     recentSnapshotLoadingId: state.recentSnapshotLoadingId,
+    refreshRecentSnapshot,
     requestArchiveIndex,
     requestRecentIndex,
     requestRecentSnapshot,
@@ -45,14 +49,12 @@ export function useMonitorPageState() {
     appliedLiveFrames: state.appliedLiveFrames,
     dispatch,
   });
-
   useMonitorKeyboardShortcuts({
     dispatch,
     activeDataset: derivedState.activeDataset,
     selection: state.selection,
     graphRows: derivedState.graphScene.rows,
   });
-
   return {
     state,
     ...derivedState,

@@ -2,11 +2,13 @@ import {
   buildCollapsedGapIds,
   buildDatasetActivationPatch,
   buildFollowLiveMap,
+  defaultSelectionForDataset,
   isFixtureDatasetTraceId,
+  resolveDatasetDrawerTab,
   stripFixtureDatasets,
   upsertDataset,
 } from "./helpers";
-import { buildConnectionMap } from "./liveConnection";
+import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
@@ -136,6 +138,85 @@ export function resolveRecentSnapshotRequest(
   return {
     ...nextState,
     ...buildDatasetActivationPatch(nextState, dataset),
+  };
+}
+
+function resolveSelectionAfterRecentRefresh(
+  state: MonitorState,
+  dataset: MonitorState["datasets"][number],
+  followLive: boolean,
+) {
+  if (state.activeRunId !== dataset.run.traceId) {
+    return state.selection;
+  }
+
+  const latestEvent = dataset.events[dataset.events.length - 1];
+  if (followLive && latestEvent) {
+    return { kind: "event" as const, id: latestEvent.eventId };
+  }
+
+  if (!state.selection) {
+    return defaultSelectionForDataset(dataset);
+  }
+
+  if (
+    state.selection.kind === "event" &&
+    dataset.events.some((event) => event.eventId === state.selection?.id)
+  ) {
+    return state.selection;
+  }
+
+  if (
+    state.selection.kind === "edge" &&
+    dataset.edges.some((edge) => edge.edgeId === state.selection?.id)
+  ) {
+    return state.selection;
+  }
+
+  if (
+    state.selection.kind === "artifact" &&
+    dataset.artifacts.some((artifact) => artifact.artifactId === state.selection?.id)
+  ) {
+    return state.selection;
+  }
+
+  return defaultSelectionForDataset(dataset);
+}
+
+export function refreshRecentSnapshot(
+  state: MonitorState,
+  filePath: string,
+  dataset: MonitorState["datasets"][number],
+): MonitorState {
+  const nextFollowLive =
+    dataset.run.liveMode === "live"
+      ? (state.followLiveByRunId[dataset.run.traceId] ?? true)
+      : false;
+  const { [dataset.run.traceId]: _removedConnection, ...remainingConnections } =
+    state.liveConnectionByRunId;
+
+  return {
+    ...state,
+    hydratedDatasetsByFilePath: {
+      ...state.hydratedDatasetsByFilePath,
+      [filePath]: dataset,
+    },
+    datasets: upsertDataset(state, dataset),
+    followLiveByRunId: {
+      ...state.followLiveByRunId,
+      [dataset.run.traceId]: nextFollowLive,
+    },
+    liveConnectionByRunId:
+      dataset.run.liveMode === "live"
+        ? updateLiveConnectionMap(
+            state.liveConnectionByRunId,
+            dataset.run.traceId,
+            dataset,
+            nextFollowLive,
+          )
+        : remainingConnections,
+    selection: resolveSelectionAfterRecentRefresh(state, dataset, nextFollowLive),
+    ...resolveDatasetDrawerTab(state, dataset),
   };
 }
 

@@ -71,6 +71,26 @@ function buildArchivedDataset(traceId: string) {
   };
 }
 
+function buildLiveRecentDataset(traceId: string) {
+  const template = requireDataset("trace-fix-006");
+
+  return {
+    ...template,
+    session: {
+      ...template.session,
+      sessionId: traceId,
+      title: `live-${traceId}`,
+    },
+    run: {
+      ...template.run,
+      traceId,
+      title: `live-${traceId}`,
+      liveMode: "live" as const,
+      isArchived: false,
+    },
+  };
+}
+
 describe("live 상태 전이", () => {
   it("imported run에서는 follow-live 토글을 무시한다", () => {
     const importedRun = createMonitorInitialState().datasets.find(
@@ -109,6 +129,39 @@ describe("live 상태 전이", () => {
     expect(nextState.selection).toEqual({
       kind: "event",
       id: updatedLiveRun?.events[updatedLiveRun.events.length - 1]?.eventId,
+    });
+  });
+
+  it("live run으로 진입하면 follow-live를 다시 켜고 최신 이벤트를 선택한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const latestEvent = liveRun.events[liveRun.events.length - 1];
+    if (!latestEvent) {
+      throw new Error("latest event missing");
+    }
+
+    const initialState = {
+      ...createMonitorInitialState(),
+      followLiveByRunId: {
+        ...createMonitorInitialState().followLiveByRunId,
+        [liveRun.run.traceId]: false,
+      },
+      liveConnectionByRunId: {
+        ...createMonitorInitialState().liveConnectionByRunId,
+        [liveRun.run.traceId]: "paused" as const,
+      },
+      selection: { kind: "event" as const, id: liveRun.events[0]?.eventId ?? "" },
+    };
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "set-active-run",
+      traceId: liveRun.run.traceId,
+    });
+
+    expect(nextState.followLiveByRunId[liveRun.run.traceId]).toBe(true);
+    expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("live");
+    expect(nextState.selection).toEqual({
+      kind: "event",
+      id: latestEvent.eventId,
     });
   });
 
@@ -511,6 +564,76 @@ describe("archive 요청 상태", () => {
       "recent-002",
     );
     expect(currentResolved.selectionLoadState).toBeNull();
+  });
+
+  it("recent live snapshot resolve는 follow-live를 기본 on으로 활성화한다", () => {
+    const initialState = monitorStateReducer(
+      monitorStateReducer(createMonitorInitialState(), {
+        type: "begin-recent-index-request",
+      }),
+      {
+        type: "resolve-recent-index-request",
+        items: [buildRecentIndexItem("recent-live-001")],
+      },
+    );
+    const pendingState = monitorStateReducer(initialState, {
+      type: "begin-recent-snapshot-request",
+      requestId: 1,
+      filePath: "/tmp/recent-live-001.jsonl",
+    });
+
+    const resolvedState = monitorStateReducer(pendingState, {
+      type: "resolve-recent-snapshot-request",
+      requestId: 1,
+      filePath: "/tmp/recent-live-001.jsonl",
+      dataset: buildLiveRecentDataset("recent-live-001"),
+    });
+
+    expect(resolvedState.followLiveByRunId["recent-live-001"]).toBe(true);
+    expect(resolvedState.liveConnectionByRunId["recent-live-001"]).toBe("live");
+    expect(resolvedState.selection).toEqual({
+      kind: "event",
+      id: buildLiveRecentDataset("recent-live-001").events.at(-1)?.eventId,
+    });
+  });
+
+  it("silent recent live refresh는 follow-live 중 최신 이벤트 selection을 유지한다", () => {
+    const dataset = buildLiveRecentDataset("recent-live-refresh");
+    const latestEvent = dataset.events[dataset.events.length - 1];
+    if (!latestEvent) {
+      throw new Error("latest event missing");
+    }
+
+    const initialState = {
+      ...createMonitorInitialState(),
+      datasets: [dataset],
+      hydratedDatasetsByFilePath: {
+        "/tmp/recent-live-refresh.jsonl": dataset,
+      },
+      activeRunId: dataset.run.traceId,
+      selection: { kind: "event" as const, id: dataset.events[0]?.eventId ?? "" },
+      followLiveByRunId: {
+        [dataset.run.traceId]: true,
+      },
+      liveConnectionByRunId: {
+        [dataset.run.traceId]: "live" as const,
+      },
+      collapsedGapIds: {
+        [dataset.run.traceId]: [],
+      },
+    };
+
+    const refreshedState = monitorStateReducer(initialState, {
+      type: "refresh-recent-snapshot",
+      filePath: "/tmp/recent-live-refresh.jsonl",
+      dataset,
+    });
+
+    expect(refreshedState.selection).toEqual({
+      kind: "event",
+      id: latestEvent.eventId,
+    });
+    expect(refreshedState.followLiveByRunId[dataset.run.traceId]).toBe(true);
   });
 
   it("recent snapshot 취소는 loading 상태를 비우고 이전 resolve를 무효화한다", () => {
