@@ -287,6 +287,40 @@ describe("live 상태 전이", () => {
     expect(nextState.followLiveByRunId["missing-trace"]).toBe(true);
     expect(nextState.liveConnectionByRunId["missing-trace"]).toBe("live");
   });
+
+  it("manual navigation increments the reveal request id and pauses live follow for past events", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const activeState = monitorStateReducer(createMonitorInitialState(), {
+      type: "set-active-run",
+      traceId: liveRun.run.traceId,
+    });
+    const pastEventId = liveRun.events[0]?.eventId ?? "";
+
+    const nextState = monitorStateReducer(activeState, {
+      type: "navigate-selection",
+      selection: { kind: "event", id: pastEventId },
+    });
+
+    expect(nextState.selection).toEqual({ kind: "event", id: pastEventId });
+    expect(nextState.selectionNavigationRequestId).toBe(
+      activeState.selectionNavigationRequestId + 1,
+    );
+    expect(nextState.followLiveByRunId[liveRun.run.traceId]).toBe(false);
+    expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
+  });
+
+  it("plain selection keeps the reveal request id unchanged", () => {
+    const initialState = createMonitorInitialState();
+    const nextState = monitorStateReducer(initialState, {
+      type: "set-selection",
+      selection: { kind: "event", id: "fix2-blocked" },
+    });
+
+    expect(nextState.selection).toEqual({ kind: "event", id: "fix2-blocked" });
+    expect(nextState.selectionNavigationRequestId).toBe(
+      initialState.selectionNavigationRequestId,
+    );
+  });
 });
 
 describe("archive 요청 상태", () => {

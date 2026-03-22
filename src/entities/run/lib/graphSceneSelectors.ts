@@ -6,6 +6,7 @@ import type {
   GraphSceneEdgeBundle,
   GraphSceneModel,
   GraphSceneRow,
+  GraphSelectionRevealTarget,
   RunDataset,
   SelectionState,
 } from "../model/types.js";
@@ -41,6 +42,51 @@ function buildGraphLanes(dataset: RunDataset) {
 
 function buildGraphVisibleEvents(dataset: RunDataset) {
   return sortEvents(dataset.events);
+}
+
+function buildSelectionRevealTarget(
+  dataset: RunDataset,
+  selection: SelectionState | null,
+  visibleEventIds: Set<string>,
+): GraphSelectionRevealTarget | null {
+  if (!selection) {
+    return null;
+  }
+
+  if (selection.kind === "event") {
+    return visibleEventIds.has(selection.id)
+      ? { kind: "event", eventId: selection.id }
+      : null;
+  }
+
+  if (selection.kind === "edge") {
+    const edge = dataset.edges.find((item) => item.edgeId === selection.id);
+    if (
+      !edge ||
+      !visibleEventIds.has(edge.sourceEventId) ||
+      !visibleEventIds.has(edge.targetEventId)
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "edge",
+      edgeId: edge.edgeId,
+      sourceEventId: edge.sourceEventId,
+      targetEventId: edge.targetEventId,
+    };
+  }
+
+  const artifact = dataset.artifacts.find((item) => item.artifactId === selection.id);
+  if (!artifact || !visibleEventIds.has(artifact.producerEventId)) {
+    return null;
+  }
+
+  return {
+    kind: "artifact",
+    artifactId: artifact.artifactId,
+    producerEventId: artifact.producerEventId,
+  };
 }
 
 export function buildGraphSceneModel(
@@ -184,6 +230,7 @@ export function buildGraphSceneModel(
       (bundle) => laneIds.has(bundle.sourceLaneId) && laneIds.has(bundle.targetLaneId),
     ),
     selectionPath,
+    selectionRevealTarget: buildSelectionRevealTarget(dataset, selection, visibleEventIds),
     hiddenLaneCount: graphLanes.hiddenLaneCount,
     latestVisibleEventId:
       [...rows]

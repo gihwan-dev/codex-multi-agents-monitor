@@ -107,7 +107,7 @@ export function dispatchMonitorKeyboardShortcut(
 
       event.preventDefault();
       dispatch({
-        type: "set-selection",
+        type: "navigate-selection",
         selection: { kind: "event", id: nextSelectionId },
       });
       break;

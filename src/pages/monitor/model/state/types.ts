@@ -16,6 +16,8 @@ export interface MonitorState {
   hydratedDatasetsByFilePath: Record<string, RunDataset>;
   activeRunId: string;
   selection: SelectionState | null;
+  selectionNavigationRequestId: number;
+  selectionNavigationRunId: string | null;
   drawerTab: DrawerTab;
   drawerOpen: boolean;
   inspectorOpen: boolean;
@@ -52,6 +54,7 @@ export interface MonitorState {
 export type MonitorAction =
   | { type: "set-active-run"; traceId: string }
   | { type: "set-selection"; selection: SelectionState | null }
+  | { type: "navigate-selection"; selection: SelectionState }
   | { type: "set-drawer-tab"; tab: DrawerTab; open?: boolean }
   | { type: "set-drawer-open"; open: boolean }
   | { type: "toggle-inspector" }

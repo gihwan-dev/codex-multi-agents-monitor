@@ -175,7 +175,7 @@ describe("monitor 키보드 단축키", () => {
     });
 
     expect(dispatch).toHaveBeenCalledWith({
-      type: "set-selection",
+      type: "navigate-selection",
       selection: { kind: "event", id: nextEvent.eventId },
     });
     expect(event.defaultPrevented).toBe(true);

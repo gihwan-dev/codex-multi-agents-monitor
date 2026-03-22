@@ -36,6 +36,7 @@ const EMPTY_GRAPH_SCENE: GraphSceneModel = {
     edgeIds: [],
     laneIds: [],
   },
+  selectionRevealTarget: null,
   hiddenLaneCount: 0,
   latestVisibleEventId: null,
 };
