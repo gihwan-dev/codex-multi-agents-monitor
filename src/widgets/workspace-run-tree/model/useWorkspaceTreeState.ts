@@ -1,9 +1,8 @@
 import { type KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import {
-  buildWorkspaceTreeModel,
-  type RunDataset,
-} from "../../../entities/run";
+import type { RunDataset } from "../../../entities/run";
+import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
+import { buildSidebarTreeModel } from "../lib/sidebarTreeModel";
 import {
   areWorkspaceIdsEqual,
   buildRunTreeId,
@@ -16,31 +15,45 @@ import {
 
 interface UseWorkspaceTreeStateArgs {
   datasets: RunDataset[];
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexReady: boolean;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
+  onSelectRecentRun: (filePath: string) => void;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }
 
 export function useWorkspaceTreeState({
   datasets,
+  recentIndex,
+  recentIndexReady,
   activeRunId,
   onSelectRun,
+  onSelectRecentRun,
   workspaceIdentityOverrides,
 }: UseWorkspaceTreeStateArgs) {
   const [search, setSearch] = useState("");
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<string[]>([]);
   const [activeTreeId, setActiveTreeId] = useState("");
+  const [optimisticActiveRunId, setOptimisticActiveRunId] = useState(activeRunId);
   const treeRef = useRef<HTMLDivElement>(null);
   const deferredSearch = useDeferredValue(search);
   const model = useMemo(
     () =>
-      buildWorkspaceTreeModel(
+      buildSidebarTreeModel({
         datasets,
-        deferredSearch,
-        "all",
+        recentIndex,
+        recentIndexReady,
+        search: deferredSearch,
         workspaceIdentityOverrides,
-      ),
-    [datasets, deferredSearch, workspaceIdentityOverrides],
+      }),
+    [
+      datasets,
+      recentIndex,
+      recentIndexReady,
+      deferredSearch,
+      workspaceIdentityOverrides,
+    ],
   );
   const flatItems = useMemo(
     () => flattenTree(model.workspaces, expandedWorkspaceIds),
@@ -48,6 +61,7 @@ export function useWorkspaceTreeState({
   );
 
   useEffect(() => {
+    setOptimisticActiveRunId((current) => (current === activeRunId ? current : activeRunId));
     setExpandedWorkspaceIds((current) => {
       const nextExpanded = resolveExpandedWorkspaceIds(model.workspaces, current);
       return areWorkspaceIdsEqual(current, nextExpanded) ? current : nextExpanded;
@@ -106,16 +120,29 @@ export function useWorkspaceTreeState({
   };
 
   const selectRun = (workspaceId: string, runId: string) => {
+    setOptimisticActiveRunId(runId);
     setActiveTreeId(buildRunTreeId(workspaceId, runId));
     onSelectRun(runId);
+  };
+
+  const selectRecentRun = (
+    workspaceId: string,
+    runId: string,
+    filePath: string,
+  ) => {
+    setOptimisticActiveRunId(runId);
+    setActiveTreeId(buildRunTreeId(workspaceId, runId));
+    onSelectRecentRun(filePath);
   };
 
   return {
     activeTreeId,
     expandedWorkspaceIds,
     handleTreeKeyDown,
+    optimisticActiveRunId,
     model,
     search,
+    selectRecentRun,
     selectRun,
     setSearch,
     toggleWorkspace,

@@ -10,6 +10,7 @@ export const MIN_RAIL_WIDTH = 220;
 export const MIN_INSPECTOR_WIDTH = 0;
 export const ARCHIVE_PAGE_SIZE = 50;
 export const LIVE_FIXTURE_TRACE_ID = "trace-fix-006";
+const FIXTURE_TRACE_IDS = new Set(FIXTURE_DATASETS.map((dataset) => dataset.run.traceId));
 
 export function buildFollowLiveMap(datasets: RunDataset[]) {
   return Object.fromEntries(
@@ -21,6 +22,14 @@ export function buildCollapsedGapIds(datasets: RunDataset[]) {
   return Object.fromEntries(
     datasets.map((dataset) => [dataset.run.traceId, [] as string[]]),
   ) as Record<string, string[]>;
+}
+
+export function isFixtureDatasetTraceId(traceId: string) {
+  return FIXTURE_TRACE_IDS.has(traceId);
+}
+
+export function stripFixtureDatasets(datasets: RunDataset[]) {
+  return datasets.filter((dataset) => !isFixtureDatasetTraceId(dataset.run.traceId));
 }
 
 export function defaultSelectionForDataset(
@@ -101,6 +110,7 @@ export function createMonitorInitialState(): MonitorState {
 
   return {
     datasets: FIXTURE_DATASETS,
+    hydratedDatasetsByFilePath: {},
     activeRunId: activeDataset.run.traceId,
     selection: defaultSelectionForDataset(activeDataset),
     drawerTab: "artifacts",
@@ -117,6 +127,13 @@ export function createMonitorInitialState(): MonitorState {
     exportText: "",
     shortcutHelpOpen: false,
     appliedLiveFrames: 0,
+    recentIndex: [],
+    recentIndexLoading: false,
+    recentIndexReady: false,
+    recentIndexError: null,
+    selectionLoadState: null,
+    recentSnapshotLoadingId: null,
+    recentSnapshotRequestId: 0,
     archivedIndex: [],
     archivedTotal: 0,
     archivedHasMore: false,

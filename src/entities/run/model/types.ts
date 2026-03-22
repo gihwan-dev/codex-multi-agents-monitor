@@ -221,6 +221,7 @@ export interface WorkspaceRunRow {
   lastActivityTs: number;
   relativeTime: string;
   liveMode: LiveMode;
+  filePath?: string | null;
 }
 
 export interface WorkspaceThreadGroup {

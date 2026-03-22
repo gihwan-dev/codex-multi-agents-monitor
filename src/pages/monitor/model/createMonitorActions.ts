@@ -13,14 +13,16 @@ import type {
 interface CreateMonitorActionsOptions {
   state: MonitorState;
   dispatch: Dispatch<MonitorAction>;
-  activeDataset: MonitorState["datasets"][number];
+  activeDataset: MonitorState["datasets"][number] | null;
   activeFollowLive: boolean;
+  requestRecentSnapshot: (filePath: string) => void;
   requestArchiveIndex: (
     offset: number,
     append: boolean,
     search?: string,
   ) => void;
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
+  cancelPendingSelectionLoad: () => void;
 }
 
 export function createMonitorActions({
@@ -28,8 +30,10 @@ export function createMonitorActions({
   dispatch,
   activeDataset,
   activeFollowLive,
+  requestRecentSnapshot,
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
+  cancelPendingSelectionLoad,
 }: CreateMonitorActionsOptions) {
   const viewActions = createMonitorViewActions({
     drawerOpen: state.drawerOpen,
@@ -50,11 +54,14 @@ export function createMonitorActions({
     dispatch,
     requestArchiveIndex,
     archiveSnapshotRequestIdRef,
+    cancelPendingSelectionLoad,
+    hydratedDatasetsByFilePath: state.hydratedDatasetsByFilePath,
   });
 
   return {
     ...viewActions,
     ...importExportActions,
     ...archiveActions,
+    selectRecentSession: requestRecentSnapshot,
   };
 }

@@ -5,9 +5,11 @@ export {
   deriveSessionLogTitle,
 } from "./lib/text";
 export { buildDatasetFromSessionLog } from "./model/datasetBuilder";
+export { buildDatasetFromSessionLogAsync } from "./model/datasetBuilderAsync";
 export type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
+  RecentSessionIndexItem,
   SessionEntrySnapshot,
   SessionLogSnapshot,
   SubagentSnapshot,

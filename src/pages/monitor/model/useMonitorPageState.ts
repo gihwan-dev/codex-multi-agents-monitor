@@ -6,7 +6,12 @@ import {
   useRef,
 } from "react";
 import { LIVE_FIXTURE_FRAMES } from "../../../entities/run/testing";
-import { loadArchivedSessionIndex, loadSessionLogDatasets } from "../../../entities/session-log";
+import {
+  loadArchivedSessionIndex,
+  loadRecentSessionIndex,
+  loadRecentSessionSnapshot,
+} from "../../../entities/session-log";
+import { canInvokeTauriRuntime } from "../../../shared/api";
 import { useMonitorKeyboardShortcuts } from "../lib/useMonitorKeyboardShortcuts";
 import { createMonitorActions } from "./createMonitorActions";
 import { deriveMonitorViewState } from "./deriveMonitorViewState";
@@ -23,9 +28,79 @@ export function useMonitorPageState() {
     undefined,
     createMonitorInitialState,
   );
+  const recentSnapshotRequestIdRef = useRef(0);
   const archiveIndexRequestIdRef = useRef(0);
   const archiveSnapshotRequestIdRef = useRef(0);
   const derivedState = deriveMonitorViewState(state);
+
+  const cancelPendingSelectionLoad = useEffectEvent(() => {
+    const nextRecentRequestId = recentSnapshotRequestIdRef.current + 1;
+    recentSnapshotRequestIdRef.current = nextRecentRequestId;
+    dispatch({
+      type: "cancel-recent-snapshot-request",
+      requestId: nextRecentRequestId,
+    });
+
+    const nextArchivedRequestId = archiveSnapshotRequestIdRef.current + 1;
+    archiveSnapshotRequestIdRef.current = nextArchivedRequestId;
+    dispatch({
+      type: "cancel-archived-snapshot-request",
+      requestId: nextArchivedRequestId,
+    });
+  });
+
+  const requestRecentIndex = useEffectEvent(() => {
+    dispatch({ type: "begin-recent-index-request" });
+
+    loadRecentSessionIndex().then((items) => {
+      if (items === null) {
+        dispatch({
+          type: "finish-recent-index-request",
+          error: "Recent sessions are unavailable right now.",
+        });
+        return;
+      }
+
+      startTransition(() => {
+        dispatch({ type: "resolve-recent-index-request", items });
+      });
+    });
+  });
+
+  const requestRecentSnapshot = useEffectEvent((filePath: string) => {
+    cancelPendingSelectionLoad();
+
+    const cachedDataset = state.hydratedDatasetsByFilePath[filePath];
+    if (cachedDataset) {
+      dispatch({ type: "set-active-run", traceId: cachedDataset.run.traceId });
+      return;
+    }
+
+    const requestId = recentSnapshotRequestIdRef.current + 1;
+    recentSnapshotRequestIdRef.current = requestId;
+    dispatch({ type: "begin-recent-snapshot-request", requestId, filePath });
+
+    loadRecentSessionSnapshot(filePath).then((dataset) => {
+      if (!dataset) {
+        dispatch({ type: "finish-recent-snapshot-request", requestId });
+        return;
+      }
+
+      dispatch({
+        type: "begin-recent-snapshot-build",
+        requestId,
+        filePath,
+      });
+      startTransition(() => {
+        dispatch({
+          type: "resolve-recent-snapshot-request",
+          requestId,
+          filePath,
+          dataset,
+        });
+      });
+    });
+  });
 
   const requestArchiveIndex = useEffectEvent(
     (offset: number, append: boolean, search?: string) => {
@@ -56,22 +131,30 @@ export function useMonitorPageState() {
   );
 
   useEffect(() => {
-    let cancelled = false;
+    if (!canInvokeTauriRuntime()) {
+      return;
+    }
 
-    loadSessionLogDatasets().then((datasets) => {
-      if (cancelled || !datasets?.length) {
-        return;
-      }
-
-      startTransition(() => {
-        dispatch({ type: "replace-datasets", datasets });
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    requestRecentIndex();
   }, []);
+
+  useEffect(() => {
+    if (
+      !state.recentIndexReady ||
+      !state.recentIndex.length ||
+      state.recentSnapshotLoadingId ||
+      derivedState.activeDataset
+    ) {
+      return;
+    }
+
+    requestRecentSnapshot(state.recentIndex[0].filePath);
+  }, [
+    state.recentIndexReady,
+    state.recentIndex,
+    state.recentSnapshotLoadingId,
+    derivedState.activeDataset,
+  ]);
 
   useEffect(() => {
     const liveFixtureRun = state.datasets.find(
@@ -101,6 +184,10 @@ export function useMonitorPageState() {
   });
 
   useEffect(() => {
+    if (!canInvokeTauriRuntime()) {
+      return;
+    }
+
     requestArchiveIndex(0, false);
   }, []);
 
@@ -112,8 +199,10 @@ export function useMonitorPageState() {
       dispatch,
       activeDataset: derivedState.activeDataset,
       activeFollowLive: derivedState.activeFollowLive,
+      requestRecentSnapshot,
       requestArchiveIndex,
       archiveSnapshotRequestIdRef,
+      cancelPendingSelectionLoad,
     }),
   };
 }

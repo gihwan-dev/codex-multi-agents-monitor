@@ -1,6 +1,8 @@
 import {
   beginArchivedIndexRequest,
+  beginArchivedSnapshotBuild,
   beginArchivedSnapshotRequest,
+  cancelArchivedSnapshotRequest,
   finishArchivedIndexRequest,
   finishArchivedSnapshotRequest,
   resolveArchivedIndexRequest,
@@ -15,6 +17,16 @@ import {
   toggleFollowLiveState,
   toggleGapState,
 } from "./datasetState";
+import {
+  beginRecentIndexRequest,
+  beginRecentSnapshotBuild,
+  beginRecentSnapshotRequest,
+  cancelRecentSnapshotRequest,
+  finishRecentIndexRequest,
+  finishRecentSnapshotRequest,
+  resolveRecentIndexRequest,
+  resolveRecentSnapshotRequest,
+} from "./recentRequestState";
 import type { MonitorAction, MonitorState } from "./types";
 
 export function monitorStateReducer(
@@ -65,6 +77,27 @@ export function monitorStateReducer(
       return importDatasetState(state, action.dataset);
     case "replace-datasets":
       return replaceDatasetsState(state, action.datasets);
+    case "begin-recent-index-request":
+      return beginRecentIndexRequest(state);
+    case "resolve-recent-index-request":
+      return resolveRecentIndexRequest(state, action.items);
+    case "finish-recent-index-request":
+      return finishRecentIndexRequest(state, action.error);
+    case "begin-recent-snapshot-request":
+      return beginRecentSnapshotRequest(state, action.requestId, action.filePath);
+    case "begin-recent-snapshot-build":
+      return beginRecentSnapshotBuild(state, action.requestId, action.filePath);
+    case "resolve-recent-snapshot-request":
+      return resolveRecentSnapshotRequest(
+        state,
+        action.requestId,
+        action.filePath,
+        action.dataset,
+      );
+    case "cancel-recent-snapshot-request":
+      return cancelRecentSnapshotRequest(state, action.requestId);
+    case "finish-recent-snapshot-request":
+      return finishRecentSnapshotRequest(state, action.requestId);
     case "apply-live-frame":
       return applyFixtureFrameState(state);
     case "begin-archived-index-request":
@@ -79,9 +112,18 @@ export function monitorStateReducer(
     case "finish-archived-index-request":
       return finishArchivedIndexRequest(state, action.requestId, action.error);
     case "begin-archived-snapshot-request":
-      return beginArchivedSnapshotRequest(state, action.requestId);
+      return beginArchivedSnapshotRequest(state, action.requestId, action.filePath);
+    case "begin-archived-snapshot-build":
+      return beginArchivedSnapshotBuild(state, action.requestId, action.filePath);
     case "resolve-archived-snapshot-request":
-      return resolveArchivedSnapshotRequest(state, action.requestId, action.dataset);
+      return resolveArchivedSnapshotRequest(
+        state,
+        action.requestId,
+        action.filePath,
+        action.dataset,
+      );
+    case "cancel-archived-snapshot-request":
+      return cancelArchivedSnapshotRequest(state, action.requestId);
     case "finish-archived-snapshot-request":
       return finishArchivedSnapshotRequest(state, action.requestId);
     case "set-archived-search":

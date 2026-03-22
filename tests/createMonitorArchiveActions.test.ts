@@ -28,9 +28,12 @@ function createArchiveActionsHarness(options?: {
   archivedIndexLength?: number;
   archivedSearch?: string;
   requestId?: number;
+  cancelPendingSelectionLoad?: ReturnType<typeof vi.fn>;
+  hydratedDatasetsByFilePath?: Record<string, ReturnType<typeof createArchiveDataset>>;
 }) {
   const dispatch = vi.fn();
   const requestArchiveIndex = vi.fn();
+  const cancelPendingSelectionLoad = options?.cancelPendingSelectionLoad ?? vi.fn();
   const archiveSnapshotRequestIdRef = { current: options?.requestId ?? 0 };
   const actions = createMonitorArchiveActions({
     archivedIndexLength: options?.archivedIndexLength ?? 0,
@@ -38,10 +41,13 @@ function createArchiveActionsHarness(options?: {
     dispatch,
     requestArchiveIndex,
     archiveSnapshotRequestIdRef,
+    cancelPendingSelectionLoad,
+    hydratedDatasetsByFilePath: options?.hydratedDatasetsByFilePath ?? {},
   });
 
   return {
     actions,
+    cancelPendingSelectionLoad,
     dispatch,
     requestArchiveIndex,
     archiveSnapshotRequestIdRef,
@@ -151,9 +157,10 @@ describe("createMonitorArchiveActions", () => {
 
     actions.selectArchivedSession("/tmp/archive.json");
     await vi.waitFor(() => {
-      expect(dispatch).toHaveBeenNthCalledWith(2, {
+      expect(dispatch).toHaveBeenNthCalledWith(3, {
         type: "resolve-archived-snapshot-request",
         requestId: 5,
+        filePath: "/tmp/archive.json",
         dataset,
       });
     });
@@ -162,8 +169,28 @@ describe("createMonitorArchiveActions", () => {
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "begin-archived-snapshot-request",
       requestId: 5,
+      filePath: "/tmp/archive.json",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "begin-archived-snapshot-build",
+      requestId: 5,
+      filePath: "/tmp/archive.json",
     });
     expect(requestArchiveIndex).not.toHaveBeenCalled();
+  });
+
+  it("archive 선택은 새 요청 전에 기존 selection load를 취소한다", () => {
+    const cancelPendingSelectionLoad = vi.fn();
+    const { actions } = createArchiveActionsHarness({
+      cancelPendingSelectionLoad,
+      hydratedDatasetsByFilePath: {
+        "/tmp/archive.json": createArchiveDataset("archive-hit"),
+      },
+    });
+
+    actions.selectArchivedSession("/tmp/archive.json");
+
+    expect(cancelPendingSelectionLoad).toHaveBeenCalledTimes(1);
   });
 
   it("archive snapshot 결과가 비어도 loading 상태를 종료한다", async () => {
@@ -183,6 +210,7 @@ describe("createMonitorArchiveActions", () => {
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "begin-archived-snapshot-request",
       requestId: 8,
+      filePath: "/tmp/archive.json",
     });
     expect(requestArchiveIndex).not.toHaveBeenCalled();
   });
@@ -213,10 +241,12 @@ describe("createMonitorArchiveActions", () => {
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "begin-archived-snapshot-request",
       requestId: 11,
+      filePath: "/tmp/archive-a.json",
     });
     expect(dispatch).toHaveBeenNthCalledWith(2, {
       type: "begin-archived-snapshot-request",
       requestId: 12,
+      filePath: "/tmp/archive-b.json",
     });
 
     secondResult.resolve(secondDataset);
@@ -224,13 +254,25 @@ describe("createMonitorArchiveActions", () => {
 
     await vi.waitFor(() => {
       expect(dispatch).toHaveBeenCalledWith({
+        type: "begin-archived-snapshot-build",
+        requestId: 12,
+        filePath: "/tmp/archive-b.json",
+      });
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "begin-archived-snapshot-build",
+        requestId: 11,
+        filePath: "/tmp/archive-a.json",
+      });
+      expect(dispatch).toHaveBeenCalledWith({
         type: "resolve-archived-snapshot-request",
         requestId: 12,
+        filePath: "/tmp/archive-b.json",
         dataset: secondDataset,
       });
       expect(dispatch).toHaveBeenCalledWith({
         type: "resolve-archived-snapshot-request",
         requestId: 11,
+        filePath: "/tmp/archive-a.json",
         dataset: firstDataset,
       });
     });
@@ -256,7 +298,25 @@ describe("createMonitorArchiveActions", () => {
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "begin-archived-snapshot-request",
       requestId: 2,
+      filePath: "/tmp/archive.json",
     });
     expect(requestArchiveIndex).not.toHaveBeenCalled();
+  });
+
+  it("cached archive snapshot은 재로드 없이 즉시 활성화한다", () => {
+    const dataset = createArchiveDataset("cached-archive");
+    const { actions, dispatch } = createArchiveActionsHarness({
+      hydratedDatasetsByFilePath: {
+        "/tmp/archive.json": dataset,
+      },
+    });
+
+    actions.selectArchivedSession("/tmp/archive.json");
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-active-run",
+      traceId: "cached-archive",
+    });
+    expect(mockedLoadArchivedSessionSnapshot).not.toHaveBeenCalled();
   });
 });

@@ -16,8 +16,11 @@ async function renderWorkspaceRunTree() {
     root.render(
       createElement(WorkspaceRunTree, {
         datasets: state.datasets,
+        recentIndex: [],
+        recentIndexReady: true,
         activeRunId: state.activeRunId,
         onSelectRun: () => {},
+        onSelectRecentRun: () => {},
         onOpenImport: () => {},
         searchRef: createRef<HTMLInputElement>(),
         workspaceIdentityOverrides: {},
@@ -25,6 +28,7 @@ async function renderWorkspaceRunTree() {
         archivedTotal: 0,
         archivedHasMore: false,
         archivedIndexLoading: false,
+        activeArchivedFilePath: null,
         archivedSearch: "",
         archiveSectionOpen: false,
         onToggleArchiveSection: () => {},
@@ -36,6 +40,37 @@ async function renderWorkspaceRunTree() {
   });
 
   return container.querySelector<HTMLElement>('[data-slot="run-tree"]');
+}
+
+async function renderRecentLoadingTree() {
+  const state = createMonitorInitialState();
+
+  await act(async () => {
+    root.render(
+      createElement(WorkspaceRunTree, {
+        datasets: state.datasets,
+        recentIndex: [],
+        recentIndexReady: false,
+        activeRunId: state.activeRunId,
+        onSelectRun: () => {},
+        onSelectRecentRun: () => {},
+        onOpenImport: () => {},
+        searchRef: createRef<HTMLInputElement>(),
+        workspaceIdentityOverrides: {},
+        archivedIndex: [],
+        archivedTotal: 0,
+        archivedHasMore: false,
+        archivedIndexLoading: false,
+        activeArchivedFilePath: null,
+        archivedSearch: "",
+        archiveSectionOpen: false,
+        onToggleArchiveSection: () => {},
+        onArchiveSearch: () => {},
+        onArchiveLoadMore: () => {},
+        onArchiveSelect: () => {},
+      }),
+    );
+  });
 }
 
 beforeEach(() => {
@@ -80,5 +115,12 @@ describe("WorkspaceRunTree keyboard behavior", () => {
 
     expect(activeWorkspaceAfter).not.toBeNull();
     expect(activeRunAfter).toBeNull();
+  });
+
+  it("recent index 초기 로드 중에도 사이드바에 별도 로딩 UI를 노출하지 않는다", async () => {
+    await renderRecentLoadingTree();
+
+    expect(container.textContent).not.toContain("Preparing recent sessions");
+    expect(container.querySelector('[data-slot="run-tree"]')?.getAttribute("aria-busy")).toBeNull();
   });
 });

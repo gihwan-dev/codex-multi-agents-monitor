@@ -10,8 +10,15 @@ declare global {
   }
 }
 
+export function canInvokeTauriRuntime() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.__TAURI_INTERNALS__?.invoke === "function"
+  );
+}
+
 function resolveInvoke(): TauriInvoke {
-  const invoke = typeof window !== "undefined" ? window.__TAURI_INTERNALS__?.invoke : undefined;
+  const invoke = canInvokeTauriRuntime() ? window.__TAURI_INTERNALS__?.invoke : undefined;
   return typeof invoke === "function" ? invoke : tauriInvoke;
 }
 

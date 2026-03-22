@@ -1,4 +1,5 @@
 import { buildDatasetActivationPatch, upsertDataset } from "./helpers";
+import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
 export function beginArchivedIndexRequest(state: MonitorState, requestId: number): MonitorState {
@@ -56,18 +57,24 @@ export function finishArchivedIndexRequest(
 export function beginArchivedSnapshotRequest(
   state: MonitorState,
   requestId: number,
+  filePath: string,
 ): MonitorState {
   return {
     ...state,
     archivedSnapshotLoading: true,
     archivedSnapshotRequestId: requestId,
+    selectionLoadState: createSelectionLoadState(
+      "archived",
+      filePath,
+      "loading_snapshot",
+    ),
   };
 }
 
-export function resolveArchivedSnapshotRequest(
+export function beginArchivedSnapshotBuild(
   state: MonitorState,
   requestId: number,
-  dataset: MonitorState["datasets"][number],
+  filePath: string,
 ): MonitorState {
   if (requestId !== state.archivedSnapshotRequestId) {
     return state;
@@ -75,9 +82,51 @@ export function resolveArchivedSnapshotRequest(
 
   return {
     ...state,
+    selectionLoadState: createSelectionLoadState(
+      "archived",
+      filePath,
+      "building_graph",
+    ),
+  };
+}
+
+export function resolveArchivedSnapshotRequest(
+  state: MonitorState,
+  requestId: number,
+  filePath: string,
+  dataset: MonitorState["datasets"][number],
+): MonitorState {
+  if (requestId !== state.archivedSnapshotRequestId) {
+    return state;
+  }
+
+  const nextState = {
+    ...state,
     archivedSnapshotLoading: false,
+    selectionLoadState: null,
+    hydratedDatasetsByFilePath: {
+      ...state.hydratedDatasetsByFilePath,
+      [filePath]: dataset,
+    },
     datasets: upsertDataset(state, dataset),
-    ...buildDatasetActivationPatch(state, dataset),
+  };
+
+  return {
+    ...nextState,
+    ...buildDatasetActivationPatch(nextState, dataset),
+  };
+}
+
+export function cancelArchivedSnapshotRequest(
+  state: MonitorState,
+  requestId: number,
+): MonitorState {
+  return {
+    ...state,
+    archivedSnapshotLoading: false,
+    archivedSnapshotRequestId: requestId,
+    selectionLoadState:
+      state.selectionLoadState?.source === "archived" ? null : state.selectionLoadState,
   };
 }
 
@@ -86,6 +135,6 @@ export function finishArchivedSnapshotRequest(
   requestId: number,
 ): MonitorState {
   return requestId === state.archivedSnapshotRequestId
-    ? { ...state, archivedSnapshotLoading: false }
+    ? { ...state, archivedSnapshotLoading: false, selectionLoadState: null }
     : state;
 }

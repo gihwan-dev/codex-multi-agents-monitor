@@ -101,6 +101,7 @@ export function isSystemBoilerplate(
   return (
     isAgentsInstruction(trimmed) ||
     isAutomationEnvelope(trimmed) ||
+    trimmed.startsWith("<environment_context>") ||
     trimmed.startsWith("<skill>") ||
     trimmed.startsWith("<subagent_notification>") ||
     trimmed.startsWith("<permissions") ||

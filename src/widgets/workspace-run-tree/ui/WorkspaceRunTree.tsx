@@ -1,10 +1,13 @@
 import { ChevronRight } from "lucide-react";
 import type { RefObject } from "react";
 import type { RunDataset } from "../../../entities/run";
-import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
+import type {
+  ArchivedSessionIndexItem,
+  RecentSessionIndexItem,
+} from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { cn } from "../../../shared/lib";
-import { Panel } from "../../../shared/ui";
+import { Panel, StatusChip } from "../../../shared/ui";
 import { Button, Input } from "../../../shared/ui/primitives";
 import { buildRunTreeId, buildWorkspaceTreeId, getWorkspaceRuns } from "../lib/workspaceTreeUtils";
 import { useWorkspaceTreeState } from "../model/useWorkspaceTreeState";
@@ -12,8 +15,11 @@ import { ArchivedSessionList } from "./ArchivedSessionList";
 
 interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexReady: boolean;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
+  onSelectRecentRun: (filePath: string) => void;
   onOpenImport: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
@@ -22,6 +28,7 @@ interface WorkspaceRunTreeProps {
   archivedHasMore: boolean;
   archivedIndexLoading: boolean;
   archivedIndexError: string | null;
+  activeArchivedFilePath: string | null;
   archivedSearch: string;
   archiveSectionOpen: boolean;
   onToggleArchiveSection: () => void;
@@ -32,8 +39,11 @@ interface WorkspaceRunTreeProps {
 
 export function WorkspaceRunTree({
   datasets,
+  recentIndex,
+  recentIndexReady,
   activeRunId,
   onSelectRun,
+  onSelectRecentRun,
   onOpenImport,
   searchRef,
   workspaceIdentityOverrides,
@@ -42,6 +52,7 @@ export function WorkspaceRunTree({
   archivedHasMore,
   archivedIndexLoading,
   archivedIndexError,
+  activeArchivedFilePath,
   archivedSearch,
   archiveSectionOpen,
   onToggleArchiveSection,
@@ -54,15 +65,20 @@ export function WorkspaceRunTree({
     expandedWorkspaceIds,
     handleTreeKeyDown,
     model,
+    optimisticActiveRunId,
     search,
+    selectRecentRun,
     selectRun,
     setSearch,
     toggleWorkspace,
     treeRef,
   } = useWorkspaceTreeState({
     datasets,
+    recentIndex,
+    recentIndexReady,
     activeRunId,
     onSelectRun,
+    onSelectRecentRun,
     workspaceIdentityOverrides,
   });
 
@@ -158,28 +174,33 @@ export function WorkspaceRunTree({
                         type="button"
                         data-slot="run-tree-item"
                         data-run-id={run.id}
-                        data-active={activeRunId === run.id ? "true" : "false"}
+                        data-active={optimisticActiveRunId === run.id ? "true" : "false"}
                         data-tree-id={treeId}
                         role="treeitem"
                         aria-level={2}
                         tabIndex={activeTreeId === treeId ? 0 : -1}
                         className={cn(
                           "grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.82rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground",
-                          activeRunId === run.id &&
+                          optimisticActiveRunId === run.id &&
                             "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground",
                         )}
                         onClick={() => {
+                          if (run.filePath) {
+                            selectRecentRun(workspace.id, run.id, run.filePath);
+                            return;
+                          }
                           selectRun(workspace.id, run.id);
                         }}
                         title={run.title}
                       >
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
                           <strong
                             data-slot="run-title"
-                            className="block min-w-0 truncate text-sm font-semibold"
+                            className="block min-w-0 flex-1 truncate text-sm font-semibold"
                           >
                             {run.title}
                           </strong>
+                          <StatusChip status={run.status} subtle />
                         </div>
                         <div className="flex min-w-0 items-center gap-1 text-[0.72rem] text-[var(--color-text-tertiary)]">
                           <span className="shrink-0">{run.relativeTime}</span>
@@ -233,6 +254,7 @@ export function WorkspaceRunTree({
               hasMore={archivedHasMore}
               indexLoading={archivedIndexLoading}
               errorMessage={archivedIndexError}
+              activeFilePath={activeArchivedFilePath}
               search={archivedSearch}
               onSearch={onArchiveSearch}
               onLoadMore={onArchiveLoadMore}
