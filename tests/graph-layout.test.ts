@@ -90,7 +90,7 @@ describe("graphLayout", () => {
     expect(computeRenderedContentHeight(420, 600)).toBe(600);
   });
 
-  it("computes the minimal follow-live scroll target needed to reveal the latest card", () => {
+  it("anchors follow-live to the bottom of the timeline while keeping the latest card visible", () => {
     const scene = createSyntheticScene();
     const layout = buildGraphLayoutSnapshot(scene, 820);
     const latestEventLayout = layout.eventById.get("target-c");
@@ -111,12 +111,12 @@ describe("graphLayout", () => {
     });
 
     expect(target).toEqual({
-      top: latestEventLayout.cardRect.y + latestEventLayout.cardRect.height - (240 - 80),
+      top: layout.contentHeight - (240 - 80),
       left: latestEventLayout.cardRect.x + latestEventLayout.cardRect.width - 480,
     });
   });
 
-  it("does not move the viewport when the latest card is already visible", () => {
+  it("keeps the bottom-aligned follow-live target stable once it reaches the latest row", () => {
     const scene = createSyntheticScene();
     const layout = buildGraphLayoutSnapshot(scene, 820);
     const latestEventLayout = layout.eventById.get("target-c");

@@ -62,19 +62,16 @@ export function resolveFollowLiveScrollTarget(
 ) {
   const visibleHeight = Math.max(viewport.viewportHeight - viewport.stickyTop, 0);
   const visibleWidth = Math.max(viewport.viewportWidth - viewport.stickyLeft, 0);
-  const visibleBottom = viewport.scrollTop + visibleHeight;
   const visibleLeft = viewport.scrollLeft + viewport.stickyLeft;
   const visibleRight = viewport.scrollLeft + viewport.viewportWidth;
-  const cardBottom = eventLayout.cardRect.y + eventLayout.cardRect.height;
   const cardRight = eventLayout.cardRect.x + eventLayout.cardRect.width;
 
-  let top = viewport.scrollTop;
+  let top = clampScrollOffset(
+    viewport.contentHeight - visibleHeight,
+    viewport.contentHeight - visibleHeight,
+  );
   if (eventLayout.cardRect.height > visibleHeight) {
     top = eventLayout.cardRect.y;
-  } else if (eventLayout.cardRect.y < viewport.scrollTop) {
-    top = eventLayout.cardRect.y;
-  } else if (cardBottom > visibleBottom) {
-    top = cardBottom - visibleHeight;
   }
 
   let left = viewport.scrollLeft;
@@ -87,10 +84,7 @@ export function resolveFollowLiveScrollTarget(
   }
 
   return {
-    top: clampScrollOffset(
-      top,
-      viewport.contentHeight - visibleHeight,
-    ),
+    top: clampScrollOffset(top, viewport.contentHeight - visibleHeight),
     left: clampScrollOffset(left, viewport.contentWidth - viewport.viewportWidth),
   };
 }

@@ -132,6 +132,39 @@ describe("live 상태 전이", () => {
     });
   });
 
+  it("live run으로 진입하면 follow-live를 다시 켜고 최신 이벤트를 선택한다", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const latestEvent = liveRun.events[liveRun.events.length - 1];
+    if (!latestEvent) {
+      throw new Error("latest event missing");
+    }
+
+    const initialState = {
+      ...createMonitorInitialState(),
+      followLiveByRunId: {
+        ...createMonitorInitialState().followLiveByRunId,
+        [liveRun.run.traceId]: false,
+      },
+      liveConnectionByRunId: {
+        ...createMonitorInitialState().liveConnectionByRunId,
+        [liveRun.run.traceId]: "paused" as const,
+      },
+      selection: { kind: "event" as const, id: liveRun.events[0]?.eventId ?? "" },
+    };
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "set-active-run",
+      traceId: liveRun.run.traceId,
+    });
+
+    expect(nextState.followLiveByRunId[liveRun.run.traceId]).toBe(true);
+    expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("live");
+    expect(nextState.selection).toEqual({
+      kind: "event",
+      id: latestEvent.eventId,
+    });
+  });
+
   it("follow-live가 꺼진 live run은 새 frame이 와도 현재 선택을 유지한다", () => {
     const liveRun = requireDataset("trace-fix-006");
     const initialState = createMonitorInitialState();
@@ -558,6 +591,10 @@ describe("archive 요청 상태", () => {
 
     expect(resolvedState.followLiveByRunId["recent-live-001"]).toBe(true);
     expect(resolvedState.liveConnectionByRunId["recent-live-001"]).toBe("live");
+    expect(resolvedState.selection).toEqual({
+      kind: "event",
+      id: buildLiveRecentDataset("recent-live-001").events.at(-1)?.eventId,
+    });
   });
 
   it("silent recent live refresh는 follow-live 중 최신 이벤트 selection을 유지한다", () => {

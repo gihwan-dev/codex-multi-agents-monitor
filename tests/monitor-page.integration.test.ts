@@ -654,6 +654,10 @@ describe("MonitorPage integration", () => {
       const liveRunButton = container.querySelector<HTMLButtonElement>(
         '[data-run-id="trace-fix-006"]',
       );
+      const initialLatestEventId =
+        createMonitorInitialState().datasets.find(
+          (dataset) => dataset.run.traceId === "trace-fix-006",
+        )?.events.at(-1)?.eventId ?? null;
       expect(liveRunButton).not.toBeNull();
       if (!liveRunButton) {
         throw new Error("live run button missing");
@@ -668,6 +672,24 @@ describe("MonitorPage integration", () => {
           "FIX-006 Disconnected live watch run",
         );
       });
+      const graphScroll = container.querySelector<HTMLElement>('[data-slot="graph-scroll"]');
+      expect(graphScroll).not.toBeNull();
+      if (!graphScroll) {
+        throw new Error("graph scroll container missing");
+      }
+      await vi.waitFor(() => {
+        expect((graphScroll as HTMLElement & { scrollTop: number }).scrollTop).toBeGreaterThan(0);
+      });
+      if (!initialLatestEventId) {
+        throw new Error("initial latest fixture event missing");
+      }
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            `[data-slot="graph-event-card"][data-event-id="${initialLatestEventId}"]`,
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
       expect(container.textContent).toContain("Live watch");
       expect(container.textContent).toContain("Follow live");
 
@@ -700,12 +722,6 @@ describe("MonitorPage integration", () => {
       expect(latestScrollOptions.top ?? 0).toBeGreaterThan(0);
       expect(latestScrollOptions.left ?? 0).toBeGreaterThan(0);
       expect(container.textContent).not.toContain("Following paused");
-
-      const graphScroll = container.querySelector<HTMLElement>('[data-slot="graph-scroll"]');
-      expect(graphScroll).not.toBeNull();
-      if (!graphScroll) {
-        throw new Error("graph scroll container missing");
-      }
 
       const currentScrollTop = (graphScroll as HTMLElement & { scrollTop: number }).scrollTop;
       await act(async () => {

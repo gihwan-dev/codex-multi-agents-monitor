@@ -1,10 +1,10 @@
 import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run";
 import { applyLiveFrame } from "../../../../features/follow-live";
 import {
+  activationSelectionForDataset,
   buildCollapsedGapIds,
   buildDatasetActivationPatch,
   buildFollowLiveMap,
-  defaultSelectionForDataset,
   LIVE_FIXTURE_TRACE_ID,
   resolveDatasetDrawerTab,
   toggleGapIds,
@@ -23,10 +23,26 @@ export function setActiveRunState(state: MonitorState, traceId: string): Monitor
     };
   }
 
+  const followLive = dataset.run.liveMode === "live";
+
   return {
     ...state,
     activeRunId: traceId,
-    selection: defaultSelectionForDataset(dataset),
+    selection: activationSelectionForDataset(dataset),
+    followLiveByRunId: followLive
+      ? {
+          ...state.followLiveByRunId,
+          [traceId]: true,
+        }
+      : state.followLiveByRunId,
+    liveConnectionByRunId: followLive
+      ? updateLiveConnectionMap(
+          state.liveConnectionByRunId,
+          traceId,
+          dataset,
+          true,
+        )
+      : state.liveConnectionByRunId,
     ...resolveDatasetDrawerTab(state, dataset),
   };
 }
@@ -124,7 +140,7 @@ export function replaceDatasetsState(
     ...state,
     datasets,
     activeRunId: activeDataset.run.traceId,
-    selection: defaultSelectionForDataset(activeDataset),
+    selection: activationSelectionForDataset(activeDataset),
     followLiveByRunId: buildFollowLiveMap(datasets),
     liveConnectionByRunId: buildConnectionMap(datasets),
     collapsedGapIds: buildCollapsedGapIds(datasets),

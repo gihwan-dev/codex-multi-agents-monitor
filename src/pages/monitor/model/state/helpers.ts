@@ -40,6 +40,23 @@ export function defaultSelectionForDataset(
     : null;
 }
 
+export function liveSelectionForDataset(
+  dataset: RunDataset,
+): SelectionState | null {
+  const latestEvent = dataset.events[dataset.events.length - 1];
+  return latestEvent
+    ? { kind: "event", id: latestEvent.eventId }
+    : defaultSelectionForDataset(dataset);
+}
+
+export function activationSelectionForDataset(
+  dataset: RunDataset,
+): SelectionState | null {
+  return dataset.run.liveMode === "live"
+    ? liveSelectionForDataset(dataset)
+    : defaultSelectionForDataset(dataset);
+}
+
 export function resolveDatasetDrawerTab(
   state: MonitorState,
   dataset: RunDataset,
@@ -78,7 +95,7 @@ export function buildDatasetActivationPatch(
 
   return {
     activeRunId: dataset.run.traceId,
-    selection: defaultSelectionForDataset(dataset),
+    selection: activationSelectionForDataset(dataset),
     collapsedGapIds: {
       ...state.collapsedGapIds,
       [dataset.run.traceId]: [],
