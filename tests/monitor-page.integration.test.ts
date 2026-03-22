@@ -12,12 +12,17 @@ import {
 import { MonitorPage } from "../src/pages/monitor/index.js";
 import { createMonitorInitialState } from "../src/pages/monitor/model/state/helpers.js";
 
-vi.mock("../src/entities/session-log/index.js", () => ({
-  loadArchivedSessionIndex: vi.fn(),
-  loadArchivedSessionSnapshot: vi.fn(),
-  loadRecentSessionIndex: vi.fn(),
-  loadRecentSessionSnapshot: vi.fn(),
-}));
+vi.mock("../src/entities/session-log/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/entities/session-log/index.js")>();
+
+  return {
+    ...actual,
+    loadArchivedSessionIndex: vi.fn(),
+    loadArchivedSessionSnapshot: vi.fn(),
+    loadRecentSessionIndex: vi.fn(),
+    loadRecentSessionSnapshot: vi.fn(),
+  };
+});
 
 const mockedLoadArchivedSessionIndex = vi.mocked(loadArchivedSessionIndex);
 const mockedLoadArchivedSessionSnapshot = vi.mocked(loadArchivedSessionSnapshot);
@@ -411,6 +416,11 @@ describe("MonitorPage integration", () => {
     expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
     expect(container.textContent).toContain("Preparing run details");
     expect(container.textContent).not.toContain("Ready to inspect");
+    expect(
+      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent?.trim() === "Export",
+      )?.disabled,
+    ).toBe(true);
 
     await act(async () => {
       secondSnapshot.resolve(buildRecentDataset("recent-002"));
@@ -454,6 +464,18 @@ describe("MonitorPage integration", () => {
       archiveSectionToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    const archiveWorkspaceToggle = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-workspace-toggle"]',
+    );
+    expect(archiveWorkspaceToggle).not.toBeNull();
+    if (!archiveWorkspaceToggle) {
+      throw new Error("archive workspace toggle missing");
+    }
+
+    await act(async () => {
+      archiveWorkspaceToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     const archiveSessionButton = container.querySelector<HTMLButtonElement>(
       '[data-slot="archive-session-item"]',
     );
@@ -468,7 +490,7 @@ describe("MonitorPage integration", () => {
 
     expect(container.querySelector("header h1")?.textContent).toBe("Run recent-001");
     expect(container.textContent).toContain("Archived session");
-    expect(container.textContent).toContain("Check archive search behavior");
+    expect(container.textContent).toContain("Archive regression coverage");
     expect(container.textContent).toContain("Archived workspace");
 
     await act(async () => {

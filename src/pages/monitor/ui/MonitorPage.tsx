@@ -1,5 +1,11 @@
 import { useEffect, useRef } from "react";
-import type { DrawerTab } from "../../../entities/run";
+import type {
+  AnomalyJump,
+  DrawerTab,
+  LiveConnection,
+  RunDataset,
+  SummaryFact,
+} from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import { LoadingStateBlock, Panel } from "../../../shared/ui";
 import {
@@ -29,6 +35,15 @@ import {
 import { useSearchFocusShortcut } from "../lib/useSearchFocusShortcut";
 import { useMonitorPageState } from "../model/useMonitorPageState";
 
+interface PreservedChromeState {
+  anomalyJumps: AnomalyJump[];
+  dataset: RunDataset;
+  followLive: boolean;
+  inspectorTitle: string | null;
+  liveConnection: LiveConnection;
+  summaryFacts: SummaryFact[];
+}
+
 export function MonitorPage() {
   const {
     state,
@@ -53,12 +68,27 @@ export function MonitorPage() {
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const previousShortcutOpenRef = useRef(state.shortcutHelpOpen);
+  const preservedChromeRef = useRef<PreservedChromeState | null>(null);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
   const displayDataset = selectionLoadState ? null : activeDataset;
   const displayRawTabAvailable = displayDataset ? rawTabAvailable : false;
-  const chromeDataset = activeDataset;
-  const hideGraphChrome = Boolean(selectionLoadState && chromeDataset);
+  if (displayDataset) {
+    preservedChromeRef.current = {
+      anomalyJumps,
+      dataset: displayDataset,
+      followLive: activeFollowLive,
+      inspectorTitle: inspectorSummary?.title ?? null,
+      liveConnection: activeLiveConnection,
+      summaryFacts,
+    };
+  }
+  const chromeState = selectionLoadState
+    ? preservedChromeRef.current
+    : displayDataset
+      ? preservedChromeRef.current
+      : null;
+  const hideGraphChrome = Boolean(selectionLoadState && chromeState);
 
   useSearchFocusShortcut(searchRef);
 
@@ -109,9 +139,10 @@ export function MonitorPage() {
       ) : null}
 
       <MonitorTopBar
-        dataset={chromeDataset}
-        followLive={activeFollowLive}
-        liveConnection={activeLiveConnection}
+        dataset={chromeState?.dataset ?? null}
+        followLive={chromeState?.followLive ?? false}
+        liveConnection={chromeState?.liveConnection ?? "paused"}
+        actionsDisabled={Boolean(selectionLoadState)}
         onExport={(target) => {
           drawerTriggerRef.current = target;
           actions.exportDataset(false);
@@ -167,17 +198,17 @@ export function MonitorPage() {
           aria-label="Graph canvas"
           aria-busy={Boolean(selectionLoadState)}
         >
-          {chromeDataset ? (
+          {chromeState ? (
             <div
               className={hideGraphChrome ? "pointer-events-none invisible" : undefined}
               aria-hidden={hideGraphChrome || undefined}
             >
               <MonitorSummaryStrip
-                facts={summaryFacts}
-                activeFocus={inspectorSummary?.title ?? null}
+                facts={chromeState.summaryFacts}
+                activeFocus={chromeState.inspectorTitle}
               />
               <MonitorGraphToolbar
-                anomalyJumps={anomalyJumps}
+                anomalyJumps={chromeState.anomalyJumps}
                 onJump={actions.selectItem}
               />
             </div>

@@ -3,6 +3,7 @@ import { StatusChip } from "../../../shared/ui";
 import { Badge, Button } from "../../../shared/ui/primitives";
 
 interface MonitorTopBarProps {
+  actionsDisabled?: boolean;
   dataset: RunDataset | null;
   followLive: boolean;
   liveConnection: LiveConnection;
@@ -12,6 +13,7 @@ interface MonitorTopBarProps {
 }
 
 export function MonitorTopBar({
+  actionsDisabled = false,
   dataset,
   followLive,
   liveConnection,
@@ -107,7 +109,7 @@ export function MonitorTopBar({
         <Button
           type="button"
           variant={followLive ? "default" : "outline"}
-          disabled={dataset.run.liveMode !== "live"}
+          disabled={actionsDisabled || dataset.run.liveMode !== "live"}
           onClick={onToggleFollowLive}
           className={
             followLive
@@ -119,6 +121,7 @@ export function MonitorTopBar({
         </Button>
         <Button
           type="button"
+          disabled={actionsDisabled}
           onClick={(event) => onExport(event.currentTarget)}
           className="bg-primary text-primary-foreground"
         >
