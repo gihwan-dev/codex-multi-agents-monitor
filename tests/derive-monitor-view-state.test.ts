@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMonitorInitialState,
   deriveMonitorViewState,
-} from "../src/pages/monitor/index.js";
+} from "./helpers/monitorTestApi.js";
 
 describe("deriveMonitorViewState", () => {
   it("archive index loading을 파생 상태에 그대로 노출한다", () => {

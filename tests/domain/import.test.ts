@@ -6,19 +6,20 @@ import {
   buildSummaryFacts,
   buildWorkspaceTreeModel,
   calculateSummaryMetrics,
-  hasRawPayload,
-} from "../../src/entities/run/index.js";
-import {
   FIXTURE_DATASETS,
   FIXTURE_IMPORT_TEXT,
-} from "../../src/entities/run/testing.js";
+  hasRawPayload,
+} from "../../src/entities/run/index.js";
 import {
   buildExportPayload,
   normalizeImportPayload,
   parseCompletedRunPayload,
 } from "../../src/features/import-run/index.js";
-import { createMonitorInitialState, monitorStateReducer } from "../../src/pages/monitor/index.js";
 import { formatDuration } from "../../src/shared/lib/format/index.js";
+import {
+  createMonitorInitialState,
+  monitorStateReducer,
+} from "../helpers/monitorTestApi.js";
 
 describe("completedRunParser", () => {
   it("rejects waiting-class events without wait_reason", () => {

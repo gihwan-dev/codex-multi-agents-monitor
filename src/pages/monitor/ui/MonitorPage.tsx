@@ -1,22 +1,9 @@
 import { useEffect, useRef } from "react";
 import type {
-  AnomalyJump,
   DrawerTab,
-  LiveConnection,
-  RunDataset,
-  SummaryFact,
 } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import { LoadingStateBlock, Panel } from "../../../shared/ui";
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../shared/ui/primitives";
 import {
   CausalGraphView,
 } from "../../../widgets/causal-graph";
@@ -34,15 +21,8 @@ import {
 } from "../lib/useCompactViewport";
 import { useSearchFocusShortcut } from "../lib/useSearchFocusShortcut";
 import { useMonitorPageState } from "../model/useMonitorPageState";
-
-interface PreservedChromeState {
-  anomalyJumps: AnomalyJump[];
-  dataset: RunDataset;
-  followLive: boolean;
-  inspectorTitle: string | null;
-  liveConnection: LiveConnection;
-  summaryFacts: SummaryFact[];
-}
+import { MonitorShortcutsDialog } from "./MonitorShortcutsDialog";
+import { usePreservedChromeState } from "./usePreservedChromeState";
 
 export function MonitorPage() {
   const {
@@ -68,27 +48,23 @@ export function MonitorPage() {
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const previousShortcutOpenRef = useRef(state.shortcutHelpOpen);
-  const preservedChromeRef = useRef<PreservedChromeState | null>(null);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
-  const displayDataset = selectionLoadState ? null : activeDataset;
-  const displayRawTabAvailable = displayDataset ? rawTabAvailable : false;
-  if (displayDataset) {
-    preservedChromeRef.current = {
-      anomalyJumps,
-      dataset: displayDataset,
-      followLive: activeFollowLive,
-      inspectorTitle: inspectorSummary?.title ?? null,
-      liveConnection: activeLiveConnection,
-      summaryFacts,
-    };
-  }
-  const chromeState = selectionLoadState
-    ? preservedChromeRef.current
-    : displayDataset
-      ? preservedChromeRef.current
-      : null;
-  const hideGraphChrome = Boolean(selectionLoadState && chromeState);
+  const {
+    chromeState,
+    displayDataset,
+    displayRawTabAvailable,
+    hideGraphChrome,
+  } = usePreservedChromeState({
+    activeDataset,
+    activeFollowLive,
+    activeLiveConnection,
+    anomalyJumps,
+    inspectorTitle: inspectorSummary?.title ?? null,
+    rawTabAvailable,
+    selectionLoadStateActive: Boolean(selectionLoadState),
+    summaryFacts,
+  });
 
   useSearchFocusShortcut(searchRef);
 
@@ -301,42 +277,11 @@ export function MonitorPage() {
         ) : null}
       </div>
 
-      <Dialog
+      <MonitorShortcutsDialog
         open={state.shortcutHelpOpen}
-        onOpenChange={(open) => {
-          if (open !== state.shortcutHelpOpen) {
-            toggleShortcuts();
-          }
-        }}
-      >
-        <DialogContent
-          aria-label="Keyboard shortcuts"
-          className="max-w-[22rem] border-white/10 bg-[linear-gradient(180deg,rgba(20,24,33,0.98),rgba(17,21,30,0.98))] text-foreground"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            shortcutTriggerRef.current?.focus();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Shortcut help</DialogTitle>
-            <DialogDescription>
-              Keep the graph flow in view without leaving the keyboard.
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="grid gap-2 pl-5 text-sm text-muted-foreground">
-            <li>`/` search focus</li>
-            <li>`I` inspector toggle</li>
-            <li>`.` follow live</li>
-            <li>`?` shortcuts help</li>
-            <li>`Cmd/Ctrl + K` shortcuts help</li>
-          </ul>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => toggleShortcuts()}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onToggle={() => toggleShortcuts()}
+        shortcutTriggerRef={shortcutTriggerRef}
+      />
     </div>
   );
 }

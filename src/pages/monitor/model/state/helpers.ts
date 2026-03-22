@@ -1,5 +1,5 @@
 import type { RunDataset, SelectionState } from "../../../../entities/run";
-import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run/testing";
+import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run";
 import { buildConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 

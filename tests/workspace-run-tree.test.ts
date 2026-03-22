@@ -3,8 +3,8 @@
 import { act, createElement, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMonitorInitialState } from "../src/pages/monitor/index.js";
 import { WorkspaceRunTree } from "../src/widgets/workspace-run-tree/index.js";
+import { createMonitorInitialState } from "./helpers/monitorTestApi.js";
 
 let container: HTMLDivElement;
 let root: Root;

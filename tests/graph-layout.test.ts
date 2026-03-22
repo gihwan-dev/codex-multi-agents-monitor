@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
+  FIXTURE_DATASETS,
   type GraphSceneModel,
 } from "../src/entities/run";
-import { FIXTURE_DATASETS } from "../src/entities/run/testing";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
 import {
   CausalGraphView,

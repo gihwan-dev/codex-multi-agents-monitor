@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
+  FIXTURE_DATASETS,
   type SelectionState,
 } from "../src/entities/run/index.js";
-import { FIXTURE_DATASETS } from "../src/entities/run/testing.js";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log/index.js";
 import {
   buildEventRects,

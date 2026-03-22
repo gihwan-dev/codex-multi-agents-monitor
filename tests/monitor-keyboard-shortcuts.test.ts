@@ -5,7 +5,7 @@ import {
   createMonitorInitialState,
   deriveMonitorViewState,
   dispatchMonitorKeyboardShortcut,
-} from "../src/pages/monitor/index.js";
+} from "./helpers/monitorTestApi.js";
 
 function expectDefined<T>(value: T | null | undefined, message: string): T {
   expect(value).toBeDefined();

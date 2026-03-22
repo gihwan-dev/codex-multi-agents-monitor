@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspaceIdentityResolver } from "../src/features/workspace-identity/index.js";
-import { createMonitorInitialState } from "../src/pages/monitor/index.js";
+import { createMonitorInitialState } from "./helpers/monitorTestApi.js";
 
 function buildDataset(repoPath: string, name: string) {
   const template = createMonitorInitialState().datasets[0];
