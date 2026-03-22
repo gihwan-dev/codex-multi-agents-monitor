@@ -110,7 +110,7 @@ test("built bundle contains imported/live contract copy", async () => {
 test("left rail uses a simplified workspace to run tree", async ({ page }) => {
   await openBuiltApp(page);
 
-  const rail = page.locator(".workspace__rail");
+  const rail = page.getByRole("complementary", { name: "Run list" });
   await expect(rail.getByPlaceholder("Search workspaces and runs")).toBeVisible();
   await expect(rail.getByRole("button", { name: "Import" })).toBeVisible();
 
@@ -118,10 +118,13 @@ test("left rail uses a simplified workspace to run tree", async ({ page }) => {
   await expect(rail.getByRole("button", { name: "Live" })).toHaveCount(0);
   await expect(rail.getByText("FIX-002 Waiting chain run", { exact: true })).toHaveCount(0);
   await expect(rail.getByText(/\bago\b/i)).toHaveCount(0);
+  await expect(page.getByText("Focus", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Event type", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Error-only", { exact: true })).toHaveCount(0);
 
   const runTreeItem = rail.getByRole("treeitem", { name: /Waiting chain review/i });
   await expect(runTreeItem).toBeVisible();
-  await expect(runTreeItem).toContainText("Waiting");
+  await expect(runTreeItem).not.toContainText("Done");
   await expect(runTreeItem).not.toContainText("Imported");
   await expect(runTreeItem).not.toContainText("Spec approval missing");
 });
@@ -129,10 +132,10 @@ test("left rail uses a simplified workspace to run tree", async ({ page }) => {
 test("left rail preserves hierarchy and single-line run titles", async ({ page }) => {
   await openBuiltApp(page);
 
-  const rail = page.locator(".workspace__rail");
-  const workspaceLabel = rail.locator(".run-list__workspace-copy strong").first();
-  const runTitle = rail.locator(".run-row__title strong").first();
-  const tree = rail.locator(".run-list__tree");
+  const rail = page.getByRole("complementary", { name: "Run list" });
+  const workspaceLabel = rail.locator('[data-slot="workspace-name"]').first();
+  const runTitle = rail.locator('[data-slot="run-title"]').first();
+  const tree = rail.locator('[data-slot="run-tree"]');
 
   const workspaceFontSize = await workspaceLabel.evaluate((element) =>
     Number.parseFloat(window.getComputedStyle(element).fontSize),
@@ -156,7 +159,7 @@ test("left rail preserves hierarchy and single-line run titles", async ({ page }
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   });
-  expect(treeAlignContent).toBe("start");
+  expect(["start", "flex-start"]).toContain(treeAlignContent);
 });
 
 test("rail and inspector resize beyond the previous width caps", async ({ page }) => {
@@ -170,9 +173,8 @@ test("rail and inspector resize beyond the previous width caps", async ({ page }
 
   await expect
     .poll(() =>
-      page.locator(".workspace__rail").evaluate((element) => {
-        const width = (element as HTMLElement).style.width;
-        return Number.parseFloat(width);
+      page.getByRole("complementary", { name: "Run list" }).evaluate((element) => {
+        return Number.parseFloat(window.getComputedStyle(element).width);
       }),
     )
     .toBeGreaterThan(340);
@@ -185,9 +187,8 @@ test("rail and inspector resize beyond the previous width caps", async ({ page }
 
   await expect
     .poll(() =>
-      page.locator(".workspace__inspector").evaluate((element) => {
-        const width = (element as HTMLElement).style.width;
-        return Number.parseFloat(width);
+      page.getByRole("complementary", { name: "Inspector" }).evaluate((element) => {
+        return Number.parseFloat(window.getComputedStyle(element).width);
       }),
     )
     .toBeGreaterThan(380);
@@ -197,7 +198,7 @@ test("drawer stays hidden until an explicit drawer action", async ({ page }) => 
   await openBuiltApp(page);
 
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
-  await page.locator("aside.workspace__inspector").getByRole("button", { name: "Artifacts" }).click();
+  await page.getByRole("complementary", { name: "Inspector" }).getByRole("button", { name: "Artifacts" }).click();
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toBeVisible();
   await page.getByRole("button", { name: "Close drawer" }).click();
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
@@ -209,7 +210,7 @@ test("mobile starts with collapsed inspector and preserves selection when reopen
   await page.setViewportSize({ width: 390, height: 844 });
   await openBuiltApp(page);
 
-  const compactInspector = page.locator(".inspector--compact");
+  const compactInspector = page.locator('[data-slot="compact-inspector"]');
   await expect(compactInspector.getByRole("button", { name: "Open" })).toBeVisible();
   await expect(compactInspector).toContainText("Planner blocked");
 
@@ -227,7 +228,7 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 }) => {
   await openBuiltApp(page);
 
-  await page.locator('.run-row[title="Dense parallel replay"]').click();
+  await page.getByRole("treeitem", { name: /Dense parallel replay/i }).click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();
 });

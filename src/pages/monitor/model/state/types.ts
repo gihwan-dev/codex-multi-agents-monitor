@@ -2,7 +2,6 @@ import type {
   DrawerTab,
   LiveConnection,
   RunDataset,
-  RunFilters,
   SelectionState,
 } from "../../../../entities/run";
 import type {
@@ -19,7 +18,6 @@ export interface MonitorState {
   inspectorOpen: boolean;
   followLiveByRunId: Record<string, boolean>;
   liveConnectionByRunId: Record<string, LiveConnection>;
-  filtersByRunId: Record<string, RunFilters>;
   collapsedGapIds: Record<string, string[]>;
   railWidth: number;
   inspectorWidth: number;
@@ -49,12 +47,6 @@ export type MonitorAction =
   | { type: "toggle-inspector" }
   | { type: "toggle-follow-live"; traceId: string }
   | { type: "set-follow-live"; traceId: string; value: boolean }
-  | {
-      type: "set-filter";
-      traceId: string;
-      key: keyof RunFilters;
-      value: string | boolean | null;
-    }
   | { type: "toggle-gap"; traceId: string; gapId: string }
   | { type: "set-rail-width"; width: number }
   | { type: "set-inspector-width"; width: number }

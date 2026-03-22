@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "../../theme/tokens.css";
+@import "../../theme/motion.css";
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-panel);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-active);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-secondary: var(--color-surface-muted);
+  --color-secondary-foreground: var(--color-text);
+  --color-muted: var(--color-surface-muted);
+  --color-muted-foreground: var(--color-text-secondary);
+  --color-accent: var(--color-surface-raised);
+  --color-accent-foreground: var(--color-text);
+  --color-destructive: var(--color-failed);
+  --color-destructive-foreground: var(--color-text);
+  --color-border: var(--color-border);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-active);
+
+  --radius-sm: calc(var(--radius-soft) - 2px);
+  --radius-md: var(--radius-soft);
+  --radius-lg: var(--radius-panel);
+  --radius-xl: calc(var(--radius-panel) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+}

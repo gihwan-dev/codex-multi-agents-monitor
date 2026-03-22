@@ -1,6 +1,9 @@
+import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 import { deriveArchiveIndexTitle } from "../../../entities/session-log";
+import { cn } from "../../../shared/lib";
+import { Input } from "../../../shared/ui/primitives";
 import { groupArchivedSessionsByWorkspace } from "../lib/archiveGroups";
 
 interface ArchivedSessionListProps {
@@ -80,60 +83,78 @@ export function ArchivedSessionList({
   };
 
   return (
-    <div className="archive-list">
-      <input
+    <div data-slot="archive-list" className="grid gap-2 pt-1">
+      <Input
         type="search"
-        className="search-input archive-list__search"
+        className="h-8 border-white/10 bg-white/[0.03] px-2.5 text-[0.78rem]"
         placeholder="Search archived sessions"
         value={localSearch}
         onChange={(e) => handleSearchChange(e.target.value)}
         aria-label="Search archived sessions"
       />
 
-      <div className="archive-list__tree">
+      <div
+        data-slot="archive-list-content"
+        className="grid max-h-[22.5rem] gap-2 overflow-x-hidden overflow-y-auto"
+      >
         {workspaceGroups.map((group) => {
           const expanded = expandedGroups.has(group.key);
           return (
-            <section key={group.key} className="archive-list__workspace">
+            <section
+              key={group.key}
+              data-slot="archive-workspace-group"
+              data-workspace-key={group.key}
+              className="grid gap-1 border-b border-white/6 pb-2"
+            >
               <button
                 type="button"
-                className="run-list__workspace-row"
+                data-slot="archive-workspace-toggle"
+                className="flex min-h-7 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-[0.78rem] text-muted-foreground transition-colors hover:bg-white/[0.03]"
                 onClick={() => toggleGroup(group.key)}
                 aria-expanded={expanded}
               >
-                <div className="run-list__workspace-copy">
-                  <span
-                    className={`run-list__disclosure${expanded ? " run-list__disclosure--open" : ""}`}
-                    aria-hidden="true"
-                  />
-                  <span className="run-list__workspace-name" title={group.displayName}>
-                    {group.displayName}
-                  </span>
-                  <span className="run-list__workspace-count">
-                    {group.sessions.length}
-                  </span>
-                </div>
+                <ChevronRight
+                  className={cn(
+                    "size-3 transition-transform",
+                    expanded && "rotate-90",
+                  )}
+                  aria-hidden="true"
+                />
+                <span
+                  data-slot="archive-workspace-name"
+                  className="min-w-0 flex-1 truncate"
+                  title={group.displayName}
+                >
+                  {group.displayName}
+                </span>
+                <span className="text-[0.7rem] text-[var(--color-text-tertiary)]">
+                  {group.sessions.length}
+                </span>
               </button>
 
               {expanded ? (
-                <div className="run-list__runs">
+                <div className="ml-2 min-w-0 grid gap-1 border-l border-white/8 pl-3">
                   {group.sessions.map((session) => (
                     <button
                       key={session.filePath}
                       type="button"
-                      className="run-row"
+                      data-slot="archive-session-item"
+                      data-file-path={session.filePath}
+                      className="grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.8rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
                       onClick={() => onSelect(session.filePath)}
                       title={session.workspacePath}
                     >
-                      <div className="run-row__title">
-                        <span>{deriveArchiveItemTitle(session)}</span>
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <span className="min-w-0 flex-1 truncate">{deriveArchiveItemTitle(session)}</span>
                         {session.model ? (
-                          <span className="archive-list__model-badge">{session.model}</span>
+                          <span className="shrink-0 text-[0.72rem] text-[var(--color-text-tertiary)]">
+                            {session.model}
+                          </span>
                         ) : null}
                       </div>
-                      <div className="run-row__sub">
-                        <span className="run-row__meta">{formatArchiveDate(session.startedAt)}</span>
-                        <span className="run-row__meta">{session.sessionId.slice(0, 8)}</span>
+                      <div className="flex items-center gap-2 text-[0.72rem] text-[var(--color-text-tertiary)]">
+                        <span>{formatArchiveDate(session.startedAt)}</span>
+                        <span>{session.sessionId.slice(0, 8)}</span>
                       </div>
                     </button>
                   ))}
@@ -145,31 +166,36 @@ export function ArchivedSessionList({
 
         {indexLoading ? (
           <>
-            <div key="skeleton-a" className="archive-list__skeleton" aria-hidden="true" />
-            <div key="skeleton-b" className="archive-list__skeleton" aria-hidden="true" />
-            <div key="skeleton-c" className="archive-list__skeleton" aria-hidden="true" />
+            <div key="skeleton-a" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+            <div key="skeleton-b" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+            <div key="skeleton-c" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
           </>
         ) : null}
 
         {!indexLoading && !searchPending && errorMessage ? (
-          <output className="archive-list__error" aria-live="polite">
+          <output className="text-sm text-[var(--color-failed)]" aria-live="polite">
             {errorMessage}
           </output>
         ) : null}
 
         {!indexLoading && !searchPending && !errorMessage && items.length === 0 ? (
-          <p className="archive-list__empty">
+          <p className="px-2 py-2 text-[0.78rem] text-[var(--color-text-tertiary)]">
             {localSearch ? "No matching archived sessions." : "No archived sessions found."}
           </p>
         ) : null}
 
         {hasMore && !indexLoading && !searchPending && !errorMessage ? (
-          <div ref={sentinelRef} className="archive-list__sentinel" aria-hidden="true" />
+          <div
+            ref={sentinelRef}
+            data-slot="archive-sentinel"
+            className="h-px"
+            aria-hidden="true"
+          />
         ) : null}
       </div>
 
       {total > 0 ? (
-        <p className="archive-list__count">
+        <p className="px-1 text-right text-[0.7rem] text-[var(--color-text-tertiary)]">
           {items.length} / {total}
         </p>
       ) : null}

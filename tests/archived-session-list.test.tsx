@@ -116,10 +116,12 @@ afterEach(async () => {
 describe("ArchivedSessionList", () => {
   it("입력 draft와 committed 검색어가 다를 때 load-more sentinel을 숨긴다", async () => {
     const { onSearch } = await renderArchivedSessionList();
-    const input = container.querySelector<HTMLInputElement>('input[type="search"]');
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search archived sessions"]',
+    );
 
     expect(input).not.toBeNull();
-    expect(container.querySelector(".archive-list__sentinel")).not.toBeNull();
+    expect(container.querySelector('[data-slot="archive-sentinel"]')).not.toBeNull();
 
     if (!input) {
       throw new Error("archive search input missing");
@@ -127,7 +129,7 @@ describe("ArchivedSessionList", () => {
 
     await updateSearchInput(input, "planner");
 
-    expect(container.querySelector(".archive-list__sentinel")).toBeNull();
+    expect(container.querySelector('[data-slot="archive-sentinel"]')).toBeNull();
     expect(onSearch).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -151,10 +153,12 @@ describe("ArchivedSessionList", () => {
 
     await renderArchivedSessionList(props);
 
-    const input = container.querySelector<HTMLInputElement>('input[type="search"]');
+    const input = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search archived sessions"]',
+    );
 
     expect(input?.value).toBe("planner");
-    expect(container.querySelector(".archive-list__sentinel")).not.toBeNull();
+    expect(container.querySelector('[data-slot="archive-sentinel"]')).not.toBeNull();
   });
 
   it("load-more sentinel이 교차되면 다음 페이지를 요청한다", async () => {
@@ -172,7 +176,7 @@ describe("ArchivedSessionList", () => {
   it("workspace 그룹을 펼치고 archived session을 선택할 수 있다", async () => {
     const { onSelect } = await renderArchivedSessionList({ hasMore: false, total: 1 });
     const workspaceButton = container.querySelector<HTMLButtonElement>(
-      ".archive-list__workspace .run-list__workspace-row",
+      '[data-slot="archive-workspace-toggle"]',
     );
 
     expect(workspaceButton).not.toBeNull();
@@ -184,7 +188,9 @@ describe("ArchivedSessionList", () => {
       workspaceButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const sessionButton = container.querySelector<HTMLButtonElement>(".archive-list__workspace .run-row");
+    const sessionButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="archive-session-item"]',
+    );
     expect(sessionButton?.textContent).toContain("Check archive search behavior");
 
     if (!sessionButton) {
@@ -208,6 +214,6 @@ describe("ArchivedSessionList", () => {
 
     expect(container.textContent).toContain("Archive sessions are unavailable right now.");
     expect(container.textContent).not.toContain("No archived sessions found.");
-    expect(container.querySelector(".archive-list__sentinel")).toBeNull();
+    expect(container.querySelector('[data-slot="archive-sentinel"]')).toBeNull();
   });
 });

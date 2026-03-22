@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { MonitorPage } from "./MonitorPage";
 
 const meta = {
-  title: "Pages/MonitorPage",
+  title: "Screens/MonitorPage",
   render: () => <MonitorPage />,
 };
 

@@ -12,8 +12,8 @@
 - Package manager: `pnpm` only.
 - Validation stack: `Biome`, `Vitest`, `Playwright`, `Storybook`.
 - State and data strategy: feature-local React state, page-local orchestration, reducer, or context plus fixture-backed selectors. Do not introduce an external global state or cache layer by default.
-- Styling and design-system direction: token source paths are `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`. Shared UI primitives live in `src/shared/ui/` as a custom thin layer.
-- Component source: build task-specific primitives such as `Panel`, `StatusChip`, `MetricPill`, `LaneHeader`, `EventRow`, `GapChip`, and `InspectorTabs` inside the repo. Do not pull in a heavyweight UI kit for v0.1.
+- Styling and design-system direction: semantic token source paths are `src/theme/tokens.css` and `src/theme/motion.css`. The root styling entry lives in `src/app/styles/index.css` and exposes semantic tokens to Tailwind CSS v4 via `@theme inline`. `src/theme/primitives.css` is a migration bridge and deletion target, not a long-term source of truth.
+- Component source: shared UI primitives live in `src/shared/ui/primitives/` as shadcn/ui open-code components plus repo-local variants. Monitor-specific wrappers such as `StatusChip`, `MetricPill`, `PanelSection`, and `InspectorTabs` live in `src/shared/ui/monitor/`. Do not introduce a second component kit.
 - Screenshot and visual review tooling: `Storybook` is the component review and screenshot baseline, and `Playwright` covers interaction and end-to-end validation.
 - Module ownership:
   - `src/app`: bootstrap, providers, shell mount, and global wiring only
@@ -27,6 +27,7 @@
 # Architecture Boundaries
 
 - `src/App.tsx` stays root composition only.
+- `src/app/styles/index.css` is the root styling entry and must stay limited to Tailwind import, theme mapping, and minimal base-layer responsibilities.
 - `src/app/styles/layout.css` is shell layout CSS only and must not absorb widget-specific styling responsibilities.
 - Parser, normalizer, storage adapter, and UI selectors must remain in separate modules.
 - Graph, waterfall, and map renderers share normalized selectors but do not share renderer implementation files.
@@ -46,10 +47,13 @@
 
 - Read order before implementation: task `README.md`, `docs/architecture/frontend-fsd.md`, `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`, `TECH_SPEC.md`, `IMPLEMENTATION_CONTRACT.md`, then `EXECUTION_PLAN.md`.
 - Use split-first file boundaries from `TECH_SPEC.md`; do not append major responsibilities onto starter files.
-- Prefer repo-local primitives and plain CSS layers over optional helper libraries until a deferred trigger is met.
+- Prefer Tailwind utilities, shadcn open-code primitives, and repo-local monitor wrappers over new legacy selector layers.
+- DOM test contracts must prefer accessible queries in this order: role, name, label, then text. Use `data-slot` and domain `data-*` metadata only for graph, canvas, tree, and similarly structural surfaces that do not expose a stable semantic role on their own.
+- Treat `className` as a styling concern only. Do not add or preserve utility or marker classes as a testing API.
 - Preserve preview-first masking, explicit raw opt-in, and `wait_reason` visibility requirements in all slices.
 - Preserve the FSD boundary contract and do not reintroduce legacy compatibility shims or a `shared/domain` catch-all.
 - If a slice needs a new core dependency, update this file and the task implementation contract in the same change.
+- After `SLICE-1`, new UI work must not add widget-local `.css` files or expand `src/theme/primitives.css`.
 
 # Validation Commands
 
@@ -70,8 +74,10 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Package management: `pnpm`
 - Validation and screenshot stack: `Biome`, `Vitest`, `Playwright`, `Storybook`
 - State and data baseline: React local state, reducer, context, selectors
-- Styling baseline: CSS token files under `src/theme/*` and repo-local primitives under `src/shared/ui/`
+- Styling baseline: Tailwind CSS v4 with `@tailwindcss/vite`, semantic CSS variables under `src/theme/tokens.css`, motion tokens under `src/theme/motion.css`, and shadcn open-code primitives under `src/shared/ui/primitives/`
 - Icon library: `lucide-react` (tree-shaking, currentColor support, React 19 optimized) — deferred trigger met: 18 event types require accessibility-safe semantic icons beyond CSS-only shapes
+- Design-system runtime helpers: `class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css`
+- shadcn policy: initialize once, add components individually, and never use `add --all --overwrite`
 
 ## Deferred
 
@@ -95,13 +101,18 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
   - Why deferred: motion scope is intentionally narrow in v0.1.
   - Trigger: minimal motion tokens cannot be maintained with repo-local assets alone.
   - Needed input: concrete motion requirements that exceed the documented token contract.
+- Full theme feature
+  - Why deferred: issue `#4` only establishes theme-ready architecture and Storybook preview parity.
+  - Trigger: issue `#5` begins implementation for user-facing theme toggle, persistence, and system sync.
+  - Needed input: approved runtime ThemeProvider contract and product location for theme controls.
 
 ## Banned/Avoid
 
 - Mixing `npm`, `yarn`, or other package managers with `pnpm`
 - Adding a second state or cache layer that overlaps with local React state responsibilities
-- Adding a second styling stack such as Tailwind, CSS-in-JS, or another token system alongside `src/theme/*`
-- Introducing a heavyweight UI kit for base primitives
+- Reintroducing legacy selector growth in `src/theme/primitives.css` or new widget `.css` files after the Tailwind baseline lands
+- Reintroducing test-only marker classes or class-selector-based DOM contracts in components or tests
+- Introducing a second component kit alongside shadcn open-code primitives
 - Default raw prompt or tool payload persistence
 - Reintroducing `src/shared/domain` or other deleted compatibility surfaces as permanent catch-all modules
 - Optional libraries that bypass locked validation commands or replace the documented source-of-truth docs

@@ -1,0 +1,59 @@
+task: design-system-tailwind-v4-shadcn-ui
+goal: Migrate the monitor to a Tailwind CSS v4 + shadcn/ui-based design system with a Storybook feedback loop and staged retirement of repo-local widget CSS.
+success_criteria:
+  - Storybook exposes foundations, primitives, monitor composites, and migrated screen states so design feedback happens before real screen integration.
+  - The monitor still answers the 30-second run-debugging checklist after chrome, rail, inspector, drawer, and control surfaces move onto design-system primitives.
+  - Semantic monitor tokens for status, spacing, typography, and surfaces are expressed once through CSS variables plus Tailwind v4 theme mapping without a permanent second styling source of truth.
+  - The repo can retire `src/theme/primitives.css` and widget-local presentation CSS in favor of Tailwind utilities, shadcn open-code components, and a minimal theme/token CSS layer.
+major_boundaries:
+  - Tailwind CSS v4 CSS-first foundation, Vite integration, and Storybook preview bridge
+  - shadcn/ui open-code primitive adoption inside `src/shared/ui` with monitor-specific semantic wrappers
+  - Staged migration of monitor chrome, rail, inspector, drawer, and graph-adjacent surfaces
+  - Theme-ready token architecture and follow-up boundary with GitHub issue `#5`
+  - CSS retirement, rollback, and verification rules across existing theme, primitive, and widget stylesheets
+work_type: migration
+impact_flags:
+  - ui_surface_changed
+  - workflow_changed
+  - architecture_significant
+  - operability_changed
+  - high_user_risk
+required_docs:
+  - README.md
+  - EXECUTION_PLAN.md
+  - SPEC_VALIDATION.md
+  - STATUS.md
+  - UX_SPEC.md
+  - UX_BEHAVIOR_ACCESSIBILITY.md
+  - DESIGN_REFERENCES/
+  - TECH_SPEC.md
+  - IMPLEMENTATION_CONTRACT.md
+  - MIGRATION.md
+  - VERIFICATION.md
+  - ROLLBACK.md
+  - ACCEPTANCE.feature
+  - ADRs/
+source_of_truth:
+  ux: UX_SPEC.md
+  ux_behavior: UX_BEHAVIOR_ACCESSIBILITY.md
+  design_references: DESIGN_REFERENCES/manifest.json
+  architecture: TECH_SPEC.md
+  implementation: IMPLEMENTATION_CONTRACT.md
+  migration: MIGRATION.md
+  execution: EXECUTION_PLAN.md
+  verification: VERIFICATION.md
+  rollback: ROLLBACK.md
+  acceptance: ACCEPTANCE.feature
+  validation: SPEC_VALIDATION.md
+ids:
+  requirement_prefix: REQ
+  screen_prefix: SCR
+  flow_prefix: FLOW
+  adr_prefix: ADR
+  acceptance_prefix: AC
+  slice_prefix: SLICE
+  risk_prefix: RISK
+delivery_strategy: ui-first
+execution_topology: keep-local
+validation_gate: blocking
+current_phase: implementation

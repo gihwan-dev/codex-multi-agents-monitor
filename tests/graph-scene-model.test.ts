@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
-  type RunFilters,
   type SelectionState,
 } from "../src/entities/run/index.js";
 import { FIXTURE_DATASETS } from "../src/entities/run/testing.js";
@@ -11,13 +10,6 @@ import {
   computeLaneMetrics,
   computeVisibleRowRange,
 } from "../src/widgets/causal-graph/model/graphLayout.js";
-
-const DEFAULT_FILTERS: RunFilters = {
-  agentId: null,
-  eventType: "all",
-  search: "",
-  errorOnly: false,
-};
 
 function expectDefined<T>(value: T | null | undefined, message: string): T {
   expect(value).toBeDefined();
@@ -52,11 +44,7 @@ describe("buildGraphSceneModel", () => {
       throw new Error("waiting-chain fixture missing");
     }
 
-    const scene = buildGraphSceneModel(
-      dataset,
-      DEFAULT_FILTERS,
-      buildDefaultSelection("trace-fix-002"),
-    );
+    const scene = buildGraphSceneModel(dataset, buildDefaultSelection("trace-fix-002"));
 
     expect(scene.rows.some((row) => row.kind === "event" && row.eventId === "fix2-blocked")).toBe(true);
     expect(scene.edgeBundles.length).toBeGreaterThan(0);
@@ -73,11 +61,7 @@ describe("buildGraphSceneModel", () => {
       throw new Error("dense-parallel fixture missing");
     }
 
-    const scene = buildGraphSceneModel(
-      dataset,
-      DEFAULT_FILTERS,
-      { kind: "event", id: "fix4-lane-1-0" },
-    );
+    const scene = buildGraphSceneModel(dataset, { kind: "event", id: "fix4-lane-1-0" });
 
     expect(scene.hiddenLaneCount).toBeGreaterThan(0);
     expect(scene.lanes.length).toBeLessThan(dataset.lanes.length);
@@ -224,7 +208,7 @@ function buildMultiAgentDataset() {
 describe("multi-agent scene model", () => {
   it("includes subagent spawn events in scene.rows", () => {
     const dataset = buildMultiAgentDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
 
     const subLaneIds = dataset.lanes
       .filter((l) => l.badge === "Subagent")
@@ -240,7 +224,7 @@ describe("multi-agent scene model", () => {
 
   it("maps every event row laneId to a valid scene lane", () => {
     const dataset = buildMultiAgentDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const sceneLaneIds = new Set(scene.lanes.map((l) => l.laneId));
 
     const eventRows = scene.rows.filter((row) => row.kind === "event");
@@ -253,7 +237,7 @@ describe("multi-agent scene model", () => {
 
   it("ensures spawn edge bundle endpoints exist in scene.rows", () => {
     const dataset = buildMultiAgentDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
 
     const rowEventIds = new Set(
       scene.rows.filter((r) => r.kind === "event").map((r) => r.eventId),
@@ -277,7 +261,7 @@ describe("multi-agent scene model", () => {
       throw new Error("expected focused subagent spawn event");
     }
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, {
+    const scene = buildGraphSceneModel(dataset, {
       kind: "event",
       id: focusedEvent.eventId,
     });
@@ -294,7 +278,7 @@ describe("multi-agent scene model", () => {
 
   it("produces valid cardRect for subagent events in layout", () => {
     const dataset = buildMultiAgentDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const laneMetrics = computeLaneMetrics(1200, scene.lanes.length);
     const layoutResult = buildEventRects(scene, laneMetrics);
 
@@ -319,7 +303,7 @@ describe("multi-agent scene model", () => {
 
   it("includes all subagent rows within virtual scroll range for sufficient viewport", () => {
     const dataset = buildMultiAgentDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const laneMetrics = computeLaneMetrics(1200, scene.lanes.length);
     const layoutResult = buildEventRects(scene, laneMetrics);
 
@@ -421,7 +405,7 @@ describe("merge edge scene integration", () => {
 
   it("includes merge edges in the graph scene edge bundles", () => {
     const dataset = buildMergeEdgeDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
 
     const mergeBundles = scene.edgeBundles.filter(
       (b) => b.edgeType === "merge",
@@ -431,7 +415,7 @@ describe("merge edge scene integration", () => {
 
   it("includes merge edge endpoints in selection path", () => {
     const dataset = buildMergeEdgeDataset();
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
 
     const mergeEdges = dataset.edges.filter((e) => e.edgeType === "merge");
     expect(mergeEdges.length).toBeGreaterThanOrEqual(1);
@@ -634,7 +618,7 @@ describe("errored subagent graph rendering", () => {
   it("graph scene model has non-empty rows for errored subagents session", () => {
     const dataset = expectDataset(buildErroredSubagentSnapshot());
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
 
     // The graph MUST have rows (this verifies the graph is not empty)
     expect(scene.rows.length).toBeGreaterThan(0);
@@ -650,7 +634,7 @@ describe("errored subagent graph rendering", () => {
   it("all edges flow forward in time (no backward edges)", () => {
     const dataset = expectDataset(buildErroredSubagentSnapshot());
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const eventsById = new Map(dataset.events.map((e) => [e.eventId, e]));
 
     for (const bundle of scene.edgeBundles) {

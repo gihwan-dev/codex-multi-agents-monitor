@@ -1,0 +1,52 @@
+[
+  {
+    "file": "curated/current-ui-shell-reuse-delta.md",
+    "source_url": "file:///Users/choegihwan/.codex/worktrees/36f8/codex-multi-agent-monitor/src/pages/monitor/ui/MonitorPage.tsx",
+    "captured_at": "2026-03-20T00:00:00Z",
+    "kind": "adopt",
+    "tags": ["reuse-delta", "current-ui", "three-pane", "desktop"],
+    "adopt_reason": "three-pane workbench, warm graphite tone, graph-first reading order는 유지 가치가 있다.",
+    "avoid_reason": "",
+    "notes": "visual identity 전체를 버리지 않고 primitive language만 교체하는 기준 reference."
+  },
+  {
+    "file": "curated/current-style-system-avoid.md",
+    "source_url": "file:///Users/choegihwan/.codex/worktrees/36f8/codex-multi-agent-monitor/src/theme/primitives.css",
+    "captured_at": "2026-03-20T00:00:00Z",
+    "kind": "avoid",
+    "tags": ["legacy-css", "primitive-layer", "accumulation"],
+    "adopt_reason": "",
+    "avoid_reason": "monolithic primitive CSS와 widget-local presentation CSS accumulation은 migration target과 충돌한다.",
+    "notes": "CSS retirement 기준과 split-first 근거."
+  },
+  {
+    "file": "curated/gitkraken-graph-grammar-adopt.md",
+    "source_url": "https://www.gitkraken.com/features/commit-graph",
+    "captured_at": "2026-03-20T00:00:00Z",
+    "kind": "adopt",
+    "tags": ["graph-grammar", "relation-flow", "three-pane"],
+    "adopt_reason": "dense relation grammar와 좌우 detail 분리가 graph-first shell과 잘 맞는다.",
+    "avoid_reason": "",
+    "notes": "git vocabulary는 버리고 relation reading order만 채택한다."
+  },
+  {
+    "file": "curated/linear-calm-chrome-adopt.md",
+    "source_url": "https://linear.app/now/behind-the-latest-design-refresh",
+    "captured_at": "2026-03-20T00:00:00Z",
+    "kind": "adopt",
+    "tags": ["chrome", "calm", "density"],
+    "adopt_reason": "quiet chrome, restrained border/radius, desktop density tone이 monitor shell과 잘 맞는다.",
+    "avoid_reason": "",
+    "notes": "board/product management language는 가져오지 않는다."
+  },
+  {
+    "file": "curated/langfuse-density-adopt.md",
+    "source_url": "https://langfuse.com/changelog/2024-06-12-timeline-view",
+    "captured_at": "2026-03-20T00:00:00Z",
+    "kind": "adopt",
+    "tags": ["observability", "timeline", "density"],
+    "adopt_reason": "dense trace reading rhythm과 bottleneck scanning 관점이 monitor shell과 호환된다.",
+    "avoid_reason": "",
+    "notes": "timeline mental model은 graph-adjacent shell density 기준으로 사용한다."
+  }
+]

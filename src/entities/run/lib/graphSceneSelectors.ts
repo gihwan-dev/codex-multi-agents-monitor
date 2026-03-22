@@ -7,20 +7,17 @@ import type {
   GraphSceneModel,
   GraphSceneRow,
   RunDataset,
-  RunFilters,
   SelectionState,
 } from "../model/types.js";
-import {
-  buildSelectionPath,
-  eventMatchesFilters,
-} from "./graphSelectionPath.js";
+import { buildSelectionPath } from "./graphSelectionPath.js";
 import { sortEvents } from "./selectorShared.js";
 
 const GAP_THRESHOLD_MS = 30_000;
 const LARGE_RUN_LANE_THRESHOLD = 8;
 
 function formatGapLabel(durationMs: number, idleLaneCount: number) {
-  return `// ${formatDuration(durationMs)} hidden · ${idleLaneCount} lanes idle //`;
+  const laneLabel = idleLaneCount === 1 ? "lane" : "lanes";
+  return `${formatDuration(durationMs)} idle · ${idleLaneCount} ${laneLabel} idle`;
 }
 
 function buildGraphLanes(dataset: RunDataset) {
@@ -42,25 +39,18 @@ function buildGraphLanes(dataset: RunDataset) {
   };
 }
 
-function buildGraphVisibleEvents(
-  dataset: RunDataset,
-  filters: RunFilters,
-  selectionEventIds: Set<string>,
-) {
-  return sortEvents(dataset.events).filter((event) => {
-    return selectionEventIds.has(event.eventId) || eventMatchesFilters(event, filters);
-  });
+function buildGraphVisibleEvents(dataset: RunDataset) {
+  return sortEvents(dataset.events);
 }
 
 export function buildGraphSceneModel(
   dataset: RunDataset,
-  filters: RunFilters,
   selection: SelectionState | null,
 ): GraphSceneModel {
   const selectionPath = buildSelectionPath(dataset, selection);
   const selectionPathEventIds = new Set(selectionPath.eventIds);
   const selectionPathEdgeIds = new Set(selectionPath.edgeIds);
-  const visibleEvents = buildGraphVisibleEvents(dataset, filters, selectionPathEventIds);
+  const visibleEvents = buildGraphVisibleEvents(dataset);
   const hasMultiAgentTopology = dataset.lanes.length > 1 && dataset.edges.length > 0;
   const graphLanes = buildGraphLanes(dataset);
   const visibleLanes = graphLanes.lanes;

@@ -46,7 +46,7 @@ describe("PromptAssemblyView", () => {
 
     expect(container.textContent).toContain("preview only");
 
-    const header = container.querySelector<HTMLButtonElement>(".layer-card__header");
+    const header = container.querySelector<HTMLButtonElement>('[data-slot="prompt-layer-toggle"]');
     if (!header) {
       throw new Error("prompt assembly header missing");
     }
@@ -64,7 +64,7 @@ describe("PromptAssemblyView", () => {
       root.render(createElement(PromptAssemblyView, { assembly, rawEnabled: true }));
     });
 
-    const header = container.querySelector<HTMLButtonElement>(".layer-card__header");
+    const header = container.querySelector<HTMLButtonElement>('[data-slot="prompt-layer-toggle"]');
     if (!header) {
       throw new Error("prompt assembly header missing");
     }

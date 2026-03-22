@@ -8,6 +8,7 @@
 }
 
 .workspace {
+  --resize-handle-hit-width: 14px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0;
@@ -28,11 +29,11 @@
 }
 
 .workspace__rail {
-  grid-template-columns: 1fr 2px;
+  grid-template-columns: 1fr var(--resize-handle-hit-width);
 }
 
 .workspace__inspector {
-  grid-template-columns: 2px 1fr;
+  grid-template-columns: var(--resize-handle-hit-width) 1fr;
   overflow: hidden;
 }
 

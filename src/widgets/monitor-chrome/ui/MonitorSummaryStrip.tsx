@@ -11,10 +11,17 @@ export function MonitorSummaryStrip({
   activeFocus,
 }: MonitorSummaryStripProps) {
   return (
-    <section className="summary-strip summary-strip--inline">
-      <span className="summary-strip__focus">{activeFocus ?? "No focus"}</span>
+    <section className="flex flex-wrap items-center gap-3 border border-x-0 border-white/8 bg-white/[0.02] px-4 py-2">
+      <span className="shrink-0 text-[0.8rem] text-muted-foreground">
+        {activeFocus ?? "No focus"}
+      </span>
       {facts.map((fact) => (
-        <MetricPill key={fact.label} label={fact.label} value={fact.value} />
+        <MetricPill
+          key={fact.label}
+          label={fact.label}
+          value={fact.value}
+          className="min-w-auto grid-flow-col items-center gap-2 px-2.5 py-1.5"
+        />
       ))}
     </section>
   );

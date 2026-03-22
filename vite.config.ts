@@ -1,3 +1,5 @@
+import { fileURLToPath, URL } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { loadRecentSessionSnapshotsForWeb } from "./scripts/sessionSnapshots.mjs";
@@ -41,9 +43,14 @@ function codexSessionSnapshotPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), codexSessionSnapshotPlugin()],
+  plugins: [react(), tailwindcss(), codexSessionSnapshotPlugin()],
   base: "./",
   clearScreen: false,
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

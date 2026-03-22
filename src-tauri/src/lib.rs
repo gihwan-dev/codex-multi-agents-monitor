@@ -1,3 +1,4 @@
+use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -7,9 +8,10 @@ use std::{
     io::{self, BufRead, BufReader},
     path::{Path, PathBuf},
     sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
-const MAX_RECENT_WORKSPACES: usize = 4;
+const MAX_RECENT_PARENT_SESSIONS: usize = 24;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -118,10 +120,7 @@ fn load_recent_session_snapshots() -> Vec<SessionLogSnapshot> {
 fn resolve_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity> {
     let git_metadata_path = repo_path.join(".git");
     if git_metadata_path.is_dir() {
-        return Ok(build_workspace_identity(
-            normalize_path(repo_path)?,
-            false,
-        ));
+        return Ok(build_workspace_identity(normalize_path(repo_path)?, false));
     }
 
     if git_metadata_path.is_file() {
@@ -144,11 +143,11 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     let codex_home = resolve_codex_home()?;
     let projects_root = resolve_projects_root()?;
     let sessions_root = codex_home.join("sessions");
+    let archived_thread_ids = load_archived_thread_ids(&codex_home).unwrap_or_default();
     let mut session_files = Vec::new();
     collect_jsonl_files(&sessions_root, &mut session_files)?;
-    session_files.sort_by(|left, right| right.cmp(left));
+    sort_session_files_by_recent_activity(&mut session_files);
 
-    let mut seen_origin_paths = HashSet::new();
     let mut parent_snapshots = Vec::new();
     let mut subagent_snapshots = Vec::new();
 
@@ -162,7 +161,7 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
             Err(_) => continue,
         }
 
-        if parent_snapshots.len() >= MAX_RECENT_WORKSPACES {
+        if parent_snapshots.len() >= MAX_RECENT_PARENT_SESSIONS {
             continue;
         }
 
@@ -172,10 +171,14 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
             Err(_) => continue,
         };
 
-        if seen_origin_paths.insert(snapshot.origin_path.clone()) {
-            parent_snapshots.push(snapshot);
+        if archived_thread_ids.contains(&snapshot.session_id) {
+            continue;
         }
+
+        parent_snapshots.push(snapshot);
     }
+
+    retain_recent_parent_snapshots(&mut parent_snapshots);
 
     for parent in &mut parent_snapshots {
         let matched: Vec<SubagentSnapshot> = subagent_snapshots
@@ -193,6 +196,88 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     }
 
     Ok(parent_snapshots)
+}
+
+fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<String>> {
+    let state_database = resolve_codex_state_database(codex_home)?;
+    let connection = Connection::open_with_flags(
+        state_database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sqlite_error)?;
+    let mut statement = connection
+        .prepare("SELECT id FROM threads WHERE archived = 1")
+        .map_err(map_sqlite_error)?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(map_sqlite_error)?;
+
+    let mut archived_thread_ids = HashSet::new();
+    for row in rows {
+        archived_thread_ids.insert(row.map_err(map_sqlite_error)?);
+    }
+
+    Ok(archived_thread_ids)
+}
+
+fn resolve_codex_state_database(codex_home: &Path) -> io::Result<PathBuf> {
+    let mut candidates: Vec<PathBuf> = fs::read_dir(codex_home)?
+        .filter_map(|entry| entry.ok().map(|item| item.path()))
+        .filter(|path| {
+            path.extension().and_then(|value| value.to_str()) == Some("sqlite")
+                && path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|name| name == "state.sqlite" || name.starts_with("state_"))
+        })
+        .collect();
+
+    candidates.sort_by(|left, right| {
+        recent_file_modified_at(right)
+            .cmp(&recent_file_modified_at(left))
+            .then_with(|| right.cmp(left))
+    });
+
+    candidates.into_iter().next().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "codex state sqlite database missing",
+        )
+    })
+}
+
+fn map_sqlite_error(error: rusqlite::Error) -> io::Error {
+    io::Error::other(error)
+}
+
+fn sort_session_files_by_recent_activity(files: &mut [PathBuf]) {
+    files.sort_by(|left, right| {
+        recent_file_modified_at(right)
+            .cmp(&recent_file_modified_at(left))
+            .then_with(|| right.cmp(left))
+    });
+}
+
+fn recent_file_modified_at(path: &Path) -> SystemTime {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or(UNIX_EPOCH)
+}
+
+fn sort_snapshots_by_recent_activity(
+    left: &SessionLogSnapshot,
+    right: &SessionLogSnapshot,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then_with(|| right.started_at.cmp(&left.started_at))
+        .then_with(|| right.session_id.cmp(&left.session_id))
+}
+
+fn retain_recent_parent_snapshots(parent_snapshots: &mut Vec<SessionLogSnapshot>) {
+    parent_snapshots.sort_by(sort_snapshots_by_recent_activity);
+    parent_snapshots.truncate(MAX_RECENT_PARENT_SESSIONS);
 }
 
 fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -374,12 +459,14 @@ fn read_session_snapshot(
         return Ok(None);
     }
 
-    let session_meta =
-        serde_json::from_str::<Value>(&first_line).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let payload = session_meta
         .get("payload")
         .and_then(Value::as_object)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing"))?;
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "session meta payload missing")
+        })?;
 
     if payload.get("source").and_then(Value::as_str).is_none() {
         return Ok(None);
@@ -411,7 +498,8 @@ fn read_session_snapshot(
     let mut prompt_assembly = Vec::new();
 
     // Extract base_instructions from session_meta
-    if let Some(bi_text) = payload.get("base_instructions")
+    if let Some(bi_text) = payload
+        .get("base_instructions")
         .and_then(|bi| bi.get("text"))
         .and_then(Value::as_str)
     {
@@ -425,7 +513,7 @@ fn read_session_snapshot(
     }
 
     let workspace_identity =
-        resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
+        resolve_live_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
     let Some(workspace_identity) = workspace_identity else {
         return Ok(None);
     };
@@ -494,22 +582,48 @@ fn read_session_snapshot(
     }))
 }
 
+fn resolve_live_session_workspace_identity(
+    workspace_path: &Path,
+    projects_root: &Path,
+) -> io::Result<WorkspaceIdentity> {
+    if is_conductor_workspace_path(workspace_path) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conductor workspaces are excluded from live sessions",
+        ));
+    }
+
+    let workspace_identity = resolve_session_workspace_identity(workspace_path, projects_root)?;
+    if !Path::new(&workspace_identity.origin_path).exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "live session workspace origin missing",
+        ));
+    }
+
+    Ok(workspace_identity)
+}
+
 fn resolve_session_workspace_identity(
     workspace_path: &Path,
     projects_root: &Path,
 ) -> io::Result<WorkspaceIdentity> {
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
     if let Ok(identity) = resolve_workspace_identity(workspace_path) {
-        if Path::new(&identity.origin_path).starts_with(projects_root) {
+        if Path::new(&identity.origin_path).starts_with(&normalized_projects_root) {
             return Ok(identity);
         }
     }
 
-    let inferred_origin = infer_projects_origin(workspace_path, projects_root).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "workspace does not resolve into Documents/Projects",
-        )
-    })?;
+    let inferred_origin = infer_projects_origin(workspace_path, &normalized_projects_root)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "workspace does not resolve into Documents/Projects",
+            )
+        })?;
 
     Ok(build_workspace_identity(
         inferred_origin.clone(),
@@ -519,22 +633,35 @@ fn resolve_session_workspace_identity(
 
 fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<PathBuf> {
     let normalized_workspace = normalize_path(workspace_path).ok()?;
+    let normalized_projects_root =
+        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+
     let workspace_file_name = normalized_workspace.file_name()?.to_str()?;
 
-    let candidate = if normalized_workspace.starts_with(projects_root) {
+    let candidate = if normalized_workspace.starts_with(&normalized_projects_root) {
         normalized_workspace
     } else {
-        projects_root.join(workspace_file_name)
+        normalized_projects_root.join(workspace_file_name)
     };
 
     let normalized_candidate = normalize_path(&candidate).unwrap_or(candidate);
-    if normalized_candidate.starts_with(projects_root) {
+    if normalized_candidate.starts_with(&normalized_projects_root) {
         Some(normalized_candidate)
     } else {
         None
     }
 }
 
+fn is_conductor_workspace_path(workspace_path: &Path) -> bool {
+    let segments: Vec<&str> = workspace_path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+
+    segments
+        .windows(4)
+        .any(|window| matches!(window, ["conductor", "workspaces", _, _]))
+}
 
 fn classify_developer_content(text: &str) -> (String, String) {
     if text.starts_with("<permissions") {
@@ -560,13 +687,20 @@ fn classify_user_context(text: &str) -> (String, String) {
         ("environment".into(), "Environment Context".into())
     } else if trimmed.starts_with("Automation:") {
         ("automation".into(), "Automation Envelope".into())
-    } else if trimmed.get(..26).map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN")).unwrap_or(false) {
+    } else if trimmed
+        .get(..26)
+        .map(|prefix| prefix.eq_ignore_ascii_case("PLEASE IMPLEMENT THIS PLAN"))
+        .unwrap_or(false)
+    {
         ("delegated".into(), "Delegated Plan".into())
     } else if trimmed.starts_with("<skill>") {
         let name = extract_skill_name(trimmed);
         ("skill".into(), format!("Skill: {name}"))
     } else if trimmed.starts_with("<subagent_notification>") {
-        ("subagent-notification".into(), "Subagent Notification".into())
+        (
+            "subagent-notification".into(),
+            "Subagent Notification".into(),
+        )
     } else if trimmed.starts_with("<turn_aborted>") {
         ("system".into(), "Turn Aborted".into())
     } else {
@@ -609,7 +743,10 @@ fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemblyLayer>) {
         };
 
         // Skip per-turn data: user prompts, skills, subagent notifications
-        if matches!(layer_type.as_str(), "user" | "skill" | "subagent-notification") {
+        if matches!(
+            layer_type.as_str(),
+            "user" | "skill" | "subagent-notification"
+        ) {
             continue;
         }
 
@@ -679,7 +816,10 @@ fn extract_message_text(content: &Value) -> Option<String> {
         match item {
             Value::String(value) if !value.trim().is_empty() => parts.push(value.trim().to_owned()),
             Value::Object(value) => {
-                let content_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
+                let content_type = value
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
 
                 if content_type == "input_image" {
                     parts.push("[Image]".to_owned());
@@ -760,13 +900,11 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                     .get("arguments")
                     .and_then(Value::as_str)
                     .and_then(|args| {
-                        serde_json::from_str::<Value>(args)
-                            .ok()
-                            .and_then(|v| {
-                                v.get("cmd")
-                                    .and_then(Value::as_str)
-                                    .map(|c| truncate_utf8_safe(c, 500))
-                            })
+                        serde_json::from_str::<Value>(args).ok().and_then(|v| {
+                            v.get("cmd")
+                                .and_then(Value::as_str)
+                                .map(|c| truncate_utf8_safe(c, 500))
+                        })
                     })
                     .or_else(|| {
                         payload
@@ -774,8 +912,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                             .and_then(Value::as_str)
                             .map(|args| truncate_utf8_safe(args, 500))
                     }),
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => payload
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
+                | "send_input" => payload
                     .get("arguments")
                     .and_then(Value::as_str)
                     .map(|args| truncate_utf8_safe(args, 2000)),
@@ -853,8 +991,8 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
                         }
                     })
                 }
-                "spawn_agent" | "close_agent" | "wait" | "wait_agent"
-                | "resume_agent" | "send_input" => payload
+                "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
+                | "send_input" => payload
                     .get("arguments")
                     .and_then(Value::as_str)
                     .or_else(|| payload.get("input").and_then(Value::as_str))
@@ -1046,9 +1184,7 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
         }
         "token_count" => {
             let info = payload.get("info").and_then(Value::as_object)?;
-            let last_usage = info
-                .get("last_token_usage")
-                .and_then(Value::as_object)?;
+            let last_usage = info.get("last_token_usage").and_then(Value::as_object)?;
             let input = last_usage
                 .get("input_tokens")
                 .and_then(Value::as_u64)
@@ -1298,6 +1434,9 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_default()
         .to_owned();
+    if is_conductor_workspace_path(Path::new(&workspace_path)) {
+        return Ok(None);
+    }
     let session_id = payload
         .get("id")
         .and_then(Value::as_str)
@@ -1310,12 +1449,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
         .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
         .unwrap_or_default()
         .to_owned();
-    let display_name = Path::new(&workspace_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|n| !n.is_empty())
-        .unwrap_or("unknown")
-        .to_owned();
+    let (origin_path, display_name) = resolve_archived_workspace_identity(&workspace_path);
 
     let mut model: Option<String> = None;
     let mut first_user_message: Option<String> = None;
@@ -1332,9 +1466,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
             Err(_) => continue,
         };
 
-        if model.is_none()
-            && entry.get("type").and_then(Value::as_str) == Some("turn_context")
-        {
+        if model.is_none() && entry.get("type").and_then(Value::as_str) == Some("turn_context") {
             model = entry
                 .get("payload")
                 .and_then(|p| p.get("model"))
@@ -1365,7 +1497,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
     Ok(Some(ArchivedSessionIndex {
         session_id,
         workspace_path: workspace_path.clone(),
-        origin_path: workspace_path,
+        origin_path,
         display_name,
         started_at: started_at.clone(),
         updated_at: started_at,
@@ -1400,6 +1532,9 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
         .and_then(Value::as_str)
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_default();
+    if is_conductor_workspace_path(Path::new(workspace_path)) {
+        return Ok(None);
+    }
     let started_at = payload
         .get("timestamp")
         .and_then(Value::as_str)
@@ -1421,7 +1556,8 @@ fn read_archived_session_full(session_file: &Path) -> io::Result<Option<SessionL
     let mut prompt_assembly = Vec::new();
 
     // Extract base_instructions from session_meta
-    if let Some(bi_text) = payload.get("base_instructions")
+    if let Some(bi_text) = payload
+        .get("base_instructions")
         .and_then(|bi| bi.get("text"))
         .and_then(Value::as_str)
     {
@@ -1537,9 +1673,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
     use std::{
         sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
+        thread,
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -1567,6 +1705,53 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    fn build_parent_snapshot(
+        session_id: &str,
+        origin_path: &str,
+        started_at: &str,
+        updated_at: &str,
+    ) -> SessionLogSnapshot {
+        SessionLogSnapshot {
+            session_id: session_id.to_owned(),
+            forked_from_id: None,
+            workspace_path: origin_path.to_owned(),
+            origin_path: origin_path.to_owned(),
+            display_name: session_id.to_owned(),
+            started_at: started_at.to_owned(),
+            updated_at: updated_at.to_owned(),
+            model: None,
+            entries: Vec::new(),
+            subagents: Vec::new(),
+            is_archived: false,
+            prompt_assembly: Vec::new(),
+        }
+    }
+
+    fn create_state_database(path: &Path, archived_ids: &[&str]) {
+        let connection = Connection::open(path).expect("state database should be created");
+        connection
+            .execute_batch(
+                "CREATE TABLE threads (
+                    id TEXT PRIMARY KEY,
+                    archived INTEGER NOT NULL
+                );",
+            )
+            .expect("threads table should be created");
+
+        for thread_id in archived_ids {
+            connection
+                .execute(
+                    "INSERT INTO threads (id, archived) VALUES (?1, 1)",
+                    [thread_id],
+                )
+                .expect("archived thread should be inserted");
+        }
+    }
+
+    fn write_session_file(path: &Path, lines: &[&str]) {
+        fs::write(path, lines.join("\n")).expect("session file should be written");
     }
 
     #[test]
@@ -1618,6 +1803,158 @@ mod tests {
     }
 
     #[test]
+    fn identifies_conductor_workspace_path_from_segments() {
+        let workspace_path = Path::new("/Users/test/conductor/workspaces/React-Dashboard/hanoi");
+        let plain_path = Path::new("/Users/test/Documents/Projects/React-Dashboard");
+
+        assert!(is_conductor_workspace_path(workspace_path));
+        assert!(!is_conductor_workspace_path(plain_path));
+    }
+
+    #[test]
+    fn rejects_live_session_when_inferred_origin_path_is_missing() {
+        let temp_dir = TempDir::new("missing-live-origin");
+        let projects_root = temp_dir.path.join("Documents/Projects");
+        let workspace_path = temp_dir.path.join("tmp/codex-routing-smoke-missing");
+
+        fs::create_dir_all(&projects_root).expect("projects root should exist");
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+
+        let error = resolve_live_session_workspace_identity(&workspace_path, &projects_root)
+            .expect_err("missing origin path should be rejected for live sessions");
+
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn rejects_live_conductor_workspace_before_identity_resolution() {
+        let temp_dir = TempDir::new("live-conductor");
+        let projects_root = temp_dir.path.join("Documents/Projects");
+        let workspace_path = temp_dir
+            .path
+            .join("conductor/workspaces/React-Dashboard/kyiv");
+
+        fs::create_dir_all(&projects_root).expect("projects root should exist");
+        fs::create_dir_all(&workspace_path).expect("workspace path should exist");
+
+        let error = resolve_live_session_workspace_identity(&workspace_path, &projects_root)
+            .expect_err("conductor workspaces should be excluded from live sessions");
+
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn skips_conductor_archived_index_entries() {
+        let temp_dir = TempDir::new("archived-index-conductor");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        write_session_file(
+            &session_file,
+            &[
+                r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
+            ],
+        );
+
+        let entry =
+            read_archived_index_entry(&session_file).expect("archived index read should succeed");
+
+        assert!(entry.is_none());
+    }
+
+    #[test]
+    fn skips_conductor_archived_snapshots() {
+        let temp_dir = TempDir::new("archived-full-conductor");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        write_session_file(
+            &session_file,
+            &[
+                r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"conductor-archived","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/Users/choegihwan/conductor/workspaces/React-Dashboard/hanoi","source":"exec"}}"#,
+            ],
+        );
+
+        let snapshot = read_archived_session_full(&session_file)
+            .expect("archived snapshot read should succeed");
+
+        assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn loads_archived_thread_ids_from_latest_state_database() {
+        let temp_dir = TempDir::new("state-database");
+        let older_database = temp_dir.path.join("state_4.sqlite");
+        let newer_database = temp_dir.path.join("state_5.sqlite");
+
+        create_state_database(&older_database, &["old-archived"]);
+        thread::sleep(Duration::from_millis(20));
+        create_state_database(&newer_database, &["new-archived", "newer-archived"]);
+
+        let archived_thread_ids =
+            load_archived_thread_ids(&temp_dir.path).expect("archived thread ids should load");
+
+        assert!(archived_thread_ids.contains("new-archived"));
+        assert!(archived_thread_ids.contains("newer-archived"));
+        assert!(!archived_thread_ids.contains("old-archived"));
+    }
+
+    #[test]
+    fn sorts_recent_session_files_by_modified_time_before_filename() {
+        let temp_dir = TempDir::new("recent-files");
+        let older_started = temp_dir.path.join("rollout-2026-03-20-old.jsonl");
+        let newer_started = temp_dir.path.join("rollout-2026-03-21-new.jsonl");
+
+        fs::write(&older_started, "old").expect("older file should be created");
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&newer_started, "new").expect("newer file should be created");
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&older_started, "old updated").expect("older file should be refreshed");
+
+        let mut files = vec![newer_started.clone(), older_started.clone()];
+        sort_session_files_by_recent_activity(&mut files);
+
+        assert_eq!(files[0], older_started);
+        assert_eq!(files[1], newer_started);
+    }
+
+    #[test]
+    fn retains_multiple_recent_parent_snapshots_from_the_same_origin() {
+        let mut snapshots = vec![
+            build_parent_snapshot(
+                "design-task",
+                "/projects/codex-multi-agent-monitor",
+                "2026-03-20T13:34:33.193Z",
+                "2026-03-21T14:54:48.938Z",
+            ),
+            build_parent_snapshot(
+                "follow-up-fix",
+                "/projects/codex-multi-agent-monitor",
+                "2026-03-21T14:40:19.429Z",
+                "2026-03-21T14:40:57.661Z",
+            ),
+            build_parent_snapshot(
+                "daily-diary",
+                "/projects/Obsidian-frontend-journey",
+                "2026-03-21T14:50:19.523Z",
+                "2026-03-21T14:50:28.647Z",
+            ),
+        ];
+
+        retain_recent_parent_snapshots(&mut snapshots);
+
+        assert_eq!(snapshots.len(), 3);
+        assert_eq!(snapshots[0].session_id, "design-task");
+        assert_eq!(snapshots[1].session_id, "daily-diary");
+        assert_eq!(snapshots[2].session_id, "follow-up-fix");
+        assert_eq!(
+            snapshots
+                .iter()
+                .filter(|snapshot| snapshot.origin_path == "/projects/codex-multi-agent-monitor")
+                .count(),
+            2,
+        );
+    }
+
+    #[test]
     fn rejects_linked_worktree_without_commondir() {
         let temp_dir = TempDir::new("missing-commondir");
         let repo_path = temp_dir.path.join("broken-worktree");
@@ -1625,10 +1962,14 @@ mod tests {
 
         fs::create_dir_all(&repo_path).expect("repo dir should exist");
         fs::create_dir_all(&git_dir).expect("git dir should exist");
-        fs::write(repo_path.join(".git"), format!("gitdir: {}\n", git_dir.display()))
-            .expect("gitdir file should be written");
+        fs::write(
+            repo_path.join(".git"),
+            format!("gitdir: {}\n", git_dir.display()),
+        )
+        .expect("gitdir file should be written");
 
-        let error = resolve_workspace_identity(&repo_path).expect_err("missing commondir should fail");
+        let error =
+            resolve_workspace_identity(&repo_path).expect_err("missing commondir should fail");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 
@@ -1691,7 +2032,11 @@ mod tests {
         assert_eq!(snapshot.model, Some("gpt-5.3-codex-spark".to_owned()));
 
         // Only subagent's own entries: task_started, user message, task_complete
-        assert_eq!(snapshot.entries.len(), 3, "fork context entries should be stripped");
+        assert_eq!(
+            snapshot.entries.len(),
+            3,
+            "fork context entries should be stripped"
+        );
         assert_eq!(snapshot.entries[0].entry_type, "task_started");
         assert_eq!(snapshot.entries[1].entry_type, "message");
         assert_eq!(snapshot.entries[1].role.as_deref(), Some("user"));
@@ -1759,7 +2104,11 @@ mod tests {
 
         assert_eq!(snapshot.agent_nickname, "Hume");
         // Only subagent entries: task_started, assistant message, task_complete
-        assert_eq!(snapshot.entries.len(), 3, "fork context with single incomplete turn should be stripped");
+        assert_eq!(
+            snapshot.entries.len(),
+            3,
+            "fork context with single incomplete turn should be stripped"
+        );
         assert_eq!(snapshot.entries[0].entry_type, "task_started");
         assert_eq!(snapshot.entries[1].entry_type, "message");
         assert_eq!(snapshot.entries[1].role.as_deref(), Some("assistant"));

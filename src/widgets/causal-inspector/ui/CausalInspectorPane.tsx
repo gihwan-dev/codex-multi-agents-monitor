@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { DrawerTab, InspectorCausalSummary, SelectionState } from "../../../entities/run";
+import { cn } from "../../../shared/lib";
 import { Panel } from "../../../shared/ui";
-import "./causal-inspector.css";
+import { Button, ScrollArea, Separator } from "../../../shared/ui/primitives";
 
 const PAYLOAD_ACTIONS: Array<{ tab: DrawerTab; label: string }> = [
   { tab: "artifacts", label: "Artifacts" },
@@ -47,7 +48,7 @@ export function CausalInspectorPane({
             title: "Direct cause",
             content: (
               <>
-                <p>{summary.whyBlocked}</p>
+                <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.whyBlocked}</p>
                 {firstUpstream ? (
                   <JumpButton
                     label={firstUpstream.label}
@@ -88,7 +89,7 @@ export function CausalInspectorPane({
             content: (
               <>
                 {summary.affectedAgentCount ? (
-                  <p className="inspector__affected-count">
+                  <p className="text-[0.82rem] font-medium text-[var(--color-active)]">
                     {summary.affectedAgentCount} agent
                     {summary.affectedAgentCount !== 1 ? "s" : ""} affected
                     {summary.downstreamWaitingCount
@@ -115,8 +116,8 @@ export function CausalInspectorPane({
             key: "suggested-next",
             title: "Suggested next",
             content: (
-              <div className="inspector__suggested-action">
-                <p>{summary.nextAction}</p>
+              <div className="rounded-r-md border-l-2 border-[var(--color-active)] bg-[color:color-mix(in_srgb,var(--color-active)_6%,transparent)] px-3 py-2">
+                <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.nextAction}</p>
               </div>
             ),
           },
@@ -131,26 +132,41 @@ export function CausalInspectorPane({
 
   return (
     <Panel
+      panelSlot={compact ? "compact-inspector" : "inspector-pane"}
       title="Inspector"
-      className={`inspector ${open ? "" : "inspector--closed"} ${compact ? "inspector--compact" : ""}`.trim()}
+      className={cn(
+        "flex h-full flex-1",
+        compact
+          ? "rounded-[var(--radius-panel)] border"
+          : "rounded-none border-l-0 max-[1180px]:rounded-[var(--radius-panel)] max-[1180px]:border",
+        !open && "opacity-90",
+      )}
       actions={
-        <button type="button" className="button button--ghost" onClick={onToggleOpen}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+          onClick={onToggleOpen}
+        >
           {open ? "Close" : "Open"}
-        </button>
+        </Button>
       }
     >
       {!open && compact ? <CompactSummary summary={summary} /> : null}
       {!open && !compact ? (
-        <p className="inspector__empty">Inspector closed. Press I to reopen.</p>
+        <p className="text-sm text-muted-foreground">Inspector closed. Press I to reopen.</p>
       ) : null}
       {open ? (
-        <div className="inspector__content">
-          {sections.map((section) => (
-            <Section key={section.key} title={section.title}>
-              {section.content}
-            </Section>
-          ))}
-        </div>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="grid gap-3 pr-3">
+            {sections.map((section) => (
+              <Section key={section.key} title={section.title}>
+                {section.content}
+              </Section>
+            ))}
+          </div>
+        </ScrollArea>
       ) : null}
     </Panel>
   );
@@ -158,15 +174,15 @@ export function CausalInspectorPane({
 
 function CompactSummary({ summary }: { summary: InspectorCausalSummary | null }) {
   if (!summary) {
-    return <p className="inspector__empty">Select a row to preview the active blocker path.</p>;
+    return <p className="text-sm text-muted-foreground">Select a row to preview the active blocker path.</p>;
   }
 
   return (
-    <div className="inspector__compact-summary">
-      <p className="inspector__compact-label">Selection summary</p>
-      <strong>{summary.title}</strong>
-      <p>{summary.preview}</p>
-      <div className="inspector__compact-meta">
+    <div className="grid gap-2">
+      <p className="text-[0.78rem] text-muted-foreground">Selection summary</p>
+      <strong className="text-sm font-semibold">{summary.title}</strong>
+      <p className="text-sm text-muted-foreground">{summary.preview}</p>
+      <div className="flex flex-wrap gap-2 text-[0.78rem] text-muted-foreground">
         {summary.facts.slice(0, 3).map((fact) => (
           <span key={fact.label}>{fact.value}</span>
         ))}
@@ -178,7 +194,7 @@ function CompactSummary({ summary }: { summary: InspectorCausalSummary | null })
 function SummarySection({ summary }: { summary: InspectorCausalSummary | null }) {
   if (!summary) {
     return (
-      <p className="inspector__empty">
+      <p className="text-sm text-muted-foreground">
         Select a row, edge, or artifact to inspect its causal summary.
       </p>
     );
@@ -186,13 +202,27 @@ function SummarySection({ summary }: { summary: InspectorCausalSummary | null })
 
   return (
     <>
-      <h3>{summary.title}</h3>
-      <p>{summary.preview}</p>
-      <dl className="definition-list">
+      <h3 className="text-[0.95rem] font-semibold leading-5">{summary.title}</h3>
+      <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.preview}</p>
+      <Separator className="bg-white/8" />
+      <dl className="grid gap-2">
         {summary.facts.map((fact) => (
-          <div key={fact.label}>
-            <dt>{fact.label}</dt>
-            <dd className={fact.emphasis && fact.emphasis !== "default" ? `definition-list__value--${fact.emphasis}` : undefined}>{fact.value}</dd>
+          <div
+            key={fact.label}
+            className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2"
+          >
+            <dt className="text-[0.78rem] font-medium text-muted-foreground">{fact.label}</dt>
+            <dd
+              className={cn(
+                "m-0 rounded px-2 py-1 text-[0.78rem] tabular-nums",
+                "bg-white/[0.07]",
+                fact.emphasis === "danger" && "text-[var(--color-failed)]",
+                fact.emphasis === "warning" && "text-[var(--color-waiting)]",
+                fact.emphasis === "accent" && "text-[var(--color-active)]",
+              )}
+            >
+              {fact.value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -208,26 +238,28 @@ function PayloadSection({
   onOpenDrawer: (tab: DrawerTab) => void;
 }) {
   if (!summary) {
-    return <p className="inspector__empty">No payload preview yet.</p>;
+    return <p className="text-sm text-muted-foreground">No payload preview yet.</p>;
   }
 
   return (
-    <>
-      <p>{summary.payloadPreview}</p>
-      <span className="inspector__payload-copy">{summary.rawStatusLabel}</span>
-      <div className="inspector__payload-actions">
+    <div className="grid gap-3">
+      <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.payloadPreview}</p>
+      <span className="text-[0.82rem] text-muted-foreground">{summary.rawStatusLabel}</span>
+      <div className="flex flex-wrap gap-2">
         {PAYLOAD_ACTIONS.map((action) => (
-          <button
+          <Button
             key={action.tab}
             type="button"
-            className="button button--ghost"
+            variant="outline"
+            size="xs"
+            className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
             onClick={() => onOpenDrawer(action.tab)}
           >
             {action.label}
-          </button>
+          </Button>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -241,20 +273,26 @@ function JumpButton({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="inspector-jump" onClick={onClick}>
-      <strong>{label}</strong>
-      <span>{description}</span>
+    <button
+      type="button"
+      className="grid gap-1 rounded-[10px] border border-white/8 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45"
+      onClick={onClick}
+    >
+      <strong className="text-sm font-semibold">{label}</strong>
+      <span className="text-[0.78rem] text-muted-foreground">{description}</span>
     </button>
   );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="inspector-section">
-      <header className="inspector-section__header">
-        <h3>{title}</h3>
+    <section className="grid gap-2 rounded-[10px] border border-white/8 bg-white/[0.025] px-3 py-3">
+      <header>
+        <h3 className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
+          {title}
+        </h3>
       </header>
-      <div className="inspector-section__body">{children}</div>
+      <div className="grid gap-3">{children}</div>
     </section>
   );
 }

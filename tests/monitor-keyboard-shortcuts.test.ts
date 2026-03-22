@@ -27,7 +27,6 @@ function buildShortcutContext(traceId?: string) {
 
   return {
     activeDataset: derivedState.activeDataset,
-    activeFilters: derivedState.activeFilters,
     graphRows: derivedState.graphScene.rows,
   };
 }
@@ -115,7 +114,7 @@ describe("monitor 키보드 단축키", () => {
     });
   });
 
-  it("E 입력 시 errorOnly 필터를 반전한다", () => {
+  it("E 입력은 더 이상 별도 action을 만들지 않는다", () => {
     const context = buildShortcutContext();
     const dispatch = vi.fn();
     const event = createShortcutEvent("e");
@@ -126,12 +125,7 @@ describe("monitor 키보드 단축키", () => {
       selection: null,
     });
 
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "set-filter",
-      traceId: context.activeDataset.run.traceId,
-      key: "errorOnly",
-      value: !context.activeFilters.errorOnly,
-    });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it("? 입력 시 단축키 도움말 토글 action을 보낸다", () => {

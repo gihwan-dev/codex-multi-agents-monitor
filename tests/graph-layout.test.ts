@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
   type GraphSceneModel,
-  type RunFilters,
 } from "../src/entities/run";
 import { FIXTURE_DATASETS } from "../src/entities/run/testing";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
@@ -24,13 +23,6 @@ import {
   ROW_GAP,
   TIME_GUTTER,
 } from "../src/widgets/causal-graph/model/graphLayout";
-
-const DEFAULT_FILTERS: RunFilters = {
-  agentId: null,
-  eventType: "all",
-  search: "",
-  errorOnly: false,
-};
 
 describe("graphLayout", () => {
   it("chooses left/right ports when horizontal distance dominates", () => {
@@ -61,8 +53,8 @@ describe("graphLayout", () => {
 
     expect(roomy.contentWidth).toBe(1400);
     expect(roomy.laneWidth).toBeCloseTo((1400 - TIME_GUTTER) / 4, 5);
-    expect(cramped.laneWidth).toBe(280);
-    expect(cramped.contentWidth).toBe(TIME_GUTTER + 280 * 4);
+    expect(cramped.laneWidth).toBe(304);
+    expect(cramped.contentWidth).toBe(TIME_GUTTER + 304 * 4);
     expect(cramped.contentWidth).toBeGreaterThan(700);
   });
 
@@ -123,7 +115,7 @@ describe("graphLayout", () => {
     const scene = buildFixtureScene("trace-fix-004", { kind: "event", id: "fix4-lane-1-0" });
     const layout = buildGraphLayoutSnapshot(scene, 900);
 
-    expect(layout.laneMetrics.laneWidth).toBeGreaterThanOrEqual(280);
+    expect(layout.laneMetrics.laneWidth).toBeGreaterThanOrEqual(304);
     expect(layout.contentWidth).toBeGreaterThan(900);
   });
 
@@ -146,7 +138,7 @@ describe("graphLayout", () => {
     expect(wide.cardWidth).toBe(Math.floor(wide.laneWidth * 0.8));
 
     const narrow = computeLaneMetrics(700, 4);
-    expect(narrow.cardWidth).toBe(256);
+    expect(narrow.cardWidth).toBe(272);
   });
 
   it("builds rowPositions with correct topY and height for every row", () => {
@@ -233,7 +225,7 @@ describe("graphLayout", () => {
 
   it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
     const dataset = getFixtureDataset("trace-fix-002");
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" });
+    const scene = buildGraphSceneModel(dataset, { kind: "event", id: "fix2-blocked" });
     const markup = renderToStaticMarkup(
       createElement(CausalGraphView, {
         scene,
@@ -241,21 +233,18 @@ describe("graphLayout", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        toggledGapIds: [],
-        onToggleGap: () => undefined,
         viewportHeightOverride: 1200,
         laneHeaderHeightOverride: 80,
       }),
     );
 
-    expect(markup).toContain("graph-sequence__route-hitbox");
-    expect(markup).toContain("graph-sequence__row-guide");
-    expect(markup).toContain("graph-sequence__row-guide--continuation");
-    expect(markup).toContain("graph-sequence__row-guide--selected");
-    expect(markup).toContain("graph-sequence__row-guide--active");
+    expect(markup).toContain('data-slot="graph-route-hitbox"');
+    expect(markup).toContain('data-slot="graph-row-guide"');
+    expect(markup).toContain('data-guide-kind="continuation"');
+    expect(markup).toContain('data-guide-kind="selected"');
+    expect(markup).toContain('data-guide-kind="active"');
     expect(markup).toContain("Interactive graph edge hit targets");
-    expect(markup).not.toContain("graph-sequence__edge-hotspot");
-    expect(markup).toContain("graph-sequence__card-summary");
+    expect(markup).toContain('data-slot="graph-card-summary"');
     expect(markup).not.toContain("wait_reason:");
   });
 });
@@ -355,7 +344,7 @@ function buildFixtureScene(
   selection: { kind: "event"; id: string },
 ) {
   const dataset = getFixtureDataset(traceId);
-  return buildGraphSceneModel(dataset, DEFAULT_FILTERS, selection);
+  return buildGraphSceneModel(dataset, selection);
 }
 
 function findRouteByPrimaryEdge(
@@ -498,7 +487,7 @@ describe("multi-agent rendering diagnostic", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, {
+    const scene = buildGraphSceneModel(dataset, {
       kind: "event",
       id: dataset.run.selectedByDefaultId,
     });
@@ -510,8 +499,6 @@ describe("multi-agent rendering diagnostic", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        toggledGapIds: [],
-        onToggleGap: () => undefined,
         viewportHeightOverride: 2400,
         laneHeaderHeightOverride: 80,
       }),
@@ -521,7 +508,7 @@ describe("multi-agent rendering diagnostic", () => {
     expect(markup).toContain("Pasteur spawned");
     expect(markup).toContain("Gibbs spawned");
 
-    const occupiedCount = (markup.match(/lane-cell--occupied/g) ?? []).length;
+    const occupiedCount = (markup.match(/data-slot="graph-lane-cell"[^>]*data-occupied="true"/g) ?? []).length;
     expect(occupiedCount).toBeGreaterThanOrEqual(3);
   });
 });
@@ -576,7 +563,7 @@ describe("errored subagent rendering", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const markup = renderToStaticMarkup(
       createElement(CausalGraphView, {
         scene,
@@ -584,19 +571,17 @@ describe("errored subagent rendering", () => {
         followLive: false,
         liveMode: dataset.run.liveMode,
         onPauseFollowLive: () => undefined,
-        toggledGapIds: [],
-        onToggleGap: () => undefined,
         viewportHeightOverride: 3000,
         laneHeaderHeightOverride: 80,
       }),
     );
 
     // Graph must NOT be empty — event cards should render
-    const occupiedCells = (markup.match(/lane-cell--occupied/g) ?? []).length;
+    const occupiedCells = (markup.match(/data-slot="graph-lane-cell"[^>]*data-occupied="true"/g) ?? []).length;
     expect(occupiedCells).toBeGreaterThan(5);
 
     // Spawn edges must be visible (3 subagents)
-    const spawnRoutes = (markup.match(/route--spawn/g) ?? []).length;
+    const spawnRoutes = (markup.match(/data-slot="graph-route"[^>]*data-edge-type="spawn"/g) ?? []).length;
     expect(spawnRoutes).toBeGreaterThanOrEqual(3);
 
     // Subagent spawned cards must be visible
@@ -611,7 +596,7 @@ describe("errored subagent rendering", () => {
     expect(markup).toContain("Hume");
 
     // Merge edges should exist (from wait_agent)
-    const mergeRoutes = (markup.match(/route--merge/g) ?? []).length;
+    const mergeRoutes = (markup.match(/data-slot="graph-route"[^>]*data-edge-type="merge"/g) ?? []).length;
     expect(mergeRoutes).toBeGreaterThanOrEqual(1);
   });
 
@@ -620,7 +605,7 @@ describe("errored subagent rendering", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const layout = buildGraphLayoutSnapshot(scene, 1400);
 
     for (const route of layout.edgeRoutes) {

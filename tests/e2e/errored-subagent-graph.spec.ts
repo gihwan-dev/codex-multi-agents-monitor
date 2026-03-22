@@ -79,7 +79,7 @@ test("errored subagent graph: full page and graph panel screenshots", async ({ p
   await expect(page.getByRole("heading", { name: "FIX-002 Waiting chain run" })).toBeVisible();
 
   // Select the errored subagent session
-  const runItem = page.locator('.run-row').filter({ hasText: "만약 니가" }).first();
+  const runItem = page.getByRole("treeitem", { name: /만약 니가/i }).first();
   if (await runItem.count() > 0) {
     await runItem.click();
   }
@@ -89,13 +89,13 @@ test("errored subagent graph: full page and graph panel screenshots", async ({ p
   await page.screenshot({ path: path.join(CAPTURE_DIR, "01-full-page.png") });
 
   // Screenshot 2: Graph panel only
-  const graphPanel = page.locator(".graph-sequence").first();
+  const graphPanel = page.locator('[data-slot="graph"]').first();
   if (await graphPanel.count() > 0) {
     await graphPanel.screenshot({ path: path.join(CAPTURE_DIR, "02-graph-panel-top.png") });
   }
 
   // Screenshot 3: Scroll graph to bottom to see merge edges
-  const scrollArea = page.locator(".graph-sequence__scroll").first();
+  const scrollArea = page.locator('[data-slot="graph-scroll"]').first();
   if (await scrollArea.count() > 0) {
     await scrollArea.evaluate((el) => el.scrollTo({ top: el.scrollHeight, behavior: "instant" }));
     await page.waitForTimeout(300);
@@ -110,13 +110,13 @@ test("errored subagent graph: full page and graph panel screenshots", async ({ p
   }
 
   // Verification assertions
-  const occupiedCells = page.locator(".graph-sequence__lane-cell--occupied");
+  const occupiedCells = page.locator('[data-slot="graph-lane-cell"][data-occupied="true"]');
   expect(await occupiedCells.count()).toBeGreaterThan(0);
 
-  const spawnRoutes = page.locator(".graph-sequence__route--spawn");
+  const spawnRoutes = page.locator('[data-slot="graph-route"][data-edge-type="spawn"]');
   expect(await spawnRoutes.count()).toBeGreaterThanOrEqual(3);
 
-  const mergeRoutes = page.locator(".graph-sequence__route--merge");
+  const mergeRoutes = page.locator('[data-slot="graph-route"][data-edge-type="merge"]');
   expect(await mergeRoutes.count()).toBeGreaterThanOrEqual(1);
 });
 
@@ -126,19 +126,19 @@ test("errored subagent graph: edge direction validation", async ({ page }) => {
   await page.goto(baseUrl);
   await expect(page.getByRole("heading", { name: "FIX-002 Waiting chain run" })).toBeVisible();
 
-  const runItem = page.locator('.run-row').filter({ hasText: "만약 니가" }).first();
+  const runItem = page.getByRole("treeitem", { name: /만약 니가/i }).first();
   if (await runItem.count() > 0) {
     await runItem.click();
   }
   await page.waitForTimeout(500);
 
   // Get all edge route ports and verify all go downward (source.cy <= target.cy)
-  const routeGroups = page.locator("[class*='graph-sequence__route--']");
+  const routeGroups = page.locator('[data-slot="graph-route"]');
   const routeCount = await routeGroups.count();
 
   for (let i = 0; i < routeCount; i++) {
     const group = routeGroups.nth(i);
-    const ports = group.locator(".graph-sequence__route-port");
+    const ports = group.locator('[data-slot="graph-route-port"]');
     const portCount = await ports.count();
     if (portCount < 2) continue;
 
@@ -166,7 +166,7 @@ test("errored subagent graph: wide view showing all lanes and edges", async ({ p
   await page.goto(baseUrl);
   await expect(page.getByRole("heading", { name: "FIX-002 Waiting chain run" })).toBeVisible();
 
-  const runItem = page.locator('.run-row').filter({ hasText: "만약 니가" }).first();
+  const runItem = page.getByRole("treeitem", { name: /만약 니가/i }).first();
   if (await runItem.count() > 0) {
     await runItem.click();
   }
@@ -176,12 +176,12 @@ test("errored subagent graph: wide view showing all lanes and edges", async ({ p
   await page.screenshot({ path: path.join(CAPTURE_DIR, "06-wide-full.png") });
 
   // Graph panel wide screenshot - should show ALL lanes and ALL edges
-  const graphPanel = page.locator(".graph-sequence").first();
+  const graphPanel = page.locator('[data-slot="graph"]').first();
   if (await graphPanel.count() > 0) {
     await graphPanel.screenshot({ path: path.join(CAPTURE_DIR, "07-wide-graph-top.png") });
 
     // Scroll to middle to see spawn+merge edge connections
-    const scrollArea = page.locator(".graph-sequence__scroll").first();
+    const scrollArea = page.locator('[data-slot="graph-scroll"]').first();
     await scrollArea.evaluate((el) => el.scrollTo({ top: el.scrollHeight / 4, behavior: "instant" }));
     await page.waitForTimeout(200);
     await graphPanel.screenshot({ path: path.join(CAPTURE_DIR, "08-wide-graph-edges.png") });
@@ -198,7 +198,7 @@ test("errored subagent graph: wide view showing all lanes and edges", async ({ p
   }
 
   // Verify all subagent lane headers are visible
-  await expect(page.locator(".graph-sequence__lane-header").filter({ hasText: "Gibbs" })).toBeVisible();
-  await expect(page.locator(".graph-sequence__lane-header").filter({ hasText: "Pasteur" })).toBeVisible();
-  await expect(page.locator(".graph-sequence__lane-header").filter({ hasText: "Hume" })).toBeVisible();
+  await expect(page.locator('[data-slot="graph-lane-header"]').filter({ hasText: "Gibbs" })).toBeVisible();
+  await expect(page.locator('[data-slot="graph-lane-header"]').filter({ hasText: "Pasteur" })).toBeVisible();
+  await expect(page.locator('[data-slot="graph-lane-header"]').filter({ hasText: "Hume" })).toBeVisible();
 });
