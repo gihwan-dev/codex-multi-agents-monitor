@@ -842,6 +842,7 @@ describe("MonitorPage integration", () => {
           ?.getAttribute("data-selected"),
       ).toBe("true");
     });
+  });
 
   it("persists theme changes from the top bar select", async () => {
     delete window.__TAURI_INTERNALS__;

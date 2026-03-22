@@ -4,6 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MonitorPage } from "../src/pages/monitor/index.js";
+import { ThemeProvider } from "../src/shared/theme/index.js";
 import {
   createMonitorInitialState,
   deriveMonitorViewState,
@@ -24,6 +25,12 @@ function findButtonByText(scope: ParentNode, text: string) {
   return Array.from(scope.querySelectorAll<HTMLButtonElement>("button")).find(
     (button) => button.textContent?.trim() === text,
   ) ?? null;
+}
+
+async function renderMonitorPage() {
+  await act(async () => {
+    root.render(createElement(ThemeProvider, null, createElement(MonitorPage)));
+  });
 }
 
 beforeEach(() => {
@@ -107,9 +114,7 @@ describe("MonitorPage anomaly jump navigation", () => {
       throw new Error("event jump target missing");
     }
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     scrollToMock.mockClear();
 
@@ -150,9 +155,7 @@ describe("MonitorPage anomaly jump navigation", () => {
       throw new Error("last handoff jump missing");
     }
 
-    await act(async () => {
-      root.render(createElement(MonitorPage));
-    });
+    await renderMonitorPage();
 
     scrollToMock.mockClear();
 
