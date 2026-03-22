@@ -1,9 +1,5 @@
 import type { Dispatch } from "react";
-import type {
-  DrawerTab,
-  RunFilters,
-  SelectionState,
-} from "../../../entities/run";
+import type { DrawerTab, SelectionState } from "../../../entities/run";
 import {
   MIN_INSPECTOR_WIDTH,
   MIN_RAIL_WIDTH,
@@ -78,14 +74,6 @@ export function createMonitorViewActions({
         type: "set-follow-live",
         traceId: activeDataset.run.traceId,
         value: false,
-      });
-    },
-    setFilter(key: keyof RunFilters, value: string | boolean | null) {
-      dispatch({
-        type: "set-filter",
-        traceId: activeDataset.run.traceId,
-        key,
-        value,
       });
     },
     toggleGap(gapId: string) {

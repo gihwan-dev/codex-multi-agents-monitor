@@ -96,7 +96,6 @@ export function useMonitorPageState() {
   useMonitorKeyboardShortcuts({
     dispatch,
     activeDataset: derivedState.activeDataset,
-    activeFilters: derivedState.activeFilters,
     selection: state.selection,
     graphRows: derivedState.graphScene.rows,
   });

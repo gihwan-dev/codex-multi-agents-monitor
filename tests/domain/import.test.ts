@@ -396,9 +396,7 @@ describe("normalization and selectors", () => {
 
     const scene = buildGraphSceneModel(
       dataset,
-      { agentId: null, eventType: "all", search: "", errorOnly: false },
       { kind: "event", id: "fix2-blocked" },
-      true,
     );
 
     expect(scene.rows.some((row) => row.kind === "event" && row.eventId === "fix2-blocked")).toBe(true);
@@ -415,7 +413,6 @@ describe("normalization and selectors", () => {
 
     const scene = buildGraphSceneModel(
       dataset,
-      { agentId: null, eventType: "all", search: "", errorOnly: false },
       { kind: "event", id: "fix2-blocked" },
     );
     const facts = buildSummaryFacts(dataset, scene.selectionPath);
@@ -480,7 +477,6 @@ describe("normalization and selectors", () => {
 
     const scene = buildGraphSceneModel(
       dataset,
-      { agentId: null, eventType: "all", search: "", errorOnly: false },
       null,
     );
     const facts = buildSummaryFacts(dataset, scene.selectionPath);
@@ -732,7 +728,7 @@ describe("monitor state contracts", () => {
     expect(nextState.followLiveByRunId[dataset.run.traceId]).toBe(false);
   });
 
-  it("stores filters per trace instead of globally", () => {
+  it("stores collapsed gaps per trace instead of globally", () => {
     const liveRun = FIXTURE_DATASETS.find((item) => item.run.liveMode === "live");
     const importedRun = FIXTURE_DATASETS.find((item) => item.run.liveMode === "imported");
 
@@ -742,22 +738,19 @@ describe("monitor state contracts", () => {
       throw new Error("fixture live/imported runs missing");
     }
 
-    const withImportedSearch = monitorStateReducer(createMonitorInitialState(), {
-      type: "set-filter",
+    const withImportedGap = monitorStateReducer(createMonitorInitialState(), {
+      type: "toggle-gap",
       traceId: importedRun.run.traceId,
-      key: "search",
-      value: "handoff",
+      gapId: "gap-imported",
     });
-    const withLiveErrorOnly = monitorStateReducer(withImportedSearch, {
-      type: "set-filter",
+    const withLiveGap = monitorStateReducer(withImportedGap, {
+      type: "toggle-gap",
       traceId: liveRun.run.traceId,
-      key: "errorOnly",
-      value: true,
+      gapId: "gap-live",
     });
 
-    expect(withLiveErrorOnly.filtersByRunId[importedRun.run.traceId]?.search).toBe("handoff");
-    expect(withLiveErrorOnly.filtersByRunId[liveRun.run.traceId]?.search).toBe("");
-    expect(withLiveErrorOnly.filtersByRunId[liveRun.run.traceId]?.errorOnly).toBe(true);
+    expect(withLiveGap.collapsedGapIds[importedRun.run.traceId]).toEqual(["gap-imported"]);
+    expect(withLiveGap.collapsedGapIds[liveRun.run.traceId]).toEqual(["gap-live"]);
   });
 
   it("raw payload가 없는 dataset은 raw drawer 탭으로 진입하지 않는다", () => {

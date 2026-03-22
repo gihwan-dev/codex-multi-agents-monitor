@@ -11,7 +11,6 @@ import {
   importDatasetState,
   replaceDatasetsState,
   setActiveRunState,
-  setFilterState,
   setFollowLiveState,
   toggleFollowLiveState,
   toggleGapState,
@@ -41,8 +40,6 @@ export function monitorStateReducer(
       return toggleFollowLiveState(state, action.traceId);
     case "set-follow-live":
       return setFollowLiveState(state, action.traceId, action.value);
-    case "set-filter":
-      return setFilterState(state, action.traceId, action.key, action.value);
     case "toggle-gap":
       return toggleGapState(state, action.traceId, action.gapId);
     case "set-rail-width":

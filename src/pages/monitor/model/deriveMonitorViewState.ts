@@ -5,7 +5,7 @@ import {
   buildSummaryFacts,
   hasRawPayload,
 } from "../../../entities/run";
-import { createDefaultFilters, type MonitorState } from "./state";
+import type { MonitorState } from "./state";
 
 function resolveActiveDataset(state: MonitorState) {
   const activeDataset =
@@ -19,17 +19,10 @@ function resolveActiveDataset(state: MonitorState) {
 
 export function deriveMonitorViewState(state: MonitorState) {
   const activeDataset = resolveActiveDataset(state);
-  const activeFilters =
-    state.filtersByRunId[activeDataset.run.traceId] ?? createDefaultFilters();
-  const graphScene = buildGraphSceneModel(
-    activeDataset,
-    activeFilters,
-    state.selection,
-  );
+  const graphScene = buildGraphSceneModel(activeDataset, state.selection);
 
   return {
     activeDataset,
-    activeFilters,
     activeFollowLive: state.followLiveByRunId[activeDataset.run.traceId] ?? false,
     activeLiveConnection:
       state.liveConnectionByRunId[activeDataset.run.traceId] ??

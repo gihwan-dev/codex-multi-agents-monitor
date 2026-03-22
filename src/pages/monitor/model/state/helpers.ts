@@ -1,8 +1,4 @@
-import type {
-  RunDataset,
-  RunFilters,
-  SelectionState,
-} from "../../../../entities/run";
+import type { RunDataset, SelectionState } from "../../../../entities/run";
 import { FIXTURE_DATASETS, FIXTURE_IMPORT_TEXT } from "../../../../entities/run/testing";
 import { buildConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
@@ -15,25 +11,10 @@ export const MIN_INSPECTOR_WIDTH = 0;
 export const ARCHIVE_PAGE_SIZE = 50;
 export const LIVE_FIXTURE_TRACE_ID = "trace-fix-006";
 
-export function createDefaultFilters(): RunFilters {
-  return {
-    agentId: null,
-    eventType: "all",
-    search: "",
-    errorOnly: false,
-  };
-}
-
 export function buildFollowLiveMap(datasets: RunDataset[]) {
   return Object.fromEntries(
     datasets.map((dataset) => [dataset.run.traceId, dataset.run.liveMode === "live"]),
   ) as Record<string, boolean>;
-}
-
-export function buildFilterMap(datasets: RunDataset[]) {
-  return Object.fromEntries(
-    datasets.map((dataset) => [dataset.run.traceId, createDefaultFilters()]),
-  ) as Record<string, RunFilters>;
 }
 
 export function buildCollapsedGapIds(datasets: RunDataset[]) {
@@ -76,10 +57,6 @@ export function buildDatasetActivationPatch(
     followLiveByRunId: {
       ...state.followLiveByRunId,
       [dataset.run.traceId]: false,
-    },
-    filtersByRunId: {
-      ...state.filtersByRunId,
-      [dataset.run.traceId]: createDefaultFilters(),
     },
     ...resolveDatasetDrawerTab(state, dataset),
   };
@@ -131,7 +108,6 @@ export function createMonitorInitialState(): MonitorState {
     inspectorOpen: !compactViewport,
     followLiveByRunId: buildFollowLiveMap(FIXTURE_DATASETS),
     liveConnectionByRunId: buildConnectionMap(FIXTURE_DATASETS),
-    filtersByRunId: buildFilterMap(FIXTURE_DATASETS),
     collapsedGapIds: buildCollapsedGapIds(FIXTURE_DATASETS),
     railWidth: DEFAULT_RAIL_WIDTH,
     inspectorWidth: DEFAULT_INSPECTOR_WIDTH,

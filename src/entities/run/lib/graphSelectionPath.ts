@@ -1,7 +1,5 @@
 import type {
-  EventRecord,
   RunDataset,
-  RunFilters,
   SelectionPath,
   SelectionState,
 } from "../model/types.js";
@@ -10,39 +8,6 @@ import {
   buildLaneEventMaps,
   sortEvents,
 } from "./selectorShared.js";
-
-export function eventMatchesFilters(
-  event: EventRecord,
-  filters: RunFilters,
-): boolean {
-  if (filters.agentId && event.agentId !== filters.agentId) {
-    return false;
-  }
-
-  if (filters.eventType !== "all" && event.eventType !== filters.eventType) {
-    return false;
-  }
-
-  if (filters.errorOnly && event.status !== "failed" && event.eventType !== "error") {
-    return false;
-  }
-
-  if (!filters.search) {
-    return true;
-  }
-
-  const query = filters.search.toLowerCase();
-  return [
-    event.title,
-    event.outputPreview ?? "",
-    event.inputPreview ?? "",
-    event.waitReason ?? "",
-    event.errorMessage ?? "",
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(query);
-}
 
 function resolveBaseEventIds(
   dataset: RunDataset,

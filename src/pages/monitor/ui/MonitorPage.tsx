@@ -32,7 +32,6 @@ export function MonitorPage() {
   const {
     state,
     activeDataset,
-    activeFilters,
     activeFollowLive,
     activeLiveConnection,
     archivedIndexLoading,
@@ -143,11 +142,8 @@ export function MonitorPage() {
         <main className="workspace__main" aria-label="Graph canvas">
           <MonitorSummaryStrip facts={summaryFacts} activeFocus={inspectorSummary?.title ?? null} />
           <MonitorGraphToolbar
-            dataset={activeDataset}
-            filters={activeFilters}
             anomalyJumps={anomalyJumps}
             onJump={actions.selectItem}
-            onSetFilter={actions.setFilter}
           />
 
           <CausalGraphView
@@ -232,7 +228,6 @@ export function MonitorPage() {
             <li>`/` search focus</li>
             <li>`I` inspector toggle</li>
             <li>`.` follow live</li>
-            <li>`E` error only</li>
             <li>`?` shortcuts help</li>
             <li>`Cmd/Ctrl + K` shortcuts help</li>
           </ul>

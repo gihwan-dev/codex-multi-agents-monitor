@@ -118,6 +118,9 @@ test("left rail uses a simplified workspace to run tree", async ({ page }) => {
   await expect(rail.getByRole("button", { name: "Live" })).toHaveCount(0);
   await expect(rail.getByText("FIX-002 Waiting chain run", { exact: true })).toHaveCount(0);
   await expect(rail.getByText(/\bago\b/i)).toHaveCount(0);
+  await expect(page.getByText("Focus", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Event type", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Error-only", { exact: true })).toHaveCount(0);
 
   const runTreeItem = rail.getByRole("treeitem", { name: /Waiting chain review/i });
   await expect(runTreeItem).toBeVisible();

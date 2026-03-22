@@ -381,14 +381,6 @@ describe("archive 요청 상태", () => {
       activeRunId: "trace-fix-999",
       drawerTab: "raw" as const,
       appliedLiveFrames: 3,
-      filtersByRunId: {
-        "trace-fix-999": {
-          agentId: "agent-1",
-          eventType: "error" as const,
-          search: "handoff",
-          errorOnly: true,
-        },
-      },
       collapsedGapIds: {
         "trace-fix-999": ["gap-1"],
       },
@@ -402,14 +394,6 @@ describe("archive 요청 상태", () => {
     expect(nextState.activeRunId).toBe(replacementDataset.run.traceId);
     expect(nextState.drawerTab).toBe("artifacts");
     expect(nextState.appliedLiveFrames).toBe(0);
-    expect(nextState.filtersByRunId).toEqual({
-      [replacementDataset.run.traceId]: {
-        agentId: null,
-        eventType: "all",
-        search: "",
-        errorOnly: false,
-      },
-    });
     expect(nextState.collapsedGapIds).toEqual({
       [replacementDataset.run.traceId]: [],
     });

@@ -202,13 +202,6 @@ export interface RunDataset {
   promptAssembly?: PromptAssembly;
 }
 
-export interface RunFilters {
-  agentId: string | null;
-  eventType: EventType | "all";
-  search: string;
-  errorOnly: boolean;
-}
-
 export interface AnomalyJump {
   label: string;
   selection:

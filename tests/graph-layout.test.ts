@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildGraphSceneModel,
   type GraphSceneModel,
-  type RunFilters,
 } from "../src/entities/run";
 import { FIXTURE_DATASETS } from "../src/entities/run/testing";
 import { buildDatasetFromSessionLog, type SessionEntrySnapshot, type SessionLogSnapshot, type SubagentSnapshot } from "../src/entities/session-log";
@@ -24,13 +23,6 @@ import {
   ROW_GAP,
   TIME_GUTTER,
 } from "../src/widgets/causal-graph/model/graphLayout";
-
-const DEFAULT_FILTERS: RunFilters = {
-  agentId: null,
-  eventType: "all",
-  search: "",
-  errorOnly: false,
-};
 
 describe("graphLayout", () => {
   it("chooses left/right ports when horizontal distance dominates", () => {
@@ -233,7 +225,7 @@ describe("graphLayout", () => {
 
   it("renders compact cards, continuation guides, and route hitboxes without the old edge hotspot button", () => {
     const dataset = getFixtureDataset("trace-fix-002");
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, { kind: "event", id: "fix2-blocked" });
+    const scene = buildGraphSceneModel(dataset, { kind: "event", id: "fix2-blocked" });
     const markup = renderToStaticMarkup(
       createElement(CausalGraphView, {
         scene,
@@ -352,7 +344,7 @@ function buildFixtureScene(
   selection: { kind: "event"; id: string },
 ) {
   const dataset = getFixtureDataset(traceId);
-  return buildGraphSceneModel(dataset, DEFAULT_FILTERS, selection);
+  return buildGraphSceneModel(dataset, selection);
 }
 
 function findRouteByPrimaryEdge(
@@ -495,7 +487,7 @@ describe("multi-agent rendering diagnostic", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, {
+    const scene = buildGraphSceneModel(dataset, {
       kind: "event",
       id: dataset.run.selectedByDefaultId,
     });
@@ -571,7 +563,7 @@ describe("errored subagent rendering", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const markup = renderToStaticMarkup(
       createElement(CausalGraphView, {
         scene,
@@ -613,7 +605,7 @@ describe("errored subagent rendering", () => {
     expect(dataset).not.toBeNull();
     if (!dataset) return;
 
-    const scene = buildGraphSceneModel(dataset, DEFAULT_FILTERS, null);
+    const scene = buildGraphSceneModel(dataset, null);
     const layout = buildGraphLayoutSnapshot(scene, 1400);
 
     for (const route of layout.edgeRoutes) {

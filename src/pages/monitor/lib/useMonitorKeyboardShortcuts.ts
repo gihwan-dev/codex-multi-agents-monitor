@@ -2,7 +2,6 @@ import { type Dispatch, useEffect, useEffectEvent } from "react";
 import type {
   GraphSceneRow,
   RunDataset,
-  RunFilters,
   SelectionState,
 } from "../../../entities/run";
 import type { MonitorAction } from "../model/state";
@@ -33,7 +32,6 @@ function getNextVisibleEventId(
 interface UseMonitorKeyboardShortcutsOptions {
   dispatch: Dispatch<MonitorAction>;
   activeDataset: RunDataset;
-  activeFilters: RunFilters;
   selection: SelectionState | null;
   graphRows: GraphSceneRow[];
 }
@@ -50,7 +48,6 @@ export function dispatchMonitorKeyboardShortcut(
   {
     dispatch,
     activeDataset,
-    activeFilters,
     selection,
     graphRows,
   }: MonitorKeyboardShortcutContext,
@@ -76,14 +73,6 @@ export function dispatchMonitorKeyboardShortcut(
       dispatch({
         type: "toggle-follow-live",
         traceId: activeDataset.run.traceId,
-      });
-      break;
-    case "e":
-      dispatch({
-        type: "set-filter",
-        traceId: activeDataset.run.traceId,
-        key: "errorOnly",
-        value: !activeFilters.errorOnly,
       });
       break;
     case "c":
@@ -118,7 +107,6 @@ export function dispatchMonitorKeyboardShortcut(
 export function useMonitorKeyboardShortcuts({
   dispatch,
   activeDataset,
-  activeFilters,
   selection,
   graphRows,
 }: UseMonitorKeyboardShortcutsOptions) {
@@ -126,7 +114,6 @@ export function useMonitorKeyboardShortcuts({
     dispatchMonitorKeyboardShortcut(event, {
       dispatch,
       activeDataset,
-      activeFilters,
       selection,
       graphRows,
     });

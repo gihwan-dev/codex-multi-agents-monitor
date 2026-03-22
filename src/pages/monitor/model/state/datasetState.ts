@@ -3,9 +3,7 @@ import { applyLiveFrame } from "../../../../features/follow-live";
 import {
   buildCollapsedGapIds,
   buildDatasetActivationPatch,
-  buildFilterMap,
   buildFollowLiveMap,
-  createDefaultFilters,
   defaultSelectionForDataset,
   LIVE_FIXTURE_TRACE_ID,
   resolveDatasetDrawerTab,
@@ -84,24 +82,6 @@ export function setFollowLiveState(
   };
 }
 
-export function setFilterState(
-  state: MonitorState,
-  traceId: string,
-  key: keyof MonitorState["filtersByRunId"][string],
-  value: string | boolean | null,
-): MonitorState {
-  return {
-    ...state,
-    filtersByRunId: {
-      ...state.filtersByRunId,
-      [traceId]: {
-        ...(state.filtersByRunId[traceId] ?? createDefaultFilters()),
-        [key]: value,
-      },
-    },
-  };
-}
-
 export function toggleGapState(
   state: MonitorState,
   traceId: string,
@@ -147,7 +127,6 @@ export function replaceDatasetsState(
     selection: defaultSelectionForDataset(activeDataset),
     followLiveByRunId: buildFollowLiveMap(datasets),
     liveConnectionByRunId: buildConnectionMap(datasets),
-    filtersByRunId: buildFilterMap(datasets),
     collapsedGapIds: buildCollapsedGapIds(datasets),
     ...resolveDatasetDrawerTab(state, activeDataset),
     appliedLiveFrames: 0,
