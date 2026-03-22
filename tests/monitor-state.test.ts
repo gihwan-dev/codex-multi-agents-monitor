@@ -305,6 +305,25 @@ describe("live 상태 전이", () => {
     expect(nextState.selectionNavigationRequestId).toBe(
       activeState.selectionNavigationRequestId + 1,
     );
+    expect(nextState.selectionNavigationRunId).toBe(liveRun.run.traceId);
+    expect(nextState.followLiveByRunId[liveRun.run.traceId]).toBe(false);
+    expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
+  });
+
+  it("manual edge navigation pauses live follow", () => {
+    const liveRun = requireDataset("trace-fix-006");
+    const activeState = monitorStateReducer(createMonitorInitialState(), {
+      type: "set-active-run",
+      traceId: liveRun.run.traceId,
+    });
+
+    const nextState = monitorStateReducer(activeState, {
+      type: "navigate-selection",
+      selection: { kind: "edge", id: "edge-live-manual" },
+    });
+
+    expect(nextState.selection).toEqual({ kind: "edge", id: "edge-live-manual" });
+    expect(nextState.selectionNavigationRunId).toBe(liveRun.run.traceId);
     expect(nextState.followLiveByRunId[liveRun.run.traceId]).toBe(false);
     expect(nextState.liveConnectionByRunId[liveRun.run.traceId]).toBe("paused");
   });
@@ -320,6 +339,21 @@ describe("live 상태 전이", () => {
     expect(nextState.selectionNavigationRequestId).toBe(
       initialState.selectionNavigationRequestId,
     );
+  });
+
+  it("changing the active run clears stale navigation requests", () => {
+    const initialState = {
+      ...createMonitorInitialState(),
+      selectionNavigationRequestId: 7,
+      selectionNavigationRunId: "trace-fix-002",
+    };
+    const nextState = monitorStateReducer(initialState, {
+      type: "set-active-run",
+      traceId: "trace-fix-006",
+    });
+
+    expect(nextState.selectionNavigationRequestId).toBe(0);
+    expect(nextState.selectionNavigationRunId).toBeNull();
   });
 });
 

@@ -63,6 +63,8 @@ export function beginArchivedSnapshotRequest(
     ...state,
     archivedSnapshotLoading: true,
     archivedSnapshotRequestId: requestId,
+    selectionNavigationRequestId: 0,
+    selectionNavigationRunId: null,
     selectionLoadState: createSelectionLoadState(
       "archived",
       filePath,

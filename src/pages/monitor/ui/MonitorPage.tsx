@@ -39,6 +39,7 @@ export function MonitorPage() {
     archivedIndexError,
     rawTabAvailable,
     graphScene,
+    selectionRevealTarget,
     inspectorSummary,
     summaryFacts,
     anomalyJumps,
@@ -226,6 +227,7 @@ export function MonitorPage() {
               selectionNavigationRequestId={state.selectionNavigationRequestId}
               selectionNavigationRunId={state.selectionNavigationRunId}
               runTraceId={displayDataset.run.traceId}
+              selectionRevealTarget={selectionRevealTarget}
               followLive={activeFollowLive}
               liveMode={displayDataset.run.liveMode}
               onPauseFollowLive={actions.pauseFollowLive}

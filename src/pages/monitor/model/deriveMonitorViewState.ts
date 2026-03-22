@@ -5,6 +5,7 @@ import {
   buildSummaryFacts,
   type GraphSceneModel,
   hasRawPayload,
+  type SelectionState,
 } from "../../../entities/run";
 import { deriveArchiveIndexTitle } from "../../../entities/session-log";
 import type { MonitorState } from "./state";
@@ -18,6 +19,26 @@ interface SelectionLoadingPresentation {
   targetTitle?: string;
   targetMeta?: string;
 }
+
+interface EventSelectionRevealTarget {
+  kind: "event";
+  eventId: string;
+}
+interface EdgeSelectionRevealTarget {
+  kind: "edge";
+  edgeId: string;
+  sourceEventId: string;
+  targetEventId: string;
+}
+interface ArtifactSelectionRevealTarget {
+  kind: "artifact";
+  artifactId: string;
+  producerEventId: string;
+}
+type SelectionRevealTarget =
+  | EventSelectionRevealTarget
+  | EdgeSelectionRevealTarget
+  | ArtifactSelectionRevealTarget;
 
 function resolveActiveDataset(state: MonitorState) {
   return (
@@ -36,10 +57,58 @@ const EMPTY_GRAPH_SCENE: GraphSceneModel = {
     edgeIds: [],
     laneIds: [],
   },
-  selectionRevealTarget: null,
   hiddenLaneCount: 0,
   latestVisibleEventId: null,
 };
+
+function buildSelectionRevealTarget(
+  activeDataset: ReturnType<typeof resolveActiveDataset>,
+  selection: SelectionState | null,
+  graphScene: GraphSceneModel,
+): SelectionRevealTarget | null {
+  if (!activeDataset || !selection) {
+    return null;
+  }
+
+  const visibleEventIds = new Set(
+    graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : [])),
+  );
+
+  if (selection.kind === "event") {
+    return visibleEventIds.has(selection.id)
+      ? { kind: "event", eventId: selection.id }
+      : null;
+  }
+
+  if (selection.kind === "edge") {
+    const edge = activeDataset.edges.find((item) => item.edgeId === selection.id);
+    if (
+      !edge ||
+      !visibleEventIds.has(edge.sourceEventId) ||
+      !visibleEventIds.has(edge.targetEventId)
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "edge",
+      edgeId: edge.edgeId,
+      sourceEventId: edge.sourceEventId,
+      targetEventId: edge.targetEventId,
+    };
+  }
+
+  const artifact = activeDataset.artifacts.find((item) => item.artifactId === selection.id);
+  if (!artifact || !visibleEventIds.has(artifact.producerEventId)) {
+    return null;
+  }
+
+  return {
+    kind: "artifact",
+    artifactId: artifact.artifactId,
+    producerEventId: artifact.producerEventId,
+  };
+}
 
 function resolveActiveSessionFilePath(state: MonitorState) {
   if (state.selectionLoadState?.filePath) {
@@ -150,6 +219,7 @@ export function deriveMonitorViewState(state: MonitorState) {
     selectionLoadingPresentation,
     rawTabAvailable: activeDataset ? hasRawPayload(activeDataset) : false,
     graphScene,
+    selectionRevealTarget: buildSelectionRevealTarget(activeDataset, state.selection, graphScene),
     inspectorSummary: activeDataset
       ? buildInspectorCausalSummary(
           activeDataset,

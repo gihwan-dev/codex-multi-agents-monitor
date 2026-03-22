@@ -5,7 +5,12 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
-import type { GraphSceneModel, LiveMode, SelectionState } from "../../../entities/run";
+import type {
+  GraphSceneModel,
+  GraphSelectionRevealTarget,
+  LiveMode,
+  SelectionState,
+} from "../../../entities/run";
 import { Panel } from "../../../shared/ui";
 import {
   buildContinuationGuideYs,
@@ -27,8 +32,9 @@ interface CausalGraphViewProps {
   scene: GraphSceneModel;
   onSelect: (selection: SelectionState) => void;
   selectionNavigationRequestId: number;
-  selectionNavigationRunId?: string | null;
-  runTraceId?: string;
+  selectionNavigationRunId: string | null;
+  runTraceId: string;
+  selectionRevealTarget: GraphSelectionRevealTarget | null;
   followLive: boolean;
   liveMode: LiveMode;
   onPauseFollowLive: () => void;
@@ -40,8 +46,9 @@ export function CausalGraphView({
   scene,
   onSelect,
   selectionNavigationRequestId,
-  selectionNavigationRunId = null,
+  selectionNavigationRunId,
   runTraceId,
+  selectionRevealTarget,
   followLive,
   liveMode,
   onPauseFollowLive,
@@ -159,14 +166,9 @@ export function CausalGraphView({
   ]);
 
   useEffect(() => {
-    const navigationMatchesCurrentRun =
-      selectionNavigationRunId === null ||
-      runTraceId === undefined ||
-      selectionNavigationRunId === runTraceId;
-
     if (
       selectionNavigationRequestId === 0 ||
-      !navigationMatchesCurrentRun ||
+      selectionNavigationRunId !== runTraceId ||
       selectionNavigationRequestId <= lastHandledNavigationRequestIdRef.current
     ) {
       return;
@@ -177,7 +179,7 @@ export function CausalGraphView({
       return;
     }
 
-    const revealRange = resolveSelectionRevealRange(scene.selectionRevealTarget, layout);
+    const revealRange = resolveSelectionRevealRange(selectionRevealTarget, layout);
     lastHandledNavigationRequestIdRef.current = selectionNavigationRequestId;
     if (!revealRange) {
       return;
@@ -207,10 +209,10 @@ export function CausalGraphView({
     layout,
     renderedContentHeight,
     runTraceId,
-    scene.selectionRevealTarget,
     scheduleScrollTopUpdate,
     selectionNavigationRunId,
     selectionNavigationRequestId,
+    selectionRevealTarget,
   ]);
 
   const handleScroll = () => {
@@ -333,7 +335,7 @@ export function CausalGraphView({
 }
 
 function resolveSelectionRevealRange(
-  selectionRevealTarget: GraphSceneModel["selectionRevealTarget"],
+  selectionRevealTarget: GraphSelectionRevealTarget | null,
   layout: ReturnType<typeof buildGraphLayoutSnapshot>,
 ) {
   if (!selectionRevealTarget) {

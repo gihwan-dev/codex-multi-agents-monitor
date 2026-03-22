@@ -307,22 +307,11 @@ export interface GraphSceneEdgeBundle {
   selected: boolean;
 }
 
-export type GraphSelectionRevealTarget =
-  | { kind: "event"; eventId: string }
-  | {
-      kind: "edge";
-      edgeId: string;
-      sourceEventId: string;
-      targetEventId: string;
-    }
-  | { kind: "artifact"; artifactId: string; producerEventId: string };
-
 export interface GraphSceneModel {
   lanes: GraphSceneLane[];
   rows: GraphSceneRow[];
   edgeBundles: GraphSceneEdgeBundle[];
   selectionPath: SelectionPath;
-  selectionRevealTarget: GraphSelectionRevealTarget | null;
   hiddenLaneCount: number;
   latestVisibleEventId: string | null;
 }

@@ -137,6 +137,42 @@ describe("MonitorPage anomaly jump navigation", () => {
       expect(selectedCard?.getAttribute("data-event-id")).toBe(targetJump.selection.id);
     });
   });
+
+  it("clicking the last handoff jump requests graph scrolling for edge navigation", async () => {
+    const initialState = createMonitorInitialState();
+    const derivedState = deriveMonitorViewState(initialState);
+    const targetJump = derivedState.anomalyJumps.find(
+      (jump) => jump.selection.kind === "edge" && jump.label === "Last handoff",
+    );
+
+    expect(targetJump).toBeDefined();
+    if (!targetJump) {
+      throw new Error("last handoff jump missing");
+    }
+
+    await act(async () => {
+      root.render(createElement(MonitorPage));
+    });
+
+    scrollToMock.mockClear();
+
+    const jumpButton = findButtonByText(container, targetJump.label);
+    expect(jumpButton).not.toBeNull();
+    if (!jumpButton) {
+      throw new Error("edge jump button missing");
+    }
+
+    await act(async () => {
+      jumpButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalledTimes(1);
+    });
+    expect(scrollToMock.mock.calls[0]?.[0]).toMatchObject({
+      behavior: "smooth",
+    });
+  });
 });
 
 function restoreDescriptor(

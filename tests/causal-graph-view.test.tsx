@@ -104,6 +104,9 @@ describe("CausalGraphView selection reveal", () => {
           scene,
           onSelect: () => undefined,
           selectionNavigationRequestId: 1,
+          selectionNavigationRunId: dataset.run.traceId,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: { kind: "event", eventId: targetEventId },
           followLive: false,
           liveMode: dataset.run.liveMode,
           onPauseFollowLive: () => undefined,
@@ -134,6 +137,110 @@ describe("CausalGraphView selection reveal", () => {
           scene,
           onSelect: () => undefined,
           selectionNavigationRequestId: 1,
+          selectionNavigationRunId: dataset.run.traceId,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: { kind: "event", eventId: firstEventId },
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    expect(scrollToMock).not.toHaveBeenCalled();
+  });
+
+  it("scrolls when a navigation request targets an offscreen edge", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const edge = dataset.edges.find((item) => item.edgeType === "handoff");
+    if (!edge) {
+      throw new Error("handoff edge missing");
+    }
+    const scene = buildGraphSceneModel(dataset, { kind: "edge", id: edge.edgeId });
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 1,
+          selectionNavigationRunId: dataset.run.traceId,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: {
+            kind: "edge",
+            edgeId: edge.edgeId,
+            sourceEventId: edge.sourceEventId,
+            targetEventId: edge.targetEventId,
+          },
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("scrolls when a navigation request targets an offscreen artifact", async () => {
+    const dataset = requireDataset("trace-fix-001");
+    const artifact = dataset.artifacts.find(
+      (item) => item.artifactId === dataset.run.finalArtifactId,
+    );
+    if (!artifact) {
+      throw new Error("final artifact missing");
+    }
+    const scene = buildGraphSceneModel(dataset, {
+      kind: "artifact",
+      id: artifact.artifactId,
+    });
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 1,
+          selectionNavigationRunId: dataset.run.traceId,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: {
+            kind: "artifact",
+            artifactId: artifact.artifactId,
+            producerEventId: artifact.producerEventId,
+          },
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores stale navigation requests from a different run after remount", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const targetEventId = dataset.events[dataset.events.length - 1]?.eventId;
+    if (!targetEventId) {
+      throw new Error("target event missing");
+    }
+    const scene = buildGraphSceneModel(dataset, { kind: "event", id: targetEventId });
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 5,
+          selectionNavigationRunId: "trace-fix-001",
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: { kind: "event", eventId: targetEventId },
           followLive: false,
           liveMode: dataset.run.liveMode,
           onPauseFollowLive: () => undefined,
