@@ -6,8 +6,11 @@ import {
   deriveSessionLogTitle,
   loadArchivedSessionIndex,
   loadArchivedSessionSnapshot,
+  loadRecentSessionIndex,
+  loadRecentSessionSnapshot,
   loadSessionLogDatasets,
   NEW_THREAD_TITLE,
+  type RecentSessionIndexItem,
   type SessionEntrySnapshot,
   type SessionLogSnapshot,
   type SubagentSnapshot,
@@ -46,6 +49,26 @@ function buildSnapshot(entries: SessionEntrySnapshot[]): SessionLogSnapshot {
     updatedAt: "2026-03-09T15:13:12.000Z",
     model: null,
     entries,
+  };
+}
+
+function buildRecentIndexItem(
+  overrides: Partial<RecentSessionIndexItem> = {},
+): RecentSessionIndexItem {
+  return {
+    sessionId: "session-1",
+    workspacePath: "/Users/choegihwan/Documents/Projects/exem-ui",
+    originPath: "/Users/choegihwan/Documents/Projects/exem-ui",
+    displayName: "exem-ui",
+    startedAt: "2026-03-09T15:03:12.000Z",
+    updatedAt: "2026-03-09T15:13:12.000Z",
+    model: "gpt-5",
+    filePath: "/tmp/session-1.jsonl",
+    firstUserMessage: "recent summary",
+    title: "recent summary",
+    status: "done",
+    lastEventSummary: "최근 응답",
+    ...overrides,
   };
 }
 
@@ -185,37 +208,50 @@ describe("sessionLogLoader", () => {
     expect(status).toBe("done");
   });
 
-  it("loads recent session snapshots from Tauri before falling back to web fetch", async () => {
-    mockedInvokeTauri.mockResolvedValue([
-      buildSnapshot([
-        makeMessageEntry(
-          "2026-03-09T15:03:18.000Z",
-          "user",
-          "tauri 우선 로드",
-        ),
-      ]),
-    ]);
+  it("loads recent session summaries from Tauri before hydrating snapshots", async () => {
+    mockedInvokeTauri
+      .mockResolvedValueOnce([
+        buildRecentIndexItem({ filePath: "/tmp/session-a.jsonl" }),
+      ])
+      .mockResolvedValueOnce(
+        buildSnapshot([
+          makeMessageEntry(
+            "2026-03-09T15:03:18.000Z",
+            "user",
+            "tauri 우선 로드",
+          ),
+        ]),
+      );
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const datasets = await loadSessionLogDatasets();
 
-    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_recent_session_snapshots");
+    expect(mockedInvokeTauri).toHaveBeenNthCalledWith(1, "load_recent_session_index");
+    expect(mockedInvokeTauri).toHaveBeenNthCalledWith(2, "load_recent_session_snapshot", {
+      filePath: "/tmp/session-a.jsonl",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(datasets).toHaveLength(1);
     expect(datasets?.[0]?.run.title).toBe("tauri 우선 로드");
   });
 
   it("Tauri snapshot 목록에서 잘못된 세션은 걸러내고 유효한 세션만 유지한다", async () => {
-    mockedInvokeTauri.mockResolvedValue([
-      buildSnapshot([
-        makeMessageEntry(
-          "2026-03-09T15:03:18.000Z",
-          "user",
-          "유효한 snapshot",
-        ),
-      ]),
-      {
+    mockedInvokeTauri
+      .mockResolvedValueOnce([
+        buildRecentIndexItem({ filePath: "/tmp/session-valid.jsonl" }),
+        buildRecentIndexItem({ sessionId: "broken-session", filePath: "/tmp/session-broken.jsonl" }),
+      ])
+      .mockResolvedValueOnce(
+        buildSnapshot([
+          makeMessageEntry(
+            "2026-03-09T15:03:18.000Z",
+            "user",
+            "유효한 snapshot",
+          ),
+        ]),
+      )
+      .mockResolvedValueOnce({
         ...buildSnapshot([
           makeMessageEntry(
             "2026-03-09T15:03:18.000Z",
@@ -225,8 +261,7 @@ describe("sessionLogLoader", () => {
         ]),
         sessionId: "broken-session",
         startedAt: "invalid-timestamp",
-      },
-    ]);
+      });
     vi.stubGlobal("fetch", vi.fn());
 
     const datasets = await loadSessionLogDatasets();
@@ -234,6 +269,35 @@ describe("sessionLogLoader", () => {
     expect(datasets).toHaveLength(1);
     expect(datasets?.[0]?.session.sessionId).toBe("session-1");
     expect(datasets?.[0]?.run.title).toBe("유효한 snapshot");
+  });
+
+  it("reads the recent session index through the Tauri bridge", async () => {
+    const items = [buildRecentIndexItem()];
+    mockedInvokeTauri.mockResolvedValueOnce(items);
+
+    const result = await loadRecentSessionIndex();
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_recent_session_index");
+    expect(result).toEqual(items);
+  });
+
+  it("hydrates a recent session snapshot through the async detail loader", async () => {
+    mockedInvokeTauri.mockResolvedValueOnce(
+      buildSnapshot([
+        makeMessageEntry(
+          "2026-03-09T15:03:18.000Z",
+          "user",
+          "recent detail hydrate",
+        ),
+      ]),
+    );
+
+    const dataset = await loadRecentSessionSnapshot("/tmp/recent-session.jsonl");
+
+    expect(mockedInvokeTauri).toHaveBeenCalledWith("load_recent_session_snapshot", {
+      filePath: "/tmp/recent-session.jsonl",
+    });
+    expect(dataset?.run.title).toBe("recent detail hydrate");
   });
 
   it("falls back to web snapshots when the Tauri bridge is unavailable", async () => {

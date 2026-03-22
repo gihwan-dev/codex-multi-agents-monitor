@@ -13,8 +13,9 @@ import type {
 interface CreateMonitorActionsOptions {
   state: MonitorState;
   dispatch: Dispatch<MonitorAction>;
-  activeDataset: MonitorState["datasets"][number];
+  activeDataset: MonitorState["datasets"][number] | null;
   activeFollowLive: boolean;
+  requestRecentSnapshot: (filePath: string) => void;
   requestArchiveIndex: (
     offset: number,
     append: boolean,
@@ -28,6 +29,7 @@ export function createMonitorActions({
   dispatch,
   activeDataset,
   activeFollowLive,
+  requestRecentSnapshot,
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
 }: CreateMonitorActionsOptions) {
@@ -50,11 +52,13 @@ export function createMonitorActions({
     dispatch,
     requestArchiveIndex,
     archiveSnapshotRequestIdRef,
+    hydratedDatasetsByFilePath: state.hydratedDatasetsByFilePath,
   });
 
   return {
     ...viewActions,
     ...importExportActions,
     ...archiveActions,
+    selectRecentSession: requestRecentSnapshot,
   };
 }

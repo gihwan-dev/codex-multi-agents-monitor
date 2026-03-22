@@ -1,7 +1,16 @@
 import type { EventRecord, RunDataset } from "../model/types.js";
 
+const SORTED_EVENT_CACHE = new WeakMap<EventRecord[], EventRecord[]>();
+
 export function sortEvents(events: EventRecord[]) {
-  return [...events].sort((left, right) => left.startTs - right.startTs);
+  const cached = SORTED_EVENT_CACHE.get(events);
+  if (cached) {
+    return cached;
+  }
+
+  const sorted = [...events].sort((left, right) => left.startTs - right.startTs);
+  SORTED_EVENT_CACHE.set(events, sorted);
+  return sorted;
 }
 
 export function buildEdgeMaps(dataset: RunDataset) {

@@ -31,7 +31,7 @@ function getNextVisibleEventId(
 
 interface UseMonitorKeyboardShortcutsOptions {
   dispatch: Dispatch<MonitorAction>;
-  activeDataset: RunDataset;
+  activeDataset: RunDataset | null;
   selection: SelectionState | null;
   graphRows: GraphSceneRow[];
 }
@@ -53,6 +53,19 @@ export function dispatchMonitorKeyboardShortcut(
   }: MonitorKeyboardShortcutContext,
 ) {
   if (isEditableKeyboardTarget(event.target)) {
+    return;
+  }
+
+  if (!activeDataset) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      dispatch({ type: "toggle-shortcuts" });
+      return;
+    }
+
+    if (event.key === "?") {
+      dispatch({ type: "toggle-shortcuts" });
+    }
     return;
   }
 

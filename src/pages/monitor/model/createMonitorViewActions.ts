@@ -10,7 +10,7 @@ import {
 interface CreateMonitorViewActionsOptions {
   drawerOpen: boolean;
   dispatch: Dispatch<MonitorAction>;
-  activeDataset: MonitorState["datasets"][number];
+  activeDataset: MonitorState["datasets"][number] | null;
   activeFollowLive: boolean;
 }
 
@@ -25,6 +25,10 @@ export function createMonitorViewActions({
       dispatch({ type: "set-active-run", traceId });
     },
     selectItem(selection: SelectionState) {
+      if (!activeDataset) {
+        return;
+      }
+
       dispatch({ type: "set-selection", selection });
 
       if (
@@ -50,6 +54,10 @@ export function createMonitorViewActions({
       dispatch({ type: "toggle-inspector" });
     },
     toggleFollowLive() {
+      if (!activeDataset) {
+        return;
+      }
+
       dispatch({
         type: "toggle-follow-live",
         traceId: activeDataset.run.traceId,
@@ -66,6 +74,10 @@ export function createMonitorViewActions({
       }
     },
     pauseFollowLive() {
+      if (!activeDataset) {
+        return;
+      }
+
       if (!activeFollowLive || activeDataset.run.liveMode !== "live") {
         return;
       }
@@ -77,6 +89,10 @@ export function createMonitorViewActions({
       });
     },
     toggleGap(gapId: string) {
+      if (!activeDataset) {
+        return;
+      }
+
       dispatch({
         type: "toggle-gap",
         traceId: activeDataset.run.traceId,

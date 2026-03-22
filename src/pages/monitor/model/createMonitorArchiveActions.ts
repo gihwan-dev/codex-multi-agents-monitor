@@ -3,6 +3,7 @@ import {
   type MutableRefObject,
   startTransition,
 } from "react";
+import type { RunDataset } from "../../../entities/run";
 import { loadArchivedSessionSnapshot } from "../../../entities/session-log";
 import type { MonitorAction } from "./state";
 
@@ -16,6 +17,7 @@ interface CreateMonitorArchiveActionsOptions {
     search?: string,
   ) => void;
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
+  hydratedDatasetsByFilePath: Record<string, RunDataset>;
 }
 
 function toOptionalSearch(value: string) {
@@ -29,6 +31,7 @@ export function createMonitorArchiveActions({
   dispatch,
   requestArchiveIndex,
   archiveSnapshotRequestIdRef,
+  hydratedDatasetsByFilePath,
 }: CreateMonitorArchiveActionsOptions) {
   function startSnapshotRequest() {
     const requestId = archiveSnapshotRequestIdRef.current + 1;
@@ -53,6 +56,7 @@ export function createMonitorArchiveActions({
         dispatch({
           type: "resolve-archived-snapshot-request",
           requestId,
+          filePath,
           dataset,
         });
       });
@@ -71,6 +75,12 @@ export function createMonitorArchiveActions({
       requestArchiveIndex(0, false, toOptionalSearch(query));
     },
     selectArchivedSession(filePath: string) {
+      const cachedDataset = hydratedDatasetsByFilePath[filePath];
+      if (cachedDataset) {
+        dispatch({ type: "set-active-run", traceId: cachedDataset.run.traceId });
+        return;
+      }
+
       const requestId = startSnapshotRequest();
       void loadArchiveSnapshot(filePath, requestId);
     },

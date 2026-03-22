@@ -24,7 +24,7 @@ interface MonitorDrawerState {
 
 interface MonitorDrawerProps {
   drawerState: MonitorDrawerState;
-  activeDataset: RunDataset;
+  activeDataset: RunDataset | null;
   rawTabAvailable: boolean;
   onSetDrawerTab: (tab: DrawerTab, target?: HTMLElement | null) => void;
   onImport: () => void;
@@ -55,6 +55,12 @@ export function MonitorDrawer({
       label: tab,
     }),
   );
+  const dataset = activeDataset;
+  const noDatasetPlaceholder = (
+    <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-muted-foreground">
+      Load a run to inspect drawer content.
+    </div>
+  );
 
   return (
     <Panel
@@ -83,8 +89,8 @@ export function MonitorDrawer({
       {drawerState.drawerTab === "artifacts" ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid gap-3 pr-3">
-            {activeDataset.artifacts.length ? (
-              activeDataset.artifacts.map((item) => (
+            {dataset?.artifacts.length ? (
+              dataset.artifacts.map((item) => (
                 <article
                   key={item.artifactId}
                   className="grid gap-2 rounded-[12px] border border-white/8 bg-white/[0.025] px-3 py-3"
@@ -94,7 +100,11 @@ export function MonitorDrawer({
                 </article>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No artifacts yet.</p>
+              dataset ? (
+                <p className="text-sm text-muted-foreground">No artifacts yet.</p>
+              ) : (
+                noDatasetPlaceholder
+              )
             )}
           </div>
         </ScrollArea>
@@ -134,24 +144,30 @@ export function MonitorDrawer({
 
       {drawerState.drawerTab === "context" ? (
         <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-white/8 bg-white/[0.02]">
-          {activeDataset.promptAssembly ? (
-            <PromptAssemblyView
-              assembly={activeDataset.promptAssembly}
-              rawEnabled={activeDataset.run.rawIncluded}
-            />
+          {dataset ? (
+            dataset.promptAssembly ? (
+              <PromptAssemblyView
+                assembly={dataset.promptAssembly}
+                rawEnabled={dataset.run.rawIncluded}
+              />
+            ) : (
+              <div className="px-4 py-3 text-sm text-muted-foreground">
+                No prompt assembly data available.
+              </div>
+            )
           ) : (
-            <div className="px-4 py-3 text-sm text-muted-foreground">
-              No prompt assembly data available.
-            </div>
+            noDatasetPlaceholder
           )}
         </div>
       ) : null}
 
       {drawerState.drawerTab === "raw" ? (
         <pre className="min-h-[12rem] flex-1 overflow-auto rounded-[12px] border border-white/8 bg-white/[0.03] p-3 text-[0.78rem] leading-6 font-mono text-muted-foreground">
-          {activeDataset.run.rawIncluded
-            ? JSON.stringify(activeDataset, null, 2)
-            : "Raw payload hidden by default."}
+          {dataset?.run.rawIncluded
+            ? JSON.stringify(dataset, null, 2)
+            : dataset
+              ? "Raw payload hidden by default."
+              : "Load a run to inspect drawer content."}
         </pre>
       ) : null}
 
@@ -162,8 +178,8 @@ export function MonitorDrawer({
       ) : null}
 
       <div className="flex flex-wrap justify-end gap-2 text-[0.8rem] tabular-nums text-muted-foreground">
-        <span>{formatTokens(activeDataset.run.summaryMetrics.tokens)}</span>
-        <span>{formatCurrency(activeDataset.run.summaryMetrics.costUsd)}</span>
+        <span>{formatTokens(dataset?.run.summaryMetrics.tokens ?? 0)}</span>
+        <span>{formatCurrency(dataset?.run.summaryMetrics.costUsd ?? 0)}</span>
       </div>
     </Panel>
   );

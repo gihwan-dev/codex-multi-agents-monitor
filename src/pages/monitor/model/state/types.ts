@@ -7,10 +7,12 @@ import type {
 import type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
+  RecentSessionIndexItem,
 } from "../../../../entities/session-log";
 
 export interface MonitorState {
   datasets: RunDataset[];
+  hydratedDatasetsByFilePath: Record<string, RunDataset>;
   activeRunId: string;
   selection: SelectionState | null;
   drawerTab: DrawerTab;
@@ -27,6 +29,12 @@ export interface MonitorState {
   exportText: string;
   shortcutHelpOpen: boolean;
   appliedLiveFrames: number;
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexLoading: boolean;
+  recentIndexReady: boolean;
+  recentIndexError: string | null;
+  recentSnapshotLoadingId: string | null;
+  recentSnapshotRequestId: number;
   archivedIndex: ArchivedSessionIndexItem[];
   archivedTotal: number;
   archivedHasMore: boolean;
@@ -57,6 +65,17 @@ export type MonitorAction =
   | { type: "toggle-shortcuts" }
   | { type: "import-dataset"; dataset: RunDataset }
   | { type: "replace-datasets"; datasets: RunDataset[] }
+  | { type: "begin-recent-index-request" }
+  | { type: "resolve-recent-index-request"; items: RecentSessionIndexItem[] }
+  | { type: "finish-recent-index-request"; error?: string | null }
+  | { type: "begin-recent-snapshot-request"; requestId: number; filePath: string }
+  | {
+      type: "resolve-recent-snapshot-request";
+      requestId: number;
+      filePath: string;
+      dataset: RunDataset;
+    }
+  | { type: "finish-recent-snapshot-request"; requestId: number }
   | { type: "apply-live-frame" }
   | { type: "begin-archived-index-request"; requestId: number }
   | {
@@ -74,6 +93,7 @@ export type MonitorAction =
   | {
       type: "resolve-archived-snapshot-request";
       requestId: number;
+      filePath: string;
       dataset: RunDataset;
     }
   | { type: "finish-archived-snapshot-request"; requestId: number }

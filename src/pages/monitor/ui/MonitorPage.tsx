@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { DrawerTab } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
+import { Panel } from "../../../shared/ui";
 import {
   Button,
   Dialog,
@@ -34,6 +35,10 @@ export function MonitorPage() {
     activeDataset,
     activeFollowLive,
     activeLiveConnection,
+    recentIndexReady,
+    recentIndexLoading,
+    recentIndexError,
+    recentSnapshotLoadingId,
     archivedIndexLoading,
     archivedIndexError,
     rawTabAvailable,
@@ -113,8 +118,12 @@ export function MonitorPage() {
           <div className="workspace__rail-pane">
             <WorkspaceRunTree
               datasets={state.datasets}
+              recentIndex={state.recentIndex}
+              recentIndexReady={recentIndexReady}
+              recentSnapshotLoadingId={recentSnapshotLoadingId}
               activeRunId={state.activeRunId}
               onSelectRun={actions.selectRun}
+              onSelectRecentRun={actions.selectRecentSession}
               onOpenImport={() => openDrawer("import")}
               searchRef={searchRef}
               workspaceIdentityOverrides={workspaceIdentityOverrides}
@@ -130,6 +139,12 @@ export function MonitorPage() {
               onArchiveLoadMore={() => actions.loadArchiveIndex(true)}
               onArchiveSelect={actions.selectArchivedSession}
             />
+            {recentIndexLoading && !recentIndexReady ? (
+              <p className="run-list__workspace-count">Loading recent sessions…</p>
+            ) : null}
+            {recentIndexError && !state.recentIndex.length ? (
+              <p className="archive-list__error">{recentIndexError}</p>
+            ) : null}
           </div>
           <ResizeHandle
             label="Resize run list"
@@ -146,13 +161,29 @@ export function MonitorPage() {
             onJump={actions.selectItem}
           />
 
-          <CausalGraphView
-            scene={graphScene}
-            onSelect={actions.selectItem}
-            followLive={activeFollowLive}
-            liveMode={activeDataset.run.liveMode}
-            onPauseFollowLive={actions.pauseFollowLive}
-          />
+          {!activeDataset ? (
+            <Panel
+              panelSlot="graph-panel"
+              title="Graph"
+              className="flex-1 overflow-hidden rounded-none border-x-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
+            >
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-muted-foreground">
+                {recentSnapshotLoadingId
+                  ? "Loading the selected session detail without blocking the UI."
+                  : "Choose a recent or archived session to hydrate its graph view."}
+              </div>
+            </Panel>
+          ) : null}
+
+          {activeDataset ? (
+            <CausalGraphView
+              scene={graphScene}
+              onSelect={actions.selectItem}
+              followLive={activeFollowLive}
+              liveMode={activeDataset.run.liveMode}
+              onPauseFollowLive={actions.pauseFollowLive}
+            />
+          ) : null}
 
           {isCompactViewport ? (
             <CausalInspectorPane

@@ -17,7 +17,7 @@ interface CreateMonitorImportExportActionsOptions {
   allowRawImport: boolean;
   noRawStorage: boolean;
   dispatch: Dispatch<MonitorAction>;
-  activeDataset: MonitorState["datasets"][number];
+  activeDataset: MonitorState["datasets"][number] | null;
 }
 
 export function createMonitorImportExportActions({
@@ -57,6 +57,15 @@ export function createMonitorImportExportActions({
       }
     },
     exportDataset(includeRaw = false) {
+      if (!activeDataset) {
+        dispatch({
+          type: "set-export-text",
+          value: "No run is loaded yet.",
+          open: true,
+        });
+        return;
+      }
+
       dispatch({
         type: "set-export-text",
         value: buildExportPayload(

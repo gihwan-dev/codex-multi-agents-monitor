@@ -67,17 +67,26 @@ export function beginArchivedSnapshotRequest(
 export function resolveArchivedSnapshotRequest(
   state: MonitorState,
   requestId: number,
+  filePath: string,
   dataset: MonitorState["datasets"][number],
 ): MonitorState {
   if (requestId !== state.archivedSnapshotRequestId) {
     return state;
   }
 
-  return {
+  const nextState = {
     ...state,
     archivedSnapshotLoading: false,
+    hydratedDatasetsByFilePath: {
+      ...state.hydratedDatasetsByFilePath,
+      [filePath]: dataset,
+    },
     datasets: upsertDataset(state, dataset),
-    ...buildDatasetActivationPatch(state, dataset),
+  };
+
+  return {
+    ...nextState,
+    ...buildDatasetActivationPatch(nextState, dataset),
   };
 }
 

@@ -33,6 +33,23 @@ function buildArchiveResult(sessionId: string) {
   };
 }
 
+function buildRecentIndexItem(sessionId: string) {
+  return {
+    sessionId,
+    workspacePath: `/tmp/${sessionId}`,
+    originPath: `/tmp/${sessionId}`,
+    displayName: sessionId,
+    startedAt: "2026-03-20T00:00:00.000Z",
+    updatedAt: "2026-03-20T00:01:00.000Z",
+    model: "gpt-5",
+    filePath: `/tmp/${sessionId}.jsonl`,
+    firstUserMessage: `first ${sessionId}`,
+    title: sessionId,
+    status: "done" as const,
+    lastEventSummary: `last ${sessionId}`,
+  };
+}
+
 function buildArchivedDataset(traceId: string) {
   const template = createMonitorInitialState().datasets[0];
   if (!template) {
@@ -331,11 +348,13 @@ describe("archive 요청 상태", () => {
     const staleResolved = monitorStateReducer(latestRequest, {
       type: "resolve-archived-snapshot-request",
       requestId: 1,
+      filePath: "/tmp/stale-archive.json",
       dataset: buildArchivedDataset("stale-archive"),
     });
     const currentResolved = monitorStateReducer(latestRequest, {
       type: "resolve-archived-snapshot-request",
       requestId: 2,
+      filePath: "/tmp/fresh-archive.json",
       dataset: buildArchivedDataset("fresh-archive"),
     });
 
@@ -366,6 +385,57 @@ describe("archive 요청 상태", () => {
 
     expect(staleFinished.archivedSnapshotLoading).toBe(true);
     expect(currentFinished.archivedSnapshotLoading).toBe(false);
+  });
+
+  it("recent index가 도착하면 fixture 목록을 내리고 첫 recent session을 활성 후보로 삼는다", () => {
+    const initialState = createMonitorInitialState();
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "resolve-recent-index-request",
+      items: [buildRecentIndexItem("recent-001")],
+    });
+
+    expect(nextState.recentIndexReady).toBe(true);
+    expect(nextState.recentIndex).toHaveLength(1);
+    expect(nextState.activeRunId).toBe("recent-001");
+    expect(nextState.datasets).toEqual([]);
+    expect(nextState.selection).toBeNull();
+  });
+
+  it("recent snapshot resolve는 cache를 채우고 최신 요청만 반영한다", () => {
+    const initialState = monitorStateReducer(createMonitorInitialState(), {
+      type: "resolve-recent-index-request",
+      items: [buildRecentIndexItem("recent-001")],
+    });
+    const pendingState = monitorStateReducer(initialState, {
+      type: "begin-recent-snapshot-request",
+      requestId: 1,
+      filePath: "/tmp/recent-001.jsonl",
+    });
+    const latestState = monitorStateReducer(pendingState, {
+      type: "begin-recent-snapshot-request",
+      requestId: 2,
+      filePath: "/tmp/recent-002.jsonl",
+    });
+
+    const staleResolved = monitorStateReducer(latestState, {
+      type: "resolve-recent-snapshot-request",
+      requestId: 1,
+      filePath: "/tmp/recent-001.jsonl",
+      dataset: buildArchivedDataset("recent-001"),
+    });
+    const currentResolved = monitorStateReducer(latestState, {
+      type: "resolve-recent-snapshot-request",
+      requestId: 2,
+      filePath: "/tmp/recent-002.jsonl",
+      dataset: buildArchivedDataset("recent-002"),
+    });
+
+    expect(staleResolved.datasets).toEqual(latestState.datasets);
+    expect(currentResolved.activeRunId).toBe("recent-002");
+    expect(currentResolved.hydratedDatasetsByFilePath["/tmp/recent-002.jsonl"]?.run.traceId).toBe(
+      "recent-002",
+    );
   });
 
   it("dataset 교체는 run별 UI 상태를 재초기화하고 raw drawer fallback을 적용한다", () => {

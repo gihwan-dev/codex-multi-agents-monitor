@@ -5,13 +5,18 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     fs::{self, File},
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead, BufReader, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const MAX_RECENT_PARENT_SESSIONS: usize = 24;
+const MAX_RECENT_SESSIONS: usize = 24;
+const RECENT_INDEX_PREFIX_SCAN_LIMIT: usize = 80;
+const RECENT_INDEX_TAIL_ENTRY_LIMIT: usize = 120;
+const RECENT_INDEX_TAIL_BYTES: u64 = 131_072;
+const ARCHIVED_INDEX_SCAN_LIMIT: usize = 50;
+const DEFAULT_THREAD_TITLE: &str = "새 스레드";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +82,23 @@ struct PromptAssemblyLayer {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct RecentSessionIndexItem {
+    session_id: String,
+    workspace_path: String,
+    origin_path: String,
+    display_name: String,
+    started_at: String,
+    updated_at: String,
+    model: Option<String>,
+    file_path: String,
+    first_user_message: Option<String>,
+    title: String,
+    status: String,
+    last_event_summary: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ArchivedSessionIndex {
     session_id: String,
     workspace_path: String,
@@ -113,8 +135,20 @@ fn resolve_workspace_identities(repo_paths: Vec<String>) -> HashMap<String, Work
 }
 
 #[tauri::command]
-fn load_recent_session_snapshots() -> Vec<SessionLogSnapshot> {
-    load_recent_session_snapshots_from_disk().unwrap_or_default()
+async fn load_recent_session_index() -> Vec<RecentSessionIndexItem> {
+    tauri::async_runtime::spawn_blocking(load_recent_session_index_from_disk)
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+async fn load_recent_session_snapshot(file_path: String) -> Option<SessionLogSnapshot> {
+    tauri::async_runtime::spawn_blocking(move || load_recent_session_snapshot_from_disk(&file_path))
+        .await
+        .ok()
+        .flatten()
 }
 
 fn resolve_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity> {
@@ -139,7 +173,7 @@ fn resolve_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity>
     ))
 }
 
-fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapshot>> {
+fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexItem>> {
     let codex_home = resolve_codex_home()?;
     let projects_root = resolve_projects_root()?;
     let sessions_root = codex_home.join("sessions");
@@ -148,54 +182,27 @@ fn load_recent_session_snapshots_from_disk() -> io::Result<Vec<SessionLogSnapsho
     collect_jsonl_files(&sessions_root, &mut session_files)?;
     sort_session_files_by_recent_activity(&mut session_files);
 
-    let mut parent_snapshots = Vec::new();
-    let mut subagent_snapshots = Vec::new();
+    let mut items = Vec::new();
 
     for session_file in &session_files {
-        match read_subagent_snapshot(session_file) {
-            Ok(Some(sub)) => {
-                subagent_snapshots.push(sub);
-                continue;
-            }
-            Ok(None) => {}
-            Err(_) => continue,
-        }
-
-        if parent_snapshots.len() >= MAX_RECENT_PARENT_SESSIONS {
+        if items.len() >= MAX_RECENT_SESSIONS {
             continue;
         }
 
-        let snapshot = match read_session_snapshot(session_file, &projects_root) {
-            Ok(Some(snapshot)) => snapshot,
+        let item = match read_recent_index_entry(session_file, &projects_root) {
+            Ok(Some(item)) => item,
             Ok(None) => continue,
             Err(_) => continue,
         };
 
-        if archived_thread_ids.contains(&snapshot.session_id) {
+        if archived_thread_ids.contains(&item.session_id) {
             continue;
         }
 
-        parent_snapshots.push(snapshot);
+        items.push(item);
     }
 
-    retain_recent_parent_snapshots(&mut parent_snapshots);
-
-    for parent in &mut parent_snapshots {
-        let matched: Vec<SubagentSnapshot> = subagent_snapshots
-            .iter()
-            .filter(|sub| {
-                sub.parent_thread_id == parent.session_id
-                    || parent
-                        .forked_from_id
-                        .as_ref()
-                        .is_some_and(|fid| sub.parent_thread_id == *fid)
-            })
-            .cloned()
-            .collect();
-        parent.subagents = matched;
-    }
-
-    Ok(parent_snapshots)
+    Ok(items)
 }
 
 fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<String>> {
@@ -264,22 +271,6 @@ fn recent_file_modified_at(path: &Path) -> SystemTime {
         .unwrap_or(UNIX_EPOCH)
 }
 
-fn sort_snapshots_by_recent_activity(
-    left: &SessionLogSnapshot,
-    right: &SessionLogSnapshot,
-) -> std::cmp::Ordering {
-    right
-        .updated_at
-        .cmp(&left.updated_at)
-        .then_with(|| right.started_at.cmp(&left.started_at))
-        .then_with(|| right.session_id.cmp(&left.session_id))
-}
-
-fn retain_recent_parent_snapshots(parent_snapshots: &mut Vec<SessionLogSnapshot>) {
-    parent_snapshots.sort_by(sort_snapshots_by_recent_activity);
-    parent_snapshots.truncate(MAX_RECENT_PARENT_SESSIONS);
-}
-
 fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
     if !directory.exists() {
         return Ok(());
@@ -300,6 +291,151 @@ fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result
     }
 
     Ok(())
+}
+
+fn load_recent_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogSnapshot> {
+    let codex_home = resolve_codex_home().ok()?;
+    let projects_root = resolve_projects_root().ok()?;
+    let sessions_root = codex_home.join("sessions");
+    let path = Path::new(file_path);
+
+    let canonical_path = fs::canonicalize(path).ok()?;
+    let canonical_root = fs::canonicalize(&sessions_root).ok()?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return None;
+    }
+
+    let mut snapshot = read_session_snapshot(&canonical_path, &projects_root).ok()??;
+    let mut session_files = Vec::new();
+    collect_jsonl_files(&sessions_root, &mut session_files).ok()?;
+
+    for session_file in &session_files {
+        if fs::canonicalize(session_file).ok().as_ref() == Some(&canonical_path) {
+            continue;
+        }
+
+        if let Ok(Some(sub)) = read_subagent_snapshot(session_file) {
+            if sub.parent_thread_id == snapshot.session_id
+                || snapshot
+                    .forked_from_id
+                    .as_ref()
+                    .is_some_and(|fid| sub.parent_thread_id == *fid)
+            {
+                snapshot.subagents.push(sub);
+            }
+        }
+    }
+
+    Some(snapshot)
+}
+
+fn read_recent_index_entry(
+    session_file: &Path,
+    projects_root: &Path,
+) -> io::Result<Option<RecentSessionIndexItem>> {
+    let file = File::open(session_file)?;
+    let mut reader = BufReader::new(file);
+    let mut first_line = String::new();
+    if reader.read_line(&mut first_line)? == 0 {
+        return Ok(None);
+    }
+
+    let session_meta = serde_json::from_str::<Value>(&first_line)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let payload = match session_meta.get("payload").and_then(Value::as_object) {
+        Some(payload) => payload,
+        None => return Ok(None),
+    };
+
+    if payload
+        .get("source")
+        .and_then(|source| source.get("subagent"))
+        .is_some()
+    {
+        return Ok(None);
+    }
+
+    if payload.get("source").and_then(Value::as_str).is_none() {
+        return Ok(None);
+    }
+
+    let workspace_path = payload
+        .get("cwd")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "session cwd missing"))?;
+    let started_at = payload
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .or_else(|| session_meta.get("timestamp").and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_owned();
+    let session_id = payload
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| session_file.display().to_string());
+
+    let workspace_identity =
+        resolve_session_workspace_identity(Path::new(workspace_path), projects_root).ok();
+    let Some(workspace_identity) = workspace_identity else {
+        return Ok(None);
+    };
+
+    let mut prefix_entries = Vec::new();
+    let mut model: Option<String> = None;
+    for line in reader
+        .lines()
+        .take(RECENT_INDEX_PREFIX_SCAN_LIMIT)
+        .flatten()
+    {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let entry = match serde_json::from_str::<Value>(&line) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+
+        if model.is_none() {
+            model = extract_turn_context_model(&entry);
+        }
+
+        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+            prefix_entries.push(snapshot_entry);
+        }
+    }
+
+    let tail_entries = read_tail_entry_snapshots(
+        session_file,
+        RECENT_INDEX_TAIL_BYTES,
+        RECENT_INDEX_TAIL_ENTRY_LIMIT,
+    )?;
+    let title = derive_recent_index_title(&prefix_entries);
+    let first_user_message = extract_first_user_message(&prefix_entries);
+    let updated_at = tail_entries
+        .last()
+        .map(|entry| entry.timestamp.clone())
+        .unwrap_or_else(|| started_at.clone());
+    let status = derive_recent_index_status(&tail_entries);
+    let last_event_summary = derive_recent_index_last_summary(&tail_entries);
+
+    Ok(Some(RecentSessionIndexItem {
+        session_id,
+        workspace_path: workspace_path.to_owned(),
+        origin_path: workspace_identity.origin_path,
+        display_name: workspace_identity.display_name,
+        started_at,
+        updated_at,
+        model,
+        file_path: session_file.display().to_string(),
+        first_user_message,
+        title,
+        status,
+        last_event_summary,
+    }))
 }
 
 fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnapshot>> {
@@ -1218,6 +1354,201 @@ fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
     }
 }
 
+fn extract_turn_context_model(entry: &Value) -> Option<String> {
+    if entry.get("type").and_then(Value::as_str) != Some("turn_context") {
+        return None;
+    }
+
+    entry.get("payload")
+        .and_then(|payload| payload.get("model"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn read_tail_entry_snapshots(
+    session_file: &Path,
+    max_bytes: u64,
+    max_entries: usize,
+) -> io::Result<Vec<SessionEntrySnapshot>> {
+    let mut file = File::open(session_file)?;
+    let file_len = file.metadata()?.len();
+    let offset = file_len.saturating_sub(max_bytes);
+    file.seek(SeekFrom::Start(offset))?;
+
+    let mut buffer = String::new();
+    file.read_to_string(&mut buffer)?;
+    let mut lines = buffer.lines();
+    if offset > 0 {
+        let _ = lines.next();
+    }
+
+    let mut entries = Vec::new();
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let entry = match serde_json::from_str::<Value>(line) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+
+        if let Some(snapshot_entry) = extract_entry_snapshot(&entry) {
+            entries.push(snapshot_entry);
+        }
+    }
+
+    if entries.len() > max_entries {
+        entries.drain(0..entries.len() - max_entries);
+    }
+
+    Ok(entries)
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn sanitize_summary_text(text: &str) -> String {
+    collapse_whitespace(text).trim().trim_start_matches('$').to_owned()
+}
+
+fn extract_first_user_message(entries: &[SessionEntrySnapshot]) -> Option<String> {
+    entries.iter().find_map(|entry| {
+        if entry.entry_type != "message" || entry.role.as_deref() != Some("user") {
+            return None;
+        }
+
+        let text = entry.text.as_deref()?.trim();
+        if text.is_empty() || is_system_boilerplate_text(text) {
+            return None;
+        }
+
+        Some(truncate_utf8_safe(text, 200))
+    })
+}
+
+fn derive_recent_index_title(entries: &[SessionEntrySnapshot]) -> String {
+    let title = extract_first_user_message(entries)
+        .map(|message| sanitize_summary_text(&message))
+        .filter(|message| !message.is_empty())
+        .unwrap_or_else(|| DEFAULT_THREAD_TITLE.to_owned());
+
+    truncate_utf8_safe(&title, 120)
+}
+
+fn derive_recent_index_status(entries: &[SessionEntrySnapshot]) -> String {
+    let has_abort = entries.iter().any(|entry| {
+        matches!(
+            entry.entry_type.as_str(),
+            "turn_aborted" | "thread_rolled_back"
+        )
+    });
+
+    let latest_message = entries.iter().rev().find(|entry| {
+        entry.entry_type == "message"
+            && entry
+                .text
+                .as_deref()
+                .map(|text| {
+                    let trimmed = text.trim();
+                    trimmed.starts_with("<turn_aborted>")
+                        || !is_system_boilerplate_text(trimmed)
+                })
+                .unwrap_or(false)
+    });
+
+    let Some(latest_message) = latest_message else {
+        return if has_abort {
+            "interrupted".to_owned()
+        } else {
+            "done".to_owned()
+        };
+    };
+
+    if latest_message
+        .text
+        .as_deref()
+        .is_some_and(|text| text.contains("<turn_aborted>"))
+    {
+        return "interrupted".to_owned();
+    }
+
+    if has_abort {
+        let last_abort = entries.iter().rev().find(|entry| {
+            matches!(
+                entry.entry_type.as_str(),
+                "turn_aborted" | "thread_rolled_back"
+            )
+        });
+        if let Some(last_abort) = last_abort {
+            if last_abort.timestamp >= latest_message.timestamp {
+                return "interrupted".to_owned();
+            }
+        }
+    }
+
+    if latest_message.role.as_deref() == Some("user") {
+        let has_completion_after = entries.iter().any(|entry| {
+            entry.entry_type == "task_complete" && entry.timestamp >= latest_message.timestamp
+        });
+
+        return if has_completion_after {
+            "done".to_owned()
+        } else {
+            "running".to_owned()
+        };
+    }
+
+    "done".to_owned()
+}
+
+fn derive_recent_index_last_summary(entries: &[SessionEntrySnapshot]) -> String {
+    for entry in entries.iter().rev() {
+        match entry.entry_type.as_str() {
+            "message" => {
+                if let Some(text) = entry.text.as_deref() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() && !is_system_boilerplate_text(trimmed) {
+                        return truncate_utf8_safe(&sanitize_summary_text(trimmed), 160);
+                    }
+                }
+            }
+            "function_call_output" | "task_complete" | "agent_message" | "agent_reasoning"
+            | "item_completed" | "turn_aborted" | "thread_rolled_back" => {
+                if let Some(text) = entry.text.as_deref() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        return truncate_utf8_safe(&sanitize_summary_text(trimmed), 160);
+                    }
+                }
+            }
+            "function_call" => {
+                if let Some(arguments) = entry.function_arguments_preview.as_deref() {
+                    let trimmed = arguments.trim();
+                    if !trimmed.is_empty() {
+                        return truncate_utf8_safe(
+                            &format!(
+                                "{}: {}",
+                                entry.function_name.as_deref().unwrap_or("tool"),
+                                sanitize_summary_text(trimmed)
+                            ),
+                            160,
+                        );
+                    }
+                }
+                if let Some(name) = entry.function_name.as_deref() {
+                    return truncate_utf8_safe(name, 160);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    "No event summary yet.".to_owned()
+}
+
 fn build_workspace_identity(origin_path: PathBuf, is_worktree: bool) -> WorkspaceIdentity {
     let display_name = origin_path
         .file_name()
@@ -1290,19 +1621,45 @@ fn resolve_common_dir(git_dir: &Path) -> io::Result<PathBuf> {
 }
 
 #[tauri::command]
-fn load_archived_session_index(
+async fn load_archived_session_index(
     offset: usize,
     limit: usize,
     search: Option<String>,
     cache: tauri::State<'_, ArchivedIndexCache>,
+) -> Result<ArchivedSessionIndexResult, String> {
+    let cached = {
+        let guard = cache.0.lock().unwrap_or_else(|e| e.into_inner());
+        guard.clone()
+    };
+
+    let index = match cached {
+        Some(index) => index,
+        None => {
+            let built = tauri::async_runtime::spawn_blocking(build_archived_index)
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default();
+
+            let mut guard = cache.0.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.is_none() {
+                *guard = Some(built.clone());
+                built
+            } else {
+                guard.clone().unwrap_or_default()
+            }
+        }
+    };
+
+    Ok(filter_archived_index(&index, offset, limit, search))
+}
+
+fn filter_archived_index(
+    index: &[ArchivedSessionIndex],
+    offset: usize,
+    limit: usize,
+    search: Option<String>,
 ) -> ArchivedSessionIndexResult {
-    let mut guard = cache.0.lock().unwrap_or_else(|e| e.into_inner());
-
-    if guard.is_none() {
-        *guard = Some(build_archived_index().unwrap_or_default());
-    }
-
-    let index = guard.as_ref().unwrap();
     let filtered: Vec<&ArchivedSessionIndex> = match &search {
         Some(query) if !query.trim().is_empty() => {
             let lower_query = query.to_lowercase();
@@ -1339,7 +1696,14 @@ fn load_archived_session_index(
 }
 
 #[tauri::command]
-fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapshot> {
+async fn load_archived_session_snapshot(file_path: String) -> Option<SessionLogSnapshot> {
+    tauri::async_runtime::spawn_blocking(move || load_archived_session_snapshot_from_disk(&file_path))
+        .await
+        .ok()
+        .flatten()
+}
+
+fn load_archived_session_snapshot_from_disk(file_path: &str) -> Option<SessionLogSnapshot> {
     let codex_home = resolve_codex_home().ok()?;
     let archived_root = codex_home.join("archived_sessions");
     let path = Path::new(&file_path);
@@ -1453,7 +1817,7 @@ fn read_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedS
 
     let mut model: Option<String> = None;
     let mut first_user_message: Option<String> = None;
-    for line in reader.lines().take(50) {
+    for line in reader.lines().take(ARCHIVED_INDEX_SCAN_LIMIT) {
         let line = match line {
             Ok(l) => l,
             Err(_) => break,
@@ -1660,7 +2024,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(ArchivedIndexCache(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
-            load_recent_session_snapshots,
+            load_recent_session_index,
+            load_recent_session_snapshot,
             resolve_workspace_identities,
             load_archived_session_index,
             load_archived_session_snapshot,
@@ -1686,6 +2051,13 @@ mod tests {
         path: PathBuf,
     }
 
+    static TEST_ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<std::ffi::OsString>,
+    }
+
     impl TempDir {
         fn new(name: &str) -> Self {
             let timestamp = SystemTime::now()
@@ -1701,31 +2073,27 @@ mod tests {
         }
     }
 
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &Path) -> Self {
+            let original = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, original }
         }
     }
 
-    fn build_parent_snapshot(
-        session_id: &str,
-        origin_path: &str,
-        started_at: &str,
-        updated_at: &str,
-    ) -> SessionLogSnapshot {
-        SessionLogSnapshot {
-            session_id: session_id.to_owned(),
-            forked_from_id: None,
-            workspace_path: origin_path.to_owned(),
-            origin_path: origin_path.to_owned(),
-            display_name: session_id.to_owned(),
-            started_at: started_at.to_owned(),
-            updated_at: updated_at.to_owned(),
-            model: None,
-            entries: Vec::new(),
-            subagents: Vec::new(),
-            is_archived: false,
-            prompt_assembly: Vec::new(),
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.original {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
         }
     }
 
@@ -1917,44 +2285,6 @@ mod tests {
     }
 
     #[test]
-    fn retains_multiple_recent_parent_snapshots_from_the_same_origin() {
-        let mut snapshots = vec![
-            build_parent_snapshot(
-                "design-task",
-                "/projects/codex-multi-agent-monitor",
-                "2026-03-20T13:34:33.193Z",
-                "2026-03-21T14:54:48.938Z",
-            ),
-            build_parent_snapshot(
-                "follow-up-fix",
-                "/projects/codex-multi-agent-monitor",
-                "2026-03-21T14:40:19.429Z",
-                "2026-03-21T14:40:57.661Z",
-            ),
-            build_parent_snapshot(
-                "daily-diary",
-                "/projects/Obsidian-frontend-journey",
-                "2026-03-21T14:50:19.523Z",
-                "2026-03-21T14:50:28.647Z",
-            ),
-        ];
-
-        retain_recent_parent_snapshots(&mut snapshots);
-
-        assert_eq!(snapshots.len(), 3);
-        assert_eq!(snapshots[0].session_id, "design-task");
-        assert_eq!(snapshots[1].session_id, "daily-diary");
-        assert_eq!(snapshots[2].session_id, "follow-up-fix");
-        assert_eq!(
-            snapshots
-                .iter()
-                .filter(|snapshot| snapshot.origin_path == "/projects/codex-multi-agent-monitor")
-                .count(),
-            2,
-        );
-    }
-
-    #[test]
     fn rejects_linked_worktree_without_commondir() {
         let temp_dir = TempDir::new("missing-commondir");
         let repo_path = temp_dir.path.join("broken-worktree");
@@ -1983,6 +2313,132 @@ mod tests {
 
         let error = resolve_workspace_identity(&repo_path).expect_err("invalid gitdir should fail");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn builds_recent_index_entry_from_lightweight_session_scan() {
+        let _env_lock = TEST_ENV_MUTEX.lock().expect("test env mutex should lock");
+        let temp_dir = TempDir::new("recent-index");
+        let home_root = normalize_path(&temp_dir.path).expect("temp path should normalize");
+        let _home_guard = EnvVarGuard::set("HOME", &home_root);
+        let codex_home = home_root.join(".codex");
+        let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", &codex_home);
+        let sessions_root = codex_home.join("sessions");
+        let projects_root = home_root.join("Documents/Projects");
+        let workspace_path = projects_root.join("demo-app");
+        let session_file = sessions_root.join("session.jsonl");
+
+        fs::create_dir_all(workspace_path.join(".git")).expect("workspace git dir should exist");
+        fs::create_dir_all(&sessions_root).expect("sessions root should exist");
+        fs::write(
+            &session_file,
+            [
+                format!(
+                    r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"session-001","source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
+                    workspace_path.display()
+                ),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Ship the recent-index flow"}]}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Working on the lightweight summary."}]}}"#.to_owned(),
+            ]
+            .join("\n"),
+        )
+        .expect("session file should be written");
+
+        let items = load_recent_session_index_from_disk().expect("recent index should load");
+        let item = items
+            .into_iter()
+            .next()
+            .expect("recent index entry should exist");
+
+        assert_eq!(item.session_id, "session-001");
+        assert_eq!(item.display_name, "demo-app");
+        assert_eq!(item.model.as_deref(), Some("gpt-5"));
+        assert_eq!(item.title, "Ship the recent-index flow");
+        assert_eq!(item.status, "done");
+        assert_eq!(item.last_event_summary, "Working on the lightweight summary.");
+        assert_eq!(item.first_user_message.as_deref(), Some("Ship the recent-index flow"));
+    }
+
+    #[test]
+    fn loads_selected_recent_snapshot_and_matching_subagents_only() {
+        let _env_lock = TEST_ENV_MUTEX.lock().expect("test env mutex should lock");
+        let temp_dir = TempDir::new("recent-detail");
+        let home_root = normalize_path(&temp_dir.path).expect("temp path should normalize");
+        let _home_guard = EnvVarGuard::set("HOME", &home_root);
+        let codex_home = home_root.join(".codex");
+        let _codex_home_guard = EnvVarGuard::set("CODEX_HOME", &codex_home);
+        let sessions_root = codex_home.join("sessions");
+        let projects_root = home_root.join("Documents/Projects");
+        let workspace_path = projects_root.join("demo-app");
+        let selected_file = sessions_root.join("selected.jsonl");
+        let matched_subagent_file = sessions_root.join("matched-sub.jsonl");
+        let unrelated_subagent_file = sessions_root.join("other-sub.jsonl");
+
+        fs::create_dir_all(workspace_path.join(".git")).expect("workspace git dir should exist");
+        fs::create_dir_all(&sessions_root).expect("sessions root should exist");
+
+        fs::write(
+            &selected_file,
+            [
+                format!(
+                    r#"{{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{{"id":"session-001","forked_from_id":"fork-001","source":"desktop","cwd":"{}","timestamp":"2026-03-20T00:00:00.000Z"}}}}"#,
+                    workspace_path.display()
+                ),
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect only this session"}]}}"#.to_owned(),
+            ]
+            .join("\n"),
+        )
+        .expect("selected file should be written");
+        fs::write(
+            &matched_subagent_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{"id":"sub-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Euler","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:01:00.000Z"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Matched child"}]}}"#.to_owned(),
+            ]
+            .join("\n"),
+        )
+        .expect("matched subagent file should be written");
+        fs::write(
+            &unrelated_subagent_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:02:00.000Z","type":"session_meta","payload":{"id":"sub-999","source":{"subagent":{"thread_spawn":{"parent_thread_id":"other-parent","depth":1,"agent_nickname":"Noether","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:02:00.000Z"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:02:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Unrelated child"}]}}"#.to_owned(),
+            ]
+            .join("\n"),
+        )
+        .expect("unrelated subagent file should be written");
+
+        let mut snapshot = read_session_snapshot(&selected_file, &projects_root)
+            .expect("selected recent snapshot should parse")
+            .expect("selected recent snapshot should exist");
+
+        let mut session_files = Vec::new();
+        collect_jsonl_files(&sessions_root, &mut session_files)
+            .expect("session files should be discoverable");
+        for session_file in &session_files {
+            if session_file == &selected_file {
+                continue;
+            }
+
+            if let Ok(Some(sub)) = read_subagent_snapshot(session_file) {
+                if sub.parent_thread_id == snapshot.session_id
+                    || snapshot
+                        .forked_from_id
+                        .as_ref()
+                        .is_some_and(|fid| sub.parent_thread_id == *fid)
+                {
+                    snapshot.subagents.push(sub);
+                }
+            }
+        }
+
+        assert_eq!(snapshot.session_id, "session-001");
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(snapshot.subagents[0].session_id, "sub-001");
+        assert_eq!(snapshot.subagents[0].agent_nickname, "Euler");
     }
 
     #[test]

@@ -1,10 +1,13 @@
 import { ChevronRight } from "lucide-react";
 import type { RefObject } from "react";
 import type { RunDataset } from "../../../entities/run";
-import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
+import type {
+  ArchivedSessionIndexItem,
+  RecentSessionIndexItem,
+} from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { cn } from "../../../shared/lib";
-import { Panel } from "../../../shared/ui";
+import { Panel, StatusChip } from "../../../shared/ui";
 import { Button, Input } from "../../../shared/ui/primitives";
 import { buildRunTreeId, buildWorkspaceTreeId, getWorkspaceRuns } from "../lib/workspaceTreeUtils";
 import { useWorkspaceTreeState } from "../model/useWorkspaceTreeState";
@@ -12,8 +15,12 @@ import { ArchivedSessionList } from "./ArchivedSessionList";
 
 interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexReady: boolean;
+  recentSnapshotLoadingId: string | null;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
+  onSelectRecentRun: (filePath: string) => void;
   onOpenImport: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
@@ -32,8 +39,12 @@ interface WorkspaceRunTreeProps {
 
 export function WorkspaceRunTree({
   datasets,
+  recentIndex,
+  recentIndexReady,
+  recentSnapshotLoadingId,
   activeRunId,
   onSelectRun,
+  onSelectRecentRun,
   onOpenImport,
   searchRef,
   workspaceIdentityOverrides,
@@ -61,6 +72,9 @@ export function WorkspaceRunTree({
     treeRef,
   } = useWorkspaceTreeState({
     datasets,
+    recentIndex,
+    recentIndexReady,
+    recentSnapshotLoadingId,
     activeRunId,
     onSelectRun,
     workspaceIdentityOverrides,
@@ -169,17 +183,27 @@ export function WorkspaceRunTree({
                             "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground",
                         )}
                         onClick={() => {
+                          if (run.filePath) {
+                            onSelectRecentRun(run.filePath);
+                            return;
+                          }
                           selectRun(workspace.id, run.id);
                         }}
                         title={run.title}
                       >
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
                           <strong
                             data-slot="run-title"
-                            className="block min-w-0 truncate text-sm font-semibold"
+                            className="block min-w-0 flex-1 truncate text-sm font-semibold"
                           >
                             {run.title}
                           </strong>
+                          <StatusChip status={run.status} subtle />
+                          {run.loading ? (
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.66rem] uppercase tracking-[0.08em] text-muted-foreground">
+                              Loading
+                            </span>
+                          ) : null}
                         </div>
                         <div className="flex min-w-0 items-center gap-1 text-[0.72rem] text-[var(--color-text-tertiary)]">
                           <span className="shrink-0">{run.relativeTime}</span>

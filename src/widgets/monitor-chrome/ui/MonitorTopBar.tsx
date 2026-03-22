@@ -3,7 +3,7 @@ import { StatusChip } from "../../../shared/ui";
 import { Badge, Button } from "../../../shared/ui/primitives";
 
 interface MonitorTopBarProps {
-  dataset: RunDataset;
+  dataset: RunDataset | null;
   followLive: boolean;
   liveConnection: LiveConnection;
   onExport: (target: HTMLElement) => void;
@@ -19,6 +19,54 @@ export function MonitorTopBar({
   onToggleFollowLive,
   onToggleShortcuts,
 }: MonitorTopBarProps) {
+  if (!dataset) {
+    return (
+      <header className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border border-white/8 bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(13,17,24,0.96))] px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="grid min-w-0 gap-1.5">
+          <p className="text-[0.7rem] uppercase tracking-[0.08em] text-muted-foreground">
+            Graph-first run workbench
+          </p>
+          <p className="truncate text-[0.82rem] text-muted-foreground">
+            Recent sessions
+          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="min-w-0 truncate text-[clamp(1.18rem,2vw,1.5rem)] font-semibold">
+              Loading selected run…
+            </h1>
+            <Badge
+              variant="outline"
+              className="h-8 rounded-full border-white/8 bg-white/[0.04] px-3 text-[0.78rem] font-medium text-muted-foreground"
+            >
+              Summary first
+            </Badge>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled
+            className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+          >
+            Follow live
+          </Button>
+          <Button type="button" disabled className="bg-primary text-primary-foreground">
+            Export
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+            onClick={(event) => onToggleShortcuts(event.currentTarget)}
+          >
+            Help
+          </Button>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className="grid gap-3 rounded-t-[calc(var(--radius-panel)+4px)] border border-white/8 bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(13,17,24,0.96))] px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
       <div className="grid min-w-0 gap-1.5">

@@ -1,3 +1,5 @@
+import type { RunStatus } from "../../run";
+
 export interface SessionEntrySnapshot {
   timestamp: string;
   entryType: string;
@@ -41,6 +43,21 @@ export interface SessionLogSnapshot {
   subagents?: SubagentSnapshot[];
   isArchived?: boolean;
   promptAssembly?: PromptAssemblyLayerSnapshot[];
+}
+
+export interface RecentSessionIndexItem {
+  sessionId: string;
+  workspacePath: string;
+  originPath: string;
+  displayName: string;
+  startedAt: string;
+  updatedAt: string;
+  model: string | null;
+  filePath: string;
+  firstUserMessage: string | null;
+  title: string;
+  status: RunStatus;
+  lastEventSummary: string;
 }
 
 export interface TimedSubagentSnapshot extends SubagentSnapshot {

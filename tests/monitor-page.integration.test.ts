@@ -5,17 +5,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadArchivedSessionIndex,
-  loadSessionLogDatasets,
+  loadRecentSessionIndex,
 } from "../src/entities/session-log/index.js";
 import { MonitorPage } from "../src/pages/monitor/index.js";
 
 vi.mock("../src/entities/session-log/index.js", () => ({
   loadArchivedSessionIndex: vi.fn(),
-  loadSessionLogDatasets: vi.fn(),
+  loadRecentSessionIndex: vi.fn(),
 }));
 
 const mockedLoadArchivedSessionIndex = vi.mocked(loadArchivedSessionIndex);
-const mockedLoadSessionLogDatasets = vi.mocked(loadSessionLogDatasets);
+const mockedLoadRecentSessionIndex = vi.mocked(loadRecentSessionIndex);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -88,7 +88,7 @@ describe("MonitorPage integration", () => {
       hasMore: boolean;
     }>();
 
-    mockedLoadSessionLogDatasets.mockResolvedValue(null);
+    mockedLoadRecentSessionIndex.mockResolvedValue([]);
     mockedLoadArchivedSessionIndex.mockReturnValue(archivedIndexRequest.promise);
 
     await act(async () => {
@@ -96,7 +96,7 @@ describe("MonitorPage integration", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mockedLoadSessionLogDatasets).toHaveBeenCalledTimes(1);
+      expect(mockedLoadRecentSessionIndex).toHaveBeenCalledTimes(1);
       expect(mockedLoadArchivedSessionIndex).toHaveBeenCalledTimes(1);
     });
 

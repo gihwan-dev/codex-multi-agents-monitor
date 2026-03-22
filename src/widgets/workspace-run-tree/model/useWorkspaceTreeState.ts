@@ -1,9 +1,8 @@
 import { type KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import {
-  buildWorkspaceTreeModel,
-  type RunDataset,
-} from "../../../entities/run";
+import type { RunDataset } from "../../../entities/run";
+import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
+import { buildSidebarTreeModel } from "../lib/sidebarTreeModel";
 import {
   areWorkspaceIdsEqual,
   buildRunTreeId,
@@ -16,6 +15,9 @@ import {
 
 interface UseWorkspaceTreeStateArgs {
   datasets: RunDataset[];
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexReady: boolean;
+  recentSnapshotLoadingId: string | null;
   activeRunId: string;
   onSelectRun: (traceId: string) => void;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
@@ -23,6 +25,9 @@ interface UseWorkspaceTreeStateArgs {
 
 export function useWorkspaceTreeState({
   datasets,
+  recentIndex,
+  recentIndexReady,
+  recentSnapshotLoadingId,
   activeRunId,
   onSelectRun,
   workspaceIdentityOverrides,
@@ -34,13 +39,22 @@ export function useWorkspaceTreeState({
   const deferredSearch = useDeferredValue(search);
   const model = useMemo(
     () =>
-      buildWorkspaceTreeModel(
+      buildSidebarTreeModel({
         datasets,
-        deferredSearch,
-        "all",
+        recentIndex,
+        recentIndexReady,
+        recentSnapshotLoadingId,
+        search: deferredSearch,
         workspaceIdentityOverrides,
-      ),
-    [datasets, deferredSearch, workspaceIdentityOverrides],
+      }),
+    [
+      datasets,
+      recentIndex,
+      recentIndexReady,
+      recentSnapshotLoadingId,
+      deferredSearch,
+      workspaceIdentityOverrides,
+    ],
   );
   const flatItems = useMemo(
     () => flattenTree(model.workspaces, expandedWorkspaceIds),

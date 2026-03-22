@@ -16,8 +16,12 @@ async function renderWorkspaceRunTree() {
     root.render(
       createElement(WorkspaceRunTree, {
         datasets: state.datasets,
+        recentIndex: [],
+        recentIndexReady: false,
+        recentSnapshotLoadingId: null,
         activeRunId: state.activeRunId,
         onSelectRun: () => {},
+        onSelectRecentRun: () => {},
         onOpenImport: () => {},
         searchRef: createRef<HTMLInputElement>(),
         workspaceIdentityOverrides: {},
