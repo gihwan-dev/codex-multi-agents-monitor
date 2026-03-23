@@ -1,7 +1,3 @@
-import { useEffect, useRef } from "react";
-import type {
-  DrawerTab,
-} from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import { LoadingStateBlock, Panel } from "../../../shared/ui";
 import {
@@ -20,6 +16,7 @@ import {
   useCompactViewport,
 } from "../lib/useCompactViewport";
 import { useSearchFocusShortcut } from "../lib/useSearchFocusShortcut";
+import { useMonitorPageInteractions } from "../model/useMonitorPageInteractions";
 import { useMonitorPageState } from "../model/useMonitorPageState";
 import { MonitorShortcutsDialog } from "./MonitorShortcutsDialog";
 import { usePreservedChromeState } from "./usePreservedChromeState";
@@ -45,12 +42,21 @@ export function MonitorPage() {
     anomalyJumps,
     actions,
   } = useMonitorPageState();
-  const searchRef = useRef<HTMLInputElement>(null);
-  const drawerTriggerRef = useRef<HTMLElement | null>(null);
-  const shortcutTriggerRef = useRef<HTMLElement | null>(null);
-  const previousShortcutOpenRef = useRef(state.shortcutHelpOpen);
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(state.datasets);
+  const {
+    closeDrawer,
+    openDrawer,
+    registerDrawerTrigger,
+    searchRef,
+    shortcutTriggerRef,
+    toggleShortcutDialog,
+  } = useMonitorPageInteractions({
+    setDrawerOpen: actions.setDrawerOpen,
+    setDrawerTab: actions.setDrawerTab,
+    shortcutHelpOpen: state.shortcutHelpOpen,
+    toggleShortcuts: actions.toggleShortcuts,
+  });
   const {
     chromeState,
     displayDataset,
@@ -68,29 +74,6 @@ export function MonitorPage() {
   });
 
   useSearchFocusShortcut(searchRef);
-
-  const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
-    drawerTriggerRef.current =
-      target ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    actions.setDrawerTab(tab, true);
-  };
-
-  const closeDrawer = () => {
-    actions.setDrawerOpen(false);
-    window.requestAnimationFrame(() => {
-      drawerTriggerRef.current?.focus();
-    });
-  };
-  const toggleShortcuts = (target?: HTMLElement | null) => {
-    if (!state.shortcutHelpOpen) {
-      shortcutTriggerRef.current =
-        target ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-      actions.toggleShortcuts();
-      return;
-    }
-
-    actions.toggleShortcuts();
-  };
   const drawerState = {
     drawerOpen: state.drawerOpen,
     drawerTab: state.drawerTab,
@@ -99,13 +82,6 @@ export function MonitorPage() {
     importText: state.importText,
     exportText: state.exportText,
   };
-
-  useEffect(() => {
-    if (previousShortcutOpenRef.current && !state.shortcutHelpOpen) {
-      shortcutTriggerRef.current?.focus();
-    }
-    previousShortcutOpenRef.current = state.shortcutHelpOpen;
-  }, [state.shortcutHelpOpen]);
 
   return (
     <div className="monitor-shell">
@@ -121,11 +97,11 @@ export function MonitorPage() {
         liveConnection={chromeState?.liveConnection ?? "paused"}
         actionsDisabled={Boolean(selectionLoadState)}
         onExport={(target) => {
-          drawerTriggerRef.current = target;
+          registerDrawerTrigger(target);
           actions.exportDataset(false);
         }}
         onToggleFollowLive={actions.toggleFollowLive}
-        onToggleShortcuts={toggleShortcuts}
+        onToggleShortcuts={toggleShortcutDialog}
       />
 
       <div className={`workspace ${isCompactViewport ? "workspace--stacked" : ""}`.trim()}>
@@ -284,7 +260,7 @@ export function MonitorPage() {
 
       <MonitorShortcutsDialog
         open={state.shortcutHelpOpen}
-        onToggle={() => toggleShortcuts()}
+        onToggle={() => toggleShortcutDialog()}
         shortcutTriggerRef={shortcutTriggerRef}
       />
     </div>

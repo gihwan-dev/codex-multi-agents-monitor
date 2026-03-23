@@ -230,5 +230,8 @@ test("dense parallel run surfaces degradation copy without losing reachability",
 
   await page.getByRole("treeitem", { name: /Dense parallel replay/i }).click();
   await expect(page.getByRole("heading", { name: "FIX-004 Dense parallel run" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Lane 9 step 10" })).toBeVisible();
+  await expect(
+    page.getByText("1 inactive done lanes are folded to preserve the active path."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lane 9 step 13 done" })).toBeVisible();
 });
