@@ -1,17 +1,10 @@
 import type { GraphSceneEdgeBundle } from "../../../entities/run";
-import type {
-  EdgeRouteLayout,
-  EventLayout,
-  PortSide,
-  Rect,
-  RoutePort,
-} from "./graphLayoutTypes";
+import type { EdgeRouteLayout, EventLayout, PortSide, Rect, RoutePort } from "./graphLayoutTypes";
 import {
   buildRoutePort,
   getSortAxis,
   movePoint,
-  rectCenterX,
-  rectCenterY,
+  rectCenterX, rectCenterY,
   simplifyOrthogonalPoints,
   toSvgPath,
 } from "./graphRouteGeometry";
@@ -20,9 +13,7 @@ const PORT_SLOT_SPACING = 12;
 const PORT_EDGE_PADDING = 12;
 const PORT_STUB_LENGTH = 16;
 const ROUTE_NUDGE_SPACING = 10;
-
 type RouteOrientation = "horizontal" | "vertical";
-
 interface PendingRoute {
   bundle: GraphSceneEdgeBundle;
   orientation: RouteOrientation;
@@ -32,33 +23,23 @@ interface PendingRoute {
   targetSide: PortSide;
   groupKey: string;
 }
-
-export function choosePortPair(
-  sourceRect: Rect,
-  targetRect: Rect,
-): {
-  orientation: RouteOrientation;
-  sourceSide: PortSide;
-  targetSide: PortSide;
+export function choosePortPair(sourceRect: Rect, targetRect: Rect): {
+  orientation: RouteOrientation; sourceSide: PortSide; targetSide: PortSide;
 } {
   const dx = rectCenterX(targetRect) - rectCenterX(sourceRect);
   const dy = rectCenterY(targetRect) - rectCenterY(sourceRect);
-
   if (Math.abs(dx) >= Math.abs(dy)) {
     return dx >= 0
       ? { orientation: "horizontal", sourceSide: "right", targetSide: "left" }
       : { orientation: "horizontal", sourceSide: "left", targetSide: "right" };
   }
-
   return dy >= 0
     ? { orientation: "vertical", sourceSide: "bottom", targetSide: "top" }
     : { orientation: "vertical", sourceSide: "top", targetSide: "bottom" };
 }
-
 function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
   const assignments = new Map<string, number>();
   const groups = new Map<string, Array<{ routeKey: string; axis: number }>>();
-
   routes.forEach((route) => {
     addPortGroupEntry(
       groups,
@@ -73,7 +54,6 @@ function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
       getSortAxis(route.source.cardRect, route.targetSide),
     );
   });
-
   groups.forEach((entries) => {
     entries
       .sort((left, right) => left.axis - right.axis || left.routeKey.localeCompare(right.routeKey))
@@ -81,10 +61,8 @@ function assignPortSlots(routes: PendingRoute[]): Map<string, number> {
         assignments.set(entry.routeKey, (index - (list.length - 1) / 2) * PORT_SLOT_SPACING);
       });
   });
-
   return assignments;
 }
-
 function buildOrthogonalRoute(
   sourcePort: RoutePort,
   targetPort: RoutePort,
@@ -92,7 +70,6 @@ function buildOrthogonalRoute(
 ): string {
   const sourceStub = movePoint(sourcePort, sourcePort.side, PORT_STUB_LENGTH);
   const targetStub = movePoint(targetPort, targetPort.side, PORT_STUB_LENGTH);
-
   const points =
     sourcePort.side === "left" || sourcePort.side === "right"
       ? [
@@ -111,83 +88,37 @@ function buildOrthogonalRoute(
           targetStub,
           { x: targetPort.x, y: targetPort.y },
         ];
-
   return toSvgPath(simplifyOrthogonalPoints(points));
 }
-
 export function buildEdgeRouteLayouts(
   edgeBundles: GraphSceneEdgeBundle[],
   eventById: Map<string, EventLayout>,
 ): EdgeRouteLayout[] {
-  const pendingRoutes = edgeBundles.flatMap((bundle) => {
-    const source = eventById.get(bundle.sourceEventId);
-    const target = eventById.get(bundle.targetEventId);
-    if (!source || !target) {
-      return [];
-    }
-
-    const portPair = choosePortPair(source.cardRect, target.cardRect);
-    return [
-      {
-        bundle,
-        orientation: portPair.orientation,
-        source,
-        target,
-        sourceSide: portPair.sourceSide,
-        targetSide: portPair.targetSide,
-        groupKey: `${portPair.orientation}:${source.laneIndex}:${target.laneIndex}`,
-      } satisfies PendingRoute,
-    ];
-  });
-
+  const pendingRoutes = buildPendingRoutes(edgeBundles, eventById);
   const portSlots = assignPortSlots(pendingRoutes);
   const routeNudges = assignRouteNudges(pendingRoutes);
-
-  return pendingRoutes.map((route) => {
-    const sourcePort = buildRoutePort(
-      route.source,
-      route.sourceSide,
-      portSlots.get(`${route.bundle.id}:source`) ?? 0,
-      PORT_EDGE_PADDING,
-    );
-    const targetPort = buildRoutePort(
-      route.target,
-      route.targetSide,
-      portSlots.get(`${route.bundle.id}:target`) ?? 0,
-      PORT_EDGE_PADDING,
-    );
-
-    return {
-      bundleId: route.bundle.id,
-      edgeType: route.bundle.edgeType,
-      path: buildOrthogonalRoute(sourcePort, targetPort, routeNudges.get(route.bundle.id) ?? 0),
-      sourcePort,
-      targetPort,
-    } satisfies EdgeRouteLayout;
+  return pendingRoutes.map((route) => buildEdgeRouteLayout(route, portSlots, routeNudges));
+}
+function buildPendingRoutes(edgeBundles: GraphSceneEdgeBundle[], eventById: Map<string, EventLayout>) {
+  return edgeBundles.flatMap((bundle) => {
+    const source = eventById.get(bundle.sourceEventId);
+    const target = eventById.get(bundle.targetEventId);
+    return source && target ? [buildPendingRoute(bundle, source, target)] : [];
   });
 }
-
 export function computeVisibleEdgeRoutes(
-  edgeRoutes: EdgeRouteLayout[],
-  scrollTop: number,
-  viewportHeight: number,
-  overscanPx: number,
+  ...[edgeRoutes, scrollTop, viewportHeight, overscanPx]: [EdgeRouteLayout[], number, number, number]
 ): EdgeRouteLayout[] {
   const visibleTop = scrollTop - overscanPx;
   const visibleBottom = scrollTop + viewportHeight + overscanPx;
-
   return edgeRoutes.filter((route) => {
     const minY = Math.min(route.sourcePort.y, route.targetPort.y);
     const maxY = Math.max(route.sourcePort.y, route.targetPort.y);
     return maxY >= visibleTop && minY <= visibleBottom;
   });
 }
-
 function addPortGroupEntry(
-  groups: Map<string, Array<{ routeKey: string; axis: number }>>,
-  groupKey: string,
-  routeKey: string,
-  axis: number,
+  ...[groups, groupKey, routeKey, axis]: [Map<string, Array<{ routeKey: string; axis: number }>>, string, string, number]
 ) {
   let group = groups.get(groupKey);
   if (!group) {
@@ -196,11 +127,9 @@ function addPortGroupEntry(
   }
   group.push({ routeKey, axis });
 }
-
 function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
   const nudges = new Map<string, number>();
   const groups = new Map<string, PendingRoute[]>();
-
   routes.forEach((route) => {
     let group = groups.get(route.groupKey);
     if (!group) {
@@ -209,7 +138,6 @@ function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
     }
     group.push(route);
   });
-
   groups.forEach((group) => {
     group
       .sort((left, right) => {
@@ -228,6 +156,36 @@ function assignRouteNudges(routes: PendingRoute[]): Map<string, number> {
         nudges.set(route.bundle.id, (index - (list.length - 1) / 2) * ROUTE_NUDGE_SPACING);
       });
   });
-
   return nudges;
+}
+function buildPendingRoute(
+  bundle: GraphSceneEdgeBundle,
+  source: EventLayout,
+  target: EventLayout,
+): PendingRoute {
+  const portPair = choosePortPair(source.cardRect, target.cardRect);
+  return {
+    bundle,
+    orientation: portPair.orientation,
+    source,
+    target,
+    sourceSide: portPair.sourceSide,
+    targetSide: portPair.targetSide,
+    groupKey: `${portPair.orientation}:${source.laneIndex}:${target.laneIndex}`,
+  };
+}
+function buildEdgeRouteLayout(
+  route: PendingRoute,
+  portSlots: Map<string, number>,
+  routeNudges: Map<string, number>,
+): EdgeRouteLayout {
+  const sourcePort = buildRoutePort(route.source, route.sourceSide, portSlots.get(`${route.bundle.id}:source`) ?? 0, PORT_EDGE_PADDING);
+  const targetPort = buildRoutePort(route.target, route.targetSide, portSlots.get(`${route.bundle.id}:target`) ?? 0, PORT_EDGE_PADDING);
+  return {
+    bundleId: route.bundle.id,
+    edgeType: route.bundle.edgeType,
+    path: buildOrthogonalRoute(sourcePort, targetPort, routeNudges.get(route.bundle.id) ?? 0),
+    sourcePort,
+    targetPort,
+  };
 }

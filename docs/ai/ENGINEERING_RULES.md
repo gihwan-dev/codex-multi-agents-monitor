@@ -10,7 +10,7 @@
 - Runtime and language: `Node >=20.19`, `TypeScript`, strict compile settings.
 - Framework and shell: `React 19`, `Vite 7`, `Tauri 2`.
 - Package manager: `pnpm` only.
-- Validation stack: `Biome`, `Vitest`, `Playwright`, `Storybook`.
+- Validation stack: `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, `cargo clippy`, `Vitest`, `Playwright`, `Storybook`.
 - State and data strategy: feature-local React state, page-local orchestration, reducer, or context plus fixture-backed selectors. Do not introduce an external global state or cache layer by default.
 - Styling and design-system direction: semantic token source paths are `src/theme/tokens.css` and `src/theme/motion.css`. The root styling entry lives in `src/app/styles/index.css` and exposes semantic tokens to Tailwind CSS v4 via `@theme inline`. `src/theme/primitives.css` is a migration bridge and deletion target, not a long-term source of truth.
 - Runtime theme contract: global theme state lives under `src/shared/theme/` via a repo-local `ThemeProvider`, persists `system | dark | light` preference under `codex-monitor-theme-preference`, resolves onto document `data-theme` before React mounts, and exposes the user-facing control in the monitor top bar. Do not add a second class-based theme source of truth.
@@ -73,13 +73,18 @@
 
 Bootstrap locks these commands as the definition-of-done contract. If a command is missing, the implementation slice must add the script or config before claiming completion.
 
+`pnpm lint` is a hard gate that aggregates `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, suppression audit, and repo smoke checks. Local runs require `lizard` to be installed via `python3 -m pip install lizard`.
+
+Quantitative gate exemptions stay narrow and explicit: non-product files only (`tests/`, `scripts/`, stories, snapshots, generated output, sample data, temporary build output, Rust test support). Do not add product-code allowlists to force green.
+
 # Dependency Policy
 
 ## Locked now
 
 - Runtime and framework: `Node >=20.19`, `TypeScript`, `React 19`, `Vite 7`, `Tauri 2`
 - Package management: `pnpm`
-- Validation and screenshot stack: `Biome`, `Vitest`, `Playwright`, `Storybook`
+- Validation and screenshot stack: `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, `cargo clippy`, `Vitest`, `Playwright`, `Storybook`
+- JS/TS metrics parser: `@typescript-eslint/parser`
 - State and data baseline: React local state, reducer, context, selectors
 - Styling baseline: Tailwind CSS v4 with `@tailwindcss/vite`, semantic CSS variables under `src/theme/tokens.css`, motion tokens under `src/theme/motion.css`, and shadcn open-code primitives under `src/shared/ui/primitives/`
 - Icon library: `lucide-react` (tree-shaking, currentColor support, React 19 optimized) — deferred trigger met: 18 event types require accessibility-safe semantic icons beyond CSS-only shapes
@@ -122,6 +127,7 @@ Bootstrap locks these commands as the definition-of-done contract. If a command 
 - Letting a `#[tauri::command]` function perform filesystem, SQLite, JSONL, or git/worktree access directly instead of delegating to `application` and `infrastructure`
 - Adding backend catch-all files such as `src-tauri/src/common.rs`, `src-tauri/src/utils.rs`, or `src-tauri/src/shared.rs`
 - Optional libraries that bypass locked validation commands or replace the documented source-of-truth docs
+- Broad lint suppressions (`biome-ignore`, `eslint-disable`, `@ts-ignore`, `@ts-nocheck`, `#[allow(...)]`) in product code
 
 # Decision Update Rules
 

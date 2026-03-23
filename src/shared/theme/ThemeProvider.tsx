@@ -21,25 +21,47 @@ interface ThemeProviderProps extends PropsWithChildren {
   preferenceOverride?: ThemePreference;
 }
 
-export function ThemeProvider({ children, preferenceOverride }: ThemeProviderProps) {
-  const [storedPreference, setStoredPreference] = useState<ThemePreference>(() =>
-    readStoredThemePreference(),
-  );
+function resolveThemePreference(
+  preferenceOverride: ThemePreference | undefined,
+  storedPreference: ThemePreference,
+) {
+  return preferenceOverride ?? storedPreference;
+}
+
+function resolveThemeValue(
+  preference: ThemePreference,
+  systemTheme: ResolvedTheme,
+): ResolvedTheme {
+  return preference === "system" ? systemTheme : preference;
+}
+
+function subscribeToThemeChanges(
+  mediaQuery: MediaQueryList,
+  onChange: (matches: boolean) => void,
+) {
+  const handleChange = (event: MediaQueryListEvent) => {
+    onChange(event.matches);
+  };
+
+  if (typeof mediaQuery.addEventListener === "function") {
+    mediaQuery.addEventListener("change", handleChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }
+
+  mediaQuery.addListener(handleChange);
+  return () => {
+    mediaQuery.removeListener(handleChange);
+  };
+}
+
+function useStoredThemePreference() {
+  return useState<ThemePreference>(() => readStoredThemePreference());
+}
+
+function useSystemTheme() {
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() => getSystemTheme());
-  const preference = preferenceOverride ?? storedPreference;
-  const resolvedTheme = preference === "system" ? systemTheme : preference;
-
-  useEffect(() => {
-    if (preferenceOverride !== undefined) {
-      return;
-    }
-
-    persistThemePreference(storedPreference);
-  }, [preferenceOverride, storedPreference]);
-
-  useEffect(() => {
-    applyResolvedThemeToDocument(resolvedTheme);
-  }, [resolvedTheme]);
 
   useEffect(() => {
     const mediaQuery = getThemeMediaQuery();
@@ -52,25 +74,42 @@ export function ThemeProvider({ children, preferenceOverride }: ThemeProviderPro
     };
 
     syncSystemTheme(mediaQuery.matches);
+    return subscribeToThemeChanges(mediaQuery, syncSystemTheme);
+  }, []);
 
-    const handleChange = (event: MediaQueryListEvent) => {
-      syncSystemTheme(event.matches);
-    };
+  return systemTheme;
+}
 
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-
-      return () => {
-        mediaQuery.removeEventListener("change", handleChange);
-      };
+function usePersistedThemePreference(
+  preferenceOverride: ThemePreference | undefined,
+  storedPreference: ThemePreference,
+) {
+  useEffect(() => {
+    if (preferenceOverride !== undefined) {
+      return;
     }
 
-    mediaQuery.addListener(handleChange);
+    persistThemePreference(storedPreference);
+  }, [preferenceOverride, storedPreference]);
+}
 
-    return () => {
-      mediaQuery.removeListener(handleChange);
-    };
-  }, []);
+function useResolvedTheme(preference: ThemePreference) {
+  const systemTheme = useSystemTheme();
+  const resolvedTheme = resolveThemeValue(preference, systemTheme);
+
+  useEffect(() => {
+    applyResolvedThemeToDocument(resolvedTheme);
+  }, [resolvedTheme]);
+
+  return resolvedTheme;
+}
+
+export function ThemeProvider({ children, preferenceOverride }: ThemeProviderProps) {
+  const [storedPreference, setStoredPreference] = useStoredThemePreference();
+  const preference = resolveThemePreference(preferenceOverride, storedPreference);
+  const resolvedTheme = useResolvedTheme(preference);
+
+  usePersistedThemePreference(preferenceOverride, storedPreference);
 
   const setPreference = (nextPreference: ThemePreference) => {
     if (preferenceOverride !== undefined) {

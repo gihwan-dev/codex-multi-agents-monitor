@@ -12,8 +12,8 @@ UX 소스: `tasks/codex-multi-agent-monitor-v0-1/UX_SPEC.md`, `UX_BEHAVIOR_ACCES
 
 ## 명령어
 
-```
-pnpm lint          # Biome
+``` 
+pnpm lint          # Aggregate hard gate (Biome + ESLint metrics + Lizard + jscpd + suppression audit + smoke)
 pnpm typecheck     # tsc --noEmit
 pnpm test          # Vitest
 pnpm test:e2e      # Playwright
@@ -32,4 +32,6 @@ pnpm build         # Tauri 빌드
 
 - starter Hello World UI/메타데이터는 제품 소스가 아님
 - `pnpm` 외 패키지 매니저 사용 금지
+- 로컬 `pnpm lint`는 `lizard` 설치가 필요함: `python3 -m pip install lizard`
+- 정량 hard gate 예외는 비제품 코드에만 제한한다: `tests/`, `scripts/`, sample data, stories, snapshots, generated output
 - 상세 규칙은 `ENGINEERING_RULES.md` 참조

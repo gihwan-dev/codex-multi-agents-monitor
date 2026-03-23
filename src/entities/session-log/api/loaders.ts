@@ -20,20 +20,7 @@ export async function loadSessionLogDatasets(): Promise<RunDataset[] | null> {
     if (index === null) {
       return loadWebSessionLogDatasets();
     }
-    if (!index.length) {
-      return null;
-    }
-
-    const snapshots = await Promise.all(
-      index.map((item) =>
-        invokeTauri<SessionLogSnapshot | null>("load_recent_session_snapshot", {
-          filePath: item.filePath,
-        }).catch(() => null),
-      ),
-    );
-    return normalizeSessionLogDatasets(
-      snapshots.filter((snapshot): snapshot is SessionLogSnapshot => snapshot !== null),
-    );
+    return loadIndexedSessionLogDatasets(index);
   } catch {
     return loadWebSessionLogDatasets();
   }
@@ -86,12 +73,7 @@ export async function loadRecentSessionSnapshot(
   filePath: string,
 ): Promise<RunDataset | null> {
   try {
-    const snapshot = await invokeTauri<SessionLogSnapshot | null>(
-      "load_recent_session_snapshot",
-      { filePath },
-    );
-    if (!snapshot) return null;
-    return buildDatasetFromSessionLogAsync(snapshot);
+    return loadSnapshotDataset("load_recent_session_snapshot", filePath);
   } catch {
     return null;
   }
@@ -116,13 +98,37 @@ export async function loadArchivedSessionSnapshot(
   filePath: string,
 ): Promise<RunDataset | null> {
   try {
-    const snapshot = await invokeTauri<SessionLogSnapshot | null>(
-      "load_archived_session_snapshot",
-      { filePath },
-    );
-    if (!snapshot) return null;
-    return buildDatasetFromSessionLogAsync(snapshot);
+    return loadSnapshotDataset("load_archived_session_snapshot", filePath);
   } catch {
     return null;
   }
+}
+
+async function loadIndexedSessionLogDatasets(
+  index: RecentSessionIndexItem[],
+): Promise<RunDataset[] | null> {
+  if (!index.length) {
+    return null;
+  }
+
+  const snapshots = await Promise.all(index.map(loadIndexedSnapshot));
+  return normalizeSessionLogDatasets(
+    snapshots.filter((snapshot): snapshot is SessionLogSnapshot => snapshot !== null),
+  );
+}
+
+function loadIndexedSnapshot(item: RecentSessionIndexItem) {
+  return invokeTauri<SessionLogSnapshot | null>("load_recent_session_snapshot", {
+    filePath: item.filePath,
+  }).catch(() => null);
+}
+
+async function loadSnapshotDataset(
+  command:
+    | "load_archived_session_snapshot"
+    | "load_recent_session_snapshot",
+  filePath: string,
+) {
+  const snapshot = await invokeTauri<SessionLogSnapshot | null>(command, { filePath });
+  return snapshot ? buildDatasetFromSessionLogAsync(snapshot) : null;
 }

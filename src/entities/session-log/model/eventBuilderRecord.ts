@@ -6,29 +6,16 @@ export function applyTokenCountToLastEvent(
   events: EventRecord[],
   rawTokenCount: string | null,
 ) {
-  if (!rawTokenCount) {
-    return;
-  }
-
   const lastEvent = events[events.length - 1];
-  if (!lastEvent) {
+  const tokens = parseTokenPayload(rawTokenCount);
+  if (!lastEvent || !tokens) {
     return;
   }
 
-  try {
-    const tokens = JSON.parse(rawTokenCount) as {
-      in?: number;
-      cached?: number;
-      out?: number;
-      reasoning?: number;
-    };
-    lastEvent.tokensIn = tokens.in ?? 0;
-    lastEvent.tokensOut = tokens.out ?? 0;
-    lastEvent.reasoningTokens = tokens.reasoning ?? 0;
-    lastEvent.cacheReadTokens = tokens.cached ?? 0;
-  } catch {
-    // Ignore malformed token payloads.
-  }
+  lastEvent.tokensIn = tokens.in ?? 0;
+  lastEvent.tokensOut = tokens.out ?? 0;
+  lastEvent.reasoningTokens = tokens.reasoning ?? 0;
+  lastEvent.cacheReadTokens = tokens.cached ?? 0;
 }
 
 export function createEntryEvent({
@@ -81,4 +68,21 @@ export function createEntryEvent({
     rawInput: null,
     rawOutput: null,
   };
+}
+
+function parseTokenPayload(rawTokenCount: string | null) {
+  if (!rawTokenCount) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawTokenCount) as {
+      in?: number;
+      cached?: number;
+      out?: number;
+      reasoning?: number;
+    };
+  } catch {
+    return null;
+  }
 }

@@ -1,0 +1,31 @@
+{
+  "absolute": false,
+  "gitignore": true,
+  "ignore": [
+    "dist/**",
+    "storybook-static/**",
+    ".tmp-tests/**",
+    ".tmp-quality/**",
+    "node_modules/**",
+    "scripts/**",
+    "tests/**",
+    "src/entities/run/model/samples.ts",
+    "src-tauri/src/test_support.rs",
+    "**/*.stories.*",
+    "**/*.story.*",
+    "**/__snapshots__/**",
+    "**/__fixtures__/**",
+    "**/generated/**"
+  ],
+  "mode": "strict",
+  "output": ".tmp-quality/jscpd",
+  "pattern": [
+    "src/**/*.{ts,tsx}",
+    "src-tauri/src/**/*.rs"
+  ],
+  "reporters": [
+    "console",
+    "json"
+  ],
+  "threshold": 3
+}

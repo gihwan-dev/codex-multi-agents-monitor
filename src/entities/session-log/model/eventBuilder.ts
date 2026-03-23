@@ -1,9 +1,9 @@
 import type { AgentLane, EventRecord, RunStatus } from "../../run";
 import { parseRequiredTimestamp } from "../lib/helpers";
-import { sanitizeMessagePreview } from "../lib/text";
-import { applyTokenCountToLastEvent, createEntryEvent } from "./eventBuilderRecord";
+import { applyTokenCountToLastEvent } from "./eventBuilderRecord";
 import type { EntryContext } from "./eventBuilderTypes";
 import { buildMessageEvent, shouldSkipMessageEntry } from "./messageEntryEvents";
+import { buildSupplementalEntryEvent } from "./supplementalEntryEvents";
 import { buildFunctionCallEvent, buildFunctionCallOutputEvent } from "./toolEntryEvents";
 import type { SessionEntrySnapshot } from "./types";
 
@@ -30,70 +30,24 @@ export function buildLaneEventsFromEntries({
 }: BuildLaneEventsArgs): EventRecord[] {
   const events: EventRecord[] = [];
   const { callIdToName, lastValidEntryIndex } = collectEntryMetadata(entries);
-
   let firstUserPromptSeen = false;
 
   for (let index = 0; index < entries.length; index++) {
-    const entry = entries[index];
-    const nextEntry = entries[index + 1];
-    const startTs = parseRequiredTimestamp(entry.timestamp);
-    if (startTs === null) {
-      continue;
-    }
-
-    const nextTs = nextEntry ? parseRequiredTimestamp(nextEntry.timestamp) : updatedAtTs;
-    const safeEndTs = nextTs !== null && nextTs > startTs ? nextTs : startTs + 1_000;
-    const isLatest = index === lastValidEntryIndex;
-    const context: EntryContext = {
-      entry,
+    firstUserPromptSeen = applyEntryResult(events, processEntryContext({
+      entries,
       lane,
-      startTs,
-      safeEndTs,
-      isLatest,
+      updatedAtTs,
       status,
       model,
+      displayTitle,
+      userLane,
+      isSubagent,
       index,
-    };
-
-    if (entry.entryType === "message" && shouldSkipMessageEntry(entry, isSubagent)) {
-      continue;
-    }
-
-    switch (entry.entryType) {
-      case "message": {
-        const result = buildMessageEvent({
-          context,
-          previousEntry: entries[index - 1],
-          userLane,
-          displayTitle,
-          isSubagent,
-          firstUserPromptSeen,
-        });
-        firstUserPromptSeen = result.firstUserPromptSeen;
-        if (result.event) {
-          events.push(result.event);
-        }
-        break;
-      }
-
-      case "function_call":
-        events.push(buildFunctionCallEvent(context));
-        break;
-
-      case "function_call_output":
-        events.push(buildFunctionCallOutputEvent(context, callIdToName));
-        break;
-      case "token_count":
-        applyTokenCountToLastEvent(events, entry.text);
-        break;
-
-      default: {
-        const event = buildSupplementalEntryEvent(context);
-        if (event) {
-          events.push(event);
-        }
-      }
-    }
+      lastValidEntryIndex,
+      callIdToName,
+      events,
+      firstUserPromptSeen,
+    }));
   }
 
   return events;
@@ -115,74 +69,151 @@ function collectEntryMetadata(entries: SessionEntrySnapshot[]) {
   return { callIdToName, lastValidEntryIndex };
 }
 
-function buildSupplementalEntryEvent(context: EntryContext): EventRecord | null {
-  const { entry } = context;
+function createEntryContext({
+  entries,
+  lane,
+  updatedAtTs,
+  status,
+  model,
+  index,
+  lastValidEntryIndex,
+}: {
+  entries: SessionEntrySnapshot[];
+  lane: AgentLane;
+  updatedAtTs: number;
+  status: RunStatus;
+  model: string;
+  index: number;
+  lastValidEntryIndex: number;
+}): EntryContext | null {
+  const entry = entries[index];
+  const nextEntry = entries[index + 1];
+  const startTs = parseRequiredTimestamp(entry.timestamp);
+  if (startTs === null) {
+    return null;
+  }
 
-  switch (entry.entryType) {
-    case "reasoning":
-      return createEntryEvent({
-        ...context,
-        eventType: "llm.started",
-        title: "Reasoning",
-        inputPreview: null,
-        outputPreview: null,
+  const nextTs = nextEntry ? parseRequiredTimestamp(nextEntry.timestamp) : updatedAtTs;
+  const safeEndTs = nextTs !== null && nextTs > startTs ? nextTs : startTs + 1_000;
+
+  return {
+    entry,
+    lane,
+    startTs,
+    safeEndTs,
+    isLatest: index === lastValidEntryIndex,
+    status,
+    model,
+    index,
+  };
+}
+
+function isSkippableMessageContext(context: EntryContext, isSubagent: boolean) {
+  return (
+    context.entry.entryType === "message" &&
+    shouldSkipMessageEntry(context.entry, isSubagent)
+  );
+}
+
+function processEntryContext({
+  entries,
+  lane,
+  userLane,
+  updatedAtTs,
+  status,
+  model,
+  displayTitle,
+  isSubagent,
+  index,
+  lastValidEntryIndex,
+  callIdToName,
+  events,
+  firstUserPromptSeen,
+}: Omit<BuildLaneEventsArgs, "isSubagent"> & {
+  isSubagent: boolean;
+  index: number;
+  lastValidEntryIndex: number;
+  callIdToName: Map<string, string>;
+  events: EventRecord[];
+  firstUserPromptSeen: boolean;
+}): {
+  event: EventRecord | null;
+  firstUserPromptSeen: boolean;
+} {
+  const context = createEntryContext({
+    entries,
+    lane,
+    updatedAtTs,
+    status,
+    model,
+    index,
+    lastValidEntryIndex,
+  });
+  if (!context || isSkippableMessageContext(context, isSubagent)) {
+    return { event: null, firstUserPromptSeen };
+  }
+  if (context.entry.entryType === "token_count") {
+    applyTokenCountToLastEvent(events, context.entry.text);
+    return { event: null, firstUserPromptSeen };
+  }
+
+  return buildEventFromEntry({
+    entries,
+    context,
+    callIdToName,
+    userLane,
+    displayTitle,
+    isSubagent,
+    firstUserPromptSeen,
+  });
+}
+
+function buildEventFromEntry({
+  entries,
+  context,
+  callIdToName,
+  userLane,
+  displayTitle,
+  isSubagent,
+  firstUserPromptSeen,
+}: {
+  entries: SessionEntrySnapshot[];
+  context: EntryContext;
+  callIdToName: Map<string, string>;
+  userLane: AgentLane | null;
+  displayTitle: string;
+  isSubagent: boolean;
+  firstUserPromptSeen: boolean;
+}) {
+  switch (context.entry.entryType) {
+    case "message":
+      return buildMessageEvent({
+        context,
+        previousEntry: entries[context.index - 1],
+        userLane,
+        displayTitle,
+        isSubagent,
+        firstUserPromptSeen,
       });
-    case "agent_message":
-      return createTextEntryEvent(context, "note", "Commentary");
-    case "agent_reasoning":
-      return createTextEntryEvent(context, "note", "Agent reasoning");
-    case "item_completed":
-      return createTextEntryEvent(context, "note", "Plan");
-    case "task_started":
-      return createEntryEvent({
-        ...context,
-        eventType: "turn.started",
-        title: "Turn started",
-        inputPreview: null,
-        outputPreview: null,
-      });
-    case "task_complete":
-      return createTextEntryEvent(context, "turn.finished", "Turn finished");
-    case "context_compacted":
-      return createEntryEvent({
-        ...context,
-        eventType: "note",
-        title: "Context compacted",
-        inputPreview: null,
-        outputPreview: "Context reduced to fit within the model window",
-      });
-    case "turn_aborted":
-      return createErrorEntryEvent(context, "Turn aborted");
-    case "thread_rolled_back":
-      return createErrorEntryEvent(context, "Thread rolled back");
+    case "function_call":
+      return { event: buildFunctionCallEvent(context), firstUserPromptSeen };
+    case "function_call_output":
+      return {
+        event: buildFunctionCallOutputEvent(context, callIdToName),
+        firstUserPromptSeen,
+      };
     default:
-      return null;
+      return {
+        event: buildSupplementalEntryEvent(context),
+        firstUserPromptSeen,
+      };
   }
 }
 
-function createTextEntryEvent(
-  context: EntryContext,
-  eventType: EventRecord["eventType"],
-  title: string,
+function applyEntryResult(
+  events: EventRecord[],
+  result: { event: EventRecord | null; firstUserPromptSeen: boolean },
 ) {
-  return createEntryEvent({
-    ...context,
-    eventType,
-    title,
-    inputPreview: null,
-    outputPreview: context.entry.text ? sanitizeMessagePreview(context.entry.text) : null,
-  });
-}
-
-function createErrorEntryEvent(context: EntryContext, fallbackReason: string) {
-  const reason = context.entry.text ?? fallbackReason;
-
-  return createEntryEvent({
-    ...context,
-    eventType: "error",
-    title: fallbackReason,
-    inputPreview: null,
-    outputPreview: reason,
-    errorMessage: reason,
-  });
+  if (result.event) events.push(result.event);
+  return result.firstUserPromptSeen;
 }

@@ -27,28 +27,32 @@ export function movePoint(
   }
 }
 
+function isDuplicatePoint(previous: Point | undefined, point: Point) {
+  return previous ? previous.x === point.x && previous.y === point.y : false;
+}
+
+function shouldCollapseMiddlePoint(points: Point[]) {
+  if (points.length < 3) {
+    return false;
+  }
+
+  const [a, b, c] = points.slice(-3);
+  return (a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y);
+}
+
 export function simplifyOrthogonalPoints(points: Point[]): Point[] {
   const result: Point[] = [];
 
-  points.forEach((point) => {
-    const previous = result[result.length - 1];
-    if (previous && previous.x === point.x && previous.y === point.y) {
-      return;
+  for (const point of points) {
+    if (isDuplicatePoint(result[result.length - 1], point)) {
+      continue;
     }
 
     result.push(point);
-    if (result.length < 3) {
-      return;
-    }
-
-    const a = result[result.length - 3];
-    const b = result[result.length - 2];
-    const c = result[result.length - 1];
-
-    if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) {
+    if (shouldCollapseMiddlePoint(result)) {
       result.splice(result.length - 2, 1);
     }
-  });
+  }
 
   return result;
 }
@@ -71,38 +75,58 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-export function buildRoutePort(
-  layout: EventLayout,
-  side: PortSide,
-  offset: number,
-  edgePadding: number,
+function buildVerticalRoutePort(
+  args: {
+    layout: EventLayout;
+    side: "top" | "bottom";
+    offset: number;
+    edgePadding: number;
+  },
 ): RoutePort {
-  const centerX = rectCenterX(layout.cardRect);
-  const centerY = rectCenterY(layout.cardRect);
-
-  if (side === "top" || side === "bottom") {
-    return {
-      eventId: layout.eventId,
-      side,
-      x: clamp(
-        centerX + offset,
-        layout.cardRect.x + edgePadding,
-        layout.cardRect.x + layout.cardRect.width - edgePadding,
-      ),
-      y: side === "top" ? layout.cardRect.y : layout.cardRect.y + layout.cardRect.height,
-      offset,
-    };
-  }
-
   return {
-    eventId: layout.eventId,
-    side,
-    x: side === "left" ? layout.cardRect.x : layout.cardRect.x + layout.cardRect.width,
-    y: clamp(
-      centerY + offset,
-      layout.cardRect.y + edgePadding,
-      layout.cardRect.y + layout.cardRect.height - edgePadding,
+    eventId: args.layout.eventId,
+    side: args.side,
+    x: clamp(
+      rectCenterX(args.layout.cardRect) + args.offset,
+      args.layout.cardRect.x + args.edgePadding,
+      args.layout.cardRect.x + args.layout.cardRect.width - args.edgePadding,
     ),
-    offset,
+    y:
+      args.side === "top"
+        ? args.layout.cardRect.y
+        : args.layout.cardRect.y + args.layout.cardRect.height,
+    offset: args.offset,
   };
+}
+
+function buildHorizontalRoutePort(
+  args: {
+    layout: EventLayout;
+    side: "left" | "right";
+    offset: number;
+    edgePadding: number;
+  },
+): RoutePort {
+  return {
+    eventId: args.layout.eventId,
+    side: args.side,
+    x:
+      args.side === "left"
+        ? args.layout.cardRect.x
+        : args.layout.cardRect.x + args.layout.cardRect.width,
+    y: clamp(
+      rectCenterY(args.layout.cardRect) + args.offset,
+      args.layout.cardRect.y + args.edgePadding,
+      args.layout.cardRect.y + args.layout.cardRect.height - args.edgePadding,
+    ),
+    offset: args.offset,
+  };
+}
+
+export function buildRoutePort(
+  ...[layout, side, offset, edgePadding]: [EventLayout, PortSide, number, number]
+): RoutePort {
+  return side === "top" || side === "bottom"
+    ? buildVerticalRoutePort({ layout, side, offset, edgePadding })
+    : buildHorizontalRoutePort({ layout, side, offset, edgePadding });
 }

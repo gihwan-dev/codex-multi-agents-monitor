@@ -20,44 +20,7 @@ export function normalizeImportEvents(
   events: RawImportPayload["events"],
   options: RedactionOptions,
 ): RunDataset["events"] {
-  return events.map((item) =>
-    redactEvent(
-      {
-        eventId: item.event_id,
-        laneId: item.lane_id,
-        agentId: item.agent_id,
-        threadId: item.thread_id,
-        parentId: item.parent_id ?? null,
-        linkIds: [],
-        eventType: item.event_type,
-        status: item.status,
-        waitReason: item.wait_reason ?? null,
-        retryCount: item.retry_count ?? 0,
-        startTs: item.start_ts,
-        endTs: item.end_ts ?? item.start_ts,
-        durationMs: (item.end_ts ?? item.start_ts) - item.start_ts,
-        title: item.title,
-        inputPreview: item.input_preview ?? null,
-        outputPreview: item.output_preview ?? null,
-        artifactId: item.artifact_id ?? null,
-        errorCode: item.error_code ?? null,
-        errorMessage: item.error_message ?? null,
-        provider: item.provider ?? "OpenAI",
-        model: item.model ?? "gpt-5",
-        toolName: item.tool_name ?? null,
-        tokensIn: item.tokens_in ?? 0,
-        tokensOut: item.tokens_out ?? 0,
-        reasoningTokens: item.reasoning_tokens ?? 0,
-        cacheReadTokens: item.cache_read_tokens ?? 0,
-        cacheWriteTokens: item.cache_write_tokens ?? 0,
-        costUsd: item.cost_usd ?? 0,
-        finishReason: item.finish_reason ?? null,
-        rawInput: item.input_raw ?? null,
-        rawOutput: item.output_raw ?? null,
-      },
-      options,
-    ),
-  );
+  return events.map((item) => normalizeImportEvent(item, options));
 }
 
 export function resolveImportDurationMs(
@@ -95,4 +58,107 @@ export function normalizeImportArtifacts(
     ...item,
     rawContent: options.allowRaw && !options.noRawStorage ? item.rawContent : null,
   }));
+}
+
+function normalizeImportEvent(
+  item: RawImportPayload["events"][number],
+  options: RedactionOptions,
+) {
+  return redactEvent(buildNormalizedImportEventRecord(item), options);
+}
+
+function buildNormalizedImportEventRecord(
+  item: RawImportPayload["events"][number],
+) {
+  const endTs = resolveImportEventEndTs(item);
+  return {
+    ...buildNormalizedImportEventIdentity(item),
+    ...buildNormalizedImportEventTiming(item, endTs),
+    ...buildNormalizedImportEventPreview(item),
+    ...buildNormalizedImportEventUsage(item),
+    ...buildNormalizedImportEventMetadata(item),
+  };
+}
+
+function buildNormalizedImportEventIdentity(
+  item: RawImportPayload["events"][number],
+) {
+  return {
+    eventId: item.event_id,
+    laneId: item.lane_id,
+    agentId: item.agent_id,
+    threadId: item.thread_id,
+    parentId: readNullable(item.parent_id),
+    linkIds: [],
+    eventType: item.event_type,
+    status: item.status,
+    title: item.title,
+  };
+}
+
+function buildNormalizedImportEventTiming(
+  item: RawImportPayload["events"][number],
+  endTs: number,
+) {
+  return {
+    startTs: item.start_ts,
+    endTs,
+    durationMs: endTs - item.start_ts,
+    retryCount: readNumber(item.retry_count),
+    waitReason: readNullable(item.wait_reason),
+  };
+}
+
+function buildNormalizedImportEventPreview(
+  item: RawImportPayload["events"][number],
+) {
+  return {
+    inputPreview: readNullable(item.input_preview),
+    outputPreview: readNullable(item.output_preview),
+    rawInput: readNullable(item.input_raw),
+    rawOutput: readNullable(item.output_raw),
+  };
+}
+
+function buildNormalizedImportEventUsage(
+  item: RawImportPayload["events"][number],
+) {
+  return {
+    tokensIn: readNumber(item.tokens_in),
+    tokensOut: readNumber(item.tokens_out),
+    reasoningTokens: readNumber(item.reasoning_tokens),
+    cacheReadTokens: readNumber(item.cache_read_tokens),
+    cacheWriteTokens: readNumber(item.cache_write_tokens),
+    costUsd: readNumber(item.cost_usd),
+  };
+}
+
+function buildNormalizedImportEventMetadata(
+  item: RawImportPayload["events"][number],
+) {
+  return {
+    artifactId: readNullable(item.artifact_id),
+    errorCode: readNullable(item.error_code),
+    errorMessage: readNullable(item.error_message),
+    provider: readWithDefault(item.provider, "OpenAI"),
+    model: readWithDefault(item.model, "gpt-5"),
+    toolName: readNullable(item.tool_name),
+    finishReason: readNullable(item.finish_reason),
+  };
+}
+
+function resolveImportEventEndTs(item: RawImportPayload["events"][number]) {
+  return readWithDefault(item.end_ts, item.start_ts);
+}
+
+function readNullable<T>(value: T | null | undefined) {
+  return value ?? null;
+}
+
+function readNumber(value: number | null | undefined) {
+  return value ?? 0;
+}
+
+function readWithDefault<T>(value: T | null | undefined, fallback: T) {
+  return value ?? fallback;
 }

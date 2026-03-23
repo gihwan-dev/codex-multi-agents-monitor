@@ -43,6 +43,109 @@ type MonitorKeyboardShortcutEvent = Pick<
   "ctrlKey" | "key" | "metaKey" | "preventDefault" | "target"
 >;
 
+interface MonitorShortcutDispatch {
+  action: MonitorAction;
+  preventDefault?: boolean;
+}
+
+function isShortcutHelpKey(
+  event: MonitorKeyboardShortcutEvent,
+  normalizedKey: string,
+) {
+  return (
+    ((event.metaKey || event.ctrlKey) && normalizedKey === "k") ||
+    normalizedKey === "?"
+  );
+}
+
+function handleShortcutHelpToggle(
+  event: MonitorKeyboardShortcutEvent,
+  normalizedKey: string,
+  dispatch: Dispatch<MonitorAction>,
+) {
+  if (!isShortcutHelpKey(event, normalizedKey)) {
+    return false;
+  }
+
+  if (normalizedKey === "k") {
+    event.preventDefault();
+  }
+
+  dispatch({ type: "toggle-shortcuts" });
+  return true;
+}
+
+function buildSelectionNavigationAction(
+  graphRows: GraphSceneRow[],
+  selection: SelectionState | null,
+  direction: "next" | "previous",
+): MonitorShortcutDispatch | null {
+  const nextSelectionId = getNextVisibleEventId(
+    collectVisibleEventIds(graphRows),
+    selection,
+    direction,
+  );
+  if (!nextSelectionId) {
+    return null;
+  }
+
+  return {
+    preventDefault: true,
+    action: {
+      type: "navigate-selection",
+      selection: { kind: "event", id: nextSelectionId },
+    },
+  };
+}
+
+function resolveDatasetShortcutAction({
+  normalizedKey,
+  activeDataset,
+  selection,
+  graphRows,
+}: {
+  normalizedKey: string;
+  activeDataset: RunDataset;
+  selection: SelectionState | null;
+  graphRows: GraphSceneRow[];
+}): MonitorShortcutDispatch | null {
+  switch (normalizedKey) {
+    case "i":
+      return { action: { type: "toggle-inspector" } };
+    case ".":
+      return {
+        action: {
+          type: "toggle-follow-live",
+          traceId: activeDataset.run.traceId,
+        },
+      };
+    case "c":
+      return { action: { type: "set-drawer-tab", tab: "context", open: true } };
+    case "arrowdown":
+      return buildSelectionNavigationAction(graphRows, selection, "next");
+    case "arrowup":
+      return buildSelectionNavigationAction(graphRows, selection, "previous");
+    default:
+      return null;
+  }
+}
+
+function dispatchShortcutAction(
+  event: MonitorKeyboardShortcutEvent,
+  dispatch: Dispatch<MonitorAction>,
+  shortcutDispatch: MonitorShortcutDispatch | null,
+) {
+  if (!shortcutDispatch) {
+    return;
+  }
+
+  if (shortcutDispatch.preventDefault) {
+    event.preventDefault();
+  }
+
+  dispatch(shortcutDispatch.action);
+}
+
 export function dispatchMonitorKeyboardShortcut(
   event: MonitorKeyboardShortcutEvent,
   {
@@ -56,65 +159,25 @@ export function dispatchMonitorKeyboardShortcut(
     return;
   }
 
-  if (!activeDataset) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      dispatch({ type: "toggle-shortcuts" });
-      return;
-    }
-
-    if (event.key === "?") {
-      dispatch({ type: "toggle-shortcuts" });
-    }
-    return;
-  }
-
-  const visibleEventIds = collectVisibleEventIds(graphRows);
   const normalizedKey = event.key.toLowerCase();
-
-  if ((event.metaKey || event.ctrlKey) && normalizedKey === "k") {
-    event.preventDefault();
-    dispatch({ type: "toggle-shortcuts" });
+  if (handleShortcutHelpToggle(event, normalizedKey, dispatch)) {
     return;
   }
 
-  switch (normalizedKey) {
-    case "i":
-      dispatch({ type: "toggle-inspector" });
-      break;
-    case ".":
-      dispatch({
-        type: "toggle-follow-live",
-        traceId: activeDataset.run.traceId,
-      });
-      break;
-    case "c":
-      dispatch({ type: "set-drawer-tab", tab: "context", open: true });
-      break;
-    case "?":
-      dispatch({ type: "toggle-shortcuts" });
-      break;
-    case "arrowdown":
-    case "arrowup": {
-      const nextSelectionId = getNextVisibleEventId(
-        visibleEventIds,
-        selection,
-        normalizedKey === "arrowdown" ? "next" : "previous",
-      );
-      if (!nextSelectionId) {
-        break;
-      }
-
-      event.preventDefault();
-      dispatch({
-        type: "navigate-selection",
-        selection: { kind: "event", id: nextSelectionId },
-      });
-      break;
-    }
-    default:
-      break;
+  if (!activeDataset) {
+    return;
   }
+
+  dispatchShortcutAction(
+    event,
+    dispatch,
+    resolveDatasetShortcutAction({
+      normalizedKey,
+      activeDataset,
+      selection,
+      graphRows,
+    }),
+  );
 }
 
 export function useMonitorKeyboardShortcuts({

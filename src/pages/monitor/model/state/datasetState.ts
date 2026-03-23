@@ -1,11 +1,15 @@
-import { LIVE_FIXTURE_FRAMES } from "../../../../entities/run";
-import { applyLiveFrame } from "../../../../features/follow-live";
+import { resolveFixtureFrameSnapshot } from "./datasetFixtureFrame";
+import {
+  findDatasetByTraceId,
+  getActiveDataset,
+  resolveFixtureFrameSelection,
+  shouldPauseFollowLiveForManualNavigation,
+} from "./datasetStateShared";
 import {
   activationSelectionForDataset,
   buildCollapsedGapIds,
   buildDatasetActivationPatch,
   buildFollowLiveMap,
-  LIVE_FIXTURE_TRACE_ID,
   resolveDatasetDrawerTab,
   toggleGapIds,
   upsertDataset,
@@ -13,33 +17,8 @@ import {
 import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
 import type { MonitorState } from "./types";
 
-function getActiveDataset(state: MonitorState) {
-  return state.datasets.find((item) => item.run.traceId === state.activeRunId) ?? null;
-}
-
-function shouldPauseFollowLiveForManualNavigation(
-  state: MonitorState,
-  selection: MonitorState["selection"],
-) {
-  const activeDataset = getActiveDataset(state);
-  if (
-    !activeDataset ||
-    activeDataset.run.liveMode !== "live" ||
-    !(state.followLiveByRunId[activeDataset.run.traceId] ?? false) ||
-    !selection
-  ) {
-    return false;
-  }
-
-  if (selection.kind !== "event") {
-    return true;
-  }
-
-  return activeDataset.events[activeDataset.events.length - 1]?.eventId !== selection.id;
-}
-
 export function setActiveRunState(state: MonitorState, traceId: string): MonitorState {
-  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
+  const dataset = findDatasetByTraceId(state.datasets, traceId);
   if (!dataset) {
     return {
       ...state,
@@ -111,7 +90,7 @@ export function toggleFollowLiveState(
   state: MonitorState,
   traceId: string,
 ): MonitorState {
-  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
+  const dataset = findDatasetByTraceId(state.datasets, traceId);
   if (!dataset || dataset.run.liveMode !== "live") {
     return state;
   }
@@ -137,7 +116,7 @@ export function setFollowLiveState(
   traceId: string,
   value: boolean,
 ): MonitorState {
-  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
+  const dataset = findDatasetByTraceId(state.datasets, traceId);
   return {
     ...state,
     followLiveByRunId: {
@@ -212,19 +191,12 @@ export function replaceDatasetsState(
 }
 
 export function applyFixtureFrameState(state: MonitorState): MonitorState {
-  if (state.appliedLiveFrames >= LIVE_FIXTURE_FRAMES.length) {
+  const frameUpdate = resolveFixtureFrameSnapshot(state);
+  if (!frameUpdate) {
     return state;
   }
 
-  const traceId = LIVE_FIXTURE_TRACE_ID;
-  const dataset = state.datasets.find((item) => item.run.traceId === traceId);
-  if (!dataset) {
-    return state;
-  }
-
-  const snapshot = applyLiveFrame(dataset, LIVE_FIXTURE_FRAMES[state.appliedLiveFrames]);
-  const latestEvent = snapshot.dataset.events[snapshot.dataset.events.length - 1];
-  const followLive = state.followLiveByRunId[traceId] ?? false;
+  const { followLive, snapshot, traceId } = frameUpdate;
 
   return {
     ...state,
@@ -238,10 +210,7 @@ export function applyFixtureFrameState(state: MonitorState): MonitorState {
       followLive,
       snapshot.connection,
     ),
-    selection:
-      followLive && state.activeRunId === traceId && latestEvent
-        ? { kind: "event", id: latestEvent.eventId }
-        : state.selection,
+    selection: resolveFixtureFrameSelection(state, snapshot.dataset),
     appliedLiveFrames: state.appliedLiveFrames + 1,
   };
 }

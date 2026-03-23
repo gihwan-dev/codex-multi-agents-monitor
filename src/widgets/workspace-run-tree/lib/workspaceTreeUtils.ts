@@ -1,11 +1,21 @@
 import type { WorkspaceTreeItem } from "../../../entities/run";
+import {
+  buildRunTreeId,
+  buildWorkspaceTreeId,
+  type FlatTreeItem,
+  getWorkspaceRuns,
+} from "./workspaceTreeCore";
 
-interface FlatTreeItem {
-  treeId: string;
-  workspaceId: string;
-  type: "workspace" | "run";
-  runId?: string;
-}
+export {
+  areWorkspaceIdsEqual,
+  buildRunTreeId,
+  buildWorkspaceTreeId,
+  findRunTreeId,
+  flattenTree,
+  getWorkspaceRuns,
+  resolveActiveTreeId,
+  resolveExpandedWorkspaceIds,
+} from "./workspaceTreeCore";
 
 interface ResolveTreeKeyActionArgs {
   key: string;
@@ -24,173 +34,158 @@ interface WorkspaceTreeKeyAction {
   selectRunId?: string;
 }
 
-export function flattenTree(
-  workspaces: WorkspaceTreeItem[],
-  expandedWorkspaceIds: string[],
-): FlatTreeItem[] {
-  return workspaces.flatMap((workspace) => [
-    {
-      treeId: buildWorkspaceTreeId(workspace.id),
-      workspaceId: workspace.id,
-      type: "workspace" as const,
-    },
-    ...(expandedWorkspaceIds.includes(workspace.id)
-      ? getWorkspaceRuns(workspace).map((run) => ({
-          treeId: buildRunTreeId(workspace.id, run.id),
-          workspaceId: workspace.id,
-          type: "run" as const,
-          runId: run.id,
-        }))
-      : []),
-  ]);
+interface TreeNavigationContext {
+  activeItem: FlatTreeItem;
+  workspace: WorkspaceTreeItem;
 }
 
-export function areWorkspaceIdsEqual(left: string[], right: string[]) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-export function getWorkspaceRuns(workspace: WorkspaceTreeItem) {
-  return workspace.threads.flatMap((thread) => thread.runs);
-}
-
-export function buildWorkspaceTreeId(workspaceId: string) {
-  return `workspace-${encodeURIComponent(workspaceId)}`;
-}
-
-export function buildRunTreeId(workspaceId: string, runId: string) {
-  return `run-${encodeURIComponent(workspaceId)}-${encodeURIComponent(runId)}`;
-}
-
-export function findRunTreeId(workspaces: WorkspaceTreeItem[], activeRunId: string) {
-  for (const workspace of workspaces) {
-    const run = getWorkspaceRuns(workspace).find((item) => item.id === activeRunId);
-    if (run) {
-      return buildRunTreeId(workspace.id, run.id);
-    }
-  }
-
-  return null;
-}
-
-export function resolveExpandedWorkspaceIds(
-  workspaces: WorkspaceTreeItem[],
+function buildExpandedWorkspaceAction(
+  workspaceId: string,
   expandedWorkspaceIds: string[],
 ) {
-  const nextExpanded = expandedWorkspaceIds.filter((workspaceId) =>
-    workspaces.some((workspace) => workspace.id === workspaceId),
-  );
-
-  return nextExpanded.length ? nextExpanded : workspaces.map((workspace) => workspace.id);
+  return {
+    handled: true,
+    expandedWorkspaceIds: [...expandedWorkspaceIds, workspaceId],
+  };
 }
 
-export function resolveActiveTreeId(
+function buildFirstRunFocusAction(workspace: WorkspaceTreeItem) {
+  const firstRun = getWorkspaceRuns(workspace)[0];
+  if (!firstRun) {
+    return { handled: true };
+  }
+
+  const firstRunTreeId = buildRunTreeId(workspace.id, firstRun.id);
+  return {
+    handled: true,
+    activeTreeId: firstRunTreeId,
+    focusTreeId: firstRunTreeId,
+  };
+}
+
+function resolveCurrentIndex(flatItems: FlatTreeItem[], activeTreeId: string) {
+  return Math.max(flatItems.findIndex((item) => item.treeId === activeTreeId), 0);
+}
+
+function resolveVerticalTreeKeyAction(
+  key: string,
+  flatItems: FlatTreeItem[],
+  currentIndex: number,
+): WorkspaceTreeKeyAction | null {
+  if (key !== "ArrowDown" && key !== "ArrowUp") {
+    return null;
+  }
+
+  const delta = key === "ArrowDown" ? 1 : -1;
+  const nextIndex = Math.min(Math.max(currentIndex + delta, 0), flatItems.length - 1);
+  const nextItem = flatItems[nextIndex];
+  return nextItem
+    ? { handled: true, activeTreeId: nextItem.treeId, focusTreeId: nextItem.treeId }
+    : { handled: true };
+}
+
+function resolveTreeNavigationContext(
+  flatItems: FlatTreeItem[],
+  activeTreeId: string,
   workspaces: WorkspaceTreeItem[],
-  activeRunId: string,
 ) {
-  return findRunTreeId(workspaces, activeRunId) ?? buildWorkspaceTreeId(workspaces[0]?.id ?? "");
-}
-
-export function resolveTreeKeyAction({
-  key,
-  flatItems,
-  activeTreeId,
-  activeRunId,
-  workspaces,
-  expandedWorkspaceIds,
-}: ResolveTreeKeyActionArgs): WorkspaceTreeKeyAction {
-  if (!flatItems.length) {
-    return { handled: false };
-  }
-
-  const currentIndex = Math.max(
-    flatItems.findIndex((item) => item.treeId === activeTreeId),
-    0,
-  );
-
-  if (key === "ArrowDown" || key === "ArrowUp") {
-    const delta = key === "ArrowDown" ? 1 : -1;
-    const nextIndex = Math.min(
-      Math.max(currentIndex + delta, 0),
-      flatItems.length - 1,
-    );
-    const nextItem = flatItems[nextIndex];
-
-    return nextItem
-      ? {
-          handled: true,
-          activeTreeId: nextItem.treeId,
-          focusTreeId: nextItem.treeId,
-        }
-      : { handled: true };
-  }
-
-  const activeItem = flatItems[currentIndex];
+  const activeItem = flatItems[resolveCurrentIndex(flatItems, activeTreeId)];
   if (!activeItem) {
-    return { handled: false };
+    return null;
   }
 
   const workspace = workspaces.find((item) => item.id === activeItem.workspaceId);
-  if (!workspace) {
-    return { handled: false };
+  return workspace ? { activeItem, workspace } : null;
+}
+
+function resolveArrowRightTreeAction(
+  context: TreeNavigationContext,
+  expandedWorkspaceIds: string[],
+) {
+  if (context.activeItem.type !== "workspace") {
+    return { handled: true };
   }
 
-  if (key === "ArrowRight") {
-    if (activeItem.type !== "workspace") {
-      return { handled: true };
-    }
+  return expandedWorkspaceIds.includes(context.workspace.id)
+    ? buildFirstRunFocusAction(context.workspace)
+    : buildExpandedWorkspaceAction(context.workspace.id, expandedWorkspaceIds);
+}
 
-    if (!expandedWorkspaceIds.includes(workspace.id)) {
-      return {
-        handled: true,
-        expandedWorkspaceIds: [...expandedWorkspaceIds, workspace.id],
-      };
-    }
-
-    const firstRun = getWorkspaceRuns(workspace)[0];
-    return firstRun
-      ? {
-          handled: true,
-          activeTreeId: buildRunTreeId(workspace.id, firstRun.id),
-          focusTreeId: buildRunTreeId(workspace.id, firstRun.id),
-        }
-      : { handled: true };
+function resolveArrowLeftTreeAction(
+  context: TreeNavigationContext,
+  expandedWorkspaceIds: string[],
+) {
+  if (context.activeItem.type === "run") {
+    const workspaceTreeId = buildWorkspaceTreeId(context.workspace.id);
+    return { handled: true, activeTreeId: workspaceTreeId, focusTreeId: workspaceTreeId };
   }
 
-  if (key === "ArrowLeft") {
-    if (activeItem.type === "run") {
-      const workspaceTreeId = buildWorkspaceTreeId(workspace.id);
-      return {
-        handled: true,
-        activeTreeId: workspaceTreeId,
-        focusTreeId: workspaceTreeId,
-      };
-    }
+  return {
+    handled: true,
+    expandedWorkspaceIds: expandedWorkspaceIds.filter(
+      (workspaceId) => workspaceId !== context.workspace.id,
+    ),
+  };
+}
 
+function resolveEnterTreeAction(
+  context: TreeNavigationContext,
+  activeRunId: string,
+  expandedWorkspaceIds: string[],
+) {
+  if (context.activeItem.type === "run") {
     return {
       handled: true,
-      expandedWorkspaceIds: expandedWorkspaceIds.filter(
-        (workspaceId) => workspaceId !== workspace.id,
-      ),
-    };
-  }
-
-  if (key !== "Enter") {
-    return { handled: false };
-  }
-
-  if (activeItem.type === "run") {
-    return {
-      handled: true,
-      activeTreeId: activeItem.treeId,
-      selectRunId: activeItem.runId ?? activeRunId,
+      activeTreeId: context.activeItem.treeId,
+      selectRunId: context.activeItem.runId ?? activeRunId,
     };
   }
 
   return {
     handled: true,
-    activeTreeId: buildWorkspaceTreeId(workspace.id),
-    expandedWorkspaceIds: expandedWorkspaceIds.includes(workspace.id)
-      ? expandedWorkspaceIds.filter((workspaceId) => workspaceId !== workspace.id)
-      : [...expandedWorkspaceIds, workspace.id],
+    activeTreeId: buildWorkspaceTreeId(context.workspace.id),
+    expandedWorkspaceIds: expandedWorkspaceIds.includes(context.workspace.id)
+      ? expandedWorkspaceIds.filter((workspaceId) => workspaceId !== context.workspace.id)
+      : [...expandedWorkspaceIds, context.workspace.id],
   };
+}
+
+function resolveHorizontalOrEnterAction(
+  args: ResolveTreeKeyActionArgs,
+  context: TreeNavigationContext,
+) {
+  if (args.key === "ArrowRight") {
+    return resolveArrowRightTreeAction(context, args.expandedWorkspaceIds);
+  }
+
+  if (args.key === "ArrowLeft") {
+    return resolveArrowLeftTreeAction(context, args.expandedWorkspaceIds);
+  }
+
+  if (args.key === "Enter") {
+    return resolveEnterTreeAction(context, args.activeRunId, args.expandedWorkspaceIds);
+  }
+
+  return { handled: false };
+}
+
+export function resolveTreeKeyAction(
+  args: ResolveTreeKeyActionArgs,
+): WorkspaceTreeKeyAction {
+  if (!args.flatItems.length) {
+    return { handled: false };
+  }
+
+  const currentIndex = resolveCurrentIndex(args.flatItems, args.activeTreeId);
+  const verticalAction = resolveVerticalTreeKeyAction(args.key, args.flatItems, currentIndex);
+  if (verticalAction) {
+    return verticalAction;
+  }
+
+  const context = resolveTreeNavigationContext(
+    args.flatItems,
+    args.activeTreeId,
+    args.workspaces,
+  );
+  return context ? resolveHorizontalOrEnterAction(args, context) : { handled: false };
 }

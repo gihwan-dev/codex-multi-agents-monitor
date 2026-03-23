@@ -15,10 +15,13 @@ export function buildConnectionMap(datasets: RunDataset[]) {
 export function updateLiveConnectionMap(
   liveConnectionByRunId: MonitorState["liveConnectionByRunId"],
   traceId: string,
-  dataset: RunDataset,
-  followLive: boolean,
-  nextConnection?: Exclude<LiveConnection, "paused">,
+  ...rest: [
+    dataset: RunDataset,
+    followLive: boolean,
+    nextConnection?: Exclude<LiveConnection, "paused">,
+  ]
 ) {
+  const [dataset, followLive, nextConnection] = rest;
   return {
     ...liveConnectionByRunId,
     [traceId]: resolveVisibleLiveConnection(
@@ -45,9 +48,12 @@ function resolveDatasetLiveConnection(
 function resolveVisibleLiveConnection(
   dataset: RunDataset,
   followLive: boolean,
-  currentConnection?: LiveConnection,
-  nextConnection?: Exclude<LiveConnection, "paused">,
+  ...rest: [
+    currentConnection?: LiveConnection,
+    nextConnection?: Exclude<LiveConnection, "paused">,
+  ]
 ): LiveConnection {
+  const [currentConnection, nextConnection] = rest;
   const resolvedConnection =
     nextConnection ??
     (currentConnection && currentConnection !== "paused"

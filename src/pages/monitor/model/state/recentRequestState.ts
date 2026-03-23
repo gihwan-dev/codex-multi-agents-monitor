@@ -2,13 +2,16 @@ import {
   buildCollapsedGapIds,
   buildDatasetActivationPatch,
   buildFollowLiveMap,
-  defaultSelectionForDataset,
   isFixtureDatasetTraceId,
   resolveDatasetDrawerTab,
   stripFixtureDatasets,
   upsertDataset,
 } from "./helpers";
 import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
+import {
+  buildRecentIndexSelectionPatch,
+  resolveSelectionAfterRecentRefresh,
+} from "./recentRequestSelection";
 import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
@@ -38,7 +41,7 @@ export function resolveRecentIndexRequest(
 ): MonitorState {
   const datasets = stripFixtureDatasets(state.datasets);
   const fixtureActive = isFixtureDatasetTraceId(state.activeRunId);
-  const nextActiveRunId = fixtureActive ? (items[0]?.sessionId ?? "") : state.activeRunId;
+  const nextActiveRunId = items[0]?.sessionId ?? "";
 
   return {
     ...state,
@@ -51,13 +54,10 @@ export function resolveRecentIndexRequest(
       state.selectionLoadState?.phase === "indexing_recent"
         ? null
         : state.selectionLoadState,
-    activeRunId: nextActiveRunId,
-    selection: fixtureActive ? null : state.selection,
-    selectionNavigationRequestId: fixtureActive ? 0 : state.selectionNavigationRequestId,
-    selectionNavigationRunId: fixtureActive ? null : state.selectionNavigationRunId,
     followLiveByRunId: buildFollowLiveMap(datasets),
     liveConnectionByRunId: buildConnectionMap(datasets),
     collapsedGapIds: buildCollapsedGapIds(datasets),
+    ...buildRecentIndexSelectionPatch(state, nextActiveRunId, fixtureActive),
   };
 }
 
@@ -123,9 +123,9 @@ export function beginRecentSnapshotBuild(
 export function resolveRecentSnapshotRequest(
   state: MonitorState,
   requestId: number,
-  filePath: string,
-  dataset: MonitorState["datasets"][number],
+  ...rest: [filePath: string, dataset: MonitorState["datasets"][number]]
 ): MonitorState {
+  const [filePath, dataset] = rest;
   if (requestId !== state.recentSnapshotRequestId) {
     return state;
   }
@@ -145,48 +145,6 @@ export function resolveRecentSnapshotRequest(
     ...nextState,
     ...buildDatasetActivationPatch(nextState, dataset),
   };
-}
-
-function resolveSelectionAfterRecentRefresh(
-  state: MonitorState,
-  dataset: MonitorState["datasets"][number],
-  followLive: boolean,
-) {
-  if (state.activeRunId !== dataset.run.traceId) {
-    return state.selection;
-  }
-
-  const latestEvent = dataset.events[dataset.events.length - 1];
-  if (followLive && latestEvent) {
-    return { kind: "event" as const, id: latestEvent.eventId };
-  }
-
-  if (!state.selection) {
-    return defaultSelectionForDataset(dataset);
-  }
-
-  if (
-    state.selection.kind === "event" &&
-    dataset.events.some((event) => event.eventId === state.selection?.id)
-  ) {
-    return state.selection;
-  }
-
-  if (
-    state.selection.kind === "edge" &&
-    dataset.edges.some((edge) => edge.edgeId === state.selection?.id)
-  ) {
-    return state.selection;
-  }
-
-  if (
-    state.selection.kind === "artifact" &&
-    dataset.artifacts.some((artifact) => artifact.artifactId === state.selection?.id)
-  ) {
-    return state.selection;
-  }
-
-  return defaultSelectionForDataset(dataset);
 }
 
 export function refreshRecentSnapshot(

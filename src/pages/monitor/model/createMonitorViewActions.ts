@@ -14,11 +14,10 @@ interface CreateMonitorViewActionsOptions {
   activeFollowLive: boolean;
 }
 
-export function createMonitorViewActions({
-  drawerOpen,
-  dispatch,
+function buildSelectionActions({
   activeDataset,
   activeFollowLive,
+  dispatch,
 }: CreateMonitorViewActionsOptions) {
   return {
     selectRun(traceId: string) {
@@ -51,6 +50,14 @@ export function createMonitorViewActions({
         });
       }
     },
+  };
+}
+
+function buildDrawerActions({
+  dispatch,
+  drawerOpen,
+}: CreateMonitorViewActionsOptions) {
+  return {
     setDrawerTab(tab: DrawerTab, open = drawerOpen) {
       dispatch({ type: "set-drawer-tab", tab, open });
     },
@@ -60,6 +67,21 @@ export function createMonitorViewActions({
     toggleInspector() {
       dispatch({ type: "toggle-inspector" });
     },
+    toggleShortcuts() {
+      dispatch({ type: "toggle-shortcuts" });
+    },
+    toggleArchiveSection() {
+      dispatch({ type: "toggle-archive-section" });
+    },
+  };
+}
+
+function buildLiveActions({
+  activeDataset,
+  activeFollowLive,
+  dispatch,
+}: CreateMonitorViewActionsOptions) {
+  return {
     toggleFollowLive() {
       if (!activeDataset) {
         return;
@@ -106,6 +128,11 @@ export function createMonitorViewActions({
         gapId,
       });
     },
+  };
+}
+
+function buildSizingActions({ dispatch }: CreateMonitorViewActionsOptions) {
+  return {
     resizeRail(width: number) {
       dispatch({
         type: "set-rail-width",
@@ -118,11 +145,14 @@ export function createMonitorViewActions({
         width: Math.max(width, MIN_INSPECTOR_WIDTH),
       });
     },
-    toggleShortcuts() {
-      dispatch({ type: "toggle-shortcuts" });
-    },
-    toggleArchiveSection() {
-      dispatch({ type: "toggle-archive-section" });
-    },
+  };
+}
+
+export function createMonitorViewActions(options: CreateMonitorViewActionsOptions) {
+  return {
+    ...buildSelectionActions(options),
+    ...buildDrawerActions(options),
+    ...buildLiveActions(options),
+    ...buildSizingActions(options),
   };
 }

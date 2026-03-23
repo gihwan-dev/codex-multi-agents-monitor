@@ -1,10 +1,10 @@
 import type { RunStatus } from "../../run";
 import { NEW_THREAD_TITLE, type SessionEntrySnapshot } from "../model/types";
 import { parseRequiredTimestamp } from "./helpers";
+import { isSystemBoilerplate } from "./systemBoilerplate";
 
 const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\([^)]+\)/g;
 const IMAGE_TAG_PATTERN = /<\/?image>/gi;
-const IMPLEMENT_PLAN_PATTERN = /^PLEASE IMPLEMENT THIS PLAN:/i;
 
 export function deriveSessionLogTitle(entries: SessionEntrySnapshot[]) {
   const firstMeaningfulUserMessage = entries.find(
@@ -33,82 +33,12 @@ export function deriveSessionLogStatus(
   entries: SessionEntrySnapshot[],
   skipImplementPlan = false,
 ): RunStatus {
-  const hasAbort = entries.some(
-    (entry) =>
-      entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
-  );
-
-  const messageEntries = entries.filter(
-    (entry) => entry.entryType === "message" && entry.text != null,
-  );
-
-  const latestMessage = [...messageEntries].reverse().find((entry) => {
-    const trimmed = entry.text?.trim() ?? "";
-    return (
-      trimmed.startsWith("<turn_aborted>") ||
-      !isSystemBoilerplate(trimmed, skipImplementPlan)
-    );
-  });
-  const latestTaskStartedTs = findLatestEntryTimestamp(
-    entries,
-    (entry) => entry.entryType === "task_started",
-  );
-  const latestTaskCompleteTs = findLatestEntryTimestamp(
-    entries,
-    (entry) => entry.entryType === "task_complete",
-  );
-  const hasOpenTask =
-    latestTaskStartedTs !== null &&
-    (latestTaskCompleteTs === null || latestTaskStartedTs > latestTaskCompleteTs);
-
-  if (!latestMessage) {
-    if (hasOpenTask) {
-      return "running";
-    }
-    return hasAbort ? "interrupted" : "done";
-  }
-
-  if (latestMessage.text?.includes("<turn_aborted>")) {
+  const latestMessage = findLatestMeaningfulMessage(entries, skipImplementPlan);
+  if (latestMessage?.text?.includes("<turn_aborted>")) {
     return "interrupted";
   }
 
-  if (hasAbort) {
-    const lastAbortEntry = [...entries].reverse().find(
-      (entry) =>
-        entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
-    );
-    if (lastAbortEntry) {
-      const abortTs = parseRequiredTimestamp(lastAbortEntry.timestamp);
-      const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
-      if (abortTs !== null && msgTs !== null && abortTs >= msgTs) {
-        return "interrupted";
-      }
-    }
-  }
-
-  if (hasOpenTask) {
-    return "running";
-  }
-
-  if (latestMessage.role === "user") {
-    const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
-    if (msgTs === null) {
-      return "running";
-    }
-
-    const hasCompletionAfter = entries.some((entry) => {
-      if (entry.entryType !== "task_complete") {
-        return false;
-      }
-
-      const entryTs = parseRequiredTimestamp(entry.timestamp);
-      return entryTs !== null && entryTs >= msgTs;
-    });
-
-    return hasCompletionAfter ? "done" : "running";
-  }
-
-  return "done";
+  return resolveEntryDrivenStatus(entries, latestMessage);
 }
 
 function findLatestEntryTimestamp(
@@ -119,25 +49,121 @@ function findLatestEntryTimestamp(
   return latestEntry ? parseRequiredTimestamp(latestEntry.timestamp) : null;
 }
 
-export function isSystemBoilerplate(
-  value: string,
-  skipImplementPlan = false,
-): boolean {
-  const trimmed = value.trim();
-  return (
-    isAgentsInstruction(trimmed) ||
-    isAutomationEnvelope(trimmed) ||
-    trimmed.startsWith("<environment_context>") ||
-    trimmed.startsWith("<skill>") ||
-    trimmed.startsWith("<subagent_notification>") ||
-    trimmed.startsWith("<permissions") ||
-    trimmed.startsWith("<turn_aborted>") ||
-    (!skipImplementPlan && isImplementPlanMessage(trimmed))
+function findLatestMeaningfulMessage(
+  entries: SessionEntrySnapshot[],
+  skipImplementPlan: boolean,
+) {
+  return [...entries].reverse().find((entry) => isMeaningfulStatusMessage(entry, skipImplementPlan));
+}
+
+function isMeaningfulStatusMessage(
+  entry: SessionEntrySnapshot,
+  skipImplementPlan: boolean,
+) {
+  if (entry.entryType !== "message" || entry.text == null) {
+    return false;
+  }
+
+  const trimmed = entry.text.trim();
+  return trimmed.startsWith("<turn_aborted>") || !isSystemBoilerplate(trimmed, skipImplementPlan);
+}
+
+function hasInterruptedEntry(entries: SessionEntrySnapshot[]) {
+  return entries.some(
+    (entry) =>
+      entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
   );
 }
 
-export function isImplementPlanMessage(value: string) {
-  return IMPLEMENT_PLAN_PATTERN.test(value.trim());
+function hasOpenTaskWindow(entries: SessionEntrySnapshot[]) {
+  const latestTaskStartedTs = findLatestEntryTimestamp(
+    entries,
+    (entry) => entry.entryType === "task_started",
+  );
+  const latestTaskCompleteTs = findLatestEntryTimestamp(
+    entries,
+    (entry) => entry.entryType === "task_complete",
+  );
+
+  return (
+    latestTaskStartedTs !== null &&
+    (latestTaskCompleteTs === null || latestTaskStartedTs > latestTaskCompleteTs)
+  );
+}
+
+function resolveEntryDrivenStatus(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot | undefined,
+): RunStatus {
+  const hasAbort = hasInterruptedEntry(entries);
+  const hasOpenTask = hasOpenTaskWindow(entries);
+  if (!latestMessage) {
+    return resolveStatusWithoutLatestMessage(hasAbort, hasOpenTask);
+  }
+  if (isInterruptedAfterLatestMessage(entries, latestMessage, hasAbort)) {
+    return "interrupted";
+  }
+  return hasOpenTask ? "running" : resolveMessageDrivenStatus(entries, latestMessage);
+}
+
+function resolveStatusWithoutLatestMessage(
+  hasAbort: boolean,
+  hasOpenTask: boolean,
+): RunStatus {
+  if (hasOpenTask) {
+    return "running";
+  }
+
+  return hasAbort ? "interrupted" : "done";
+}
+
+function isInterruptedAfterLatestMessage(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot,
+  hasAbort: boolean,
+) {
+  if (!hasAbort) {
+    return false;
+  }
+
+  const lastAbortEntry = [...entries].reverse().find(
+    (entry) =>
+      entry.entryType === "turn_aborted" || entry.entryType === "thread_rolled_back",
+  );
+  if (!lastAbortEntry) {
+    return false;
+  }
+
+  const abortTs = parseRequiredTimestamp(lastAbortEntry.timestamp);
+  const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
+  return abortTs !== null && msgTs !== null && abortTs >= msgTs;
+}
+
+function resolveMessageDrivenStatus(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot,
+): RunStatus {
+  if (latestMessage.role !== "user") {
+    return "done";
+  }
+
+  const msgTs = parseRequiredTimestamp(latestMessage.timestamp);
+  if (msgTs === null) {
+    return "running";
+  }
+
+  return hasCompletionAfter(entries, msgTs) ? "done" : "running";
+}
+
+function hasCompletionAfter(entries: SessionEntrySnapshot[], msgTs: number) {
+  return entries.some((entry) => {
+    if (entry.entryType !== "task_complete") {
+      return false;
+    }
+
+    const entryTs = parseRequiredTimestamp(entry.timestamp);
+    return entryTs !== null && entryTs >= msgTs;
+  });
 }
 
 export function sanitizeMessagePreview(value: string) {
@@ -172,12 +198,4 @@ export function deriveArchiveIndexTitle(
 function isMeaningfulTitleMessage(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 0 && !isSystemBoilerplate(trimmed);
-}
-
-function isAgentsInstruction(value: string) {
-  return /^#\s*AGENTS\.md instructions\b/i.test(value.trim());
-}
-
-function isAutomationEnvelope(value: string) {
-  return /^Automation:/i.test(value.trim());
 }

@@ -14,6 +14,14 @@ interface BuildRunStartEventOptions {
   model: string;
 }
 
+interface BuildRunEndEventOptions {
+  sessionId: string;
+  lane: AgentLane;
+  updatedTs: number;
+  status: RunStatus;
+  model: string;
+}
+
 export function buildRunStartEvent({
   sessionId,
   lane,
@@ -58,49 +66,30 @@ export function buildRunStartEvent({
   };
 }
 
-export function buildRunEndEvent(
-  sessionId: string,
-  lane: AgentLane,
-  updatedTs: number,
-  status: RunStatus,
-  model: string,
-) {
-  if (status === "running") {
-    return null;
-  }
+export function buildRunEndEvent({
+  sessionId,
+  lane,
+  updatedTs,
+  status,
+  model,
+}: BuildRunEndEventOptions): EventRecord | null {
+  if (status === "running") return null;
 
-  const finishedEventType = status === "interrupted" ? "run.cancelled" : "run.finished";
+  const { eventType, title } = resolveRunEndMetadata(status);
   return {
-    eventId: `${sessionId}:run-finished`,
-    parentId: null,
-    linkIds: [],
-    laneId: lane.laneId,
-    agentId: lane.agentId,
-    threadId: lane.threadId,
-    eventType: finishedEventType,
-    status,
-    waitReason: null,
-    retryCount: 0,
-    startTs: updatedTs,
-    endTs: updatedTs + 1_000,
-    durationMs: 1_000,
-    title: status === "interrupted" ? "Session interrupted" : "Session finished",
-    inputPreview: null,
-    outputPreview: null,
-    artifactId: null,
-    errorCode: null,
-    errorMessage: null,
-    provider: "OpenAI",
-    model,
-    toolName: null,
-    tokensIn: 0,
-    tokensOut: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
+    eventId: `${sessionId}:run-finished`, parentId: null, linkIds: [],
+    laneId: lane.laneId, agentId: lane.agentId, threadId: lane.threadId,
+    eventType, status, waitReason: null, retryCount: 0, startTs: updatedTs,
+    endTs: updatedTs + 1_000, durationMs: 1_000, title, inputPreview: null,
+    outputPreview: null, artifactId: null, errorCode: null, errorMessage: null,
+    provider: "OpenAI", model, toolName: null, tokensIn: 0, tokensOut: 0,
+    reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0,
+    finishReason: null, rawInput: null, rawOutput: null,
   } satisfies EventRecord;
+}
+
+function resolveRunEndMetadata(status: RunStatus) {
+  return status === "interrupted"
+    ? { eventType: "run.cancelled" as const, title: "Session interrupted" }
+    : { eventType: "run.finished" as const, title: "Session finished" };
 }

@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::infrastructure::filesystem::normalize_path;
 use rusqlite::Connection;
 use std::{

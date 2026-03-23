@@ -14,13 +14,18 @@ export function beginArchivedIndexRequest(state: MonitorState, requestId: number
 export function resolveArchivedIndexRequest(
   state: MonitorState,
   requestId: number,
-  result: MonitorState["archivedIndex"] extends Array<infer _> ? {
-    items: MonitorState["archivedIndex"];
-    total: number;
-    hasMore: boolean;
-  } : never,
-  append: boolean,
+  ...rest: [
+    result: MonitorState["archivedIndex"] extends Array<infer _>
+      ? {
+          items: MonitorState["archivedIndex"];
+          total: number;
+          hasMore: boolean;
+        }
+      : never,
+    append: boolean,
+  ]
 ): MonitorState {
+  const [result, append] = rest;
   if (requestId !== state.archivedIndexRequestId) {
     return state;
   }
@@ -95,9 +100,9 @@ export function beginArchivedSnapshotBuild(
 export function resolveArchivedSnapshotRequest(
   state: MonitorState,
   requestId: number,
-  filePath: string,
-  dataset: MonitorState["datasets"][number],
+  ...rest: [filePath: string, dataset: MonitorState["datasets"][number]]
 ): MonitorState {
+  const [filePath, dataset] = rest;
   if (requestId !== state.archivedSnapshotRequestId) {
     return state;
   }
