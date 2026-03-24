@@ -5,7 +5,6 @@ import { formatBytes } from "./promptAssemblyFormat";
 
 interface PromptAssemblyViewProps {
   assembly: PromptAssembly;
-  rawEnabled: boolean;
 }
 
 interface PromptAssemblyHeaderProps {
@@ -42,7 +41,7 @@ function PromptAssemblyEmptyState({ assembly }: PromptAssemblyEmptyStateProps) {
   ) : null;
 }
 
-export function PromptAssemblyView({ assembly, rawEnabled }: PromptAssemblyViewProps) {
+export function PromptAssemblyView({ assembly }: PromptAssemblyViewProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const toggleLayer = (layerId: string) => {
@@ -70,7 +69,6 @@ export function PromptAssemblyView({ assembly, rawEnabled }: PromptAssemblyViewP
           expanded={expandedIds.has(layer.layerId)}
           layer={layer}
           onToggle={toggleLayer}
-          rawEnabled={rawEnabled}
         />
       ))}
 

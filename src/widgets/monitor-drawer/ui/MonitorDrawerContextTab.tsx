@@ -12,7 +12,7 @@ export function ContextTab({
   return (
     <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-white/8 bg-white/[0.02]">
       {activeDataset.promptAssembly ? (
-        <PromptAssemblyView assembly={activeDataset.promptAssembly} rawEnabled={activeDataset.run.rawIncluded} />
+        <PromptAssemblyView assembly={activeDataset.promptAssembly} />
       ) : (
         <div className="px-4 py-3 text-sm text-muted-foreground">No prompt assembly data available.</div>
       )}

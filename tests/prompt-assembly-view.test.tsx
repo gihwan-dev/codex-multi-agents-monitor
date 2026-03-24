@@ -3,25 +3,25 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { PromptAssemblyView } from "../src/widgets/prompt-assembly/ui/PromptAssemblyView.js";
 import type { PromptAssembly } from "../src/entities/run/index.js";
-import { PromptAssemblyView } from "../src/widgets/prompt-assembly/index.js";
-
-let container: HTMLDivElement;
-let root: Root;
 
 const assembly: PromptAssembly = {
-  totalContentLength: 42,
   layers: [
     {
-      layerId: "layer-1",
+      layerId: "layer-0",
       layerType: "system",
-      label: "System",
-      preview: "preview only",
+      label: "System Prompt",
       contentLength: 42,
+      preview: "preview only",
       rawContent: "super secret system prompt",
     },
   ],
+  totalContentLength: 42,
 };
+
+let container: HTMLDivElement;
+let root: Root;
 
 beforeEach(() => {
   container = document.createElement("div");
@@ -39,29 +39,17 @@ afterEach(async () => {
 });
 
 describe("PromptAssemblyView", () => {
-  it("raw가 비활성화되면 preview는 유지하고 상세 원문은 숨긴다", async () => {
+  it("접힌 상태에서는 preview를 표시한다", async () => {
     await act(async () => {
-      root.render(createElement(PromptAssemblyView, { assembly, rawEnabled: false }));
+      root.render(createElement(PromptAssemblyView, { assembly }));
     });
 
     expect(container.textContent).toContain("preview only");
-
-    const header = container.querySelector<HTMLButtonElement>('[data-slot="prompt-layer-toggle"]');
-    if (!header) {
-      throw new Error("prompt assembly header missing");
-    }
-
-    await act(async () => {
-      header.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("Raw context hidden by default.");
-    expect(container.textContent).not.toContain("super secret system prompt");
   });
 
-  it("raw가 활성화되면 상세 원문을 렌더링한다", async () => {
+  it("펼치면 rawContent를 line-clamp로 표시한다", async () => {
     await act(async () => {
-      root.render(createElement(PromptAssemblyView, { assembly, rawEnabled: true }));
+      root.render(createElement(PromptAssemblyView, { assembly }));
     });
 
     const header = container.querySelector<HTMLButtonElement>('[data-slot="prompt-layer-toggle"]');
@@ -74,5 +62,36 @@ describe("PromptAssemblyView", () => {
     });
 
     expect(container.textContent).toContain("super secret system prompt");
+  });
+
+  it("rawContent가 없으면 preview를 표시한다", async () => {
+    const noRawAssembly: PromptAssembly = {
+      layers: [
+        {
+          layerId: "layer-0",
+          layerType: "system",
+          label: "System Prompt",
+          contentLength: 42,
+          preview: "fallback preview text",
+          rawContent: null,
+        },
+      ],
+      totalContentLength: 42,
+    };
+
+    await act(async () => {
+      root.render(createElement(PromptAssemblyView, { assembly: noRawAssembly }));
+    });
+
+    const header = container.querySelector<HTMLButtonElement>('[data-slot="prompt-layer-toggle"]');
+    if (!header) {
+      throw new Error("prompt assembly header missing");
+    }
+
+    await act(async () => {
+      header.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("fallback preview text");
   });
 });
