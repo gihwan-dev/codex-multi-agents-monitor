@@ -29,23 +29,24 @@ interface GraphViewportEffectsOptions {
   stickyTop: number;
 }
 
-export function useGraphViewportEffects({
-  availableCanvasHeight,
-  followLive,
-  followScrollTargetRef,
-  lastHandledNavigationRequestIdRef,
-  latestVisibleEventId,
-  layout,
-  liveMode,
-  renderedContentHeight,
-  runTraceId,
-  scheduleScrollTopUpdate,
-  scrollRef,
-  selectionNavigationRequestId,
-  selectionNavigationRunId,
-  selectionRevealTarget,
-  stickyTop,
-}: GraphViewportEffectsOptions) {
+export function useGraphViewportEffects(options: GraphViewportEffectsOptions) {
+  const {
+    availableCanvasHeight,
+    followLive,
+    followScrollTargetRef,
+    lastHandledNavigationRequestIdRef,
+    latestVisibleEventId,
+    layout,
+    liveMode,
+    renderedContentHeight,
+    runTraceId,
+    scheduleScrollTopUpdate,
+    scrollRef,
+    selectionNavigationRequestId,
+    selectionNavigationRunId,
+    selectionRevealTarget,
+    stickyTop,
+  } = options;
   useGraphFollowLiveScroll({
     followLive,
     followScrollTargetRef,

@@ -74,12 +74,14 @@ function useArchiveInfiniteScroll({
       return undefined;
     }
 
+    function handleIntersection(entries: IntersectionObserverEntry[]) {
+      if (entries[0]?.isIntersecting) {
+        onLoadMore();
+      }
+    }
+
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          onLoadMore();
-        }
-      },
+      handleIntersection,
       { rootMargin: "200px" },
     );
 

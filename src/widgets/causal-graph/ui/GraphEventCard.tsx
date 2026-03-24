@@ -2,7 +2,11 @@ import type { GraphSceneModel, RunStatus } from "../../../entities/run";
 import { cn } from "../../../shared/lib";
 import { EventTypeGlyph } from "../../../shared/ui";
 import type { GraphLayoutSnapshot } from "../model/graphLayout";
-import { buildCardStyle, GRAPH_STATUS_COLORS } from "./graphCanvasStyles";
+import { buildCardStyle } from "./graphCanvasStyles";
+import {
+  GraphStatusDot,
+  resolveEventCardClasses,
+} from "./GraphEventCardDecorations";
 
 interface GraphEventCardProps {
   eventId: string;
@@ -71,29 +75,5 @@ export function GraphEventCard({
         </p>
       ) : null}
     </button>
-  );
-}
-
-function resolveEventCardClasses(
-  eventType: GraphEventCardProps["eventType"],
-) {
-  if (eventType === "tool.started" || eventType === "tool.finished") {
-    return "rounded-lg";
-  }
-
-  return eventType === "turn.started" || eventType === "turn.finished"
-    ? "rounded-md"
-    : "";
-}
-
-function GraphStatusDot({ status }: { status: RunStatus }) {
-  return (
-    <span
-      aria-hidden="true"
-      data-slot="graph-status-dot"
-      data-status={status}
-      className="mt-1 inline-flex size-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: GRAPH_STATUS_COLORS[status] }}
-    />
   );
 }

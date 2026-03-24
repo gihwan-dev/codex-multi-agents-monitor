@@ -5,7 +5,9 @@ import type {
   SelectionState,
 } from "../../../entities/run";
 import { Panel } from "../../../shared/ui";
+import { HiddenLaneNotice } from "./CausalGraphHiddenLaneNotice";
 import { CausalGraphViewportSurface } from "./CausalGraphViewportSurface";
+import { createEdgeSelectHandler } from "./graphEdgeSelectHandler";
 import { useCausalGraphViewModel } from "./useCausalGraphViewModel";
 
 interface CausalGraphViewProps {
@@ -69,36 +71,4 @@ export function CausalGraphView({
       />
     </Panel>
   );
-}
-
-function HiddenLaneNotice({ hiddenLaneCount }: { hiddenLaneCount: number }) {
-  if (!hiddenLaneCount) {
-    return null;
-  }
-
-  return (
-    <p className="text-[0.8rem] text-muted-foreground">
-      {hiddenLaneCount} inactive done lanes are folded to preserve the active path.
-    </p>
-  );
-}
-
-function createEdgeSelectHandler({
-  followLive,
-  liveMode,
-  onPauseFollowLive,
-  onSelect,
-}: {
-  followLive: boolean;
-  liveMode: LiveMode;
-  onPauseFollowLive: () => void;
-  onSelect: (selection: SelectionState) => void;
-}) {
-  return (edgeId: string) => {
-    if (followLive && liveMode === "live") {
-      onPauseFollowLive();
-    }
-
-    onSelect({ kind: "edge", id: edgeId });
-  };
 }

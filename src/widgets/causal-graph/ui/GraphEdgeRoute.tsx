@@ -1,7 +1,11 @@
-import type { CSSProperties } from "react";
 import type { GraphSceneEdgeBundle } from "../../../entities/run";
 import type { EdgeRouteLayout } from "../model/graphLayout";
-import { EDGE_COLORS } from "./graphCanvasStyles";
+import { GraphEdgePort } from "./GraphEdgePort";
+import {
+  buildEdgeRouteStyle,
+  resolveEdgeDashArray,
+  resolveEdgeStrokeWidth,
+} from "./graphEdgeRouteStyle";
 
 interface GraphEdgeRouteProps {
   bundle: GraphSceneEdgeBundle | undefined;
@@ -41,51 +45,4 @@ export function GraphEdgeRoute({
       <GraphEdgePort cx={route.targetPort.x} cy={route.targetPort.y} port="target" />
     </g>
   );
-}
-
-function GraphEdgePort({
-  cx,
-  cy,
-  port,
-}: {
-  cx: number;
-  cy: number;
-  port: "source" | "target";
-}) {
-  return (
-    <circle
-      data-slot="graph-route-port"
-      data-port={port}
-      cx={cx}
-      cy={cy}
-      r={4}
-      fill="currentColor"
-      stroke="var(--color-graph-port-outline)"
-      strokeWidth={1.5}
-    />
-  );
-}
-
-function buildEdgeRouteStyle(bundle: GraphSceneEdgeBundle): CSSProperties {
-  return {
-    color: EDGE_COLORS[bundle.edgeType] ?? "var(--color-graph-edge-neutral)",
-    opacity: bundle.inPath || bundle.selected ? 1 : 0.88,
-  };
-}
-
-function resolveEdgeStrokeWidth(bundle: GraphSceneEdgeBundle) {
-  return bundle.inPath || bundle.selected ? 3.5 : 2.5;
-}
-
-function resolveEdgeDashArray(edgeType: GraphSceneEdgeBundle["edgeType"]) {
-  switch (edgeType) {
-    case "handoff":
-      return "6 4";
-    case "transfer":
-      return "2 4";
-    case "merge":
-      return "1 3";
-    default:
-      return undefined;
-  }
 }

@@ -4,6 +4,11 @@ import type {
   SelectionState,
 } from "../../../entities/run";
 import type { MonitorState } from "./state";
+import {
+  buildArtifactRevealTarget,
+  buildEdgeRevealTarget,
+  buildEventRevealTarget,
+} from "./selectionRevealTargetResolvers";
 
 function collectVisibleEventIds(graphScene: GraphSceneModel) {
   return new Set(
@@ -24,31 +29,10 @@ export function buildSelectionRevealTarget(options: {
   const visibleEventIds = collectVisibleEventIds(graphScene);
   switch (selection.kind) {
     case "event":
-      return visibleEventIds.has(selection.id)
-        ? { kind: "event", eventId: selection.id }
-        : null;
-    case "edge": {
-      const edge = activeDataset.edges.find((item) => item.edgeId === selection.id);
-      if (!edge || !visibleEventIds.has(edge.sourceEventId) || !visibleEventIds.has(edge.targetEventId)) {
-        return null;
-      }
-
-      return {
-        kind: "edge",
-        edgeId: edge.edgeId,
-        sourceEventId: edge.sourceEventId,
-        targetEventId: edge.targetEventId,
-      };
-    }
-    case "artifact": {
-      const artifact = activeDataset.artifacts.find((item) => item.artifactId === selection.id);
-      return artifact && visibleEventIds.has(artifact.producerEventId)
-        ? {
-            kind: "artifact",
-            artifactId: artifact.artifactId,
-            producerEventId: artifact.producerEventId,
-          }
-        : null;
-    }
+      return buildEventRevealTarget(selection, visibleEventIds);
+    case "edge":
+      return buildEdgeRevealTarget(activeDataset, selection, visibleEventIds);
+    case "artifact":
+      return buildArtifactRevealTarget(activeDataset, selection, visibleEventIds);
   }
 }

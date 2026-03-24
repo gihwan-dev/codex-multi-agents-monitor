@@ -1,6 +1,7 @@
 import type { GraphSceneModel, SelectionState } from "../../../entities/run";
 import type { GraphLayoutSnapshot, RowPosition } from "../model/graphLayout";
-import { GraphLaneCell } from "./GraphLaneCell";
+import { GraphEventLaneCells } from "./GraphEventLaneCells";
+import { GraphEventRowTimeCell } from "./GraphEventRowTimeCell";
 
 type GraphEventRowModel = Extract<GraphSceneModel["rows"][number], { kind: "event" }>;
 
@@ -34,29 +35,8 @@ export function GraphEventRow({
         height: rowPosition.height,
       }}
     >
-      <div
-        data-slot="graph-event-time"
-        className="sticky left-0 z-[3] flex min-h-full items-center px-3 text-[0.74rem] font-mono text-muted-foreground"
-        style={{ background: "var(--gradient-graph-time)" }}
-      >
-        <div className="flex items-baseline gap-1.5 whitespace-nowrap tabular-nums">
-          <strong>{row.timeLabel}</strong>
-          <span className="text-[0.68rem] text-[var(--color-text-tertiary)]">
-            ({row.durationLabel})
-          </span>
-        </div>
-      </div>
-      {scene.lanes.map((lane) =>
-        eventLayout ? (
-          <GraphLaneCell
-            key={`${row.id}:${lane.laneId}`}
-            eventLayout={eventLayout}
-            laneId={lane.laneId}
-            onSelect={onSelect}
-            row={row}
-          />
-        ) : null,
-      )}
+      <GraphEventRowTimeCell timeLabel={row.timeLabel} durationLabel={row.durationLabel} />
+      <GraphEventLaneCells eventLayout={eventLayout} onSelect={onSelect} row={row} scene={scene} />
     </div>
   );
 }

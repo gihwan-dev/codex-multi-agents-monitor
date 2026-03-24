@@ -1,14 +1,8 @@
 import type { ReactNode } from "react";
 import { type DrawerTab, type RunDataset } from "../../../entities/run";
 import { formatCurrency, formatTokens } from "../../../shared/lib/format";
-import {
-  ArtifactList,
-  ContextTab,
-  ImportTab,
-  LogTab,
-  NoDatasetPlaceholder,
-  RawTab,
-} from "./MonitorDrawerTabViews";
+import { NoDatasetPlaceholder } from "./MonitorDrawerTabViews";
+import { resolveMonitorDrawerContent } from "./resolveMonitorDrawerContent";
 
 export interface MonitorDrawerState {
   drawerOpen: boolean;
@@ -31,36 +25,6 @@ export interface MonitorDrawerContentProps {
 
 export { NoDatasetPlaceholder };
 
-function resolveDrawerContent(options: MonitorDrawerContentProps) {
-  const renderers = {
-    artifacts: () => (
-      <ArtifactList
-        activeDataset={options.activeDataset}
-        placeholder={options.placeholder}
-      />
-    ),
-    context: () => (
-      <ContextTab
-        activeDataset={options.activeDataset}
-        placeholder={options.placeholder}
-      />
-    ),
-    import: () => (
-      <ImportTab
-        drawerState={options.drawerState}
-        onImport={options.onImport}
-        onImportTextChange={options.onImportTextChange}
-        onAllowRawChange={options.onAllowRawChange}
-        onNoRawChange={options.onNoRawChange}
-      />
-    ),
-    log: () => <LogTab exportText={options.drawerState.exportText} />,
-    raw: () => <RawTab activeDataset={options.activeDataset} />,
-  } satisfies Record<DrawerTab, () => ReactNode>;
-
-  return renderers[options.drawerState.drawerTab]();
-}
-
 export function MonitorDrawerContent({
   drawerState,
   activeDataset,
@@ -70,7 +34,7 @@ export function MonitorDrawerContent({
   onNoRawChange,
   placeholder,
 }: MonitorDrawerContentProps) {
-  return resolveDrawerContent({
+  return resolveMonitorDrawerContent({
     drawerState,
     activeDataset,
     onAllowRawChange,

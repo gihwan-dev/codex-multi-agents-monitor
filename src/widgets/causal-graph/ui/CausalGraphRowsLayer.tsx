@@ -3,8 +3,7 @@ import type {
   GraphLayoutSnapshot,
   RowPosition,
 } from "../model/graphLayout";
-import { GraphEventRow } from "./GraphEventRow";
-import { GraphGapRow } from "./GraphGapRow";
+import { renderGraphRow } from "./renderGraphRow";
 
 interface CausalGraphRowsLayerProps {
   gridTemplateColumns: string;
@@ -31,35 +30,16 @@ export function CausalGraphRowsLayer({
       className="relative z-[1]"
       style={{ height: renderedContentHeight }}
     >
-      {visibleRows.map((row, visibleIndex) => {
-        const rowPosition = visibleRowPositions[visibleIndex];
-        if (!rowPosition) {
-          return null;
-        }
-
-        return row.kind === "gap" ? (
-          <GraphGapRow
-            key={row.id}
-            durationMs={row.durationMs}
-            gridTemplateColumns={gridTemplateColumns}
-            label={row.label}
-            laneCount={scene.lanes.length}
-            rowHeight={rowPosition.height}
-            rowId={row.id}
-            topY={rowPosition.topY}
-          />
-        ) : (
-          <GraphEventRow
-            key={row.id}
-            gridTemplateColumns={gridTemplateColumns}
-            layout={layout}
-            onSelect={onSelect}
-            row={row}
-            rowPosition={rowPosition}
-            scene={scene}
-          />
-        );
-      })}
+      {visibleRows.map((row, visibleIndex) =>
+        renderGraphRow({
+          gridTemplateColumns,
+          layout,
+          onSelect,
+          row,
+          rowPosition: visibleRowPositions[visibleIndex],
+          scene,
+        }),
+      )}
     </div>
   );
 }

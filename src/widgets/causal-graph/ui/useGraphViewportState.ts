@@ -53,9 +53,10 @@ function resolveAvailableCanvasHeight({
   viewportHeight: number;
   viewportHeightOverride?: number;
 }) {
+  const nextViewportHeight = viewportHeightOverride ?? viewportHeight;
+  const nextLaneHeaderHeight = laneHeaderHeightOverride ?? laneHeaderHeight;
   return Math.max(
     0,
-    (viewportHeightOverride ?? viewportHeight) -
-      (laneHeaderHeightOverride ?? laneHeaderHeight),
+    nextViewportHeight - nextLaneHeaderHeight,
   );
 }
