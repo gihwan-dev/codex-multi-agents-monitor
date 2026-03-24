@@ -2,6 +2,26 @@ import { buildDatasetActivationPatch, upsertDataset } from "./helpers";
 import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
+interface ResolveArchivedIndexRequestOptions {
+  state: MonitorState;
+  requestId: number;
+  result: MonitorState["archivedIndex"] extends Array<infer _>
+    ? {
+        items: MonitorState["archivedIndex"];
+        total: number;
+        hasMore: boolean;
+      }
+    : never;
+  append: boolean;
+}
+
+interface ResolveArchivedSnapshotRequestOptions {
+  state: MonitorState;
+  requestId: number;
+  filePath: string;
+  dataset: MonitorState["datasets"][number];
+}
+
 export function beginArchivedIndexRequest(state: MonitorState, requestId: number): MonitorState {
   return {
     ...state,
@@ -12,15 +32,9 @@ export function beginArchivedIndexRequest(state: MonitorState, requestId: number
 }
 
 export function resolveArchivedIndexRequest(
-  state: MonitorState,
-  requestId: number,
-  result: MonitorState["archivedIndex"] extends Array<infer _> ? {
-    items: MonitorState["archivedIndex"];
-    total: number;
-    hasMore: boolean;
-  } : never,
-  append: boolean,
+  options: ResolveArchivedIndexRequestOptions,
 ): MonitorState {
+  const { state, requestId, result, append } = options;
   if (requestId !== state.archivedIndexRequestId) {
     return state;
   }
@@ -93,11 +107,9 @@ export function beginArchivedSnapshotBuild(
 }
 
 export function resolveArchivedSnapshotRequest(
-  state: MonitorState,
-  requestId: number,
-  filePath: string,
-  dataset: MonitorState["datasets"][number],
+  options: ResolveArchivedSnapshotRequestOptions,
 ): MonitorState {
+  const { state, requestId, filePath, dataset } = options;
   if (requestId !== state.archivedSnapshotRequestId) {
     return state;
   }

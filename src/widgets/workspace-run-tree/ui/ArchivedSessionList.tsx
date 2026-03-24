@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 import { Input } from "../../../shared/ui/primitives";
-import { useArchivedSessionListState } from "../model/useArchivedSessionListState";
-import { ArchivedSessionListGroup } from "./ArchivedSessionListGroup";
+import { groupArchivedSessionsByWorkspace } from "../lib/archiveGroups";
+import { ArchivedSessionFeedback } from "./ArchivedSessionFeedback";
+import { ArchivedWorkspaceGroupSection } from "./ArchivedSessionGroup";
 
 interface ArchivedSessionListProps {
   items: ArchivedSessionIndexItem[];
@@ -16,6 +18,135 @@ interface ArchivedSessionListProps {
   onSelect: (filePath: string) => void;
 }
 
+interface ArchivedSessionGroupsProps {
+  activeFilePath: string | null;
+  expandedGroups: Set<string>;
+  onSelect: (filePath: string) => void;
+  toggleGroup: (name: string) => void;
+  workspaceGroups: ReturnType<typeof groupArchivedSessionsByWorkspace>;
+}
+
+function useArchivedSessionSearch(
+  search: string,
+  onSearch: (query: string) => void,
+) {
+  const [localSearch, setLocalSearch] = useState(search);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchPending = localSearch.trim() !== search.trim();
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setLocalSearch(value);
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => onSearch(value), 300);
+    },
+    [onSearch],
+  );
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  useEffect(() => {
+    setLocalSearch(search);
+  }, [search]);
+
+  return {
+    localSearch,
+    searchPending,
+    handleSearchChange,
+  };
+}
+
+function useArchiveInfiniteScroll({
+  hasMore,
+  indexLoading,
+  onLoadMore,
+  searchPending,
+}: Pick<
+  ArchivedSessionListProps,
+  "hasMore" | "indexLoading" | "onLoadMore"
+> & {
+  searchPending: boolean;
+}) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || indexLoading || searchPending) {
+      return undefined;
+    }
+
+    function handleIntersection(entries: IntersectionObserverEntry[]) {
+      if (entries[0]?.isIntersecting) {
+        onLoadMore();
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      handleIntersection,
+      { rootMargin: "200px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, indexLoading, onLoadMore, searchPending]);
+
+  return sentinelRef;
+}
+
+function useExpandedArchiveGroups() {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((name: string) => {
+    setExpandedGroups((previous) => {
+      const next = new Set(previous);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  }, []);
+
+  return {
+    expandedGroups,
+    toggleGroup,
+  };
+}
+
+function ArchivedSessionGroups({
+  activeFilePath,
+  expandedGroups,
+  onSelect,
+  toggleGroup,
+  workspaceGroups,
+}: ArchivedSessionGroupsProps) {
+  return workspaceGroups.map((group) => (
+    <ArchivedWorkspaceGroupSection
+      key={group.key}
+      activeFilePath={activeFilePath}
+      expanded={expandedGroups.has(group.key)}
+      onSelect={onSelect}
+      onToggle={() => toggleGroup(group.key)}
+      sessions={group.sessions}
+      title={group.displayName}
+      workspaceKey={group.key}
+    />
+  ));
+}
+
+function ArchivedSessionCount({
+  total,
+  visibleItems,
+}: {
+  total: number;
+  visibleItems: number;
+}) {
+  if (total <= 0) {
+    return null;
+  }
+
+  return (
+    <p className="px-1 text-right text-[0.7rem] text-[var(--color-text-tertiary)]">
+      {visibleItems} / {total}
+    </p>
+  );
+}
+
 export function ArchivedSessionList({
   items,
   total,
@@ -28,23 +159,10 @@ export function ArchivedSessionList({
   onLoadMore,
   onSelect,
 }: ArchivedSessionListProps) {
-  const {
-    expandedGroups,
-    handleSearchChange,
-    localSearch,
-    searchPending,
-    sentinelRef,
-    toggleGroup,
-    workspaceGroups,
-  } = useArchivedSessionListState({
-    hasMore,
-    indexLoading,
-    items,
-    onLoadMore,
-    onSearch,
-    search,
-  });
-
+  const workspaceGroups = useMemo(() => groupArchivedSessionsByWorkspace(items), [items]);
+  const { localSearch, searchPending, handleSearchChange } = useArchivedSessionSearch(search, onSearch);
+  const { expandedGroups, toggleGroup } = useExpandedArchiveGroups();
+  const sentinelRef = useArchiveInfiniteScroll({ hasMore, indexLoading, onLoadMore, searchPending });
   return (
     <div data-slot="archive-list" className="grid gap-2 pt-1">
       <Input
@@ -52,63 +170,28 @@ export function ArchivedSessionList({
         className="h-8 border-white/10 bg-white/[0.03] px-2.5 text-[0.78rem]"
         placeholder="Search archived sessions"
         value={localSearch}
-        onChange={(e) => handleSearchChange(e.target.value)}
+        onChange={(event) => handleSearchChange(event.target.value)}
         aria-label="Search archived sessions"
       />
-
-      <div
-        data-slot="archive-list-content"
-        className="grid max-h-[22.5rem] gap-2 overflow-x-hidden overflow-y-auto"
-      >
-        {workspaceGroups.map((group) => {
-          const expanded = expandedGroups.has(group.key);
-          return (
-            <ArchivedSessionListGroup
-              key={group.key}
-              activeFilePath={activeFilePath}
-              expanded={expanded}
-              group={group}
-              onSelect={onSelect}
-              onToggleGroup={toggleGroup}
-            />
-          );
-        })}
-
-        {indexLoading ? (
-          <>
-            <div key="skeleton-a" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-            <div key="skeleton-b" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-            <div key="skeleton-c" className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-          </>
-        ) : null}
-
-        {!indexLoading && !searchPending && errorMessage ? (
-          <output className="text-sm text-[var(--color-failed)]" aria-live="polite">
-            {errorMessage}
-          </output>
-        ) : null}
-
-        {!indexLoading && !searchPending && !errorMessage && items.length === 0 ? (
-          <p className="px-2 py-2 text-[0.78rem] text-[var(--color-text-tertiary)]">
-            {localSearch ? "No matching archived sessions." : "No archived sessions found."}
-          </p>
-        ) : null}
-
-        {hasMore && !indexLoading && !searchPending && !errorMessage ? (
-          <div
-            ref={sentinelRef}
-            data-slot="archive-sentinel"
-            className="h-px"
-            aria-hidden="true"
-          />
-        ) : null}
+      <div data-slot="archive-list-content" className="grid max-h-[22.5rem] gap-2 overflow-x-hidden overflow-y-auto">
+        <ArchivedSessionGroups
+          activeFilePath={activeFilePath}
+          expandedGroups={expandedGroups}
+          onSelect={onSelect}
+          toggleGroup={toggleGroup}
+          workspaceGroups={workspaceGroups}
+        />
+        <ArchivedSessionFeedback
+          errorMessage={errorMessage}
+          hasMore={hasMore}
+          indexLoading={indexLoading}
+          itemsLength={items.length}
+          localSearch={localSearch}
+          searchPending={searchPending}
+          sentinelRef={sentinelRef}
+        />
       </div>
-
-      {total > 0 ? (
-        <p className="px-1 text-right text-[0.7rem] text-[var(--color-text-tertiary)]">
-          {items.length} / {total}
-        </p>
-      ) : null}
+      <ArchivedSessionCount total={total} visibleItems={items.length} />
     </div>
   );
 }

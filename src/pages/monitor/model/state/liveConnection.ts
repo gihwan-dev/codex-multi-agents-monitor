@@ -1,6 +1,21 @@
 import type { LiveConnection, RunDataset } from "../../../../entities/run";
 import type { MonitorState } from "./types";
 
+interface UpdateLiveConnectionMapOptions {
+  liveConnectionByRunId: MonitorState["liveConnectionByRunId"];
+  traceId: string;
+  dataset: RunDataset;
+  followLive: boolean;
+  nextConnection?: Exclude<LiveConnection, "paused">;
+}
+
+interface ResolveVisibleLiveConnectionOptions {
+  dataset: RunDataset;
+  followLive: boolean;
+  currentConnection?: LiveConnection;
+  nextConnection?: Exclude<LiveConnection, "paused">;
+}
+
 export function buildConnectionMap(datasets: RunDataset[]) {
   return Object.fromEntries(
     datasets
@@ -12,21 +27,11 @@ export function buildConnectionMap(datasets: RunDataset[]) {
   ) as Record<string, LiveConnection>;
 }
 
-export function updateLiveConnectionMap(
-  liveConnectionByRunId: MonitorState["liveConnectionByRunId"],
-  traceId: string,
-  dataset: RunDataset,
-  followLive: boolean,
-  nextConnection?: Exclude<LiveConnection, "paused">,
-) {
+export function updateLiveConnectionMap(options: UpdateLiveConnectionMapOptions) {
+  const { liveConnectionByRunId, traceId, dataset, followLive, nextConnection } = options;
   return {
     ...liveConnectionByRunId,
-    [traceId]: resolveVisibleLiveConnection(
-      dataset,
-      followLive,
-      liveConnectionByRunId[traceId],
-      nextConnection,
-    ),
+    [traceId]: resolveVisibleLiveConnection({ dataset, followLive, currentConnection: liveConnectionByRunId[traceId], nextConnection }),
   };
 }
 
@@ -43,11 +48,9 @@ function resolveDatasetLiveConnection(
 }
 
 function resolveVisibleLiveConnection(
-  dataset: RunDataset,
-  followLive: boolean,
-  currentConnection?: LiveConnection,
-  nextConnection?: Exclude<LiveConnection, "paused">,
+  options: ResolveVisibleLiveConnectionOptions,
 ): LiveConnection {
+  const { dataset, followLive, currentConnection, nextConnection } = options;
   const resolvedConnection =
     nextConnection ??
     (currentConnection && currentConnection !== "paused"

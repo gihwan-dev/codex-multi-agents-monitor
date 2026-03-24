@@ -6,6 +6,16 @@ export interface ExpandedGapView {
   hiddenEvents: EventRecord[];
 }
 
+function resolveHiddenGapEvents(
+  eventIds: string[],
+  eventsById: Map<string, EventRecord>,
+) {
+  return eventIds.flatMap((eventId) => {
+    const event = eventsById.get(eventId);
+    return event ? [event] : [];
+  });
+}
+
 export function buildExpandedGapIds(
   rows: GraphSceneRow[],
   toggledGapIds: string[],
@@ -32,22 +42,15 @@ export function buildExpandedGaps(
   }
 
   const eventsById = new Map(events.map((event) => [event.eventId, event]));
-  const expandedGaps: ExpandedGapView[] = [];
-
-  for (const row of rows) {
-    if (row.kind !== "gap" || !expandedGapIds.has(row.id)) {
-      continue;
-    }
-
-    expandedGaps.push({
-      gapId: row.id,
-      label: row.label,
-      hiddenEvents: row.hiddenEventIds.flatMap((eventId) => {
-        const event = eventsById.get(eventId);
-        return event ? [event] : [];
-      }),
-    });
-  }
-
-  return expandedGaps;
+  return rows.flatMap((row) =>
+    row.kind === "gap" && expandedGapIds.has(row.id)
+      ? [
+          {
+            gapId: row.id,
+            label: row.label,
+            hiddenEvents: resolveHiddenGapEvents(row.hiddenEventIds, eventsById),
+          },
+        ]
+      : [],
+  );
 }

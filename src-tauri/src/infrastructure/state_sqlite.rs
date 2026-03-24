@@ -45,30 +45,45 @@ fn resolve_codex_state_database(codex_home: &Path) -> io::Result<PathBuf> {
 
 pub(crate) fn load_live_thread_rows(codex_home: &Path) -> io::Result<Vec<LiveThreadRow>> {
     let state_database = resolve_codex_state_database(codex_home)?;
-    let connection = Connection::open_with_flags(
+    let connection = open_state_connection(&state_database)?;
+    let mut statement = prepare_live_thread_rows_query(&connection)?;
+    let rows = statement
+        .query_map([], map_live_thread_row)
+        .map_err(map_sqlite_error)?;
+    collect_live_thread_rows(rows)
+}
+
+fn open_state_connection(state_database: &Path) -> io::Result<Connection> {
+    Connection::open_with_flags(
         state_database,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(map_sqlite_error)?;
-    let mut statement = connection
+    .map_err(map_sqlite_error)
+}
+
+fn prepare_live_thread_rows_query(connection: &Connection) -> io::Result<rusqlite::Statement<'_>> {
+    connection
         .prepare(
             "SELECT id, rollout_path, source, cwd
              FROM threads
              WHERE archived = 0
              ORDER BY updated_at DESC, id DESC",
         )
-        .map_err(map_sqlite_error)?;
-    let rows = statement
-        .query_map([], |row| {
-            Ok(LiveThreadRow {
-                session_id: row.get(0)?,
-                rollout_path: row.get(1)?,
-                source: row.get(2)?,
-                workspace_path: row.get(3)?,
-            })
-        })
-        .map_err(map_sqlite_error)?;
+        .map_err(map_sqlite_error)
+}
 
+fn map_live_thread_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRow> {
+    Ok(LiveThreadRow {
+        session_id: row.get(0)?,
+        rollout_path: row.get(1)?,
+        source: row.get(2)?,
+        workspace_path: row.get(3)?,
+    })
+}
+
+fn collect_live_thread_rows(
+    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRow>>,
+) -> io::Result<Vec<LiveThreadRow>> {
     let mut result = Vec::new();
     for row in rows {
         result.push(row.map_err(map_sqlite_error)?);

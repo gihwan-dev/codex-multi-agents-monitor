@@ -1,36 +1,16 @@
-import {
-  useReducer,
-} from "react";
+import { useReducer } from "react";
 import { useMonitorKeyboardShortcuts } from "../lib/useMonitorKeyboardShortcuts";
 import { createMonitorActions } from "./createMonitorActions";
 import { deriveMonitorViewState } from "./deriveMonitorViewState";
-import {
-  createMonitorInitialState,
-  monitorStateReducer,
-} from "./state";
+import { createMonitorInitialState, monitorStateReducer } from "./state";
 import { useLiveFixturePlayback } from "./useLiveFixturePlayback";
 import { useMonitorBootstrap } from "./useMonitorBootstrap";
 import { useMonitorRequestController } from "./useMonitorRequestController";
 
-export function useMonitorPageState() {
-  const [state, dispatch] = useReducer(
-    monitorStateReducer,
-    undefined,
-    createMonitorInitialState,
-  );
+function useMonitorPageRuntime() {
+  const [state, dispatch] = useReducer(monitorStateReducer, undefined, createMonitorInitialState);
   const derivedState = deriveMonitorViewState(state);
-  const {
-    loadArchiveIndex,
-    refreshRecentSnapshot,
-    requestArchiveIndex,
-    requestRecentIndex,
-    requestRecentSnapshot,
-    searchArchive,
-    selectArchivedSession,
-  } = useMonitorRequestController({
-    state,
-    dispatch,
-  });
+  const controller = useMonitorRequestController({ state, dispatch });
 
   useMonitorBootstrap({
     activeDataset: derivedState.activeDataset,
@@ -39,10 +19,10 @@ export function useMonitorPageState() {
     recentIndex: state.recentIndex,
     recentIndexReady: state.recentIndexReady,
     recentSnapshotLoadingId: state.recentSnapshotLoadingId,
-    refreshRecentSnapshot,
-    requestArchiveIndex,
-    requestRecentIndex,
-    requestRecentSnapshot,
+    refreshRecentSnapshot: controller.refreshRecentSnapshot,
+    requestArchiveIndex: controller.requestArchiveIndex,
+    requestRecentIndex: controller.requestRecentIndex,
+    requestRecentSnapshot: controller.requestRecentSnapshot,
   });
   useLiveFixturePlayback({
     datasets: state.datasets,
@@ -55,18 +35,17 @@ export function useMonitorPageState() {
     selection: state.selection,
     graphRows: derivedState.graphScene.rows,
   });
+
+  return { state, dispatch, derivedState, controller };
+}
+
+export function useMonitorPageState() {
+  const { state, dispatch, derivedState, controller } = useMonitorPageRuntime();
+  const actions = createMonitorActions({ state, dispatch, activeDataset: derivedState.activeDataset, activeFollowLive: derivedState.activeFollowLive, loadArchiveIndex: controller.loadArchiveIndex, searchArchive: controller.searchArchive, selectArchivedSession: controller.selectArchivedSession, requestRecentSnapshot: controller.requestRecentSnapshot });
+
   return {
     state,
     ...derivedState,
-    actions: createMonitorActions({
-      state,
-      dispatch,
-      activeDataset: derivedState.activeDataset,
-      activeFollowLive: derivedState.activeFollowLive,
-      loadArchiveIndex,
-      searchArchive,
-      selectArchivedSession,
-      requestRecentSnapshot,
-    }),
+    actions,
   };
 }

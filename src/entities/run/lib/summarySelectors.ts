@@ -5,172 +5,158 @@ import type {
   RunDataset,
   SelectionPath,
   SummaryFact,
-  SummaryMetrics,
 } from "../model/types.js";
 import { sortEvents } from "./selectorShared.js";
+import {
+  calculateSummaryMetrics,
+  findLastHandoff,
+} from "./summaryMetricCalculations.js";
 
-function calculatePeakParallelism(events: EventRecord[]): number {
-  const points = events.flatMap((event) => {
-    const endTs = event.endTs ?? event.startTs;
-    return [
-      { ts: event.startTs, laneId: event.laneId, delta: 1 as const },
-      { ts: endTs, laneId: event.laneId, delta: -1 as const },
-    ];
-  });
+export { calculateSummaryMetrics };
 
-  points.sort((left, right) => {
-    if (left.ts !== right.ts) {
-      return left.ts - right.ts;
-    }
-    return left.delta - right.delta;
-  });
+const BLOCKING_STATUSES = ["blocked", "waiting", "interrupted"] as const;
+const AFFECTED_STATUSES = [...BLOCKING_STATUSES, "failed"] as const;
 
-  const activeByLane = new Map<string, number>();
-  let peak = 0;
-
-  for (const point of points) {
-    const current = activeByLane.get(point.laneId) ?? 0;
-    const next = current + point.delta;
-    if (next <= 0) {
-      activeByLane.delete(point.laneId);
-    } else {
-      activeByLane.set(point.laneId, next);
-    }
-    peak = Math.max(peak, activeByLane.size);
-  }
-
-  return peak || 1;
-}
-
-function calculateLongestGap(events: EventRecord[]) {
-  const orderedEvents = sortEvents(events);
-  let longestGapMs = 0;
-
-  for (let index = 1; index < orderedEvents.length; index += 1) {
-    const previous = orderedEvents[index - 1];
-    const current = orderedEvents[index];
-    if (!previous || !current) {
-      continue;
-    }
-
-    const previousEndTs = previous.endTs ?? previous.startTs;
-    longestGapMs = Math.max(longestGapMs, current.startTs - previousEndTs);
-  }
-
-  return Math.max(longestGapMs, 0);
-}
-
-function hasTokenUsage(event: EventRecord) {
-  return event.tokensIn > 0 || event.tokensOut > 0 || event.reasoningTokens > 0;
-}
-
-function countsAsLlmCall(event: EventRecord) {
-  if (event.eventType === "llm.finished") {
-    return true;
-  }
-
-  // Session logs often attach token_count to the assistant note instead of
-  // emitting an explicit llm.finished event. Count those outputs once so the
-  // summary stays aligned with the visible token totals.
-  return event.eventType === "note" && hasTokenUsage(event);
-}
-
-function findLastHandoff(dataset: RunDataset, orderedEvents: EventRecord[]) {
+function findBlockerEvent(events: EventRecord[]) {
   return (
-    [...dataset.edges]
-      .filter((edge) => edge.edgeType === "handoff")
-      .sort((left, right) => {
-        const sourceA =
-          orderedEvents.find((event) => event.eventId === left.sourceEventId)?.startTs ?? 0;
-        const sourceB =
-          orderedEvents.find((event) => event.eventId === right.sourceEventId)?.startTs ?? 0;
-        return sourceB - sourceA;
-      })[0] ?? null
+    events.find((event) => event.status === "blocked") ??
+    events.find((event) => event.status === "waiting") ??
+    events.find((event) => event.status === "interrupted") ??
+    null
   );
 }
 
-export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
-  const events = dataset.events;
-  const totalTokens = events.reduce(
-    (acc, event) => acc + event.tokensIn + event.tokensOut + event.reasoningTokens,
-    0,
-  );
-  const activeTimeMs = events.reduce(
-    (acc, event) =>
-      acc +
-      (["llm.started", "llm.finished", "tool.started", "tool.finished"].includes(
-        event.eventType,
+function buildAffectedLaneIds(
+  orderedEvents: EventRecord[],
+  selectionPath: SelectionPath,
+  blockerEvent: EventRecord | null,
+) {
+  const selectionEventIdSet = new Set(selectionPath.eventIds);
+  const affectedLaneIds = new Set(
+    orderedEvents
+      .filter(
+        (event) =>
+          selectionEventIdSet.has(event.eventId) &&
+          AFFECTED_STATUSES.includes(event.status as (typeof AFFECTED_STATUSES)[number]),
       )
-        ? event.durationMs
-        : 0),
-    0,
+      .map((event) => event.laneId),
   );
-  const errorCount = events.filter(
-    (event) => event.status === "failed" || event.eventType === "error",
-  ).length;
-  const timePoints = events.flatMap((event) => [event.startTs, event.endTs ?? event.startTs]);
-  const peakParallelism = calculatePeakParallelism(events);
-  const longestGapMs = calculateLongestGap(events);
-  const derivedDurationMs =
-    timePoints.length > 0 ? Math.max(...timePoints) - Math.min(...timePoints) : 0;
-  const durationMs = dataset.run.durationMs || derivedDurationMs;
+
+  if (blockerEvent) {
+    affectedLaneIds.delete(blockerEvent.laneId);
+  }
+
+  return affectedLaneIds;
+}
+
+function buildLastHandoffLabel(
+  dataset: RunDataset,
+  orderedEvents: EventRecord[],
+) {
+  const lastHandoff = findLastHandoff(dataset, orderedEvents);
+  if (!lastHandoff) {
+    return { handoff: null, label: "n/a" };
+  }
+
+  const source =
+    dataset.lanes.find((lane) => lane.agentId === lastHandoff.sourceAgentId)?.name ?? "Unknown";
+  const target =
+    dataset.lanes.find((lane) => lane.agentId === lastHandoff.targetAgentId)?.name ?? "Unknown";
 
   return {
-    totalDurationMs: durationMs,
-    activeTimeMs,
-    idleTimeMs: Math.max(durationMs - activeTimeMs, 0),
-    longestGapMs,
-    agentCount: dataset.lanes.length,
-    peakParallelism,
-    llmCalls: events.filter(countsAsLlmCall).length,
-    toolCalls: events.filter((event) => event.eventType === "tool.finished").length,
-    tokens: totalTokens,
-    costUsd: Number(events.reduce((acc, event) => acc + event.costUsd, 0).toFixed(2)),
-    errorCount,
+    handoff: lastHandoff,
+    label: `${source} -> ${target}`,
+  };
+}
+
+function resolveBlockerLaneName(dataset: RunDataset, blockerEvent: EventRecord | null) {
+  if (!blockerEvent) {
+    return "n/a";
+  }
+
+  return dataset.lanes.find((lane) => lane.laneId === blockerEvent.laneId)?.name ?? blockerEvent.title;
+}
+
+function createAnomalyJump(
+  label: string,
+  selection: AnomalyJump["selection"],
+  emphasis: AnomalyJump["emphasis"],
+) {
+  return { label, selection, emphasis } satisfies AnomalyJump;
+}
+
+function appendAnomalyJump(
+  jumps: AnomalyJump[],
+  jump: AnomalyJump | null,
+) {
+  if (jump) {
+    jumps.push(jump);
+  }
+}
+
+function resolveWaitingEventJump(waitingEvent: EventRecord | undefined) {
+  return waitingEvent
+    ? createAnomalyJump("Longest wait", { kind: "event", id: waitingEvent.eventId }, "warning")
+    : null;
+}
+
+function resolveFirstErrorJump(firstError: EventRecord | undefined) {
+  return firstError
+    ? createAnomalyJump("First error", { kind: "event", id: firstError.eventId }, "danger")
+    : null;
+}
+
+function resolveExpensiveJump(expensive: EventRecord | undefined) {
+  return expensive
+    ? createAnomalyJump("Most expensive", { kind: "event", id: expensive.eventId }, "accent")
+    : null;
+}
+
+function resolveLastHandoffJump(lastHandoff: ReturnType<typeof findLastHandoff>) {
+  return lastHandoff
+    ? createAnomalyJump("Last handoff", { kind: "edge", id: lastHandoff.edgeId }, "accent")
+    : null;
+}
+
+function resolveFinalArtifactJump(finalArtifact: RunDataset["artifacts"][number] | undefined) {
+  return finalArtifact
+    ? createAnomalyJump(
+        "Final artifact",
+        { kind: "artifact", id: finalArtifact.artifactId },
+        "default",
+      )
+    : null;
+}
+
+function collectAnomalyCandidates(dataset: RunDataset) {
+  const events = sortEvents(dataset.events);
+  return {
+    firstError: events.find((event) => event.status === "failed" || event.eventType === "error"),
+    waitingEvent: [...events]
+      .filter((event) =>
+        BLOCKING_STATUSES.includes(event.status as (typeof BLOCKING_STATUSES)[number]),
+      )
+      .sort((left, right) => right.durationMs - left.durationMs)[0],
+    lastHandoff: findLastHandoff(dataset, events),
+    finalArtifact: dataset.artifacts.find(
+      (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
+    ),
+    expensive: [...events].sort((left, right) => right.costUsd - left.costUsd)[0],
   };
 }
 
 export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
-  const events = sortEvents(dataset.events);
-  const firstError = events.find(
-    (event) => event.status === "failed" || event.eventType === "error",
-  );
-  const waitingEvent = [...events]
-    .filter((event) => ["waiting", "blocked", "interrupted"].includes(event.status))
-    .sort((left, right) => right.durationMs - left.durationMs)[0];
-  const lastHandoff = findLastHandoff(dataset, events);
-  const finalArtifact = dataset.artifacts.find(
-    (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
-  );
-  const expensive = [...events].sort((left, right) => right.costUsd - left.costUsd)[0];
+  const { firstError, waitingEvent, lastHandoff, finalArtifact, expensive } =
+    collectAnomalyCandidates(dataset);
+  const jumps: AnomalyJump[] = [];
 
-  return [
-    waitingEvent && {
-      label: "Longest wait",
-      selection: { kind: "event" as const, id: waitingEvent.eventId },
-      emphasis: "warning" as const,
-    },
-    firstError && {
-      label: "First error",
-      selection: { kind: "event" as const, id: firstError.eventId },
-      emphasis: "danger" as const,
-    },
-    expensive && {
-      label: "Most expensive",
-      selection: { kind: "event" as const, id: expensive.eventId },
-      emphasis: "accent" as const,
-    },
-    lastHandoff && {
-      label: "Last handoff",
-      selection: { kind: "edge" as const, id: lastHandoff.edgeId },
-      emphasis: "accent" as const,
-    },
-    finalArtifact && {
-      label: "Final artifact",
-      selection: { kind: "artifact" as const, id: finalArtifact.artifactId },
-      emphasis: "default" as const,
-    },
-  ].filter(Boolean) as AnomalyJump[];
+  appendAnomalyJump(jumps, resolveWaitingEventJump(waitingEvent));
+  appendAnomalyJump(jumps, resolveFirstErrorJump(firstError));
+  appendAnomalyJump(jumps, resolveExpensiveJump(expensive));
+  appendAnomalyJump(jumps, resolveLastHandoffJump(lastHandoff));
+  appendAnomalyJump(jumps, resolveFinalArtifactJump(finalArtifact));
+
+  return jumps;
 }
 
 export function buildSummaryFacts(
@@ -178,48 +164,20 @@ export function buildSummaryFacts(
   selectionPath: SelectionPath,
 ): SummaryFact[] {
   const orderedEvents = sortEvents(dataset.events);
-  const blockerEvent =
-    orderedEvents.find((event) => event.status === "blocked") ??
-    orderedEvents.find((event) => event.status === "waiting") ??
-    orderedEvents.find((event) => event.status === "interrupted") ??
-    null;
-  const selectionEventIdSet = new Set(selectionPath.eventIds);
-  const affectedLaneIds = new Set(
-    orderedEvents
-      .filter(
-        (event) =>
-          selectionEventIdSet.has(event.eventId) &&
-          ["waiting", "blocked", "interrupted", "failed"].includes(event.status),
-      )
-      .map((event) => event.laneId),
+  const blockerEvent = findBlockerEvent(orderedEvents);
+  const affectedLaneIds = buildAffectedLaneIds(orderedEvents, selectionPath, blockerEvent);
+  const { handoff: lastHandoff, label: lastHandoffLabel } = buildLastHandoffLabel(
+    dataset,
+    orderedEvents,
   );
-  if (blockerEvent) {
-    affectedLaneIds.delete(blockerEvent.laneId);
-  }
-
-  const lastHandoff = findLastHandoff(dataset, orderedEvents);
   const firstFailure = orderedEvents.find(
     (event) => event.status === "failed" || event.eventType === "error",
   );
-  const blockerLaneName = blockerEvent
-    ? dataset.lanes.find((lane) => lane.laneId === blockerEvent.laneId)?.name ?? blockerEvent.title
-    : "n/a";
-  const lastHandoffLabel = lastHandoff
-    ? (() => {
-        const source =
-          dataset.lanes.find((lane) => lane.agentId === lastHandoff.sourceAgentId)?.name ??
-          "Unknown";
-        const target =
-          dataset.lanes.find((lane) => lane.agentId === lastHandoff.targetAgentId)?.name ??
-          "Unknown";
-        return `${source} -> ${target}`;
-      })()
-    : "n/a";
 
   return [
     {
       label: "Blocked by",
-      value: blockerLaneName,
+      value: resolveBlockerLaneName(dataset, blockerEvent),
       emphasis: blockerEvent ? "warning" : "default",
     },
     {

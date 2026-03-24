@@ -542,7 +542,7 @@ describe("normalization and selectors", () => {
   });
 
   it("builds a workspace tree model with workspace-first grouping", () => {
-    const model = buildWorkspaceTreeModel(FIXTURE_DATASETS, "", "all");
+    const model = buildWorkspaceTreeModel({ datasets: FIXTURE_DATASETS, search: "", quickFilter: "all" });
     expect(model.workspaces.length).toBeGreaterThan(0);
     expect(model.workspaces[0]?.threads.length).toBeGreaterThan(0);
     expect(model.workspaces[0]?.threads[0]?.runs.length).toBeGreaterThan(0);
@@ -558,16 +558,21 @@ describe("normalization and selectors", () => {
       throw new Error("fixtures for workspace merge test missing");
     }
 
-    const model = buildWorkspaceTreeModel([fix4, fix5], "", "all", {
-      [fix4.project.repoPath]: {
-        originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
-        displayName: "codex-multi-agent-monitor",
-        isWorktree: true,
-      },
-      [fix5.project.repoPath]: {
-        originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
-        displayName: "codex-multi-agent-monitor",
-        isWorktree: true,
+    const model = buildWorkspaceTreeModel({
+      datasets: [fix4, fix5],
+      search: "",
+      quickFilter: "all",
+      workspaceIdentityOverrides: {
+        [fix4.project.repoPath]: {
+          originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+          displayName: "codex-multi-agent-monitor",
+          isWorktree: true,
+        },
+        [fix5.project.repoPath]: {
+          originPath: "/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor",
+          displayName: "codex-multi-agent-monitor",
+          isWorktree: true,
+        },
       },
     });
 
@@ -586,7 +591,7 @@ describe("normalization and selectors", () => {
       throw new Error("fixtures for workspace fallback test missing");
     }
 
-    const model = buildWorkspaceTreeModel([fix4, fix5], "", "all");
+    const model = buildWorkspaceTreeModel({ datasets: [fix4, fix5], search: "", quickFilter: "all" });
     expect(model.workspaces).toHaveLength(2);
   });
 
@@ -605,8 +610,22 @@ describe("normalization and selectors", () => {
       },
     };
 
-    expect(buildWorkspaceTreeModel([fix4], "codex-multi-agent-monitor", "all", overrides).workspaces).toHaveLength(1);
-    expect(buildWorkspaceTreeModel([fix4], fix4.project.name, "all", overrides).workspaces).toHaveLength(1);
+    expect(
+      buildWorkspaceTreeModel({
+        datasets: [fix4],
+        search: "codex-multi-agent-monitor",
+        quickFilter: "all",
+        workspaceIdentityOverrides: overrides,
+      }).workspaces,
+    ).toHaveLength(1);
+    expect(
+      buildWorkspaceTreeModel({
+        datasets: [fix4],
+        search: fix4.project.name,
+        quickFilter: "all",
+        workspaceIdentityOverrides: overrides,
+      }).workspaces,
+    ).toHaveLength(1);
   });
 
   it("prefers the first user input preview for the sidebar run title", () => {
@@ -616,7 +635,7 @@ describe("normalization and selectors", () => {
       throw new Error("fixture for sidebar title test missing");
     }
 
-    const model = buildWorkspaceTreeModel([fix5], "", "all");
+    const model = buildWorkspaceTreeModel({ datasets: [fix5], search: "", quickFilter: "all" });
     const runTitle = model.workspaces[0]?.threads[0]?.runs[0]?.title;
 
     expect(runTitle).toBe("outline migration plan");
@@ -629,7 +648,7 @@ describe("normalization and selectors", () => {
       throw new Error("fixture for sidebar session fallback test missing");
     }
 
-    const model = buildWorkspaceTreeModel([fix2], "", "all");
+    const model = buildWorkspaceTreeModel({ datasets: [fix2], search: "", quickFilter: "all" });
     const runTitle = model.workspaces[0]?.threads[0]?.runs[0]?.title;
 
     expect(runTitle).toBe("Waiting chain review");
@@ -642,7 +661,11 @@ describe("normalization and selectors", () => {
       throw new Error("fixture for sidebar title search test missing");
     }
 
-    const model = buildWorkspaceTreeModel([fix5], "outline migration plan", "all");
+    const model = buildWorkspaceTreeModel({
+      datasets: [fix5],
+      search: "outline migration plan",
+      quickFilter: "all",
+    });
     expect(model.workspaces).toHaveLength(1);
     expect(model.workspaces[0]?.threads[0]?.runs[0]?.title).toBe("outline migration plan");
   });
@@ -690,7 +713,11 @@ describe("normalization and selectors", () => {
 
     const olderRun = shiftDataset("trace-order-old", "Alpha older run", 0);
     const newerRun = shiftDataset("trace-order-new", "Zulu newer run", 60_000);
-    const model = buildWorkspaceTreeModel([olderRun, newerRun], "", "all");
+    const model = buildWorkspaceTreeModel({
+      datasets: [olderRun, newerRun],
+      search: "",
+      quickFilter: "all",
+    });
     const runs = model.workspaces[0]?.threads[0]?.runs;
 
     expect(runs).toBeDefined();

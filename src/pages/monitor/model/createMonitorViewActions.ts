@@ -14,12 +14,18 @@ interface CreateMonitorViewActionsOptions {
   activeFollowLive: boolean;
 }
 
-export function createMonitorViewActions({
-  drawerOpen,
-  dispatch,
-  activeDataset,
-  activeFollowLive,
-}: CreateMonitorViewActionsOptions) {
+function buildSelectionActions(options: CreateMonitorViewActionsOptions) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return createSelectionActions({ activeDataset, activeFollowLive, dispatch });
+}
+
+function createSelectionActions(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
   return {
     selectRun(traceId: string) {
       dispatch({ type: "set-active-run", traceId });
@@ -51,6 +57,14 @@ export function createMonitorViewActions({
         });
       }
     },
+  };
+}
+
+function buildDrawerActions({
+  dispatch,
+  drawerOpen,
+}: CreateMonitorViewActionsOptions) {
+  return {
     setDrawerTab(tab: DrawerTab, open = drawerOpen) {
       dispatch({ type: "set-drawer-tab", tab, open });
     },
@@ -60,52 +74,116 @@ export function createMonitorViewActions({
     toggleInspector() {
       dispatch({ type: "toggle-inspector" });
     },
-    toggleFollowLive() {
-      if (!activeDataset) {
-        return;
-      }
-
-      dispatch({
-        type: "toggle-follow-live",
-        traceId: activeDataset.run.traceId,
-      });
-
-      if (!activeFollowLive && activeDataset.run.liveMode === "live") {
-        const latestEvent = activeDataset.events[activeDataset.events.length - 1];
-        if (latestEvent) {
-          dispatch({
-            type: "set-selection",
-            selection: { kind: "event", id: latestEvent.eventId },
-          });
-        }
-      }
+    toggleShortcuts() {
+      dispatch({ type: "toggle-shortcuts" });
     },
-    pauseFollowLive() {
-      if (!activeDataset) {
-        return;
-      }
-
-      if (!activeFollowLive || activeDataset.run.liveMode !== "live") {
-        return;
-      }
-
-      dispatch({
-        type: "set-follow-live",
-        traceId: activeDataset.run.traceId,
-        value: false,
-      });
+    toggleArchiveSection() {
+      dispatch({ type: "toggle-archive-section" });
     },
-    toggleGap(gapId: string) {
-      if (!activeDataset) {
-        return;
-      }
+  };
+}
 
-      dispatch({
-        type: "toggle-gap",
-        traceId: activeDataset.run.traceId,
-        gapId,
-      });
-    },
+function buildLiveActions(options: CreateMonitorViewActionsOptions) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return createLiveActions({ activeDataset, activeFollowLive, dispatch });
+}
+
+function dispatchFollowLiveToggle(
+  dispatch: Dispatch<MonitorAction>,
+  activeDataset: NonNullable<CreateMonitorViewActionsOptions["activeDataset"]>,
+) {
+  dispatch({
+    type: "toggle-follow-live",
+    traceId: activeDataset.run.traceId,
+  });
+}
+
+function selectLatestLiveEvent(
+  dispatch: Dispatch<MonitorAction>,
+  activeDataset: NonNullable<CreateMonitorViewActionsOptions["activeDataset"]>,
+) {
+  const latestEvent = activeDataset.events[activeDataset.events.length - 1];
+  if (!latestEvent) {
+    return;
+  }
+
+  dispatch({
+    type: "set-selection",
+    selection: { kind: "event", id: latestEvent.eventId },
+  });
+}
+
+function createLiveActions(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  return {
+    toggleFollowLive: createToggleFollowLiveAction(options),
+    pauseFollowLive: createPauseFollowLiveAction(options),
+    toggleGap: createToggleGapAction(options),
+  };
+}
+
+function createToggleFollowLiveAction(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return function toggleFollowLive() {
+    if (!activeDataset) {
+      return;
+    }
+
+    dispatchFollowLiveToggle(dispatch, activeDataset);
+    if (!activeFollowLive && activeDataset.run.liveMode === "live") {
+      selectLatestLiveEvent(dispatch, activeDataset);
+    }
+  };
+}
+
+function createPauseFollowLiveAction(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return function pauseFollowLive() {
+    if (!activeDataset || !activeFollowLive || activeDataset.run.liveMode !== "live") {
+      return;
+    }
+
+    dispatch({
+      type: "set-follow-live",
+      traceId: activeDataset.run.traceId,
+      value: false,
+    });
+  };
+}
+
+function createToggleGapAction(
+  options: Pick<CreateMonitorViewActionsOptions, "activeDataset" | "dispatch">,
+) {
+  const { activeDataset, dispatch } = options;
+  return function toggleGap(gapId: string) {
+    if (!activeDataset) {
+      return;
+    }
+
+    dispatch({
+      type: "toggle-gap",
+      traceId: activeDataset.run.traceId,
+      gapId,
+    });
+  };
+}
+
+function buildSizingActions({ dispatch }: CreateMonitorViewActionsOptions) {
+  return {
     resizeRail(width: number) {
       dispatch({
         type: "set-rail-width",
@@ -118,11 +196,14 @@ export function createMonitorViewActions({
         width: Math.max(width, MIN_INSPECTOR_WIDTH),
       });
     },
-    toggleShortcuts() {
-      dispatch({ type: "toggle-shortcuts" });
-    },
-    toggleArchiveSection() {
-      dispatch({ type: "toggle-archive-section" });
-    },
+  };
+}
+
+export function createMonitorViewActions(options: CreateMonitorViewActionsOptions) {
+  return {
+    ...buildSelectionActions(options),
+    ...buildDrawerActions(options),
+    ...buildLiveActions(options),
+    ...buildSizingActions(options),
   };
 }

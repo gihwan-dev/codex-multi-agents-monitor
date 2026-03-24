@@ -21,7 +21,7 @@
   - repo baseline: `docs/ai/ENGINEERING_RULES.md`
   - task supplement: `IMPLEMENTATION_CONTRACT.md`
 - `SLICE-1` and `SLICE-2` implementers must read `UX_SPEC.md` and `UX_BEHAVIOR_ACCESSIBILITY.md` before touching UI files. Bootstrap docs do not replace UX ownership.
-- The baseline toolchain is locked to `Biome + Vitest + Playwright + Storybook`. Bootstrap records the contract only; implementation adds missing scripts or config later.
+- The baseline toolchain is locked to `Biome + ESLint (metrics-only) + Lizard + jscpd + cargo clippy + Vitest + Playwright + Storybook`. Bootstrap records the contract only; implementation adds missing scripts or config later.
 - Feature work starts from a split-first boundary. `src/App.tsx` stays composition-only and `src/app/styles/layout.css` is not a widget feature stylesheet.
 - FE target layers are `app / pages / widgets / features / entities / shared`.
 - `src/app/` is bootstrap only, `src/pages/monitor/` owns page orchestration, `src/widgets/` owns screen blocks, `src/features/` owns user actions, `src/entities/` owns normalized models plus entity-owned fixture/runtime samples, and `src/shared/` owns primitives, helpers, generic testing utilities, and theme layers.
@@ -30,6 +30,7 @@
 - Token and motion files must live under `src/theme/tokens.css`, `src/theme/primitives.css`, and `src/theme/motion.css`.
 - Runtime theme state now lives in `src/shared/theme/` with a repo-local `ThemeProvider`. It persists `system | dark | light` under `codex-monitor-theme-preference`, applies resolved `data-theme` to the document before React mount, and exposes the user-facing control from the monitor top bar instead of a separate settings screen.
 - `implement-task` must treat `docs/ai/ENGINEERING_RULES.md`, `docs/architecture/frontend-fsd.md`, this file, and the UX docs as required pre-read inputs for every slice.
+- Quantitative hard-gate exemptions stay limited to non-product code: `tests/`, `scripts/`, sample data, stories, snapshots, generated output, and backend test support scaffolding.
 - Backend refactor work under `src-tauri/src/` now follows `commands / application / domain / infrastructure / state / support`.
 - `src-tauri/src/lib.rs` is bootstrap only: `mod` wiring, `manage(...)`, `generate_handler!`, and `run()` only.
 - Tauri command handlers belong in `src-tauri/src/commands/` and must stay thin adapters over application services.
@@ -42,7 +43,8 @@
 
 - Runtime and shell: `React 19`, `React DOM 19`, `Vite 7`, `Tauri 2`
 - Language and package management: `TypeScript`, `pnpm`
-- Validation baseline: `Biome`, `Vitest`, `Playwright`, `Storybook`
+- Validation baseline: `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, `cargo clippy`, `Vitest`, `Playwright`, `Storybook`
+- JS/TS metrics parser: `@typescript-eslint/parser`
 - UI implementation baseline: repo-local CSS layers plus repo-local primitives under `src/shared/ui/`
 - State and selectors baseline: feature-local React state, reducer, context, and selector modules
 
@@ -71,7 +73,8 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - `SLICE-3`: `widget extraction review`, `storybook smoke check`, `layout density review`
 - `SLICE-4`: `entity and loader split review`, `normalization smoke check`, `fixture boundary review`
 - Every slice still closes against the repo-level command contract in `docs/ai/ENGINEERING_RULES.md`.
-- Backend modular-monolith slices additionally close against `cargo check`, `cargo clippy -- -D warnings`, and `cargo test` in `src-tauri/`.
+- Backend modular-monolith slices additionally close against `cargo check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` in `src-tauri/`.
+- Quantitative hard gate exemptions stay limited to non-product files (`tests/`, `scripts/`, stories, snapshots, generated output, sample data, Rust test support); remaining product violations must be refactored, not allowlisted.
 
 # Open Risks
 
@@ -81,3 +84,4 @@ When a trigger is met, the implementer must update `docs/ai/ENGINEERING_RULES.md
 - `shared/domain` and `session-log-loader` naming can leak back in if future slices reintroduce compatibility shims.
 - `lib.rs` can regress into a god-file again if future backend work bypasses `commands/application/infrastructure` boundaries.
 - The current environment still blocks full Playwright browser navigation, so end-to-end coverage remains limited to built-artifact smoke plus contract assertions.
+- The strict thresholds can surface a larger-than-expected refactor tranche across `entities`, `pages`, `widgets`, and backend parsing helpers before the repo returns to green.

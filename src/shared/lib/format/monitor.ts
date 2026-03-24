@@ -1,21 +1,32 @@
-export function formatDuration(durationMs: number): string {
+function formatSubMinuteDuration(durationMs: number): string {
   if (durationMs < 1000) {
     return `${Math.round(durationMs)}ms`;
   }
 
-  const totalSeconds = Math.round(durationMs / 1000);
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`;
-  }
+  return `${Math.round(durationMs / 1000)}s`;
+}
 
+function formatMinuteDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  if (minutes < 60) {
-    return `${minutes}m ${seconds}s`;
-  }
+  return `${minutes}m ${seconds}s`;
+}
 
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+function formatHourDuration(totalSeconds: number): string {
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  return `${hours}h ${totalMinutes % 60}m`;
+}
+
+export function formatDuration(durationMs: number): string {
+  const totalSeconds = Math.round(durationMs / 1000);
+  if (totalSeconds < 60) {
+    return formatSubMinuteDuration(durationMs);
+  }
+  if (totalSeconds < 3600) {
+    return formatMinuteDuration(totalSeconds);
+  }
+  return formatHourDuration(totalSeconds);
 }
 
 export function formatCurrency(costUsd: number): string {
@@ -58,21 +69,20 @@ export function formatRelativeTime(
   timestamp: number,
   referenceTimestamp = Date.now(),
 ): string {
-  const deltaSeconds = Math.round((timestamp - referenceTimestamp) / 1000);
-  const absoluteSeconds = Math.abs(deltaSeconds);
-
+  const absoluteSeconds = Math.abs(Math.round((timestamp - referenceTimestamp) / 1000));
   if (absoluteSeconds < 10) return "now";
-
   if (absoluteSeconds < 60) return `${absoluteSeconds}s`;
+  return formatExtendedRelativeTime(absoluteSeconds);
+}
 
+function formatExtendedRelativeTime(absoluteSeconds: number): string {
   const absoluteMinutes = Math.round(absoluteSeconds / 60);
   if (absoluteMinutes < 60) return `${absoluteMinutes}m`;
 
   const absoluteHours = Math.round(absoluteMinutes / 60);
   if (absoluteHours < 24) return `${absoluteHours}h`;
 
-  const absoluteDays = Math.round(absoluteHours / 24);
-  return `${absoluteDays}d`;
+  return `${Math.round(absoluteHours / 24)}d`;
 }
 
 export function truncateId(value: string): string {

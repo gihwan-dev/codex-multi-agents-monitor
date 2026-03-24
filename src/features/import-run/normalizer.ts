@@ -34,7 +34,10 @@ export function normalizeImportPayload(
     lanes: payload.lanes,
     events,
     edges: payload.edges,
-    artifacts: normalizeImportArtifacts(payload.artifacts, options),
+    artifacts: normalizeImportArtifacts({
+      artifacts: payload.artifacts,
+      redaction: options,
+    }),
     ...(promptAssembly ? { promptAssembly } : {}),
   };
 

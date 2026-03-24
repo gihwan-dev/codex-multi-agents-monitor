@@ -2,33 +2,40 @@ import type { EventRecord } from "../../run";
 import { buildEntryEventId } from "../lib/helpers";
 import type { EntryContext, EntryEventOptions } from "./eventBuilderTypes";
 
+const DEFAULT_EVENT_METRICS = {
+  tokensIn: 0,
+  tokensOut: 0,
+  reasoningTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  costUsd: 0,
+  finishReason: null,
+  rawInput: null,
+  rawOutput: null,
+} satisfies Pick<
+  EventRecord,
+  | "tokensIn"
+  | "tokensOut"
+  | "reasoningTokens"
+  | "cacheReadTokens"
+  | "cacheWriteTokens"
+  | "costUsd"
+  | "finishReason"
+  | "rawInput"
+  | "rawOutput"
+>;
+
 export function applyTokenCountToLastEvent(
   events: EventRecord[],
   rawTokenCount: string | null,
 ) {
-  if (!rawTokenCount) {
-    return;
-  }
-
   const lastEvent = events[events.length - 1];
-  if (!lastEvent) {
+  const tokens = normalizeTokenCounts(parseTokenPayload(rawTokenCount));
+  if (!lastEvent || !tokens) {
     return;
   }
 
-  try {
-    const tokens = JSON.parse(rawTokenCount) as {
-      in?: number;
-      cached?: number;
-      out?: number;
-      reasoning?: number;
-    };
-    lastEvent.tokensIn = tokens.in ?? 0;
-    lastEvent.tokensOut = tokens.out ?? 0;
-    lastEvent.reasoningTokens = tokens.reasoning ?? 0;
-    lastEvent.cacheReadTokens = tokens.cached ?? 0;
-  } catch {
-    // Ignore malformed token payloads.
-  }
+  Object.assign(lastEvent, tokens);
 }
 
 export function createEntryEvent({
@@ -71,14 +78,45 @@ export function createEntryEvent({
     provider: "OpenAI",
     model,
     toolName: toolName ?? null,
-    tokensIn: 0,
-    tokensOut: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
+    ...DEFAULT_EVENT_METRICS,
   };
+}
+
+function normalizeTokenCounts(
+  tokens: ReturnType<typeof parseTokenPayload>,
+) {
+  if (!tokens) {
+    return null;
+  }
+
+  return {
+    tokensIn: resolveTokenCount(tokens.in),
+    tokensOut: resolveTokenCount(tokens.out),
+    reasoningTokens: resolveTokenCount(tokens.reasoning),
+    cacheReadTokens: resolveTokenCount(tokens.cached),
+  } satisfies Pick<
+    EventRecord,
+    "tokensIn" | "tokensOut" | "reasoningTokens" | "cacheReadTokens"
+  >;
+}
+
+function resolveTokenCount(value: number | undefined) {
+  return typeof value === "number" ? value : 0;
+}
+
+function parseTokenPayload(rawTokenCount: string | null) {
+  if (!rawTokenCount) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawTokenCount) as {
+      in?: number;
+      cached?: number;
+      out?: number;
+      reasoning?: number;
+    };
+  } catch {
+    return null;
+  }
 }

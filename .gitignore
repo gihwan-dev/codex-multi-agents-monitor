@@ -12,6 +12,7 @@ dist
 dist-ssr
 storybook-static
 .tmp-tests
+.tmp-quality
 playwright-report
 src-tauri/target
 src-tauri/gen

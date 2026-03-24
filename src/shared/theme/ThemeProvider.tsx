@@ -1,13 +1,14 @@
-import { createContext, type PropsWithChildren, useContext, useEffect, useState } from "react";
-import {
-  applyResolvedThemeToDocument,
-  getSystemTheme,
-  getThemeMediaQuery,
-  persistThemePreference,
-  type ResolvedTheme,
-  readStoredThemePreference,
-  type ThemePreference,
+import { createContext, type PropsWithChildren, useContext } from "react";
+import type {
+  ResolvedTheme,
+  ThemePreference,
 } from "./dom";
+import {
+  resolveThemePreference,
+  usePersistedThemePreference,
+  useResolvedTheme,
+  useStoredThemePreference,
+} from "./themeProviderHooks";
 
 interface ThemeContextValue {
   preference: ThemePreference;
@@ -22,55 +23,11 @@ interface ThemeProviderProps extends PropsWithChildren {
 }
 
 export function ThemeProvider({ children, preferenceOverride }: ThemeProviderProps) {
-  const [storedPreference, setStoredPreference] = useState<ThemePreference>(() =>
-    readStoredThemePreference(),
-  );
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() => getSystemTheme());
-  const preference = preferenceOverride ?? storedPreference;
-  const resolvedTheme = preference === "system" ? systemTheme : preference;
+  const [storedPreference, setStoredPreference] = useStoredThemePreference();
+  const preference = resolveThemePreference(preferenceOverride, storedPreference);
+  const resolvedTheme = useResolvedTheme(preference);
 
-  useEffect(() => {
-    if (preferenceOverride !== undefined) {
-      return;
-    }
-
-    persistThemePreference(storedPreference);
-  }, [preferenceOverride, storedPreference]);
-
-  useEffect(() => {
-    applyResolvedThemeToDocument(resolvedTheme);
-  }, [resolvedTheme]);
-
-  useEffect(() => {
-    const mediaQuery = getThemeMediaQuery();
-    if (!mediaQuery) {
-      return undefined;
-    }
-
-    const syncSystemTheme = (matches: boolean) => {
-      setSystemTheme(matches ? "dark" : "light");
-    };
-
-    syncSystemTheme(mediaQuery.matches);
-
-    const handleChange = (event: MediaQueryListEvent) => {
-      syncSystemTheme(event.matches);
-    };
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-
-      return () => {
-        mediaQuery.removeEventListener("change", handleChange);
-      };
-    }
-
-    mediaQuery.addListener(handleChange);
-
-    return () => {
-      mediaQuery.removeListener(handleChange);
-    };
-  }, []);
+  usePersistedThemePreference(preferenceOverride, storedPreference);
 
   const setPreference = (nextPreference: ThemePreference) => {
     if (preferenceOverride !== undefined) {

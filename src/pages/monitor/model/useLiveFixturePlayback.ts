@@ -9,11 +9,8 @@ interface UseLiveFixturePlaybackOptions {
   dispatch: Dispatch<MonitorAction>;
 }
 
-export function useLiveFixturePlayback({
-  datasets,
-  appliedLiveFrames,
-  dispatch,
-}: UseLiveFixturePlaybackOptions) {
+export function useLiveFixturePlayback(options: UseLiveFixturePlaybackOptions) {
+  const { datasets, appliedLiveFrames, dispatch } = options;
   useEffect(() => {
     const liveFixtureRun = datasets.find(
       (item) => item.run.traceId === LIVE_FIXTURE_TRACE_ID,

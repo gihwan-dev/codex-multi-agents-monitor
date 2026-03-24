@@ -8,9 +8,9 @@ import type {
   GraphLayoutSnapshot,
   RowPosition,
 } from "../model/graphLayout";
-import { CausalGraphBackdropSvg } from "./CausalGraphBackdropSvg";
-import { CausalGraphEdgeHitTargets } from "./CausalGraphEdgeHitTargets";
-import { CausalGraphRows } from "./CausalGraphRows";
+import { CausalGraphBackgroundSvg } from "./CausalGraphBackgroundSvg";
+import { CausalGraphInteractiveRoutes } from "./CausalGraphInteractiveRoutes";
+import { CausalGraphRowsLayer } from "./CausalGraphRowsLayer";
 
 interface CausalGraphCanvasProps {
   availableCanvasHeight: number;
@@ -50,7 +50,7 @@ export function CausalGraphCanvas({
       className="relative"
       style={{ width: layout.contentWidth, minHeight: renderedContentHeight }}
     >
-      <CausalGraphBackdropSvg
+      <CausalGraphBackgroundSvg
         availableCanvasHeight={availableCanvasHeight}
         bundleById={bundleById}
         continuationGuideYs={continuationGuideYs}
@@ -62,20 +62,18 @@ export function CausalGraphCanvas({
         visibleEdgeRoutes={visibleEdgeRoutes}
         visibleRows={visibleRows}
       />
-
-      <CausalGraphRows
+      <CausalGraphRowsLayer
         gridTemplateColumns={gridTemplateColumns}
         layout={layout}
         onSelect={onSelect}
         renderedContentHeight={renderedContentHeight}
-        sceneLanes={scene.lanes}
+        scene={scene}
         visibleRowPositions={visibleRowPositions}
         visibleRows={visibleRows}
       />
-
-      <CausalGraphEdgeHitTargets
+      <CausalGraphInteractiveRoutes
         bundleById={bundleById}
-        layout={layout}
+        contentWidth={layout.contentWidth}
         onSelectEdge={onSelectEdge}
         renderedContentHeight={renderedContentHeight}
         visibleEdgeRoutes={visibleEdgeRoutes}

@@ -1,26 +1,13 @@
-import {
-  DRAWER_TABS,
-  type DrawerTab,
-  type RunDataset,
-} from "../../../entities/run";
-import { formatCurrency, formatTokens } from "../../../shared/lib/format";
+import type { DrawerTab, RunDataset } from "../../../entities/run";
 import { InspectorTabs, Panel } from "../../../shared/ui";
+import { Button } from "../../../shared/ui/primitives";
 import {
-  Button,
-  Checkbox,
-  ScrollArea,
-  Textarea,
-} from "../../../shared/ui/primitives";
-import { PromptAssemblyView } from "../../prompt-assembly";
-
-interface MonitorDrawerState {
-  drawerOpen: boolean;
-  drawerTab: DrawerTab;
-  allowRawImport: boolean;
-  noRawStorage: boolean;
-  importText: string;
-  exportText: string;
-}
+  DrawerMetrics,
+  MonitorDrawerContent,
+  type MonitorDrawerState,
+  NoDatasetPlaceholder,
+} from "./MonitorDrawerSections";
+import { buildDrawerTabOptions } from "./monitorDrawerTabOptions";
 
 interface MonitorDrawerProps {
   drawerState: MonitorDrawerState;
@@ -49,19 +36,6 @@ export function MonitorDrawer({
     return <div aria-hidden="true" />;
   }
 
-  const tabOptions = DRAWER_TABS.filter((tab) => rawTabAvailable || tab !== "raw").map(
-    (tab) => ({
-      value: tab,
-      label: tab,
-    }),
-  );
-  const dataset = activeDataset;
-  const noDatasetPlaceholder = (
-    <div className="flex min-h-0 flex-1 items-center justify-center rounded-[12px] border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-sm text-muted-foreground">
-      Select a run to inspect drawer content.
-    </div>
-  );
-
   return (
     <Panel
       panelSlot="monitor-drawer"
@@ -82,105 +56,19 @@ export function MonitorDrawer({
     >
       <InspectorTabs
         value={drawerState.drawerTab}
-        options={tabOptions}
+        options={buildDrawerTabOptions(rawTabAvailable)}
         onValueChange={(value) => onSetDrawerTab(value as DrawerTab)}
       />
-
-      {drawerState.drawerTab === "artifacts" ? (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="grid gap-3 pr-3">
-            {dataset?.artifacts.length ? (
-              dataset.artifacts.map((item) => (
-                <article
-                  key={item.artifactId}
-                  className="grid gap-2 rounded-[12px] border border-white/8 bg-white/[0.025] px-3 py-3"
-                >
-                  <strong className="text-sm font-semibold">{item.title}</strong>
-                  <p className="text-sm leading-6 text-muted-foreground">{item.preview}</p>
-                </article>
-              ))
-            ) : (
-              dataset ? (
-                <p className="text-sm text-muted-foreground">No artifacts yet.</p>
-              ) : (
-                noDatasetPlaceholder
-              )
-            )}
-          </div>
-        </ScrollArea>
-      ) : null}
-
-      {drawerState.drawerTab === "import" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              aria-labelledby="monitor-drawer-raw-opt-in"
-              checked={drawerState.allowRawImport}
-              onCheckedChange={(checked) => onAllowRawChange(checked === true)}
-              className="border-white/12 bg-white/[0.03]"
-            />
-            <span id="monitor-drawer-raw-opt-in">Raw opt-in</span>
-          </div>
-          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              aria-labelledby="monitor-drawer-no-raw-storage"
-              checked={drawerState.noRawStorage}
-              onCheckedChange={(checked) => onNoRawChange(checked === true)}
-              className="border-white/12 bg-white/[0.03]"
-            />
-            <span id="monitor-drawer-no-raw-storage">No raw storage</span>
-          </div>
-          <Textarea
-            className="min-h-[12rem] flex-1 border-white/10 bg-white/[0.03] font-mono text-[0.78rem] text-foreground"
-            aria-label="JSON payload to import"
-            value={drawerState.importText}
-            onChange={(event) => onImportTextChange(event.target.value)}
-          />
-          <Button type="button" className="w-fit" onClick={onImport}>
-            Parse and import
-          </Button>
-        </div>
-      ) : null}
-
-      {drawerState.drawerTab === "context" ? (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-white/8 bg-white/[0.02]">
-          {dataset ? (
-            dataset.promptAssembly ? (
-              <PromptAssemblyView
-                assembly={dataset.promptAssembly}
-                rawEnabled={dataset.run.rawIncluded}
-              />
-            ) : (
-              <div className="px-4 py-3 text-sm text-muted-foreground">
-                No prompt assembly data available.
-              </div>
-            )
-          ) : (
-            noDatasetPlaceholder
-          )}
-        </div>
-      ) : null}
-
-      {drawerState.drawerTab === "raw" ? (
-        <pre className="min-h-[12rem] flex-1 overflow-auto rounded-[12px] border border-white/8 bg-white/[0.03] p-3 text-[0.78rem] leading-6 font-mono text-muted-foreground">
-          {dataset?.run.rawIncluded
-            ? JSON.stringify(dataset, null, 2)
-            : dataset
-              ? "Raw payload hidden by default."
-              : "Select a run to inspect drawer content."}
-        </pre>
-      ) : null}
-
-      {drawerState.drawerTab === "log" ? (
-        <pre className="min-h-[12rem] flex-1 overflow-auto rounded-[12px] border border-white/8 bg-white/[0.03] p-3 text-[0.78rem] leading-6 font-mono text-muted-foreground">
-          {drawerState.exportText || "No export generated yet."}
-        </pre>
-      ) : null}
-
-      <div className="flex flex-wrap justify-end gap-2 text-[0.8rem] tabular-nums text-muted-foreground">
-        <span>{formatTokens(dataset?.run.summaryMetrics.tokens ?? 0)}</span>
-        <span>{formatCurrency(dataset?.run.summaryMetrics.costUsd ?? 0)}</span>
-      </div>
+      <MonitorDrawerContent
+        drawerState={drawerState}
+        activeDataset={activeDataset}
+        onImport={onImport}
+        onImportTextChange={onImportTextChange}
+        onAllowRawChange={onAllowRawChange}
+        onNoRawChange={onNoRawChange}
+        placeholder={<NoDatasetPlaceholder />}
+      />
+      <DrawerMetrics dataset={activeDataset} />
     </Panel>
   );
 }

@@ -45,7 +45,7 @@ export function createWorkspaceIdentityResolver({
           if (!fallback) {
             return;
           }
-          cache.set(repoPath, sanitizeWorkspaceIdentity(identity, fallback));
+          cache.set(repoPath, sanitizeWorkspaceIdentity({ identity, fallback }));
         });
       } catch {
         // Web/Storybook should quietly keep fallback labels when native resolution is unavailable.

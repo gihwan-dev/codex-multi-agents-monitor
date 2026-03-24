@@ -27,70 +27,31 @@ pub(crate) fn resolve_workspace_identities(
 pub(crate) fn resolve_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity> {
     let git_metadata_path = repo_path.join(".git");
     if git_metadata_path.is_dir() {
-        return Ok(build_workspace_identity(normalize_path(repo_path)?, false));
+        return resolve_standard_workspace_identity(repo_path);
     }
 
     if git_metadata_path.is_file() {
-        let git_dir = resolve_linked_git_dir(&git_metadata_path)?;
-        let common_dir = resolve_common_dir(&git_dir)?;
-        let origin_path = common_dir.parent().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "commondir has no repo parent")
-        })?;
-
-        return Ok(build_workspace_identity(normalize_path(origin_path)?, true));
+        return resolve_linked_worktree_identity(&git_metadata_path);
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        ".git metadata missing",
-    ))
+    Err(missing_git_metadata_error())
 }
 
 pub(crate) fn resolve_live_session_workspace_identity(
     workspace_path: &Path,
     projects_root: &Path,
 ) -> io::Result<WorkspaceIdentity> {
-    if is_conductor_workspace_path(workspace_path) {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "conductor workspaces are excluded from live sessions",
-        ));
+    reject_live_session_workspace_path(workspace_path)?;
+
+    let normalized_projects_root = normalize_projects_root(projects_root);
+    if let Some(identity) =
+        resolve_existing_live_session_identity(workspace_path, &normalized_projects_root)
+    {
+        return Ok(identity);
     }
 
-    if is_documents_archives_workspace_path(workspace_path) {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "archived project workspaces are excluded from live sessions",
-        ));
-    }
-
-    let normalized_projects_root =
-        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
-
-    if let Ok(identity) = resolve_workspace_identity(workspace_path) {
-        let origin_path = normalize_path(Path::new(&identity.origin_path))
-            .unwrap_or_else(|_| PathBuf::from(identity.origin_path.clone()));
-
-        if origin_path.starts_with(&normalized_projects_root) && origin_path.exists() {
-            return Ok(identity);
-        }
-    }
-
-    let inferred_origin = infer_live_projects_origin(workspace_path, &normalized_projects_root)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "live session workspace does not resolve into Documents/Projects",
-            )
-        })?;
-
-    if !inferred_origin.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "live session workspace origin missing",
-        ));
-    }
-
+    let inferred_origin =
+        resolve_existing_live_session_origin(workspace_path, &normalized_projects_root)?;
     let normalized_workspace =
         normalize_path(workspace_path).unwrap_or_else(|_| workspace_path.to_path_buf());
 
@@ -104,8 +65,7 @@ pub(crate) fn resolve_session_workspace_identity(
     workspace_path: &Path,
     projects_root: &Path,
 ) -> io::Result<WorkspaceIdentity> {
-    let normalized_projects_root =
-        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+    let normalized_projects_root = normalize_projects_root(projects_root);
 
     if let Ok(identity) = resolve_workspace_identity(workspace_path) {
         if Path::new(&identity.origin_path).starts_with(&normalized_projects_root) {
@@ -194,8 +154,7 @@ fn infer_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<
 
 fn infer_live_projects_origin(workspace_path: &Path, projects_root: &Path) -> Option<PathBuf> {
     let normalized_workspace = normalize_path(workspace_path).ok()?;
-    let normalized_projects_root =
-        normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf());
+    let normalized_projects_root = normalize_projects_root(projects_root);
 
     if !normalized_workspace.starts_with(&normalized_projects_root) {
         return None;
@@ -212,6 +171,83 @@ fn infer_live_projects_origin(workspace_path: &Path, projects_root: &Path) -> Op
         Some(normalized_candidate)
     } else {
         None
+    }
+}
+
+fn resolve_standard_workspace_identity(repo_path: &Path) -> io::Result<WorkspaceIdentity> {
+    Ok(build_workspace_identity(normalize_path(repo_path)?, false))
+}
+
+fn resolve_linked_worktree_identity(git_metadata_path: &Path) -> io::Result<WorkspaceIdentity> {
+    let git_dir = resolve_linked_git_dir(git_metadata_path)?;
+    let common_dir = resolve_common_dir(&git_dir)?;
+    let origin_path = common_dir.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "commondir has no repo parent")
+    })?;
+
+    Ok(build_workspace_identity(normalize_path(origin_path)?, true))
+}
+
+fn missing_git_metadata_error() -> io::Error {
+    io::Error::new(io::ErrorKind::NotFound, ".git metadata missing")
+}
+
+fn normalize_projects_root(projects_root: &Path) -> PathBuf {
+    normalize_path(projects_root).unwrap_or_else(|_| projects_root.to_path_buf())
+}
+
+fn reject_live_session_workspace_path(workspace_path: &Path) -> io::Result<()> {
+    if is_conductor_workspace_path(workspace_path) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "conductor workspaces are excluded from live sessions",
+        ));
+    }
+
+    if is_documents_archives_workspace_path(workspace_path) {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "archived project workspaces are excluded from live sessions",
+        ));
+    }
+
+    Ok(())
+}
+
+fn resolve_existing_live_session_identity(
+    workspace_path: &Path,
+    normalized_projects_root: &Path,
+) -> Option<WorkspaceIdentity> {
+    let identity = resolve_workspace_identity(workspace_path).ok()?;
+    let origin_path = normalize_path(Path::new(&identity.origin_path))
+        .unwrap_or_else(|_| PathBuf::from(identity.origin_path.clone()));
+
+    if origin_path.starts_with(normalized_projects_root) && origin_path.exists() {
+        Some(identity)
+    } else {
+        None
+    }
+}
+
+fn resolve_existing_live_session_origin(
+    workspace_path: &Path,
+    normalized_projects_root: &Path,
+) -> io::Result<PathBuf> {
+    let inferred_origin =
+        infer_live_projects_origin(workspace_path, normalized_projects_root).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "live session workspace does not resolve into Documents/Projects",
+            )
+        })?;
+
+    if inferred_origin.exists() {
+        Ok(inferred_origin)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "live session workspace origin missing",
+        ))
     }
 }
 

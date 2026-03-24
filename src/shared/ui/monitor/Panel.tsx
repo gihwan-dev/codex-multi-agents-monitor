@@ -1,5 +1,6 @@
 import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
 import { cn } from "../../lib";
+import { PanelHeader } from "./PanelHeader";
 
 interface PanelProps extends PropsWithChildren {
   title?: string;
@@ -32,28 +33,12 @@ export function Panel({
       )}
       style={{ background: "var(--gradient-panel-surface)", ...style }}
     >
-      {(title || actions) && (
-        <header
-          className={cn(
-            "flex items-start justify-between gap-3",
-            headerClassName,
-          )}
-        >
-          <div className="min-w-0">
-            {title ? (
-              <h2
-                className={cn(
-                  "text-[0.95rem] font-semibold tracking-[0.02em]",
-                  titleClassName,
-                )}
-              >
-                {title}
-              </h2>
-            ) : null}
-          </div>
-          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-        </header>
-      )}
+      <PanelHeader
+        actions={actions}
+        headerClassName={headerClassName}
+        title={title}
+        titleClassName={titleClassName}
+      />
       {children}
     </section>
   );

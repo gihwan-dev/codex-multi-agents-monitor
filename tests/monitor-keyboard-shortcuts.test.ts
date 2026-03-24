@@ -73,10 +73,13 @@ describe("monitor 키보드 단축키", () => {
       target: document.createElement("input"),
     });
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).not.toHaveBeenCalled();
@@ -87,10 +90,13 @@ describe("monitor 키보드 단축키", () => {
     const dispatch = vi.fn();
     const event = createShortcutEvent("k", { ctrlKey: true });
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).toHaveBeenCalledWith({ type: "toggle-shortcuts" });
@@ -102,10 +108,13 @@ describe("monitor 키보드 단축키", () => {
     const dispatch = vi.fn();
     const event = createShortcutEvent(".");
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).toHaveBeenCalledWith({
@@ -119,10 +128,13 @@ describe("monitor 키보드 단축키", () => {
     const dispatch = vi.fn();
     const event = createShortcutEvent("e");
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).not.toHaveBeenCalled();
@@ -133,10 +145,13 @@ describe("monitor 키보드 단축키", () => {
     const dispatch = vi.fn();
     const event = createShortcutEvent("?");
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).toHaveBeenCalledWith({ type: "toggle-shortcuts" });
@@ -147,10 +162,13 @@ describe("monitor 키보드 단축키", () => {
     const dispatch = vi.fn();
     const event = createShortcutEvent("c");
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: null,
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: null,
+      },
     });
 
     expect(dispatch).toHaveBeenCalledWith({
@@ -168,10 +186,13 @@ describe("monitor 키보드 단축키", () => {
     const nextEvent = expectDefined(visibleEventRows[1], "next event missing");
     const event = createShortcutEvent("ArrowDown");
 
-    dispatchMonitorKeyboardShortcut(event, {
-      ...context,
-      dispatch,
-      selection: { kind: "event", id: currentEvent.eventId },
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        ...context,
+        dispatch,
+        selection: { kind: "event", id: currentEvent.eventId },
+      },
     });
 
     expect(dispatch).toHaveBeenCalledWith({

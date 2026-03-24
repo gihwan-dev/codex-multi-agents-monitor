@@ -1,8 +1,19 @@
 use crate::{
     application,
-    domain::session::{ArchivedSessionIndexResult, RecentSessionIndexItem, SessionLogSnapshot},
+    domain::ingest_policy::ArchivedIndexQuery,
+    domain::session::{
+        ArchivedSessionIndex, ArchivedSessionIndexResult, RecentSessionIndexItem,
+        SessionLogSnapshot,
+    },
     state::archive_cache::ArchivedIndexCache,
 };
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct LoadArchivedSessionIndexArgs {
+    offset: usize,
+    limit: usize,
+    search: Option<String>,
+}
 
 #[tauri::command]
 pub(crate) async fn load_recent_session_index() -> Vec<RecentSessionIndexItem> {
@@ -27,28 +38,18 @@ pub(crate) async fn load_recent_session_snapshot(file_path: String) -> Option<Se
 
 #[tauri::command]
 pub(crate) async fn load_archived_session_index(
-    offset: usize,
-    limit: usize,
-    search: Option<String>,
+    args: LoadArchivedSessionIndexArgs,
     cache: tauri::State<'_, ArchivedIndexCache>,
 ) -> Result<ArchivedSessionIndexResult, String> {
-    let index = match cache.clone_entries() {
-        Some(index) => index,
-        None => {
-            let built = tauri::async_runtime::spawn_blocking(
-                application::archived_sessions::build_archived_index,
-            )
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .unwrap_or_default();
-
-            cache.populate_if_empty(built)
-        }
-    };
+    let index = load_or_build_archived_index(cache).await;
 
     Ok(application::archived_sessions::load_archived_session_index(
-        offset, limit, search, &index,
+        ArchivedIndexQuery {
+            offset: args.offset,
+            limit: args.limit,
+            search: args.search,
+            index: &index,
+        },
     ))
 }
 
@@ -67,4 +68,20 @@ pub(crate) async fn load_archived_session_snapshot(
 #[tauri::command]
 pub(crate) fn refresh_archived_session_index(cache: tauri::State<'_, ArchivedIndexCache>) {
     cache.clear();
+}
+
+async fn load_or_build_archived_index(cache: tauri::State<'_, ArchivedIndexCache>) -> Vec<ArchivedSessionIndex> {
+    match cache.clone_entries() {
+        Some(index) => index,
+        None => {
+            let built = tauri::async_runtime::spawn_blocking(
+                application::archived_sessions::build_archived_index,
+            )
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or_default();
+            cache.populate_if_empty(built)
+        }
+    }
 }

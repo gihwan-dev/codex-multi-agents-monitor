@@ -7,9 +7,7 @@ import type {
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { Panel } from "../../../shared/ui";
 import { useWorkspaceTreeState } from "../model/useWorkspaceTreeState";
-import { WorkspaceRunTreeArchiveSection } from "./WorkspaceRunTreeArchiveSection";
-import { WorkspaceRunTreeHeader } from "./WorkspaceRunTreeHeader";
-import { WorkspaceRunTreeWorkspaceGroup } from "./WorkspaceRunTreeWorkspaceGroup";
+import { WorkspaceRunTreeSections } from "./WorkspaceRunTreeSections";
 
 interface WorkspaceRunTreeProps {
   datasets: RunDataset[];
@@ -58,19 +56,7 @@ export function WorkspaceRunTree({
   onArchiveLoadMore,
   onArchiveSelect,
 }: WorkspaceRunTreeProps) {
-  const {
-    activeTreeId,
-    expandedWorkspaceIds,
-    handleTreeKeyDown,
-    model,
-    optimisticActiveRunId,
-    search,
-    selectRecentRun,
-    selectRun,
-    setSearch,
-    toggleWorkspace,
-    treeRef,
-  } = useWorkspaceTreeState({
+  const workspaceTreeState = useWorkspaceTreeState({
     datasets,
     recentIndex,
     recentIndexReady,
@@ -85,51 +71,23 @@ export function WorkspaceRunTree({
       panelSlot="run-tree-panel"
       className="flex-1 rounded-none border-r-0 border-t-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
     >
-      <WorkspaceRunTreeHeader
-        onOpenImport={onOpenImport}
-        onSearchChange={setSearch}
-        search={search}
+      <WorkspaceRunTreeSections
         searchRef={searchRef}
+        onOpenImport={onOpenImport}
+        archivedIndex={archivedIndex}
+        archivedTotal={archivedTotal}
+        archivedHasMore={archivedHasMore}
+        archivedIndexLoading={archivedIndexLoading}
+        archivedIndexError={archivedIndexError}
+        activeArchivedFilePath={activeArchivedFilePath}
+        archivedSearch={archivedSearch}
+        archiveSectionOpen={archiveSectionOpen}
+        onToggleArchiveSection={onToggleArchiveSection}
+        onArchiveSearch={onArchiveSearch}
+        onArchiveLoadMore={onArchiveLoadMore}
+        onArchiveSelect={onArchiveSelect}
+        {...workspaceTreeState}
       />
-
-      <div
-        ref={treeRef}
-        data-slot="run-tree"
-        className="grid min-h-0 flex-1 content-start items-start gap-2 overflow-x-hidden overflow-y-auto pt-2"
-        role="tree"
-        aria-label="Workspace tree"
-        onKeyDown={handleTreeKeyDown}
-      >
-        {model.workspaces.map((workspace) => (
-          <WorkspaceRunTreeWorkspaceGroup
-            key={workspace.id}
-            activeTreeId={activeTreeId}
-            expanded={expandedWorkspaceIds.includes(workspace.id)}
-            optimisticActiveRunId={optimisticActiveRunId}
-            onSelectRecentRun={selectRecentRun}
-            onSelectRun={selectRun}
-            onToggleWorkspace={toggleWorkspace}
-            workspace={workspace}
-          />
-        ))}
-      </div>
-
-      {archivedIndexError || archivedTotal > 0 || archivedIndex.length > 0 ? (
-        <WorkspaceRunTreeArchiveSection
-          activeArchivedFilePath={activeArchivedFilePath}
-          archiveSectionOpen={archiveSectionOpen}
-          archivedHasMore={archivedHasMore}
-          archivedIndex={archivedIndex}
-          archivedIndexError={archivedIndexError}
-          archivedIndexLoading={archivedIndexLoading}
-          archivedSearch={archivedSearch}
-          archivedTotal={archivedTotal}
-          onArchiveLoadMore={onArchiveLoadMore}
-          onArchiveSearch={onArchiveSearch}
-          onArchiveSelect={onArchiveSelect}
-          onToggleArchiveSection={onToggleArchiveSection}
-        />
-      ) : null}
     </Panel>
   );
 }

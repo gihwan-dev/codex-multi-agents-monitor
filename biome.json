@@ -6,14 +6,61 @@
       "!dist",
       "!storybook-static",
       "!.tmp-tests",
+      "!.tmp-quality",
       "!node_modules",
-      "!src/app/styles/index.css"
+      "!scripts",
+      "!tests",
+      "!src/app/styles/index.css",
+      "!src/entities/run/model/samples.ts",
+      "!src-tauri/src/test_support.rs",
+      "!**/*.stories.*",
+      "!**/*.story.*",
+      "!**/__snapshots__",
+      "!**/__fixtures__",
+      "!**/generated"
     ]
   },
   "formatter": {
     "enabled": false
   },
   "linter": {
-    "enabled": true
+    "enabled": true,
+    "rules": {
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 8
+          }
+        },
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 35
+          }
+        },
+        "noExcessiveNestedTestSuites": "error",
+        "useMaxParams": {
+          "level": "error",
+          "options": {
+            "max": 3
+          }
+        }
+      },
+      "nursery": {
+        "noExcessiveClassesPerFile": {
+          "level": "error",
+          "options": {
+            "maxClasses": 1
+          }
+        },
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": {
+            "maxLines": 220
+          }
+        }
+      }
+    }
   }
 }

@@ -2,17 +2,17 @@ import type { RefObject } from "react";
 import { Button, Input } from "../../../shared/ui/primitives";
 
 interface WorkspaceRunTreeHeaderProps {
-  onOpenImport: () => void;
-  onSearchChange: (value: string) => void;
-  search: string;
   searchRef: RefObject<HTMLInputElement | null>;
+  search: string;
+  setSearch: (value: string) => void;
+  onOpenImport: () => void;
 }
 
 export function WorkspaceRunTreeHeader({
-  onOpenImport,
-  onSearchChange,
-  search,
   searchRef,
+  search,
+  setSearch,
+  onOpenImport,
 }: WorkspaceRunTreeHeaderProps) {
   return (
     <div
@@ -25,7 +25,7 @@ export function WorkspaceRunTreeHeader({
         className="border-white/10 bg-white/[0.03] text-foreground"
         placeholder="Search workspaces and runs"
         value={search}
-        onChange={(event) => onSearchChange(event.target.value)}
+        onChange={(event) => setSearch(event.target.value)}
         aria-label="Search workspaces and runs"
       />
       <Button

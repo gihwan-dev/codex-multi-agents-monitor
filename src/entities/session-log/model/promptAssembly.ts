@@ -5,6 +5,27 @@ interface PromptAssemblyOptions {
   includeRaw: boolean;
 }
 
+type PromptAssemblyLayerSnapshot = NonNullable<SessionLogSnapshot["promptAssembly"]>[number];
+
+function createPromptAssemblyLayerBuilder(
+  sessionId: string,
+  includeRaw: boolean,
+) {
+  return function buildPromptAssemblyLayer(
+    layer: PromptAssemblyLayerSnapshot,
+    index: number,
+  ) {
+    return {
+      layerId: `${sessionId}:layer:${index}`,
+      layerType: layer.layerType as PromptLayerType,
+      label: layer.label,
+      preview: layer.preview,
+      contentLength: layer.contentLength,
+      rawContent: includeRaw ? layer.rawContent : null,
+    };
+  };
+}
+
 export function buildPromptAssembly(
   snapshot: SessionLogSnapshot,
   options: PromptAssemblyOptions,
@@ -14,15 +35,12 @@ export function buildPromptAssembly(
     return undefined;
   }
 
+  const buildPromptAssemblyLayer = createPromptAssemblyLayerBuilder(
+    snapshot.sessionId,
+    options.includeRaw,
+  );
   return {
-    layers: layers.map((layer, index) => ({
-      layerId: `${snapshot.sessionId}:layer:${index}`,
-      layerType: layer.layerType as PromptLayerType,
-      label: layer.label,
-      preview: layer.preview,
-      contentLength: layer.contentLength,
-      rawContent: options.includeRaw ? layer.rawContent : null,
-    })),
+    layers: layers.map(buildPromptAssemblyLayer),
     totalContentLength: layers.reduce((sum, layer) => sum + layer.contentLength, 0),
   };
 }

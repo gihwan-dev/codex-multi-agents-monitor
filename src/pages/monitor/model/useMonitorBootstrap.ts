@@ -1,118 +1,199 @@
-import { useEffect, useRef } from "react";
-import type { RunDataset } from "../../../entities/run";
+import { type MutableRefObject, useEffect, useEffectEvent, useRef } from "react";
 import { canInvokeTauriRuntime } from "../../../shared/api";
-import type { MonitorState } from "./state";
+import type {
+  InitialRecentSnapshotState,
+  MonitorBootstrapEffectOptions,
+  MonitorBootstrapRefs,
+  RecentRefreshState,
+  UseInitialRecentSnapshotOptions,
+  UseMonitorBootstrapOptions,
+  UseRecentLiveRefreshOptions,
+} from "./monitorBootstrapTypes";
 
-interface UseMonitorBootstrapOptions {
-  activeDataset: RunDataset | null;
-  activeFollowLive: boolean;
-  activeSessionFilePath: string | null;
-  recentIndex: MonitorState["recentIndex"];
-  recentIndexReady: boolean;
-  recentSnapshotLoadingId: string | null;
-  refreshRecentSnapshot: (filePath: string) => void;
-  requestArchiveIndex: (offset: number, append: boolean, search?: string) => void;
-  requestRecentIndex: () => void;
-  requestRecentSnapshot: (filePath: string) => void;
+const LIVE_RECENT_POLL_INTERVAL_MS = 2_000;
+
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+
+  return ref;
 }
 
-export function useMonitorBootstrap({
-  activeDataset,
-  activeFollowLive,
-  activeSessionFilePath,
-  recentIndex,
-  recentIndexReady,
-  recentSnapshotLoadingId,
-  refreshRecentSnapshot,
-  requestArchiveIndex,
-  requestRecentIndex,
-  requestRecentSnapshot,
-}: UseMonitorBootstrapOptions) {
-  const LIVE_RECENT_POLL_INTERVAL_MS = 2_000;
-  const requestRecentIndexRef = useRef(requestRecentIndex);
-  const requestRecentSnapshotRef = useRef(requestRecentSnapshot);
-  const requestArchiveIndexRef = useRef(requestArchiveIndex);
-  const refreshRecentSnapshotRef = useRef(refreshRecentSnapshot);
+function useMonitorBootstrapRefs(
+  options: Pick<
+    UseMonitorBootstrapOptions,
+    | "refreshRecentSnapshot"
+    | "requestArchiveIndex"
+    | "requestRecentIndex"
+    | "requestRecentSnapshot"
+  >,
+): MonitorBootstrapRefs {
+  return {
+    requestRecentIndexRef: useLatestRef(options.requestRecentIndex),
+    requestRecentSnapshotRef: useLatestRef(options.requestRecentSnapshot),
+    requestArchiveIndexRef: useLatestRef(options.requestArchiveIndex),
+    refreshRecentSnapshotRef: useLatestRef(options.refreshRecentSnapshot),
+  };
+}
 
-  useEffect(() => {
-    requestRecentIndexRef.current = requestRecentIndex;
-  }, [requestRecentIndex]);
-
-  useEffect(() => {
-    requestRecentSnapshotRef.current = requestRecentSnapshot;
-  }, [requestRecentSnapshot]);
-
-  useEffect(() => {
-    requestArchiveIndexRef.current = requestArchiveIndex;
-  }, [requestArchiveIndex]);
-
-  useEffect(() => {
-    refreshRecentSnapshotRef.current = refreshRecentSnapshot;
-  }, [refreshRecentSnapshot]);
+function useRecentIndexBootstrapRequest(
+  requestRecentIndexRef: MutableRefObject<() => void>,
+) {
+  const requestRecentIndex = useEffectEvent(() => requestRecentIndexRef.current());
 
   useEffect(() => {
     if (!canInvokeTauriRuntime()) {
       return;
     }
 
-    requestRecentIndexRef.current();
+    requestRecentIndex();
   }, []);
+}
+
+function useArchiveIndexBootstrapRequest(
+  requestArchiveIndexRef: MutableRefObject<
+    UseMonitorBootstrapOptions["requestArchiveIndex"]
+  >,
+) {
+  const requestArchiveIndex = useEffectEvent(() => requestArchiveIndexRef.current(0, false));
+
+  useEffect(() => {
+    if (!canInvokeTauriRuntime()) {
+      return;
+    }
+
+    requestArchiveIndex();
+  }, []);
+}
+
+function shouldRequestInitialRecentSnapshot(options: InitialRecentSnapshotState) {
+  const { activeDataset, recentIndex, recentIndexReady, recentSnapshotLoadingId } = options;
+  return Boolean(
+    recentIndexReady &&
+      recentIndex.length > 0 &&
+      !recentSnapshotLoadingId &&
+      !activeDataset,
+  );
+}
+
+function useInitialRecentSnapshot(options: UseInitialRecentSnapshotOptions) {
+  const {
+    activeDataset,
+    recentIndex,
+    recentIndexReady,
+    recentSnapshotLoadingId,
+    requestRecentSnapshotRef,
+  } = options;
 
   useEffect(() => {
     if (
-      !recentIndexReady ||
-      !recentIndex.length ||
-      recentSnapshotLoadingId ||
-      activeDataset
+      !shouldRequestInitialRecentSnapshot({
+        activeDataset,
+        recentIndex,
+        recentIndexReady,
+        recentSnapshotLoadingId,
+      })
     ) {
       return;
     }
 
-    requestRecentSnapshotRef.current(recentIndex[0].filePath);
+    requestRecentSnapshotRef.current?.(recentIndex[0].filePath);
   }, [
     activeDataset,
     recentIndex,
     recentIndexReady,
     recentSnapshotLoadingId,
+    requestRecentSnapshotRef,
   ]);
+}
+
+function shouldRefreshRecentSnapshot(options: RecentRefreshState) {
+  const {
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+  } = options;
+  if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath) {
+    return false;
+  }
+
+  return Boolean(
+    recentIndex.some((item) => item.filePath === activeSessionFilePath) &&
+      !activeDataset.run.isArchived &&
+      activeDataset.run.liveMode === "live" &&
+      activeFollowLive,
+  );
+}
+
+function useRecentLiveRefresh(options: UseRecentLiveRefreshOptions) {
+  const {
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+    refreshRecentSnapshotRef,
+  } = options;
+  const shouldRefresh = shouldRefreshRecentSnapshot({
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+  });
 
   useEffect(() => {
-    if (!canInvokeTauriRuntime()) {
-      return;
-    }
-
-    requestArchiveIndexRef.current(0, false);
-  }, []);
-
-  useEffect(() => {
-    if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath) {
+    if (!shouldRefresh || !activeSessionFilePath) {
       return undefined;
     }
 
-    const isRecentSnapshot = recentIndex.some(
-      (item) => item.filePath === activeSessionFilePath,
-    );
-    if (
-      !isRecentSnapshot ||
-      activeDataset.run.isArchived ||
-      activeDataset.run.liveMode !== "live" ||
-      !activeFollowLive
-    ) {
-      return undefined;
-    }
-
-    refreshRecentSnapshotRef.current(activeSessionFilePath);
+    refreshRecentSnapshotRef.current?.(activeSessionFilePath);
     const intervalId = window.setInterval(() => {
-      refreshRecentSnapshotRef.current(activeSessionFilePath);
+      refreshRecentSnapshotRef.current?.(activeSessionFilePath);
     }, LIVE_RECENT_POLL_INTERVAL_MS);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [
+  }, [activeSessionFilePath, refreshRecentSnapshotRef, shouldRefresh]);
+}
+
+export function useMonitorBootstrap(options: UseMonitorBootstrapOptions) {
+  useMonitorBootstrapEffects({
+    ...options,
+    ...useMonitorBootstrapRefs(options),
+  });
+}
+
+function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
+  const {
     activeDataset,
     activeFollowLive,
     activeSessionFilePath,
     recentIndex,
-  ]);
+    recentIndexReady,
+    recentSnapshotLoadingId,
+    requestRecentIndexRef,
+    requestRecentSnapshotRef,
+    requestArchiveIndexRef,
+    refreshRecentSnapshotRef,
+  } = options;
+  useRecentIndexBootstrapRequest(requestRecentIndexRef);
+  useArchiveIndexBootstrapRequest(requestArchiveIndexRef);
+  useInitialRecentSnapshot({
+    activeDataset,
+    recentIndex,
+    recentIndexReady,
+    recentSnapshotLoadingId,
+    requestRecentSnapshotRef,
+  });
+  useRecentLiveRefresh({
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+    refreshRecentSnapshotRef,
+  });
 }

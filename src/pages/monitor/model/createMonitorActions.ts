@@ -19,16 +19,17 @@ interface CreateMonitorActionsOptions {
   requestRecentSnapshot: (filePath: string) => void;
 }
 
-export function createMonitorActions({
-  state,
-  dispatch,
-  activeDataset,
-  activeFollowLive,
-  loadArchiveIndex,
-  searchArchive,
-  selectArchivedSession,
-  requestRecentSnapshot,
-}: CreateMonitorActionsOptions) {
+export function createMonitorActions(options: CreateMonitorActionsOptions) {
+  const {
+    state,
+    dispatch,
+    activeDataset,
+    activeFollowLive,
+    loadArchiveIndex,
+    searchArchive,
+    selectArchivedSession,
+    requestRecentSnapshot,
+  } = options;
   const viewActions = createMonitorViewActions({
     drawerOpen: state.drawerOpen,
     dispatch,
