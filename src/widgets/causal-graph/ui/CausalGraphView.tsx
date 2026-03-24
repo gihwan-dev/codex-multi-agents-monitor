@@ -45,7 +45,6 @@ export function CausalGraphView({
     runTraceId,
     selectionNavigationRunId,
     selectionNavigationRequestId,
-    selectionNavigationRunId,
     selectionRevealTarget,
     scene,
     viewportHeightOverride,
