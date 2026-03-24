@@ -6,8 +6,9 @@ import { flattenTree } from "../lib/workspaceTreeUtils";
 import {
   useWorkspaceTreeActions,
   useWorkspaceTreeModel,
-  useWorkspaceTreeSelectionSync,
 } from "./workspaceTreeStateHelpers";
+import { useWorkspaceTreeSelectionState } from "./useWorkspaceTreeSelectionState";
+import { buildWorkspaceTreeStateResult } from "./workspaceTreeStateResult";
 
 interface UseWorkspaceTreeStateArgs {
   datasets: RunDataset[];
@@ -68,7 +69,7 @@ function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
   });
-  useWorkspaceTreeSelectionStateSync({
+  useWorkspaceTreeSelectionState({
     activeRunId,
     model,
     setActiveTreeId: treeIds.setActiveTreeId,
@@ -107,28 +108,4 @@ function useWorkspaceTreeSelectionActions(
   options: Parameters<typeof useWorkspaceTreeActions>[0],
 ) {
   return useWorkspaceTreeActions(options);
-}
-
-function useWorkspaceTreeSelectionStateSync(
-  options: Parameters<typeof useWorkspaceTreeSelectionSync>[0],
-) {
-  useWorkspaceTreeSelectionSync(options);
-}
-
-function buildWorkspaceTreeStateResult(options: {
-  treeIds: ReturnType<typeof useWorkspaceTreeIds>;
-  model: ReturnType<typeof useWorkspaceTreeModel>["model"];
-  search: string;
-  setSearch: ReturnType<typeof useWorkspaceTreeModel>["setSearch"];
-  actions: ReturnType<typeof useWorkspaceTreeActions>;
-}) {
-  return {
-    activeTreeId: options.treeIds.activeTreeId,
-    expandedWorkspaceIds: options.treeIds.expandedWorkspaceIds,
-    optimisticActiveRunId: options.treeIds.optimisticActiveRunId,
-    model: options.model,
-    search: options.search,
-    setSearch: options.setSearch,
-    ...options.actions,
-  };
 }

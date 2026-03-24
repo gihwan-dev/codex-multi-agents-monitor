@@ -3,13 +3,13 @@ import type {
   EdgeRouteLayout,
   GraphLayoutSnapshot,
 } from "../model/graphLayout";
-import { TIME_GUTTER } from "../model/graphLayout";
 import {
   buildLaneIds,
   GraphContinuationGuides,
   GraphLaneLines,
   GraphRouteMarkerDefs,
 } from "./GraphBackgroundDecorations";
+import { renderGraphRowGuide } from "./CausalGraphRowGuide";
 import { GraphEdgeRoute } from "./GraphEdgeRoute";
 
 interface CausalGraphBackgroundSvgProps {
@@ -52,7 +52,7 @@ export function CausalGraphBackgroundSvg({
         layout={layout}
         renderedContentHeight={renderedContentHeight}
       />
-      {visibleRows.map((row) => renderRowGuide(row, layout))}
+      {visibleRows.map((row) => renderGraphRowGuide(row, layout))}
       <GraphContinuationGuides
         availableCanvasHeight={availableCanvasHeight}
         contentWidth={layout.contentWidth}
@@ -69,44 +69,4 @@ export function CausalGraphBackgroundSvg({
       ))}
     </svg>
   );
-}
-
-function renderRowGuide(
-  row: GraphSceneModel["rows"][number],
-  layout: GraphLayoutSnapshot,
-) {
-  if (row.kind !== "event") {
-    return null;
-  }
-
-  const guideY = layout.rowGuideYByEventId.get(row.eventId);
-  if (guideY === undefined) {
-    return null;
-  }
-
-  return (
-    <line
-      key={`guide-${row.eventId}`}
-      data-slot="graph-row-guide"
-      data-guide-kind={row.selected ? "selected" : row.inPath ? "active" : "default"}
-      data-event-id={row.eventId}
-      x1={TIME_GUTTER}
-      y1={guideY}
-      x2={layout.contentWidth}
-      y2={guideY}
-      stroke={resolveGuideColor(row.selected, row.inPath)}
-      strokeWidth={row.selected || row.inPath ? 1.25 : 1}
-      strokeDasharray="2 6"
-    />
-  );
-}
-
-function resolveGuideColor(selected: boolean, inPath: boolean) {
-  if (selected) {
-    return "var(--color-graph-guide-selected)";
-  }
-
-  return inPath
-    ? "var(--color-graph-guide-active)"
-    : "var(--color-graph-guide-default)";
 }

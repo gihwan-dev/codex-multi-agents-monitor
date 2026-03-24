@@ -5,6 +5,10 @@ import {
   resolveFollowLiveScrollTarget,
   TIME_GUTTER,
 } from "../model/graphLayout";
+import {
+  readActiveFollowLiveEventId,
+  readFollowLiveContext,
+} from "./graphFollowLiveContext";
 
 interface UseGraphFollowLiveScrollOptions {
   followLive: boolean;
@@ -25,12 +29,6 @@ interface ResolveFollowLiveViewportOptions {
   renderedContentHeight: number;
   scrollRef: RefObject<HTMLDivElement | null>;
   stickyTop: number;
-}
-
-interface ReadFollowLiveContextOptions {
-  latestVisibleEventId: string;
-  layout: GraphLayoutSnapshot;
-  scrollRef: RefObject<HTMLDivElement | null>;
 }
 
 export function useGraphFollowLiveScroll(options: UseGraphFollowLiveScrollOptions) {
@@ -102,13 +100,7 @@ function resolveFollowLiveViewport(
     return { kind: "clear" };
   }
 
-  const followLiveContext = readFollowLiveContext(
-    {
-      latestVisibleEventId: activeEventId,
-      layout,
-      scrollRef,
-    },
-  );
+  const followLiveContext = readFollowLiveContext({ latestVisibleEventId: activeEventId, layout, scrollRef });
   if (!followLiveContext) {
     return { kind: "skip" };
   }
@@ -145,34 +137,6 @@ function applyFollowLiveResolution(
   setFollowScrollTarget(followScrollTargetRef, resolution.followTarget);
   scrollElementToTarget(resolution.element, resolution.followTarget);
 }
-
-function readActiveFollowLiveEventId(
-  followLive: boolean,
-  latestVisibleEventId: GraphSceneModel["latestVisibleEventId"],
-  liveMode: LiveMode,
-) {
-  if (!followLive || liveMode !== "live") {
-    return null;
-  }
-
-  return latestVisibleEventId;
-}
-
-function readFollowLiveContext(options: ReadFollowLiveContextOptions) {
-  const { latestVisibleEventId, layout, scrollRef } = options;
-  const element = scrollRef.current;
-  const eventLayout = layout.eventById.get(latestVisibleEventId);
-  if (!element || !eventLayout || isViewportUnavailable(element)) {
-    return null;
-  }
-
-  return { element, eventLayout };
-}
-
-function isViewportUnavailable(element: HTMLDivElement) {
-  return element.clientHeight <= 0 || element.clientWidth <= 0;
-}
-
 function applyNonScrollResolution(
   followScrollTargetRef: RefObject<{ top: number; left: number } | null>,
   kind: "clear" | "skip",

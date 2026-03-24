@@ -3,8 +3,8 @@ import type {
   GraphSelectionRevealTarget,
   LiveMode,
 } from "../../../entities/run";
-import { useGraphViewportController } from "./graphViewportEffects";
 import { buildGraphViewportSnapshot } from "./graphViewportSnapshot";
+import { useGraphViewportController } from "./useGraphViewportController";
 import { useGraphViewportState } from "./useGraphViewportState";
 
 interface UseCausalGraphViewModelOptions {
