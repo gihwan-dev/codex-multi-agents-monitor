@@ -41,6 +41,8 @@ export function PromptLayerCard({
       <PromptLayerPreview preview={layer.preview} />
       {expanded ? (
         <PromptLayerContent
+          label={layer.label}
+          preview={layer.preview}
           rawVisible={rawEnabled && layer.rawContent !== null}
           rawContent={layer.rawContent}
         />

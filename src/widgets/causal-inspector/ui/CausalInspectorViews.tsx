@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
 import type { DrawerTab, InspectorCausalSummary } from "../../../entities/run";
-import { cn } from "../../../shared/lib";
 import { Button, ScrollArea, Separator } from "../../../shared/ui/primitives";
+import { CausalInspectorSection } from "./CausalInspectorSection";
 import type { InspectorSectionConfig } from "./CausalInspectorSections";
+import { SummaryExpandButton } from "./SummaryExpandButton";
+import { SummaryFactList } from "./SummaryFactList";
+
+export { CausalInspectorJumpButton as JumpButton } from "./CausalInspectorJumpButton";
 
 const PAYLOAD_ACTIONS: Array<{ tab: DrawerTab; label: string }> = [
   { tab: "artifacts", label: "Artifacts" },
@@ -14,11 +17,11 @@ const PAYLOAD_ACTIONS: Array<{ tab: DrawerTab; label: string }> = [
 export function InspectorSections({ sections }: { sections: InspectorSectionConfig[] }) {
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="grid gap-3 pr-3">
+      <div className="grid min-w-0 gap-3 pr-3">
         {sections.map((section) => (
-          <Section key={section.key} title={section.title}>
+          <CausalInspectorSection key={section.key} title={section.title}>
             {section.content}
-          </Section>
+          </CausalInspectorSection>
         ))}
       </div>
     </ScrollArea>
@@ -55,29 +58,11 @@ export function SummarySection({ summary }: { summary: InspectorCausalSummary | 
 
   return (
     <>
+      <SummaryExpandButton summary={summary} />
       <h3 className="text-[0.95rem] font-semibold leading-5">{summary.title}</h3>
-      <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.preview}</p>
+      <p className="break-words text-[0.8rem] leading-6 text-muted-foreground">{summary.preview}</p>
       <Separator className="bg-white/8" />
-      <dl className="grid gap-2">
-        {summary.facts.map((fact) => (
-          <div
-            key={fact.label}
-            className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2"
-          >
-            <dt className="text-[0.78rem] font-medium text-muted-foreground">{fact.label}</dt>
-            <dd
-              className={cn(
-                "m-0 rounded bg-white/[0.07] px-2 py-1 text-[0.78rem] tabular-nums",
-                fact.emphasis === "danger" && "text-[var(--color-failed)]",
-                fact.emphasis === "warning" && "text-[var(--color-waiting)]",
-                fact.emphasis === "accent" && "text-[var(--color-active)]",
-              )}
-            >
-              {fact.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <SummaryFactList facts={summary.facts} />
     </>
   );
 }
@@ -95,7 +80,6 @@ export function PayloadSection({
 
   return (
     <div className="grid gap-3">
-      <p className="text-[0.8rem] leading-6 text-muted-foreground">{summary.payloadPreview}</p>
       <span className="text-[0.82rem] text-muted-foreground">{summary.rawStatusLabel}</span>
       <div className="flex flex-wrap gap-2">
         {PAYLOAD_ACTIONS.map((action) => (
@@ -112,39 +96,5 @@ export function PayloadSection({
         ))}
       </div>
     </div>
-  );
-}
-
-export function JumpButton({
-  label,
-  description,
-  onClick,
-}: {
-  label: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="grid gap-1 rounded-[10px] border border-white/8 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45"
-      onClick={onClick}
-    >
-      <strong className="text-sm font-semibold">{label}</strong>
-      <span className="text-[0.78rem] text-muted-foreground">{description}</span>
-    </button>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="grid gap-2 rounded-[10px] border border-white/8 bg-white/[0.025] px-3 py-3">
-      <header>
-        <h3 className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
-          {title}
-        </h3>
-      </header>
-      <div className="grid gap-3">{children}</div>
-    </section>
   );
 }

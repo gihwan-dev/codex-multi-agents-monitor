@@ -5,3 +5,5 @@ export * from "./LoadingStateBlock";
 export * from "./MetricPill";
 export * from "./Panel";
 export * from "./StatusChip";
+export * from "./TextViewerContent";
+export * from "./TextViewerModal";

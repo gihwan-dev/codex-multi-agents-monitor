@@ -27,7 +27,9 @@ export function OccupiedGraphLaneCell({
         eventLayout={eventLayout}
         eventType={row.eventType}
         inPath={row.inPath}
+        inputPreview={row.inputPreview}
         onSelect={() => onSelect({ kind: "event", id: row.eventId })}
+        outputPreview={row.outputPreview}
         rowAnchorTop={eventLayout.rowTop}
         selected={row.selected}
         status={row.status}

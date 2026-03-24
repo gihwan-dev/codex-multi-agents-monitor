@@ -80,6 +80,8 @@ export interface GraphSceneRowEvent {
   laneId: string;
   title: string;
   summary: string;
+  inputPreview: string | null;
+  outputPreview: string | null;
   status: RunStatus;
   waitReason: string | null;
   timeLabel: string;
@@ -176,6 +178,10 @@ export interface InspectorCausalSummary {
   downstream: InspectorJump[];
   nextAction: string | null;
   payloadPreview: string;
+  inputPreview: string | null;
+  outputPreview: string | null;
+  rawInput: string | null;
+  rawOutput: string | null;
   rawStatusLabel: string;
   affectedAgentCount: number;
   downstreamWaitingCount: number;

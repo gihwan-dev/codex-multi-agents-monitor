@@ -88,6 +88,8 @@ function buildEventRow(args: BuildEventRowArgs) {
     laneId: event.laneId,
     title: event.title,
     summary: resolveEventRowSummary(event),
+    inputPreview: event.inputPreview,
+    outputPreview: event.outputPreview,
     status: event.status,
     waitReason: event.waitReason,
     timeLabel: formatTimestamp(event.startTs),
