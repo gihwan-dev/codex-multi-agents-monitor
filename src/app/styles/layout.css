@@ -5,6 +5,7 @@
   min-height: 100vh;
   gap: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .workspace {
