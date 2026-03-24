@@ -7,6 +7,7 @@ import type {
 } from "../../../entities/run";
 import { cn } from "../../../shared/lib";
 import { StatusChip } from "../../../shared/ui";
+import { ScrollArea } from "../../../shared/ui/primitives";
 import { buildRunTreeId, buildWorkspaceTreeId, getWorkspaceRuns } from "../lib/workspaceTreeUtils";
 
 interface WorkspaceTreeListProps {
@@ -219,26 +220,28 @@ export function WorkspaceTreeList({
   treeRef,
 }: WorkspaceTreeListProps) {
   return (
-    <div
-      ref={treeRef}
-      data-slot="run-tree"
-      className="grid min-h-0 flex-1 content-start items-start gap-2 overflow-x-hidden overflow-y-auto pt-2"
-      role="tree"
-      aria-label="Workspace tree"
-      onKeyDown={handleTreeKeyDown}
-    >
-      {model.workspaces.map((workspace) => (
-        <WorkspaceGroup
-          key={workspace.id}
-          activeTreeId={activeTreeId}
-          expandedWorkspaceIds={expandedWorkspaceIds}
-          optimisticActiveRunId={optimisticActiveRunId}
-          workspace={workspace}
-          toggleWorkspace={toggleWorkspace}
-          selectRecentRun={selectRecentRun}
-          selectRun={selectRun}
-        />
-      ))}
-    </div>
+    <ScrollArea className="min-h-0 flex-1">
+      <div
+        ref={treeRef}
+        data-slot="run-tree"
+        className="grid content-start items-start gap-2 pr-3 pt-2"
+        role="tree"
+        aria-label="Workspace tree"
+        onKeyDown={handleTreeKeyDown}
+      >
+        {model.workspaces.map((workspace) => (
+          <WorkspaceGroup
+            key={workspace.id}
+            activeTreeId={activeTreeId}
+            expandedWorkspaceIds={expandedWorkspaceIds}
+            optimisticActiveRunId={optimisticActiveRunId}
+            workspace={workspace}
+            toggleWorkspace={toggleWorkspace}
+            selectRecentRun={selectRecentRun}
+            selectRun={selectRun}
+          />
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

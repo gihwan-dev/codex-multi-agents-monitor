@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
-import { Input } from "../../../shared/ui/primitives";
+import { Input, ScrollArea } from "../../../shared/ui/primitives";
 import { groupArchivedSessionsByWorkspace } from "../lib/archiveGroups";
 import { ArchivedSessionFeedback } from "./ArchivedSessionFeedback";
 import { ArchivedWorkspaceGroupSection } from "./ArchivedSessionGroup";
@@ -173,24 +173,26 @@ export function ArchivedSessionList({
         onChange={(event) => handleSearchChange(event.target.value)}
         aria-label="Search archived sessions"
       />
-      <div data-slot="archive-list-content" className="grid max-h-[22.5rem] gap-2 overflow-x-hidden overflow-y-auto">
-        <ArchivedSessionGroups
-          activeFilePath={activeFilePath}
-          expandedGroups={expandedGroups}
-          onSelect={onSelect}
-          toggleGroup={toggleGroup}
-          workspaceGroups={workspaceGroups}
-        />
-        <ArchivedSessionFeedback
-          errorMessage={errorMessage}
-          hasMore={hasMore}
-          indexLoading={indexLoading}
-          itemsLength={items.length}
-          localSearch={localSearch}
-          searchPending={searchPending}
-          sentinelRef={sentinelRef}
-        />
-      </div>
+      <ScrollArea className="max-h-[22.5rem]">
+        <div data-slot="archive-list-content" className="grid gap-2 pr-3">
+          <ArchivedSessionGroups
+            activeFilePath={activeFilePath}
+            expandedGroups={expandedGroups}
+            onSelect={onSelect}
+            toggleGroup={toggleGroup}
+            workspaceGroups={workspaceGroups}
+          />
+          <ArchivedSessionFeedback
+            errorMessage={errorMessage}
+            hasMore={hasMore}
+            indexLoading={indexLoading}
+            itemsLength={items.length}
+            localSearch={localSearch}
+            searchPending={searchPending}
+            sentinelRef={sentinelRef}
+          />
+        </div>
+      </ScrollArea>
       <ArchivedSessionCount total={total} visibleItems={items.length} />
     </div>
   );
