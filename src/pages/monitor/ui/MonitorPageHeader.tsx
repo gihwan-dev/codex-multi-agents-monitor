@@ -1,7 +1,11 @@
 import { MonitorTopBar } from "../../../widgets/monitor-chrome";
 import type { MonitorPageView } from "./monitorPageViewTypes";
 
-export function MonitorPageHeader(view: MonitorPageView) {
+interface MonitorPageHeaderProps extends MonitorPageView {
+  onNavigateToSkills?: () => void;
+}
+
+export function MonitorPageHeader({ onNavigateToSkills, ...view }: MonitorPageHeaderProps) {
   return (
     <MonitorTopBar
       dataset={view.chromeState?.dataset ?? null}
@@ -14,6 +18,7 @@ export function MonitorPageHeader(view: MonitorPageView) {
       }}
       onToggleFollowLive={view.actions.toggleFollowLive}
       onToggleShortcuts={view.toggleShortcuts}
+      onNavigateToSkills={onNavigateToSkills}
     />
   );
 }

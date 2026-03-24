@@ -1,0 +1,29 @@
+import { SkillActivityGrid } from "../../../widgets/skill-activity-grid";
+import type { useSkillActivityPageView } from "../model/useSkillActivityPageView";
+import { SkillActivityToolbar } from "./SkillActivityToolbar";
+import { SkillActivityTopBar } from "./SkillActivityTopBar";
+
+type SkillActivityPageView = ReturnType<typeof useSkillActivityPageView>;
+
+export function SkillActivityPageContent(view: SkillActivityPageView) {
+  return (
+    <div className="grid h-full grid-rows-[auto_auto_1fr] gap-4 overflow-hidden p-4">
+      <SkillActivityTopBar onNavigateToMonitor={view.onNavigateToMonitor} />
+      <SkillActivityToolbar
+        searchQuery={view.state.searchQuery}
+        statusFilter={view.state.statusFilter}
+        sortField={view.state.sortField}
+        totalCount={view.totalCount}
+        visibleCount={view.items.length}
+        onSearchChange={view.setSearch}
+        onStatusFilterChange={view.setStatusFilter}
+        onSortChange={view.setSort}
+      />
+      <SkillActivityGrid
+        items={view.items}
+        hasCatalog={view.hasCatalog}
+        onSkillClick={view.onSkillClick}
+      />
+    </div>
+  );
+}
