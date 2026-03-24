@@ -1,4 +1,4 @@
-import { type RefObject } from "react";
+import type { RefObject } from "react";
 import type {
   GraphSceneModel,
   GraphSelectionRevealTarget,
@@ -27,43 +27,34 @@ interface GraphViewportEffectsOptions {
 }
 
 export function useGraphViewportEffects(options: GraphViewportEffectsOptions) {
-  const {
-    availableCanvasHeight,
-    followLive,
-    followScrollTargetRef,
-    lastHandledNavigationRequestIdRef,
-    latestVisibleEventId,
-    layout,
-    liveMode,
-    renderedContentHeight,
-    runTraceId,
-    scheduleScrollTopUpdate,
-    scrollRef,
-    selectionNavigationRequestId,
-    selectionNavigationRunId,
-    selectionRevealTarget,
-    stickyTop,
-  } = options;
-  useGraphFollowLiveScroll({
-    followLive,
-    followScrollTargetRef,
-    latestVisibleEventId,
-    layout,
-    liveMode,
-    renderedContentHeight,
-    scrollRef,
-    stickyTop,
-  });
-  useGraphSelectionRevealNavigation({
-    availableCanvasHeight,
-    lastHandledNavigationRequestIdRef,
-    layout,
-    renderedContentHeight,
-    runTraceId,
-    scheduleScrollTopUpdate,
-    scrollRef,
-    selectionNavigationRunId,
-    selectionNavigationRequestId,
-    selectionRevealTarget,
-  });
+  useGraphFollowLiveScroll(readFollowLiveScrollOptions(options));
+  useGraphSelectionRevealNavigation(readSelectionRevealOptions(options));
+}
+
+function readFollowLiveScrollOptions(options: GraphViewportEffectsOptions) {
+  return {
+    followLive: options.followLive,
+    followScrollTargetRef: options.followScrollTargetRef,
+    latestVisibleEventId: options.latestVisibleEventId,
+    layout: options.layout,
+    liveMode: options.liveMode,
+    renderedContentHeight: options.renderedContentHeight,
+    scrollRef: options.scrollRef,
+    stickyTop: options.stickyTop,
+  };
+}
+
+function readSelectionRevealOptions(options: GraphViewportEffectsOptions) {
+  return {
+    availableCanvasHeight: options.availableCanvasHeight,
+    lastHandledNavigationRequestIdRef: options.lastHandledNavigationRequestIdRef,
+    layout: options.layout,
+    renderedContentHeight: options.renderedContentHeight,
+    runTraceId: options.runTraceId,
+    scheduleScrollTopUpdate: options.scheduleScrollTopUpdate,
+    scrollRef: options.scrollRef,
+    selectionNavigationRunId: options.selectionNavigationRunId,
+    selectionNavigationRequestId: options.selectionNavigationRequestId,
+    selectionRevealTarget: options.selectionRevealTarget,
+  };
 }

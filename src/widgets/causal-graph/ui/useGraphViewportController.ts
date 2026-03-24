@@ -5,8 +5,8 @@ import type {
   LiveMode,
 } from "../../../entities/run";
 import { createGraphScrollHandler } from "./graphScrollHandler";
-import type { buildGraphViewportSnapshot } from "./graphViewportSnapshot";
 import { useGraphViewportEffects } from "./graphViewportEffects";
+import type { buildGraphViewportSnapshot } from "./graphViewportSnapshot";
 import type { useGraphViewportState } from "./useGraphViewportState";
 
 interface UseGraphViewportControllerOptions {

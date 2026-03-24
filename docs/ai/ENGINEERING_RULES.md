@@ -73,7 +73,7 @@
 
 Bootstrap locks these commands as the definition-of-done contract. If a command is missing, the implementation slice must add the script or config before claiming completion.
 
-`pnpm lint` is a hard gate that aggregates `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, suppression audit, and repo smoke checks. Local runs require `lizard` to be installed via `python3 -m pip install lizard`.
+`pnpm lint` is a hard gate that aggregates `Biome`, `ESLint (metrics-only)`, `Lizard`, `jscpd`, suppression audit, and repo smoke checks. `scripts/lizard.mjs` prefers an existing `lizard` binary, then bootstraps a pinned local `.tmp-quality/lizard-venv` when Python 3 is available.
 
 Quantitative gate exemptions stay narrow and explicit: non-product files only (`tests/`, `scripts/`, stories, snapshots, generated output, sample data, temporary build output, Rust test support). Do not add product-code allowlists to force green.
 

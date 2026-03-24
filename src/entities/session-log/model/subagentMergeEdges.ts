@@ -1,76 +1,23 @@
 import type {
-  AgentLane,
   EdgeRecord,
   EventRecord,
 } from "../../run";
 import { readStringArray } from "../lib/toolPreview";
 import type {
-  IndexedSubagentMaps,
-  SessionLinkContext,
-} from "./subagentLinkTypes";
+  BuildMergeEdgeOptions,
+  BuildSubagentMergeEdgesArgs,
+  MergeCandidate,
+  MergeCandidateBuildOptions,
+  MergeSourceTimingOptions,
+  ResolveMergeSourceOptions,
+  SingleSessionIdOptions,
+  SpawnFallbackEventIdOptions,
+  UpsertMergeCandidateOptions,
+} from "./subagentMergeEdgeTypes";
 import {
   readParentFunctionArgs,
   resolveLinkedSessionId,
 } from "./subagentSessionResolver";
-
-interface BuildSubagentMergeEdgesArgs {
-  parentEvents: EventRecord[];
-  mainLane: AgentLane;
-  indexedSubagents: IndexedSubagentMaps;
-  eventsById: Map<string, EventRecord>;
-  latestSubagentEventBySessionId: Map<string, EventRecord>;
-  sessionLinks: SessionLinkContext;
-}
-
-interface MergeCandidate {
-  edge: EdgeRecord;
-  targetTs: number;
-}
-
-interface SingleSessionIdOptions {
-  event: EventRecord;
-  args: BuildSubagentMergeEdgesArgs;
-}
-
-interface BuildMergeEdgeOptions {
-  event: EventRecord;
-  sessionId: string;
-  args: BuildSubagentMergeEdgesArgs;
-  edgeId: string;
-  payloadSuffix: string;
-}
-
-interface ResolveMergeSourceOptions {
-  sessionId: string;
-  targetEventId: string;
-  args: BuildSubagentMergeEdgesArgs;
-}
-
-interface MergeSourceTimingOptions {
-  lastEventId: string;
-  targetEventId: string;
-  args: BuildSubagentMergeEdgesArgs;
-}
-
-interface SpawnFallbackEventIdOptions {
-  sessionId: string;
-  lastEventId: string;
-  args: BuildSubagentMergeEdgesArgs;
-}
-
-interface UpsertMergeCandidateOptions {
-  sessionId: string;
-  edge: EdgeRecord | null;
-  args: BuildSubagentMergeEdgesArgs;
-  mergeCandidates: Map<string, MergeCandidate>;
-}
-
-interface MergeCandidateBuildOptions {
-  event: EventRecord;
-  sessionId: string;
-  args: BuildSubagentMergeEdgesArgs;
-  mergeCandidates: Map<string, MergeCandidate>;
-}
 
 export function buildSubagentMergeEdges(
   args: BuildSubagentMergeEdgesArgs,

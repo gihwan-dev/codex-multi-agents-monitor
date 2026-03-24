@@ -1,13 +1,13 @@
 import { Badge } from "../primitives/badge";
 import {
-  buildStatusChipClassName,
-  buildStatusChipStyle,
-} from "./StatusChip.helpers";
-import {
   STATUS_COLORS,
   STATUS_LABELS,
   type StatusChipStatus,
 } from "./StatusChip.constants";
+import {
+  buildStatusChipClassName,
+  buildStatusChipStyle,
+} from "./StatusChip.helpers";
 import { StatusChipGlyph } from "./StatusChipGlyph";
 
 export type { StatusChipStatus } from "./StatusChip.constants";

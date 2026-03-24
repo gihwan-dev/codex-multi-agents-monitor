@@ -1,9 +1,9 @@
 import { cn } from "../../lib";
-import { getAnnouncementProps } from "./loadingStateAnnouncement";
 import { LoadingCopy } from "./LoadingStateCopy";
 import { LoadingProgress } from "./LoadingStateProgress";
 import { LoadingSkeletonRows } from "./LoadingStateSkeletonRows";
 import { LoadingTargetCard } from "./LoadingStateTargetCard";
+import { getAnnouncementProps } from "./loadingStateAnnouncement";
 
 export interface MonitorLoadingPresentation {
   title: string;

@@ -20,39 +20,28 @@ interface UseCausalGraphViewModelOptions {
   viewportHeightOverride?: number;
 }
 
-export function useCausalGraphViewModel({
-  followLive,
-  laneHeaderHeightOverride,
-  liveMode,
-  onPauseFollowLive,
-  runTraceId,
-  scene,
-  selectionNavigationRequestId,
-  selectionNavigationRunId,
-  selectionRevealTarget,
-  viewportHeightOverride,
-}: UseCausalGraphViewModelOptions) {
+export function useCausalGraphViewModel(options: UseCausalGraphViewModelOptions) {
   const viewportState = useGraphViewportState({
-    laneHeaderHeightOverride,
-    viewportHeightOverride,
+    laneHeaderHeightOverride: options.laneHeaderHeightOverride,
+    viewportHeightOverride: options.viewportHeightOverride,
   });
   const graphSnapshot = buildGraphViewportSnapshot({
     availableCanvasHeight: viewportState.availableCanvasHeight,
-    scene,
+    scene: options.scene,
     scrollTop: viewportState.scrollTop,
     viewportWidth: viewportState.viewportWidth,
   });
   const viewportController = useGraphViewportController({
-    followLive,
+    followLive: options.followLive,
     graphSnapshot,
-    laneHeaderHeightOverride,
-    liveMode,
-    onPauseFollowLive,
-    runTraceId,
-    scene,
-    selectionNavigationRunId,
-    selectionNavigationRequestId,
-    selectionRevealTarget,
+    laneHeaderHeightOverride: options.laneHeaderHeightOverride,
+    liveMode: options.liveMode,
+    onPauseFollowLive: options.onPauseFollowLive,
+    runTraceId: options.runTraceId,
+    scene: options.scene,
+    selectionNavigationRunId: options.selectionNavigationRunId,
+    selectionNavigationRequestId: options.selectionNavigationRequestId,
+    selectionRevealTarget: options.selectionRevealTarget,
     viewportState,
   });
 

@@ -1,62 +1,20 @@
-import type { AgentLane, EventRecord, RunStatus } from "../../run";
+import type { EventRecord } from "../../run";
 import { parseRequiredTimestamp } from "../lib/helpers";
+import type {
+  BuildLaneEventLoopOptions,
+  BuildLaneEventsArgs,
+  CreateEntryContextOptions,
+  ProcessEntryContextOptions,
+  ProcessedEntryContextOptions,
+  SafeEndTimestampOptions,
+} from "./eventBuilderInternalTypes";
+import { buildLaneEventLoop } from "./eventBuilderLoop";
 import { applyTokenCountToLastEvent } from "./eventBuilderRecord";
 import type { EntryContext } from "./eventBuilderTypes";
 import { buildMessageEvent, shouldSkipMessageEntry } from "./messageEntryEvents";
 import { buildSupplementalEntryEvent } from "./supplementalEntryEvents";
 import { buildFunctionCallEvent, buildFunctionCallOutputEvent } from "./toolEntryEvents";
 import type { SessionEntrySnapshot } from "./types";
-
-interface BuildLaneEventsArgs {
-  entries: SessionEntrySnapshot[];
-  lane: AgentLane;
-  userLane: AgentLane | null;
-  updatedAtTs: number;
-  status: RunStatus;
-  model: string;
-  displayTitle: string;
-  isSubagent?: boolean;
-}
-
-interface BuildLaneEventLoopOptions extends Omit<BuildLaneEventsArgs, "isSubagent"> {
-  isSubagent: boolean;
-  callIdToName: Map<string, string>;
-  lastValidEntryIndex: number;
-}
-
-interface CreateEntryContextOptions {
-  entries: SessionEntrySnapshot[];
-  lane: AgentLane;
-  updatedAtTs: number;
-  status: RunStatus;
-  model: string;
-  index: number;
-  lastValidEntryIndex: number;
-}
-
-interface ProcessEntryContextOptions extends BuildLaneEventLoopOptions {
-  index: number;
-  events: EventRecord[];
-  firstUserPromptSeen: boolean;
-}
-
-interface ProcessedEntryContextOptions {
-  entries: SessionEntrySnapshot[];
-  context: EntryContext;
-  callIdToName: Map<string, string>;
-  userLane: AgentLane | null;
-  displayTitle: string;
-  isSubagent: boolean;
-  events: EventRecord[];
-  firstUserPromptSeen: boolean;
-}
-
-interface SafeEndTimestampOptions {
-  entries: SessionEntrySnapshot[];
-  index: number;
-  updatedAtTs: number;
-  startTs: number;
-}
 
 function collectEntryMetadata(entries: SessionEntrySnapshot[]) {
   const callIdToName = new Map<string, string>();
@@ -75,45 +33,50 @@ function collectEntryMetadata(entries: SessionEntrySnapshot[]) {
 }
 
 function buildLaneEvents(options: BuildLaneEventLoopOptions): EventRecord[] {
-  const { entries } = options;
-  const events: EventRecord[] = [];
-  let firstUserPromptSeen = false;
-
-  for (let index = 0; index < entries.length; index++) {
-    firstUserPromptSeen = applyEntryResult(
-      events,
+  return buildLaneEventLoop({
+    entryCount: options.entries.length,
+    buildEntryResult: (index, events, firstUserPromptSeen) =>
       processEntryContext({
         ...options,
         index,
         events,
         firstUserPromptSeen,
       }),
-    );
-  }
-
-  return events;
+  });
 }
 
 function createEntryContext(options: CreateEntryContextOptions): EntryContext | null {
-  const { entries, lane, updatedAtTs, status, model, index, lastValidEntryIndex } =
-    options;
-  const entry = entries[index]!;
-  const startTs = parseRequiredTimestamp(entry.timestamp);
-  if (startTs === null) {
+  const timedEntry = readTimedEntryContext(options.entries, options.index);
+  return timedEntry ? buildEntryContext(options, timedEntry) : null;
+}
+
+function readTimedEntryContext(entries: SessionEntrySnapshot[], index: number) {
+  const entry = entries[index];
+  if (!entry) {
     return null;
   }
 
+  const startTs = parseRequiredTimestamp(entry.timestamp);
+  return startTs === null ? null : { entry, startTs };
+}
+
+function buildEntryContext(
+  options: CreateEntryContextOptions,
+  timedEntry: { entry: SessionEntrySnapshot; startTs: number },
+): EntryContext {
+  const { entries, lane, updatedAtTs, status, model, index, lastValidEntryIndex } =
+    options;
   const safeEndTs = resolveSafeEndTimestamp({
     entries,
     index,
     updatedAtTs,
-    startTs,
+    startTs: timedEntry.startTs,
   });
 
   return {
-    entry,
+    entry: timedEntry.entry,
     lane,
-    startTs,
+    startTs: timedEntry.startTs,
     safeEndTs,
     isLatest: index === lastValidEntryIndex,
     status,
@@ -237,14 +200,6 @@ function buildEventFromEntry(options: Omit<ProcessedEntryContextOptions, "events
         firstUserPromptSeen,
       };
   }
-}
-
-function applyEntryResult(
-  events: EventRecord[],
-  result: { event: EventRecord | null; firstUserPromptSeen: boolean },
-) {
-  if (result.event) events.push(result.event);
-  return result.firstUserPromptSeen;
 }
 
 export function buildLaneEventsFromEntries(options: BuildLaneEventsArgs): EventRecord[] {

@@ -1,7 +1,7 @@
 import { createContext, type PropsWithChildren, useContext } from "react";
-import {
-  type ResolvedTheme,
-  type ThemePreference,
+import type {
+  ResolvedTheme,
+  ThemePreference,
 } from "./dom";
 import {
   resolveThemePreference,

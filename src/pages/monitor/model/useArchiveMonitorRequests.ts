@@ -58,6 +58,33 @@ function requestArchiveIndexFromSource(args: RequestArchiveIndexFromSourceArgs) 
   });
 }
 
+function useRequestArchiveIndexEvent(args: Pick<UseArchiveMonitorRequestsOptions, "archiveIndexRequestIdRef" | "dispatch">) {
+  return useEffectEvent((offset: number, append: boolean, search?: string) =>
+    requestArchiveIndexFromSource({
+      archiveIndexRequestIdRef: args.archiveIndexRequestIdRef,
+      dispatch: args.dispatch,
+      offset,
+      append,
+      search,
+    }),
+  );
+}
+
+function useLoadArchiveIndexEvent(options: {
+  archivedIndexLength: number;
+  archivedSearch: string;
+  requestArchiveIndex: ReturnType<typeof useRequestArchiveIndexEvent>;
+}) {
+  return useEffectEvent((append: boolean) => {
+    const offset = append ? options.archivedIndexLength : 0;
+    options.requestArchiveIndex(
+      offset,
+      append,
+      toOptionalArchiveSearch(options.archivedSearch),
+    );
+  });
+}
+
 function selectArchivedSessionFromSource(args: {
   state: MonitorState;
   dispatch: Dispatch<MonitorAction>;
@@ -96,26 +123,19 @@ function selectArchivedSessionFromSource(args: {
 
 function useArchiveIndexRequester(options: UseArchiveMonitorRequestsOptions) {
   const { archiveIndexRequestIdRef, dispatch, state } = options;
+  const requestArchiveIndex = useRequestArchiveIndexEvent({
+    archiveIndexRequestIdRef,
+    dispatch,
+  });
+  const loadArchiveIndex = useLoadArchiveIndexEvent({
+    archivedIndexLength: state.archivedIndex.length,
+    archivedSearch: state.archivedSearch,
+    requestArchiveIndex,
+  });
+
   return {
-    requestArchiveIndex: useEffectEvent((offset: number, append: boolean, search?: string) =>
-      requestArchiveIndexFromSource({
-        archiveIndexRequestIdRef,
-        dispatch,
-        offset,
-        append,
-        search,
-      }),
-    ),
-    loadArchiveIndex: useEffectEvent((append: boolean) => {
-      const offset = append ? state.archivedIndex.length : 0;
-      requestArchiveIndexFromSource({
-        archiveIndexRequestIdRef,
-        dispatch,
-        offset,
-        append,
-        search: toOptionalArchiveSearch(state.archivedSearch),
-      });
-    }),
+    requestArchiveIndex,
+    loadArchiveIndex,
   };
 }
 

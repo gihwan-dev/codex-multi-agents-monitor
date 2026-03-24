@@ -2,10 +2,10 @@ import { type RefObject, useEffect } from "react";
 import type { GraphSelectionRevealTarget } from "../../../entities/run";
 import type { GraphLayoutSnapshot } from "../model/graphLayout";
 import {
-  clamp,
   prefersReducedMotion,
   resolveSelectionRevealRange,
 } from "./graphSelectionReveal";
+import { buildSelectionRevealResolution } from "./graphSelectionRevealResolution";
 
 interface UseGraphSelectionRevealNavigationOptions {
   availableCanvasHeight: number;
@@ -30,17 +30,6 @@ interface ResolveSelectionRevealNavigationOptions {
   selectionNavigationRunId: string | null;
   selectionNavigationRequestId: number;
   selectionRevealTarget: GraphSelectionRevealTarget | null;
-}
-
-interface SelectionRevealContext {
-  element: HTMLDivElement;
-  revealRange: ReturnType<typeof resolveSelectionRevealRange>;
-}
-
-interface BuildSelectionRevealResolutionOptions {
-  availableCanvasHeight: number;
-  renderedContentHeight: number;
-  revealContext: SelectionRevealContext;
 }
 
 export function useGraphSelectionRevealNavigation(
@@ -103,16 +92,6 @@ function applySelectionRevealResolution(
 
   scrollToRevealTarget(resolution.element, resolution.nextScrollTop);
   scheduleScrollTopUpdate(resolution.nextScrollTop);
-}
-
-function isRevealRangeVisible(
-  element: HTMLDivElement,
-  revealRange: { top: number; bottom: number },
-  availableCanvasHeight: number,
-) {
-  const visibleTop = element.scrollTop;
-  const visibleBottom = visibleTop + availableCanvasHeight;
-  return revealRange.top >= visibleTop && revealRange.bottom <= visibleBottom;
 }
 
 function resolveSelectionRevealNavigation(
@@ -195,43 +174,6 @@ function readSelectionRevealContext(
       options.layout,
     ),
   };
-}
-
-function buildSelectionRevealResolution(
-  options: BuildSelectionRevealResolutionOptions,
-):
-  | { kind: "handled" }
-  | { element: HTMLDivElement; kind: "scroll"; nextScrollTop: number } {
-  const { availableCanvasHeight, renderedContentHeight, revealContext } = options;
-  if (
-    revealContext.revealRange === null ||
-    isRevealRangeVisible(
-      revealContext.element,
-      revealContext.revealRange,
-      availableCanvasHeight,
-    )
-  ) {
-    return { kind: "handled" };
-  }
-
-  return {
-    element: revealContext.element,
-    kind: "scroll",
-    nextScrollTop: buildRevealScrollTop(
-      availableCanvasHeight,
-      renderedContentHeight,
-      revealContext.revealRange.anchorY,
-    ),
-  };
-}
-
-function buildRevealScrollTop(
-  availableCanvasHeight: number,
-  renderedContentHeight: number,
-  anchorY: number,
-) {
-  const maxScrollTop = Math.max(0, renderedContentHeight - availableCanvasHeight);
-  return clamp(anchorY - availableCanvasHeight / 2, 0, maxScrollTop);
 }
 
 function scrollToRevealTarget(element: HTMLDivElement, nextScrollTop: number) {

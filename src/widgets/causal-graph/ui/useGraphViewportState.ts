@@ -8,26 +8,23 @@ interface UseGraphViewportStateOptions {
   viewportHeightOverride?: number;
 }
 
-export function useGraphViewportState({
-  laneHeaderHeightOverride,
-  viewportHeightOverride,
-}: UseGraphViewportStateOptions) {
+export function useGraphViewportState(options: UseGraphViewportStateOptions) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const laneStripRef = useRef<HTMLDivElement>(null);
   const { laneHeaderHeight, viewportHeight, viewportWidth } =
     useGraphViewportMeasurements({
-      laneHeaderHeightOverride,
+      laneHeaderHeightOverride: options.laneHeaderHeightOverride,
       laneStripRef,
-      viewportHeightOverride,
+      viewportHeightOverride: options.viewportHeightOverride,
       viewportRef,
     });
   const { scrollTop, scheduleScrollTopUpdate } = useGraphScrollTopState();
   const availableCanvasHeight = resolveAvailableCanvasHeight({
     laneHeaderHeight,
-    laneHeaderHeightOverride,
+    laneHeaderHeightOverride: options.laneHeaderHeightOverride,
     viewportHeight,
-    viewportHeightOverride,
+    viewportHeightOverride: options.viewportHeightOverride,
   });
 
   return {
@@ -42,21 +39,13 @@ export function useGraphViewportState({
   };
 }
 
-function resolveAvailableCanvasHeight({
-  laneHeaderHeight,
-  laneHeaderHeightOverride,
-  viewportHeight,
-  viewportHeightOverride,
-}: {
+function resolveAvailableCanvasHeight(options: {
   laneHeaderHeight: number;
   laneHeaderHeightOverride?: number;
   viewportHeight: number;
   viewportHeightOverride?: number;
 }) {
-  const nextViewportHeight = viewportHeightOverride ?? viewportHeight;
-  const nextLaneHeaderHeight = laneHeaderHeightOverride ?? laneHeaderHeight;
-  return Math.max(
-    0,
-    nextViewportHeight - nextLaneHeaderHeight,
-  );
+  const nextViewportHeight = options.viewportHeightOverride ?? options.viewportHeight;
+  const nextLaneHeaderHeight = options.laneHeaderHeightOverride ?? options.laneHeaderHeight;
+  return Math.max(0, nextViewportHeight - nextLaneHeaderHeight);
 }

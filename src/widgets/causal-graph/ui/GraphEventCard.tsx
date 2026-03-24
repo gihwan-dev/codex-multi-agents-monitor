@@ -2,11 +2,11 @@ import type { GraphSceneModel, RunStatus } from "../../../entities/run";
 import { cn } from "../../../shared/lib";
 import { EventTypeGlyph } from "../../../shared/ui";
 import type { GraphLayoutSnapshot } from "../model/graphLayout";
-import { buildCardStyle } from "./graphCanvasStyles";
 import {
   GraphStatusDot,
   resolveEventCardClasses,
 } from "./GraphEventCardDecorations";
+import { buildCardStyle } from "./graphCanvasStyles";
 
 interface GraphEventCardProps {
   eventId: string;

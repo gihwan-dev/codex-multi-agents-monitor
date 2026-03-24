@@ -1,6 +1,6 @@
 import type { GraphSceneRow, SelectionState } from "../../../entities/run";
-import type { MonitorShortcutDispatch } from "./monitorKeyboardShortcutTypes";
 import { buildSelectionNavigationAction } from "./monitorKeyboardSelectionNavigation";
+import type { MonitorShortcutDispatch } from "./monitorKeyboardShortcutTypes";
 
 interface ResolveSelectionShortcutActionOptions {
   normalizedKey: string;

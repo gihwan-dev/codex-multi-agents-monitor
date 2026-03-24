@@ -1,13 +1,12 @@
 import type { AgentLane, EdgeRecord, EventRecord } from "../../run";
-import { buildTimedSubagentSnapshots } from "../lib/helpers";
 import {
   buildLatestSubagentEventBySessionId,
-  buildSessionLinkMaps,
-  indexSubagents,
+  type indexSubagents,
 } from "../lib/sessionLinks";
 import type { SessionLinkContext } from "./subagentLinkTypes";
 import { buildSubagentTimelineEntry } from "./subagentTimelineBuilders";
-import type { SessionLogSnapshot, TimedSubagentSnapshot } from "./types";
+import { createSubagentTimelineContext } from "./subagentTimelineContext";
+import type { SessionLogSnapshot } from "./types";
 
 interface BuildSubagentTimelineOptions {
   snapshot: SessionLogSnapshot;
@@ -27,45 +26,10 @@ interface BuildSubagentTimelineResult {
   sessionLinks: SessionLinkContext;
 }
 
-interface SubagentTimelineContext {
-  subagents: TimedSubagentSnapshot[];
-  indexedSubagents: ReturnType<typeof indexSubagents>;
-  subagentToSpawnSource: Map<string, string>;
-  waitAgentErrors: Map<string, string>;
-  sessionLinks: SessionLinkContext;
-}
-
 interface SubagentTimelineBuffers {
   lanes: AgentLane[];
   events: EventRecord[];
   edges: EdgeRecord[];
-}
-
-function createSubagentTimelineContext(
-  snapshot: SessionLogSnapshot,
-  parentEvents: EventRecord[],
-): SubagentTimelineContext {
-  const subagents = buildTimedSubagentSnapshots(snapshot.subagents ?? []);
-  const indexedSubagents = indexSubagents(subagents);
-  const sessionLinkMaps = buildSessionLinkMaps({
-    sessionId: snapshot.sessionId,
-    entries: snapshot.entries,
-    parentEvents,
-    subagents,
-    indexedSubagents,
-  });
-
-  return {
-    subagents,
-    indexedSubagents,
-    subagentToSpawnSource: sessionLinkMaps.subagentToSpawnSource,
-    waitAgentErrors: sessionLinkMaps.waitAgentErrors,
-    sessionLinks: {
-      callEventToOutputEvent: sessionLinkMaps.callEventToOutputEvent,
-      codexAgentIdToSessionId: sessionLinkMaps.codexAgentIdToSessionId,
-      parentFunctionArgsByEventId: sessionLinkMaps.parentFunctionArgsByEventId,
-    },
-  };
 }
 
 function createSubagentTimelineBuffers(): SubagentTimelineBuffers {
@@ -93,7 +57,7 @@ export function buildSubagentTimeline(
   options: BuildSubagentTimelineOptions,
 ): BuildSubagentTimelineResult {
   const { snapshot, mainLane, parentEvents, parentTimelineEvents, resolvedModel } = options;
-  const timelineContext = createSubagentTimelineContext(snapshot, parentEvents);
+  const timelineContext = createSubagentTimelineContext({ snapshot, parentEvents });
   const buffers = createSubagentTimelineBuffers();
 
   for (const subagent of timelineContext.subagents) {

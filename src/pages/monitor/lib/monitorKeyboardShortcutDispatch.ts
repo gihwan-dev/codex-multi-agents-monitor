@@ -1,7 +1,7 @@
 import { isEditableKeyboardTarget } from "./keyboardTarget";
 import {
-  resolveDatasetShortcutAction,
   type MonitorShortcutDispatch,
+  resolveDatasetShortcutAction,
 } from "./monitorKeyboardShortcutActions";
 
 interface MonitorKeyboardShortcutContext {
@@ -58,27 +58,34 @@ function dispatchShortcutAction(options: {
   options.dispatch(options.shortcutDispatch.action);
 }
 
+function readDatasetShortcutDispatch(
+  context: MonitorKeyboardShortcutContext,
+  normalizedKey: string,
+) {
+  return context.activeDataset
+    ? resolveDatasetShortcutAction({
+        normalizedKey,
+        activeDataset: context.activeDataset,
+        selection: context.selection,
+        graphRows: context.graphRows,
+      })
+    : null;
+}
+
 export function dispatchMonitorKeyboardShortcut(options: MonitorKeyboardShortcutOptions) {
-  const {
-    event,
-    context: { dispatch, activeDataset, selection, graphRows },
-  } = options;
+  const { event, context } = options;
   if (isEditableKeyboardTarget(event.target)) {
     return;
   }
 
   const normalizedKey = event.key.toLowerCase();
-  if (handleShortcutHelpToggle({ event, normalizedKey, dispatch })) {
-    return;
-  }
-
-  if (!activeDataset) {
+  if (handleShortcutHelpToggle({ event, normalizedKey, dispatch: context.dispatch })) {
     return;
   }
 
   dispatchShortcutAction({
     event,
-    dispatch,
-    shortcutDispatch: resolveDatasetShortcutAction({ normalizedKey, activeDataset, selection, graphRows }),
+    dispatch: context.dispatch,
+    shortcutDispatch: readDatasetShortcutDispatch(context, normalizedKey),
   });
 }

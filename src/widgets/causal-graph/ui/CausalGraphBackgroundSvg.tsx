@@ -3,13 +3,13 @@ import type {
   EdgeRouteLayout,
   GraphLayoutSnapshot,
 } from "../model/graphLayout";
+import { renderGraphRowGuide } from "./CausalGraphRowGuide";
 import {
   buildLaneIds,
   GraphContinuationGuides,
   GraphLaneLines,
   GraphRouteMarkerDefs,
 } from "./GraphBackgroundDecorations";
-import { renderGraphRowGuide } from "./CausalGraphRowGuide";
 import { GraphEdgeRoute } from "./GraphEdgeRoute";
 
 interface CausalGraphBackgroundSvgProps {

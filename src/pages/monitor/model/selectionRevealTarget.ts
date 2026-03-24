@@ -3,12 +3,12 @@ import type {
   GraphSelectionRevealTarget,
   SelectionState,
 } from "../../../entities/run";
-import type { MonitorState } from "./state";
 import {
   buildArtifactRevealTarget,
   buildEdgeRevealTarget,
   buildEventRevealTarget,
 } from "./selectionRevealTargetResolvers";
+import type { MonitorState } from "./state";
 
 function collectVisibleEventIds(graphScene: GraphSceneModel) {
   return new Set(

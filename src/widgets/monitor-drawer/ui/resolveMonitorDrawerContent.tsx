@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { type DrawerTab } from "../../../entities/run";
+import type { DrawerTab } from "../../../entities/run";
 import { ArtifactList } from "./MonitorDrawerArtifactList";
 import { ContextTab } from "./MonitorDrawerContextTab";
 import { ImportTab } from "./MonitorDrawerImportTab";

@@ -1,7 +1,7 @@
 import type { LiveConnection, RunDataset } from "../../../entities/run";
-import { MonitorTopBarActions } from "./MonitorTopBarActions";
 import { DatasetMonitorTopBarHeading } from "./DatasetMonitorTopBarHeading";
 import { EmptyMonitorTopBarHeading } from "./EmptyMonitorTopBarHeading";
+import { MonitorTopBarActions } from "./MonitorTopBarActions";
 import { MonitorTopBarShell } from "./MonitorTopBarShell";
 
 interface MonitorTopBarProps {

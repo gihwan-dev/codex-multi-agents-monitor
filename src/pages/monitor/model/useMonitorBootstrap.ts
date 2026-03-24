@@ -1,53 +1,16 @@
 import { type MutableRefObject, useEffect, useEffectEvent, useRef } from "react";
-import type { RunDataset } from "../../../entities/run";
 import { canInvokeTauriRuntime } from "../../../shared/api";
-import type { MonitorState } from "./state";
-
-interface UseMonitorBootstrapOptions {
-  activeDataset: RunDataset | null;
-  activeFollowLive: boolean;
-  activeSessionFilePath: string | null;
-  recentIndex: MonitorState["recentIndex"];
-  recentIndexReady: boolean;
-  recentSnapshotLoadingId: string | null;
-  refreshRecentSnapshot: (filePath: string) => void;
-  requestArchiveIndex: (offset: number, append: boolean, search?: string) => void;
-  requestRecentIndex: () => void;
-  requestRecentSnapshot: (filePath: string) => void;
-}
+import type {
+  InitialRecentSnapshotState,
+  MonitorBootstrapEffectOptions,
+  MonitorBootstrapRefs,
+  RecentRefreshState,
+  UseInitialRecentSnapshotOptions,
+  UseMonitorBootstrapOptions,
+  UseRecentLiveRefreshOptions,
+} from "./monitorBootstrapTypes";
 
 const LIVE_RECENT_POLL_INTERVAL_MS = 2_000;
-
-type InitialRecentSnapshotState = Pick<
-  UseMonitorBootstrapOptions,
-  "activeDataset" | "recentIndex" | "recentIndexReady" | "recentSnapshotLoadingId"
->;
-
-type RecentRefreshState = Pick<
-  UseMonitorBootstrapOptions,
-  "activeDataset" | "activeFollowLive" | "activeSessionFilePath" | "recentIndex"
->;
-
-interface UseInitialRecentSnapshotOptions extends InitialRecentSnapshotState {
-  requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
-}
-
-interface UseRecentLiveRefreshOptions extends RecentRefreshState {
-  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
-}
-
-interface MonitorBootstrapRefs {
-  requestRecentIndexRef: MutableRefObject<() => void>;
-  requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
-  requestArchiveIndexRef: MutableRefObject<
-    UseMonitorBootstrapOptions["requestArchiveIndex"]
-  >;
-  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
-}
-
-interface MonitorBootstrapEffectOptions
-  extends UseMonitorBootstrapOptions,
-    MonitorBootstrapRefs {}
 
 function useLatestRef<T>(value: T) {
   const ref = useRef(value);

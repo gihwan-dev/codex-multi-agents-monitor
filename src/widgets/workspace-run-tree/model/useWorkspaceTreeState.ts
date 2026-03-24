@@ -3,11 +3,10 @@ import type { RunDataset } from "../../../entities/run";
 import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { flattenTree } from "../lib/workspaceTreeUtils";
+import { useWorkspaceTreeSelectionController } from "./useWorkspaceTreeSelectionController";
 import {
-  useWorkspaceTreeActions,
   useWorkspaceTreeModel,
 } from "./workspaceTreeStateHelpers";
-import { useWorkspaceTreeSelectionState } from "./useWorkspaceTreeSelectionState";
 import { buildWorkspaceTreeStateResult } from "./workspaceTreeStateResult";
 
 interface UseWorkspaceTreeStateArgs {
@@ -57,7 +56,7 @@ function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
     workspaceIdentityOverrides,
   });
   const flatItems = useWorkspaceFlatItems(model.workspaces, treeIds.expandedWorkspaceIds);
-  const actions = useWorkspaceTreeSelectionActions({
+  const actions = useWorkspaceTreeSelectionController({
     activeRunId,
     activeTreeId: treeIds.activeTreeId,
     expandedWorkspaceIds: treeIds.expandedWorkspaceIds,
@@ -65,13 +64,6 @@ function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
     model,
     onSelectRecentRun,
     onSelectRun,
-    setActiveTreeId: treeIds.setActiveTreeId,
-    setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
-    setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
-  });
-  useWorkspaceTreeSelectionState({
-    activeRunId,
-    model,
     setActiveTreeId: treeIds.setActiveTreeId,
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
@@ -102,10 +94,4 @@ function useWorkspaceFlatItems(
     () => flattenTree(workspaces, expandedWorkspaceIds),
     [workspaces, expandedWorkspaceIds],
   );
-}
-
-function useWorkspaceTreeSelectionActions(
-  options: Parameters<typeof useWorkspaceTreeActions>[0],
-) {
-  return useWorkspaceTreeActions(options);
 }

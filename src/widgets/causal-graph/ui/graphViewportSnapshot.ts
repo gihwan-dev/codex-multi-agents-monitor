@@ -3,10 +3,9 @@ import {
   buildContinuationGuideYs,
   buildGraphLayoutSnapshot,
   computeRenderedContentHeight,
-  computeVisibleEdgeRoutes,
-  computeVisibleRowRange,
   TIME_GUTTER,
 } from "../model/graphLayout";
+import { buildGraphViewportVisibility } from "./graphViewportVisibility";
 
 interface BuildGraphViewportSnapshotOptions {
   availableCanvasHeight: number;
@@ -29,11 +28,11 @@ export function buildGraphViewportSnapshot(
     layout.contentHeight,
     renderedContentHeight,
   );
-  const visibleRange = computeVisibleRowRange({
-    rowPositions: layout.rowPositions,
+  const visibility = buildGraphViewportVisibility({
+    availableCanvasHeight,
+    layout,
+    scene,
     scrollTop,
-    viewportHeight: availableCanvasHeight,
-    overscanCount: 4,
   });
 
   return {
@@ -42,16 +41,6 @@ export function buildGraphViewportSnapshot(
     gridTemplateColumns: `${TIME_GUTTER}px repeat(${scene.lanes.length || 1}, ${layout.laneMetrics.laneWidth}px)`,
     layout,
     renderedContentHeight,
-    visibleEdgeRoutes: computeVisibleEdgeRoutes({
-      edgeRoutes: layout.edgeRoutes,
-      scrollTop,
-      viewportHeight: availableCanvasHeight,
-      overscanPx: 500,
-    }),
-    visibleRowPositions: layout.rowPositions.slice(
-      visibleRange.startIndex,
-      visibleRange.endIndex,
-    ),
-    visibleRows: scene.rows.slice(visibleRange.startIndex, visibleRange.endIndex),
+    ...visibility,
   };
 }

@@ -2,9 +2,13 @@ import { formatDuration, formatTimestamp } from "../../../shared/lib/format";
 import type {
   EventRecord,
   GraphSceneRow,
-  RunDataset,
-  SelectionState,
 } from "../model/types.js";
+import type {
+  BuildEventRowArgs,
+  BuildGapHiddenEventIdsArgs,
+  BuildGapRowArgs,
+  GraphSceneRowsArgs,
+} from "./graphSceneRowTypes.js";
 
 const GAP_THRESHOLD_MS = 30_000;
 
@@ -12,38 +16,6 @@ export interface GraphSceneRowsResult {
   rows: GraphSceneRow[];
   visibleRowsByEventId: Map<string, string>;
   latestVisibleEventId: string | null;
-}
-
-interface GraphSceneRowsArgs {
-  dataset: RunDataset;
-  visibleEvents: EventRecord[];
-  laneIds: Set<string>;
-  visibleLaneCount: number;
-  selection: SelectionState | null;
-  selectionPathEventIds: Set<string>;
-  hasMultiAgentTopology: boolean;
-}
-
-interface BuildGapHiddenEventIdsArgs {
-  events: EventRecord[];
-  visibleEventIdSet: Set<string>;
-  gapStart: number;
-  gapEnd: number;
-}
-
-interface BuildGapRowArgs {
-  dataset: RunDataset;
-  previousEvent: EventRecord | undefined;
-  event: EventRecord;
-  visibleEventIdSet: Set<string>;
-  idleLaneCount: number;
-}
-
-interface BuildEventRowArgs {
-  event: EventRecord;
-  selection: SelectionState | null;
-  selectionPathEventIds: Set<string>;
-  hasMultiAgentTopology: boolean;
 }
 
 interface AppendSceneEventRowsOptions {

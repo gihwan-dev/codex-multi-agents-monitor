@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { type DrawerTab, type RunDataset } from "../../../entities/run";
+import type { DrawerTab, RunDataset } from "../../../entities/run";
 import { formatCurrency, formatTokens } from "../../../shared/lib/format";
 import { NoDatasetPlaceholder } from "./MonitorDrawerTabViews";
 import { resolveMonitorDrawerContent } from "./resolveMonitorDrawerContent";

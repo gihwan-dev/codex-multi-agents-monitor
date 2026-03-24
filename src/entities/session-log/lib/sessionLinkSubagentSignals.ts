@@ -1,55 +1,19 @@
 import type { SessionLogSnapshot } from "../model/types";
 import type { CallMaps } from "./sessionLinkCallMaps";
 import type {
+  BuildSpawnAgentLinkOptions,
+  RegisterWaitAgentErrorOptions,
+  ResolvedSpawnAgentLink,
+  SpawnAgentCallContext,
+  SpawnAgentLink,
+  SpawnAgentLinkReadOptions,
+  SubagentSignalOptions,
+} from "./sessionLinkSubagentSignalTypes";
+import type {
   IndexedSubagents,
   SessionLinkMaps,
 } from "./sessionLinkTypes";
 import { parseJsonRecord, readAgentReference } from "./toolPreview";
-
-interface SubagentSignalOptions {
-  entry: SessionLogSnapshot["entries"][number];
-  indexedSubagents: IndexedSubagents;
-  callMaps: CallMaps;
-  sessionLinks: SessionLinkMaps;
-}
-
-interface SpawnAgentLink {
-  agentId: string | null | undefined;
-  sessionId: string;
-  spawnSourceEventId: string | null;
-}
-
-interface SpawnAgentLinkReadOptions {
-  entry: SessionLogSnapshot["entries"][number];
-  indexedSubagents: IndexedSubagents;
-  callMaps: CallMaps;
-}
-
-interface RegisterWaitAgentErrorOptions {
-  agentId: string;
-  agentStatus: unknown;
-  indexedSubagents: IndexedSubagents;
-  sessionLinks: SessionLinkMaps;
-}
-
-interface SpawnAgentCallContext {
-  functionCallId: string;
-  indexedSubagents: IndexedSubagents;
-  callMaps: CallMaps;
-}
-
-interface BuildSpawnAgentLinkOptions {
-  spawnCallContext: SpawnAgentCallContext;
-  matchedSubagent: IndexedSubagents["bySessionId"] extends Map<string, infer TValue>
-    ? TValue
-    : never;
-  agentId: string | null | undefined;
-}
-
-interface ResolvedSpawnAgentLink {
-  matchedSubagent: BuildSpawnAgentLinkOptions["matchedSubagent"];
-  agentId: string | null | undefined;
-}
 
 interface ResolveSpawnAgentLinkDetailsOptions {
   indexedSubagents: IndexedSubagents;

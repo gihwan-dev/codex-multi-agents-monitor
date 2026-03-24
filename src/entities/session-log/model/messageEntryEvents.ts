@@ -10,6 +10,13 @@ import {
 } from "./messageEventRecord";
 import type { SessionEntrySnapshot } from "./types";
 
+type NoteMessageEventOptions = {
+  context: MessageEventArgs["context"];
+  title: string;
+  preview: string;
+  firstUserPromptSeen: boolean;
+};
+
 export function shouldSkipMessageEntry(
   entry: SessionEntrySnapshot,
   isSubagent: boolean,
@@ -82,15 +89,51 @@ function buildSpecialMessageEvent(options: {
     preview,
     messageText,
   } = options;
-  if (shouldBuildSystemInstructionEvent(isSubagent, messageText)) {
-    return buildSystemInstructionEvent(context, preview, firstUserPromptSeen);
+  const noteTitle = readSpecialMessageNoteTitle({
+    isSubagent,
+    entry: context.entry,
+    messageText,
+  });
+  if (noteTitle) {
+    return buildNoteMessageEventResult({
+      context,
+      title: noteTitle,
+      preview,
+      firstUserPromptSeen,
+    });
   }
   if (shouldSkipAssistantMessage(previousEntry, context.entry)) {
     return { event: null, firstUserPromptSeen };
   }
-  return shouldBuildDelegatedPromptEvent(isSubagent, context.entry)
-    ? buildDelegatedPromptEvent(context, preview, firstUserPromptSeen)
+  return null;
+}
+
+function readSpecialMessageNoteTitle(options: {
+  isSubagent: boolean;
+  entry: SessionEntrySnapshot;
+  messageText: string;
+}) {
+  if (shouldBuildSystemInstructionEvent(options.isSubagent, options.messageText)) {
+    return "System instruction";
+  }
+
+  return shouldBuildDelegatedPromptEvent(options.isSubagent, options.entry)
+    ? "Delegated prompt"
     : null;
+}
+
+function buildNoteMessageEventResult(options: NoteMessageEventOptions): MessageEventResult {
+  const eventOptions = {
+    title: options.title,
+    eventType: "note" as const,
+    inputPreview: null,
+    outputPreview: options.preview,
+  };
+
+  return {
+    event: createMessageEventRecord(options.context, eventOptions),
+    firstUserPromptSeen: options.firstUserPromptSeen,
+  };
 }
 
 function shouldBuildSystemInstructionEvent(
@@ -98,22 +141,6 @@ function shouldBuildSystemInstructionEvent(
   messageText: string,
 ) {
   return isSubagent && isImplementPlanMessage(messageText.trim());
-}
-
-function buildSystemInstructionEvent(
-  context: MessageEventArgs["context"],
-  preview: string,
-  firstUserPromptSeen: boolean,
-): MessageEventResult {
-  return {
-    event: createMessageEventRecord(context, {
-      title: "System instruction",
-      eventType: "note",
-      inputPreview: null,
-      outputPreview: preview,
-    }),
-    firstUserPromptSeen,
-  };
 }
 
 function shouldSkipAssistantMessage(
@@ -132,22 +159,6 @@ function shouldBuildDelegatedPromptEvent(
   entry: SessionEntrySnapshot,
 ) {
   return isSubagent && entry.role === "user";
-}
-
-function buildDelegatedPromptEvent(
-  context: MessageEventArgs["context"],
-  preview: string,
-  firstUserPromptSeen: boolean,
-): MessageEventResult {
-  return {
-    event: createMessageEventRecord(context, {
-      title: "Delegated prompt",
-      eventType: "note",
-      inputPreview: null,
-      outputPreview: preview,
-    }),
-    firstUserPromptSeen,
-  };
 }
 
 function buildStandardMessageEvent(options: {

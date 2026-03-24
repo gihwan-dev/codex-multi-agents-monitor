@@ -5,6 +5,7 @@ import {
   resolveFixtureFrameSelection,
   shouldPauseFollowLiveForManualNavigation,
 } from "./datasetStateShared";
+import { resolveFollowLiveConnectionState } from "./followLiveConnectionState";
 import {
   activationSelectionForDataset,
   buildCollapsedGapIds,
@@ -118,18 +119,20 @@ export function setFollowLiveState(
   value: boolean,
 ): MonitorState {
   const dataset = findDatasetByTraceId(state.datasets, traceId);
+  const liveConnectionByRunId = resolveFollowLiveConnectionState({
+    state,
+    traceId,
+    value,
+    dataset,
+  });
+
   return {
     ...state,
     followLiveByRunId: {
       ...state.followLiveByRunId,
       [traceId]: value,
     },
-    liveConnectionByRunId: dataset
-      ? updateLiveConnectionMap({ liveConnectionByRunId: state.liveConnectionByRunId, traceId, dataset, followLive: value })
-      : {
-          ...state.liveConnectionByRunId,
-          [traceId]: value ? "live" : "paused",
-        },
+    liveConnectionByRunId,
   };
 }
 

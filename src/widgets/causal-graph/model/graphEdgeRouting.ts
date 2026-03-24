@@ -1,4 +1,16 @@
 import type { GraphSceneEdgeBundle } from "../../../entities/run";
+import {
+  type AddPortGroupEntryOptions,
+  type BuildEdgeRouteLayoutsOptions,
+  type BuildPendingRouteOptions,
+  type ComputeVisibleEdgeRoutesOptions,
+  type PendingRoute,
+  PORT_EDGE_PADDING,
+  PORT_SLOT_SPACING,
+  PORT_STUB_LENGTH,
+  ROUTE_NUDGE_SPACING,
+  type RouteOrientation,
+} from "./graphEdgeRoutingShared";
 import type { EdgeRouteLayout, EventLayout, PortSide, Rect, RoutePort } from "./graphLayoutTypes";
 import {
   buildRoutePort,
@@ -8,46 +20,6 @@ import {
   simplifyOrthogonalPoints,
   toSvgPath,
 } from "./graphRouteGeometry";
-
-const PORT_SLOT_SPACING = 12;
-const PORT_EDGE_PADDING = 12;
-const PORT_STUB_LENGTH = 16;
-const ROUTE_NUDGE_SPACING = 10;
-type RouteOrientation = "horizontal" | "vertical";
-interface PendingRoute {
-  bundle: GraphSceneEdgeBundle;
-  orientation: RouteOrientation;
-  source: EventLayout;
-  target: EventLayout;
-  sourceSide: PortSide;
-  targetSide: PortSide;
-  groupKey: string;
-}
-
-interface BuildEdgeRouteLayoutsOptions {
-  edgeBundles: GraphSceneEdgeBundle[];
-  eventById: Map<string, EventLayout>;
-}
-
-interface ComputeVisibleEdgeRoutesOptions {
-  edgeRoutes: EdgeRouteLayout[];
-  scrollTop: number;
-  viewportHeight: number;
-  overscanPx: number;
-}
-
-interface BuildPendingRouteOptions {
-  bundle: GraphSceneEdgeBundle;
-  source: EventLayout;
-  target: EventLayout;
-}
-
-interface AddPortGroupEntryOptions {
-  groups: Map<string, Array<{ routeKey: string; axis: number }>>;
-  groupKey: string;
-  routeKey: string;
-  axis: number;
-}
 export function choosePortPair(sourceRect: Rect, targetRect: Rect): {
   orientation: RouteOrientation; sourceSide: PortSide; targetSide: PortSide;
 } {

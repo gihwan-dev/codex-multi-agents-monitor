@@ -7,13 +7,13 @@ import type {
   WorkspaceTreeModel,
 } from "../model/types.js";
 import {
-  appendWorkspaceRun,
-  sortWorkspaceThreads,
-} from "./workspaceTreeCollections.js";
-import {
   buildReferenceTimestamp,
   buildWorkspaceRunRow,
 } from "./workspaceRunRow.js";
+import {
+  appendWorkspaceRun,
+  sortWorkspaceThreads,
+} from "./workspaceTreeCollections.js";
 
 function matchesQuickFilter(dataset: RunDataset, filter: WorkspaceQuickFilterKey) {
   if (filter === "all") {
