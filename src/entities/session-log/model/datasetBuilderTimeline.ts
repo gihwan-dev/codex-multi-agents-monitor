@@ -153,7 +153,7 @@ export function buildSessionLogDataset(options: BuildSessionLogDatasetOptions): 
     events: combinedTimeline.events,
     edges: combinedTimeline.edges,
     artifacts: [],
-    promptAssembly: buildPromptAssembly(snapshot, { includeRaw: false }),
+    promptAssembly: buildPromptAssembly(snapshot, { includeRaw: true }),
   };
 }
 

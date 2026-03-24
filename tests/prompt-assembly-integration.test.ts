@@ -90,7 +90,7 @@ describe("promptAssembly mapping", () => {
 
     expect(assembly.layers[3].layerType).toBe("user");
     expect(assembly.layers[0].preview).toBe("You are a helpful assistant...");
-    expect(assembly.layers.every((layer) => layer.rawContent === null)).toBe(true);
+    expect(assembly.layers.every((layer) => layer.rawContent !== null)).toBe(true);
   });
 
   it("returns undefined promptAssembly when no layers present", () => {
