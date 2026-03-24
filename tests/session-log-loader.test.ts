@@ -785,7 +785,34 @@ describe("sessionLogLoader", () => {
     expect(reasoning[0].title).toBe("Reasoning");
   });
 
-  it("context_compacted falls back to default message when no summary", () => {
+  it("context_compacted shows summary from text when available", () => {
+    const dataset = expectDataset(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "context_compacted",
+          role: null,
+          text: "15 messages compacted (5 user, 4 developer, 6 assistant) · tools: read_file",
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    const compacted = expectEvent(
+      dataset,
+      (event) => event.title === "Context compacted",
+      "expected compacted note event",
+    );
+    expect(compacted.eventType).toBe("note");
+    expect(compacted.outputPreview).toBe(
+      "15 messages compacted (5 user, 4 developer, 6 assistant) · tools: read_file",
+    );
+  });
+
+  it("context_compacted falls back to generic message when text is null", () => {
     const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
@@ -810,7 +837,7 @@ describe("sessionLogLoader", () => {
     expect(compacted.outputPreview).toBe("Context reduced to fit within the model window");
   });
 
-  it("context_compacted shows summary text when available", () => {
+  it("deduplicates consecutive context_compacted events with same timestamp", () => {
     const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
@@ -818,7 +845,16 @@ describe("sessionLogLoader", () => {
           timestamp: "2026-03-19T10:05:00.000Z",
           entryType: "context_compacted",
           role: null,
-          text: "Compressed 47 messages into a summary covering file edits and test runs",
+          text: "10 messages compacted (3 user, 2 developer, 5 assistant)",
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "context_compacted",
+          role: null,
+          text: null,
           functionName: null,
           functionCallId: null,
           functionArgumentsPreview: null,
@@ -826,14 +862,12 @@ describe("sessionLogLoader", () => {
       ]),
     );
 
-    const compacted = expectEvent(
-      dataset,
+    const compactedEvents = dataset.events.filter(
       (event) => event.title === "Context compacted",
-      "expected compacted note event with summary",
     );
-    expect(compacted.eventType).toBe("note");
-    expect(compacted.outputPreview).toBe(
-      "Compressed 47 messages into a summary covering file edits and test runs",
+    expect(compactedEvents).toHaveLength(1);
+    expect(compactedEvents[0].outputPreview).toBe(
+      "10 messages compacted (3 user, 2 developer, 5 assistant)",
     );
   });
 
