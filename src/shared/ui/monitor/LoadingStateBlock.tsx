@@ -16,11 +16,6 @@ interface LoadingStateBlockProps extends MonitorLoadingPresentation {
   skeletonRows?: number;
 }
 
-interface SkeletonRowProps {
-  title: string;
-  index: number;
-}
-
 interface LoadingTargetCardProps {
   compact?: boolean;
   targetEyebrow?: string;
@@ -58,8 +53,7 @@ function resolveSkeletonWidthClass(index: number) {
   return SKELETON_WIDTHS[index % SKELETON_WIDTHS.length] ?? SKELETON_WIDTHS[0];
 }
 
-function SkeletonRow({ title, index }: SkeletonRowProps) {
-  const rowNumber = index + 1;
+function SkeletonRow({ index }: { index: number }) {
   const widthClass = resolveSkeletonWidthClass(index);
   return (
     <div
@@ -73,7 +67,7 @@ function SkeletonRow({ title, index }: SkeletonRowProps) {
 
 function renderSkeletonRows(title: string, skeletonRows: number) {
   return Array.from({ length: skeletonRows }, (_, index) => (
-    <SkeletonRow key={buildSkeletonRowKey(title, index + 1)} title={title} index={index} />
+    <SkeletonRow key={buildSkeletonRowKey(title, index + 1)} index={index} />
   ));
 }
 

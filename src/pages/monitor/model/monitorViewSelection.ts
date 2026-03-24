@@ -1,7 +1,8 @@
-import type { GraphSceneModel, GraphSelectionRevealTarget, SelectionState } from "../../../entities/run";
 import { deriveArchiveIndexTitle } from "../../../entities/session-log";
 import type { MonitorState } from "./state";
 import { describeSelectionLoadState } from "./state/selectionLoadState";
+
+export { buildSelectionRevealTarget } from "./selectionRevealTarget";
 
 interface SelectionLoadingPresentation {
   title: string;
@@ -10,85 +11,6 @@ interface SelectionLoadingPresentation {
   targetEyebrow?: string;
   targetTitle?: string;
   targetMeta?: string;
-}
-
-interface BuildSelectionRevealTargetOptions {
-  activeDataset: MonitorState["datasets"][number] | null;
-  selection: SelectionState | null;
-  graphScene: GraphSceneModel;
-}
-
-function collectVisibleEventIds(graphScene: GraphSceneModel) {
-  return new Set(
-    graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : [])),
-  );
-}
-
-function resolveEventRevealTarget(
-  visibleEventIds: Set<string>,
-  selection: SelectionState,
-): GraphSelectionRevealTarget | null {
-  return visibleEventIds.has(selection.id)
-    ? { kind: "event", eventId: selection.id }
-    : null;
-}
-
-function resolveEdgeRevealTarget(
-  activeDataset: NonNullable<MonitorState["datasets"][number]>,
-  visibleEventIds: Set<string>,
-  selection: SelectionState,
-): GraphSelectionRevealTarget | null {
-  const edge = activeDataset.edges.find((item) => item.edgeId === selection.id);
-  if (
-    !edge ||
-    !visibleEventIds.has(edge.sourceEventId) ||
-    !visibleEventIds.has(edge.targetEventId)
-  ) {
-    return null;
-  }
-
-  return {
-    kind: "edge",
-    edgeId: edge.edgeId,
-    sourceEventId: edge.sourceEventId,
-    targetEventId: edge.targetEventId,
-  };
-}
-
-function resolveArtifactRevealTarget(
-  activeDataset: NonNullable<MonitorState["datasets"][number]>,
-  visibleEventIds: Set<string>,
-  selection: SelectionState,
-): GraphSelectionRevealTarget | null {
-  const artifact = activeDataset.artifacts.find((item) => item.artifactId === selection.id);
-  if (!artifact || !visibleEventIds.has(artifact.producerEventId)) {
-    return null;
-  }
-
-  return {
-    kind: "artifact",
-    artifactId: artifact.artifactId,
-    producerEventId: artifact.producerEventId,
-  };
-}
-
-export function buildSelectionRevealTarget(
-  options: BuildSelectionRevealTargetOptions,
-): GraphSelectionRevealTarget | null {
-  const { activeDataset, selection, graphScene } = options;
-  if (!activeDataset || !selection) {
-    return null;
-  }
-
-  const visibleEventIds = collectVisibleEventIds(graphScene);
-  switch (selection.kind) {
-    case "event":
-      return resolveEventRevealTarget(visibleEventIds, selection);
-    case "edge":
-      return resolveEdgeRevealTarget(activeDataset, visibleEventIds, selection);
-    case "artifact":
-      return resolveArtifactRevealTarget(activeDataset, visibleEventIds, selection);
-  }
 }
 
 export function resolveActiveSessionFilePath(state: MonitorState) {

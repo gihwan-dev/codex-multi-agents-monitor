@@ -75,7 +75,13 @@ function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
   });
-  return buildWorkspaceTreeStateResult(treeIds, model, search, setSearch, actions);
+  return buildWorkspaceTreeStateResult({
+    treeIds,
+    model,
+    search,
+    setSearch,
+    actions,
+  });
 }
 
 function useWorkspaceTreeModelState(options: {
@@ -109,20 +115,20 @@ function useWorkspaceTreeSelectionStateSync(
   useWorkspaceTreeSelectionSync(options);
 }
 
-function buildWorkspaceTreeStateResult(
-  treeIds: ReturnType<typeof useWorkspaceTreeIds>,
-  model: ReturnType<typeof useWorkspaceTreeModel>["model"],
-  search: string,
-  setSearch: ReturnType<typeof useWorkspaceTreeModel>["setSearch"],
-  actions: ReturnType<typeof useWorkspaceTreeActions>,
-) {
+function buildWorkspaceTreeStateResult(options: {
+  treeIds: ReturnType<typeof useWorkspaceTreeIds>;
+  model: ReturnType<typeof useWorkspaceTreeModel>["model"];
+  search: string;
+  setSearch: ReturnType<typeof useWorkspaceTreeModel>["setSearch"];
+  actions: ReturnType<typeof useWorkspaceTreeActions>;
+}) {
   return {
-    activeTreeId: treeIds.activeTreeId,
-    expandedWorkspaceIds: treeIds.expandedWorkspaceIds,
-    optimisticActiveRunId: treeIds.optimisticActiveRunId,
-    model,
-    search,
-    setSearch,
-    ...actions,
+    activeTreeId: options.treeIds.activeTreeId,
+    expandedWorkspaceIds: options.treeIds.expandedWorkspaceIds,
+    optimisticActiveRunId: options.treeIds.optimisticActiveRunId,
+    model: options.model,
+    search: options.search,
+    setSearch: options.setSearch,
+    ...options.actions,
   };
 }

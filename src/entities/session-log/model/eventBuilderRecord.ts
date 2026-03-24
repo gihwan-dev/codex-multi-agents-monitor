@@ -2,6 +2,29 @@ import type { EventRecord } from "../../run";
 import { buildEntryEventId } from "../lib/helpers";
 import type { EntryContext, EntryEventOptions } from "./eventBuilderTypes";
 
+const DEFAULT_EVENT_METRICS = {
+  tokensIn: 0,
+  tokensOut: 0,
+  reasoningTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  costUsd: 0,
+  finishReason: null,
+  rawInput: null,
+  rawOutput: null,
+} satisfies Pick<
+  EventRecord,
+  | "tokensIn"
+  | "tokensOut"
+  | "reasoningTokens"
+  | "cacheReadTokens"
+  | "cacheWriteTokens"
+  | "costUsd"
+  | "finishReason"
+  | "rawInput"
+  | "rawOutput"
+>;
+
 export function applyTokenCountToLastEvent(
   events: EventRecord[],
   rawTokenCount: string | null,
@@ -32,9 +55,8 @@ export function createEntryEvent({
   waitReason,
   errorMessage,
 }: EntryContext & EntryEventOptions): EventRecord {
-  const defaultMetrics = buildDefaultEventMetrics();
   return {
-    eventId: resolveEntryEventId(lane.threadId, entry, index),
+    eventId: buildEntryEventId(lane.threadId, entry, index),
     parentId: null,
     linkIds: [],
     laneId: lane.laneId,
@@ -56,41 +78,8 @@ export function createEntryEvent({
     provider: "OpenAI",
     model,
     toolName: toolName ?? null,
-    ...defaultMetrics,
+    ...DEFAULT_EVENT_METRICS,
   };
-}
-
-function resolveEntryEventId(
-  threadId: string,
-  entry: EntryContext["entry"],
-  index: number,
-) {
-  return buildEntryEventId(threadId, entry, index);
-}
-
-function buildDefaultEventMetrics() {
-  return {
-    tokensIn: 0,
-    tokensOut: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    costUsd: 0,
-    finishReason: null,
-    rawInput: null,
-    rawOutput: null,
-  } satisfies Pick<
-    EventRecord,
-    | "tokensIn"
-    | "tokensOut"
-    | "reasoningTokens"
-    | "cacheReadTokens"
-    | "cacheWriteTokens"
-    | "costUsd"
-    | "finishReason"
-    | "rawInput"
-    | "rawOutput"
-  >;
 }
 
 function normalizeTokenCounts(

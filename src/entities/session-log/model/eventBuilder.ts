@@ -58,20 +58,20 @@ interface SafeEndTimestampOptions {
   startTs: number;
 }
 
-export function buildLaneEventsFromEntries(options: BuildLaneEventsArgs): EventRecord[] {
-  const { callIdToName, lastValidEntryIndex } = collectEntryMetadata(options.entries);
-  return buildLaneEvents({
-    entries: options.entries,
-    lane: options.lane,
-    userLane: options.userLane,
-    updatedAtTs: options.updatedAtTs,
-    status: options.status,
-    model: options.model,
-    displayTitle: options.displayTitle,
-    isSubagent: options.isSubagent ?? false,
-    callIdToName,
-    lastValidEntryIndex,
-  });
+function collectEntryMetadata(entries: SessionEntrySnapshot[]) {
+  const callIdToName = new Map<string, string>();
+  let lastValidEntryIndex = -1;
+
+  for (const [index, entry] of entries.entries()) {
+    if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
+      callIdToName.set(entry.functionCallId, entry.functionName);
+    }
+    if (parseRequiredTimestamp(entry.timestamp) !== null) {
+      lastValidEntryIndex = index;
+    }
+  }
+
+  return { callIdToName, lastValidEntryIndex };
 }
 
 function buildLaneEvents(options: BuildLaneEventLoopOptions): EventRecord[] {
@@ -92,21 +92,6 @@ function buildLaneEvents(options: BuildLaneEventLoopOptions): EventRecord[] {
   }
 
   return events;
-}
-function collectEntryMetadata(entries: SessionEntrySnapshot[]) {
-  const callIdToName = new Map<string, string>();
-  let lastValidEntryIndex = -1;
-
-  for (const [index, entry] of entries.entries()) {
-    if (entry.entryType === "function_call" && entry.functionCallId && entry.functionName) {
-      callIdToName.set(entry.functionCallId, entry.functionName);
-    }
-    if (parseRequiredTimestamp(entry.timestamp) !== null) {
-      lastValidEntryIndex = index;
-    }
-  }
-
-  return { callIdToName, lastValidEntryIndex };
 }
 
 function createEntryContext(options: CreateEntryContextOptions): EntryContext | null {
@@ -260,4 +245,20 @@ function applyEntryResult(
 ) {
   if (result.event) events.push(result.event);
   return result.firstUserPromptSeen;
+}
+
+export function buildLaneEventsFromEntries(options: BuildLaneEventsArgs): EventRecord[] {
+  const { callIdToName, lastValidEntryIndex } = collectEntryMetadata(options.entries);
+  return buildLaneEvents({
+    entries: options.entries,
+    lane: options.lane,
+    userLane: options.userLane,
+    updatedAtTs: options.updatedAtTs,
+    status: options.status,
+    model: options.model,
+    displayTitle: options.displayTitle,
+    isSubagent: options.isSubagent ?? false,
+    callIdToName,
+    lastValidEntryIndex,
+  });
 }

@@ -41,36 +41,6 @@ interface SubagentTimelineBuffers {
   edges: EdgeRecord[];
 }
 
-export function buildSubagentTimeline(
-  options: BuildSubagentTimelineOptions,
-): BuildSubagentTimelineResult {
-  const { snapshot, mainLane, parentEvents, parentTimelineEvents, resolvedModel } = options;
-  const timelineContext = createSubagentTimelineContext(snapshot, parentEvents);
-  const buffers = createSubagentTimelineBuffers();
-
-  for (const subagent of timelineContext.subagents) {
-    appendSubagentTimelineEntry(
-      buffers,
-      buildSubagentTimelineEntry({
-        subagent,
-        mainLane,
-        parentTimelineEvents,
-        resolvedModel,
-        subagentToSpawnSource: timelineContext.subagentToSpawnSource,
-        waitAgentErrors: timelineContext.waitAgentErrors,
-      }),
-    );
-  }
-
-  return {
-    ...buffers,
-    indexedSubagents: timelineContext.indexedSubagents,
-    subagentToSpawnSource: timelineContext.subagentToSpawnSource,
-    latestSubagentEventBySessionId: buildLatestSubagentEventBySessionId(buffers.events),
-    sessionLinks: timelineContext.sessionLinks,
-  };
-}
-
 function createSubagentTimelineContext(
   snapshot: SessionLogSnapshot,
   parentEvents: EventRecord[],
@@ -117,4 +87,34 @@ function appendSubagentTimelineEntry(
   buffers.lanes.push(entry.lane);
   buffers.events.push(...entry.events);
   buffers.edges.push(entry.edge);
+}
+
+export function buildSubagentTimeline(
+  options: BuildSubagentTimelineOptions,
+): BuildSubagentTimelineResult {
+  const { snapshot, mainLane, parentEvents, parentTimelineEvents, resolvedModel } = options;
+  const timelineContext = createSubagentTimelineContext(snapshot, parentEvents);
+  const buffers = createSubagentTimelineBuffers();
+
+  for (const subagent of timelineContext.subagents) {
+    appendSubagentTimelineEntry(
+      buffers,
+      buildSubagentTimelineEntry({
+        subagent,
+        mainLane,
+        parentTimelineEvents,
+        resolvedModel,
+        subagentToSpawnSource: timelineContext.subagentToSpawnSource,
+        waitAgentErrors: timelineContext.waitAgentErrors,
+      }),
+    );
+  }
+
+  return {
+    ...buffers,
+    indexedSubagents: timelineContext.indexedSubagents,
+    subagentToSpawnSource: timelineContext.subagentToSpawnSource,
+    latestSubagentEventBySessionId: buildLatestSubagentEventBySessionId(buffers.events),
+    sessionLinks: timelineContext.sessionLinks,
+  };
 }

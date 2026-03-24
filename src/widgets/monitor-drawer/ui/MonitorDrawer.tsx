@@ -2,12 +2,12 @@ import type { DrawerTab, RunDataset } from "../../../entities/run";
 import { InspectorTabs, Panel } from "../../../shared/ui";
 import { Button } from "../../../shared/ui/primitives";
 import {
-  buildDrawerTabOptions,
   DrawerMetrics,
   MonitorDrawerContent,
   type MonitorDrawerState,
   NoDatasetPlaceholder,
 } from "./MonitorDrawerSections";
+import { buildDrawerTabOptions } from "./monitorDrawerTabOptions";
 
 interface MonitorDrawerProps {
   drawerState: MonitorDrawerState;

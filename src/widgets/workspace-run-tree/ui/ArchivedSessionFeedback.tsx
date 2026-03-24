@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 
 const archivedSessionFeedbackStates = [
   {
@@ -27,13 +27,14 @@ interface ArchivedSessionFeedbackStateArgs {
   searchPending: boolean;
 }
 
-function resolveArchivedSessionFeedbackState(args: {
-  errorMessage: string | null;
-  hasMore: boolean;
-  indexLoading: boolean;
-  itemsLength: number;
-  searchPending: boolean;
-}): ArchivedSessionFeedbackState {
+interface ArchivedSessionFeedbackProps extends ArchivedSessionFeedbackStateArgs {
+  localSearch: string;
+  sentinelRef: RefObject<HTMLDivElement | null>;
+}
+
+function resolveArchivedSessionFeedbackState(
+  args: ArchivedSessionFeedbackStateArgs,
+): ArchivedSessionFeedbackState {
   const matchedState = archivedSessionFeedbackStates.find(({ matches }) => matches(args));
 
   if (matchedState) {
@@ -41,6 +42,45 @@ function resolveArchivedSessionFeedbackState(args: {
   }
 
   return args.hasMore && !args.searchPending ? "sentinel" : "idle";
+}
+
+function renderLoadingFeedback() {
+  return (
+    <>
+      <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+      <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+      <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+    </>
+  );
+}
+
+function renderErrorFeedback(errorMessage: string | null) {
+  return (
+    <output className="text-sm text-[var(--color-failed)]" aria-live="polite">
+      {errorMessage}
+    </output>
+  );
+}
+
+function renderEmptyFeedback(localSearch: string) {
+  return (
+    <p className="px-2 py-2 text-[0.78rem] text-[var(--color-text-tertiary)]">
+      {localSearch ? "No matching archived sessions." : "No archived sessions found."}
+    </p>
+  );
+}
+
+function renderSentinelFeedback(
+  sentinelRef: RefObject<HTMLDivElement | null>,
+) {
+  return (
+    <div
+      ref={sentinelRef}
+      data-slot="archive-sentinel"
+      className="h-px"
+      aria-hidden="true"
+    />
+  );
 }
 
 export function ArchivedSessionFeedback({
@@ -51,15 +91,7 @@ export function ArchivedSessionFeedback({
   localSearch,
   searchPending,
   sentinelRef,
-}: {
-  errorMessage: string | null;
-  hasMore: boolean;
-  indexLoading: boolean;
-  itemsLength: number;
-  localSearch: string;
-  searchPending: boolean;
-  sentinelRef: RefObject<HTMLDivElement | null>;
-}) {
+}: ArchivedSessionFeedbackProps) {
   const state = resolveArchivedSessionFeedbackState({
     errorMessage,
     hasMore,
@@ -67,38 +99,12 @@ export function ArchivedSessionFeedback({
     itemsLength,
     searchPending,
   });
-
-  switch (state) {
-    case "loading":
-      return (
-        <>
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-        </>
-      );
-    case "error":
-      return (
-        <output className="text-sm text-[var(--color-failed)]" aria-live="polite">
-          {errorMessage}
-        </output>
-      );
-    case "empty":
-      return (
-        <p className="px-2 py-2 text-[0.78rem] text-[var(--color-text-tertiary)]">
-          {localSearch ? "No matching archived sessions." : "No archived sessions found."}
-        </p>
-      );
-    case "idle":
-      return null;
-    case "sentinel":
-      return (
-        <div
-          ref={sentinelRef}
-          data-slot="archive-sentinel"
-          className="h-px"
-          aria-hidden="true"
-        />
-      );
-  }
+  const renderers = {
+    empty: () => renderEmptyFeedback(localSearch),
+    error: () => renderErrorFeedback(errorMessage),
+    idle: () => null,
+    loading: renderLoadingFeedback,
+    sentinel: () => renderSentinelFeedback(sentinelRef),
+  } satisfies Record<ArchivedSessionFeedbackState, () => ReactNode>;
+  return renderers[state]();
 }

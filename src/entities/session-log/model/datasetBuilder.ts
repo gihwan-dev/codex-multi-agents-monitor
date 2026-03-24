@@ -1,4 +1,4 @@
-import type { AgentLane, EventRecord, RunDataset } from "../../run";
+import type { AgentLane, RunDataset } from "../../run";
 import { parseRequiredTimestamp } from "../lib/helpers";
 import { deriveSessionLogStatus, deriveSessionLogTitle } from "../lib/text";
 import {
@@ -10,23 +10,6 @@ import type { ParentRunContext, SnapshotTiming } from "./datasetBuilderTypes";
 import { buildLaneEventsFromEntries } from "./eventBuilder";
 import { buildRunEndEvent, buildRunStartEvent } from "./runBoundaryEvents";
 import type { SessionLogSnapshot } from "./types";
-
-interface BuildRunBoundaryContextOptions {
-  snapshot: SessionLogSnapshot;
-  timing: SnapshotTiming;
-  mainLane: AgentLane;
-  parentEvents: EventRecord[];
-  status: RunDataset["run"]["status"];
-  resolvedModel: string;
-}
-
-interface BuildParentRunEndEventOptions {
-  snapshot: SessionLogSnapshot;
-  timing: SnapshotTiming;
-  mainLane: AgentLane;
-  status: RunDataset["run"]["status"];
-  resolvedModel: string;
-}
 
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
   const timing = resolveSnapshotTiming(snapshot);
@@ -70,6 +53,22 @@ function buildParentRunContext(
     model: resolvedModel,
     displayTitle,
   });
+  const runStartEvent = buildRunStartEvent({
+    sessionId: snapshot.sessionId,
+    lane: mainLane,
+    startTs: timing.startTs,
+    firstEventTs: parentEvents[0]?.startTs ?? timing.updatedTs,
+    hasParentEvents: parentEvents.length > 0,
+    status,
+    model: resolvedModel,
+  });
+  const runEndEvent = buildRunEndEvent({
+    sessionId: snapshot.sessionId,
+    lane: mainLane,
+    updatedTs: timing.updatedTs,
+    status,
+    model: resolvedModel,
+  });
 
   return {
     displayTitle,
@@ -78,14 +77,8 @@ function buildParentRunContext(
     userLane,
     mainLane,
     parentEvents,
-    ...buildRunBoundaryContext({
-      snapshot,
-      timing,
-      mainLane,
-      parentEvents,
-      status,
-      resolvedModel,
-    }),
+    runStartEvent,
+    runEndEvent,
   };
 }
 
@@ -121,39 +114,4 @@ function buildParentLanes(
       laneStatus: status,
     } satisfies AgentLane,
   };
-}
-
-function buildRunBoundaryContext(options: BuildRunBoundaryContextOptions) {
-  const { mainLane, resolvedModel, snapshot, status, timing } = options;
-  const runStartEvent = buildParentRunStartEvent(options);
-  const runEndEvent = buildParentRunEndEvent({ snapshot, timing, mainLane, status, resolvedModel });
-
-  return {
-    runStartEvent,
-    runEndEvent,
-  };
-}
-
-function buildParentRunStartEvent(options: BuildRunBoundaryContextOptions) {
-  const { mainLane, parentEvents, resolvedModel, snapshot, status, timing } = options;
-  return buildRunStartEvent({
-    sessionId: snapshot.sessionId,
-    lane: mainLane,
-    startTs: timing.startTs,
-    firstEventTs: parentEvents[0]?.startTs ?? timing.updatedTs,
-    hasParentEvents: parentEvents.length > 0,
-    status,
-    model: resolvedModel,
-  });
-}
-
-function buildParentRunEndEvent(options: BuildParentRunEndEventOptions) {
-  const { snapshot, timing, mainLane, status, resolvedModel } = options;
-  return buildRunEndEvent({
-    sessionId: snapshot.sessionId,
-    lane: mainLane,
-    updatedTs: timing.updatedTs,
-    status,
-    model: resolvedModel,
-  });
 }
