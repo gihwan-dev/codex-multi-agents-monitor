@@ -15,6 +15,59 @@ import {
 import { buildSubagentTimeline } from "./subagentTimeline";
 import type { SessionLogSnapshot } from "./types";
 
+interface BuildSessionLogDatasetOptions {
+  snapshot: SessionLogSnapshot;
+  timing: SnapshotTiming;
+  parentRun: ParentRunContext;
+  combinedTimeline: CombinedTimeline;
+}
+
+function resolveSelectedByDefaultId(parentRun: ParentRunContext) {
+  return (
+    parentRun.parentEvents[parentRun.parentEvents.length - 1]?.eventId ??
+    parentRun.runStartEvent.eventId
+  );
+}
+
+function buildSessionLogProject(snapshot: SessionLogSnapshot) {
+  return {
+    projectId: snapshot.originPath,
+    name: snapshot.displayName,
+    repoPath: snapshot.originPath,
+    badge: "Desktop",
+  };
+}
+
+function buildSessionLogSession(snapshot: SessionLogSnapshot, timing: SnapshotTiming, title: string) {
+  return {
+    sessionId: snapshot.sessionId,
+    title,
+    owner: "User",
+    startedAt: timing.startTs,
+  };
+}
+
+function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
+  const { combinedTimeline, parentRun, snapshot, timing } = options;
+  const isRunning = parentRun.status === "running";
+  return {
+    traceId: snapshot.sessionId,
+    title: parentRun.displayTitle,
+    status: parentRun.status,
+    startTs: timing.startTs,
+    endTs: isRunning ? null : timing.updatedTs,
+    durationMs: Math.max(timing.updatedTs - timing.startTs, 1_000),
+    environment: "Desktop",
+    liveMode: !snapshot.isArchived && isRunning ? "live" : "imported",
+    summaryMetrics: buildEmptySummaryMetrics(),
+    finalArtifactId: null,
+    selectedByDefaultId: combinedTimeline.selectedByDefaultId,
+    rawIncluded: false,
+    noRawStorage: true,
+    isArchived: snapshot.isArchived ?? false,
+  } satisfies RunDataset["run"];
+}
+
 export function buildCombinedTimeline(
   snapshot: SessionLogSnapshot,
   parentRun: ParentRunContext,
@@ -41,9 +94,7 @@ export function buildCombinedTimeline(
     lanes,
     events,
     edges,
-    selectedByDefaultId:
-      parentRun.parentEvents[parentRun.parentEvents.length - 1]?.eventId ??
-      parentRun.runStartEvent.eventId,
+    selectedByDefaultId: resolveSelectedByDefaultId(parentRun),
   };
 }
 
@@ -92,44 +143,12 @@ function buildTimelineEdges(
   return edges;
 }
 
-export function buildSessionLogDataset(options: {
-  snapshot: SessionLogSnapshot;
-  timing: SnapshotTiming;
-  parentRun: ParentRunContext;
-  combinedTimeline: CombinedTimeline;
-}): RunDataset {
+export function buildSessionLogDataset(options: BuildSessionLogDatasetOptions): RunDataset {
   const { combinedTimeline, parentRun, snapshot, timing } = options;
-  const isRunning = parentRun.status === "running";
-
   return {
-    project: {
-      projectId: snapshot.originPath,
-      name: snapshot.displayName,
-      repoPath: snapshot.originPath,
-      badge: "Desktop",
-    },
-    session: {
-      sessionId: snapshot.sessionId,
-      title: parentRun.displayTitle,
-      owner: "User",
-      startedAt: timing.startTs,
-    },
-    run: {
-      traceId: snapshot.sessionId,
-      title: parentRun.displayTitle,
-      status: parentRun.status,
-      startTs: timing.startTs,
-      endTs: isRunning ? null : timing.updatedTs,
-      durationMs: Math.max(timing.updatedTs - timing.startTs, 1_000),
-      environment: "Desktop",
-      liveMode: !snapshot.isArchived && isRunning ? "live" : "imported",
-      summaryMetrics: buildEmptySummaryMetrics(),
-      finalArtifactId: null,
-      selectedByDefaultId: combinedTimeline.selectedByDefaultId,
-      rawIncluded: false,
-      noRawStorage: true,
-      isArchived: snapshot.isArchived ?? false,
-    },
+    project: buildSessionLogProject(snapshot),
+    session: buildSessionLogSession(snapshot, timing, parentRun.displayTitle),
+    run: buildSessionLogRun(options),
     lanes: combinedTimeline.lanes,
     events: combinedTimeline.events,
     edges: combinedTimeline.edges,

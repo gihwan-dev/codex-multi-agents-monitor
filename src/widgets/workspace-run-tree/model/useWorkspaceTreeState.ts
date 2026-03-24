@@ -34,19 +34,29 @@ function useWorkspaceTreeIds(activeRunId: string) {
   };
 }
 
-export function useWorkspaceTreeState({
-  datasets,
-  recentIndex,
-  recentIndexReady,
-  activeRunId,
-  onSelectRun,
-  onSelectRecentRun,
-  workspaceIdentityOverrides,
-}: UseWorkspaceTreeStateArgs) {
+export function useWorkspaceTreeState(options: UseWorkspaceTreeStateArgs) {
+  return useWorkspaceTreeStateFromOptions(options);
+}
+
+function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
+  const {
+    datasets,
+    recentIndex,
+    recentIndexReady,
+    activeRunId,
+    onSelectRun,
+    onSelectRecentRun,
+    workspaceIdentityOverrides,
+  } = options;
   const treeIds = useWorkspaceTreeIds(activeRunId);
-  const { search, setSearch, model } = useWorkspaceTreeModel({ datasets, recentIndex, recentIndexReady, workspaceIdentityOverrides });
-  const flatItems = useMemo(() => flattenTree(model.workspaces, treeIds.expandedWorkspaceIds), [model.workspaces, treeIds.expandedWorkspaceIds]);
-  const actions = useWorkspaceTreeActions({
+  const { search, setSearch, model } = useWorkspaceTreeModelState({
+    datasets,
+    recentIndex,
+    recentIndexReady,
+    workspaceIdentityOverrides,
+  });
+  const flatItems = useWorkspaceFlatItems(model.workspaces, treeIds.expandedWorkspaceIds);
+  const actions = useWorkspaceTreeSelectionActions({
     activeRunId,
     activeTreeId: treeIds.activeTreeId,
     expandedWorkspaceIds: treeIds.expandedWorkspaceIds,
@@ -58,13 +68,54 @@ export function useWorkspaceTreeState({
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
   });
-  useWorkspaceTreeSelectionSync({
+  useWorkspaceTreeSelectionStateSync({
     activeRunId,
     model,
     setActiveTreeId: treeIds.setActiveTreeId,
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
   });
+  return buildWorkspaceTreeStateResult(treeIds, model, search, setSearch, actions);
+}
+
+function useWorkspaceTreeModelState(options: {
+  datasets: RunDataset[];
+  recentIndex: RecentSessionIndexItem[];
+  recentIndexReady: boolean;
+  workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
+}) {
+  return useWorkspaceTreeModel(options);
+}
+
+function useWorkspaceFlatItems(
+  workspaces: ReturnType<typeof useWorkspaceTreeModel>["model"]["workspaces"],
+  expandedWorkspaceIds: string[],
+) {
+  return useMemo(
+    () => flattenTree(workspaces, expandedWorkspaceIds),
+    [workspaces, expandedWorkspaceIds],
+  );
+}
+
+function useWorkspaceTreeSelectionActions(
+  options: Parameters<typeof useWorkspaceTreeActions>[0],
+) {
+  return useWorkspaceTreeActions(options);
+}
+
+function useWorkspaceTreeSelectionStateSync(
+  options: Parameters<typeof useWorkspaceTreeSelectionSync>[0],
+) {
+  useWorkspaceTreeSelectionSync(options);
+}
+
+function buildWorkspaceTreeStateResult(
+  treeIds: ReturnType<typeof useWorkspaceTreeIds>,
+  model: ReturnType<typeof useWorkspaceTreeModel>["model"],
+  search: string,
+  setSearch: ReturnType<typeof useWorkspaceTreeModel>["setSearch"],
+  actions: ReturnType<typeof useWorkspaceTreeActions>,
+) {
   return {
     activeTreeId: treeIds.activeTreeId,
     expandedWorkspaceIds: treeIds.expandedWorkspaceIds,

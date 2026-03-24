@@ -98,7 +98,12 @@ export const monitorActionHandlers: MonitorActionHandlerMap = {
   "begin-archived-index-request": (state, action) =>
     beginArchivedIndexRequest(state, action.requestId),
   "resolve-archived-index-request": (state, action) =>
-    resolveArchivedIndexRequest(state, action.requestId, action.result, action.append),
+    resolveArchivedIndexRequest({
+      state,
+      requestId: action.requestId,
+      result: action.result,
+      append: action.append,
+    }),
   "finish-archived-index-request": (state, action) =>
     finishArchivedIndexRequest(state, action.requestId, action.error),
   "begin-archived-snapshot-request": (state, action) =>
@@ -106,12 +111,12 @@ export const monitorActionHandlers: MonitorActionHandlerMap = {
   "begin-archived-snapshot-build": (state, action) =>
     beginArchivedSnapshotBuild(state, action.requestId, action.filePath),
   "resolve-archived-snapshot-request": (state, action) =>
-    resolveArchivedSnapshotRequest(
+    resolveArchivedSnapshotRequest({
       state,
-      action.requestId,
-      action.filePath,
-      action.dataset,
-    ),
+      requestId: action.requestId,
+      filePath: action.filePath,
+      dataset: action.dataset,
+    }),
   "cancel-archived-snapshot-request": (state, action) =>
     cancelArchivedSnapshotRequest(state, action.requestId),
   "finish-archived-snapshot-request": (state, action) =>

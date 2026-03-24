@@ -6,14 +6,33 @@ import type {
 } from "./subagentLinkTypes";
 import { readLinkedSubagent as readResolvedSubagent } from "./subagentSessionResolver";
 
+interface ToolSessionLinks {
+  codexAgentIdToSessionId: SessionLinkContext["codexAgentIdToSessionId"];
+  parentFunctionArgsByEventId: SessionLinkContext["parentFunctionArgsByEventId"];
+}
+
 interface ToolMetadataOptions {
   event: EventRecord;
   parsedArgs: Record<string, unknown>;
   indexedSubagents: IndexedSubagentMaps;
-  sessionLinks: Pick<
-    SessionLinkContext,
-    "codexAgentIdToSessionId" | "parentFunctionArgsByEventId"
-  >;
+  sessionLinks: ToolSessionLinks;
+}
+
+interface EventToolMetadataOptions {
+  event: EventRecord;
+  indexedSubagents: IndexedSubagentMaps;
+  sessionLinks: ToolSessionLinks;
+}
+
+interface ResolveLinkedSubagentRecordOptions {
+  parsedArgs: Record<string, unknown>;
+  indexedSubagents: IndexedSubagentMaps;
+  sessionLinks: ToolSessionLinks;
+}
+
+interface ResolvedEventToolMetadata {
+  handler: (options: ToolMetadataOptions) => void;
+  parsedArgs: Record<string, unknown>;
 }
 
 const TOOL_METADATA_HANDLERS: Partial<
@@ -29,59 +48,51 @@ const TOOL_METADATA_HANDLERS: Partial<
 export function applySubagentToolMetadata(
   events: EventRecord[],
   indexedSubagents: IndexedSubagentMaps,
-  sessionLinks: Pick<
-    SessionLinkContext,
-    "codexAgentIdToSessionId" | "parentFunctionArgsByEventId"
-  >,
+  sessionLinks: ToolSessionLinks,
 ) {
   for (const event of events) {
-    applyEventToolMetadata(event, indexedSubagents, sessionLinks);
+    applyEventToolMetadata({ event, indexedSubagents, sessionLinks });
   }
 }
 
-function applyEventToolMetadata(
-  event: EventRecord,
-  indexedSubagents: IndexedSubagentMaps,
-  sessionLinks: Pick<
-    SessionLinkContext,
-    "codexAgentIdToSessionId" | "parentFunctionArgsByEventId"
-  >,
-) {
-  if (!event.toolName) {
+function applyEventToolMetadata(options: EventToolMetadataOptions) {
+  const resolved = resolveEventToolMetadata(options);
+  if (!resolved) {
     return;
+  }
+
+  resolved.handler({ ...options, parsedArgs: resolved.parsedArgs });
+}
+
+function resolveEventToolMetadata(
+  options: EventToolMetadataOptions,
+): ResolvedEventToolMetadata | null {
+  const { event, sessionLinks } = options;
+  if (!event.toolName) {
+    return null;
   }
 
   const parsedArgs = readToolArgs(event, sessionLinks);
   if (!parsedArgs) {
-    return;
+    return null;
   }
 
   const handler = TOOL_METADATA_HANDLERS[event.toolName];
-  if (handler) {
-    handler({ event, parsedArgs, indexedSubagents, sessionLinks });
-  }
+  return handler ? { handler, parsedArgs } : null;
 }
 
 function readToolArgs(
   event: EventRecord,
-  sessionLinks: Pick<SessionLinkContext, "parentFunctionArgsByEventId">,
+  sessionLinks: Pick<ToolSessionLinks, "parentFunctionArgsByEventId">,
 ) {
   const rawArgs =
     sessionLinks.parentFunctionArgsByEventId.get(event.eventId) ?? event.inputPreview;
   return parseJsonRecord(rawArgs);
 }
 
-function applyInteractiveToolMetadata({
-  event,
-  parsedArgs,
-  indexedSubagents,
-  sessionLinks,
-}: ToolMetadataOptions) {
-  const subagent = resolveLinkedSubagentRecord({
-    parsedArgs,
-    indexedSubagents,
-    sessionLinks,
-  });
+function applyInteractiveToolMetadata(options: ToolMetadataOptions) {
+  const { event } = options;
+  const subagent = resolveLinkedSubagentRecord(options);
   if (!subagent) {
     return;
   }
@@ -92,17 +103,9 @@ function applyInteractiveToolMetadata({
       : `Send to ${subagent.agentNickname}`;
 }
 
-function applyCloseAgentMetadata({
-  event,
-  parsedArgs,
-  indexedSubagents,
-  sessionLinks,
-}: ToolMetadataOptions) {
-  const subagent = resolveLinkedSubagentRecord({
-    parsedArgs,
-    indexedSubagents,
-    sessionLinks,
-  });
+function applyCloseAgentMetadata(options: ToolMetadataOptions) {
+  const { event } = options;
+  const subagent = resolveLinkedSubagentRecord(options);
   if (!subagent) {
     return;
   }
@@ -111,42 +114,24 @@ function applyCloseAgentMetadata({
   event.outputPreview = `${subagent.agentNickname} (${subagent.agentRole})`;
 }
 
-function applyWaitToolMetadata({
-  event,
-  parsedArgs,
-  indexedSubagents,
-  sessionLinks,
-}: ToolMetadataOptions) {
-  const nicknames = readWaitNicknames({
-    parsedArgs,
-    indexedSubagents,
-    sessionLinks,
-  });
+function applyWaitToolMetadata(options: ToolMetadataOptions) {
+  const { event } = options;
+  const nicknames = readWaitNicknames(options);
   if (nicknames.length > 0) {
     event.title = `Wait (${nicknames.join(", ")})`;
   }
 }
 
-function resolveLinkedSubagentRecord({
-  parsedArgs,
-  indexedSubagents,
-  sessionLinks,
-}: Pick<
-  ToolMetadataOptions,
-  "parsedArgs" | "indexedSubagents" | "sessionLinks"
->) {
+function resolveLinkedSubagentRecord(
+  options: ResolveLinkedSubagentRecordOptions,
+) {
+  const { parsedArgs, indexedSubagents, sessionLinks } = options;
   return readResolvedSubagent(parsedArgs, indexedSubagents, sessionLinks);
 }
 
-function readWaitNicknames({
-  parsedArgs,
-  indexedSubagents,
-  sessionLinks,
-}: Pick<
-  ToolMetadataOptions,
-  "parsedArgs" | "indexedSubagents" | "sessionLinks"
->) {
-  return readStringArray(parsedArgs, "ids")
+function readWaitNicknames(options: ResolveLinkedSubagentRecordOptions) {
+  const { parsedArgs, indexedSubagents, sessionLinks } = options;
+  return readStringArray({ record: parsedArgs, key: "ids" })
     .map(
       (agentId) =>
         sessionLinks.codexAgentIdToSessionId.get(agentId) ??

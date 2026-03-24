@@ -17,7 +17,11 @@ export function useMonitorRequestController({
   dispatch,
 }: UseMonitorRequestControllerOptions) {
   const requestRefs = useMonitorRequestRefs();
-  const cancelPendingSelectionLoad = useCancelPendingSelectionLoad(dispatch, requestRefs);
+  const cancelPendingSelectionLoad = useCancelPendingSelectionLoad({
+    dispatch,
+    recentSnapshotRequestIdRef: requestRefs.recentSnapshotRequestIdRef,
+    archiveSnapshotRequestIdRef: requestRefs.archiveSnapshotRequestIdRef,
+  });
   const recentRequests = useRecentMonitorRequests({
     state,
     dispatch,

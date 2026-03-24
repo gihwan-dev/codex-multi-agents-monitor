@@ -11,6 +11,23 @@ import { buildLaneEventsFromEntries } from "./eventBuilder";
 import { buildRunEndEvent, buildRunStartEvent } from "./runBoundaryEvents";
 import type { SessionLogSnapshot } from "./types";
 
+interface BuildRunBoundaryContextOptions {
+  snapshot: SessionLogSnapshot;
+  timing: SnapshotTiming;
+  mainLane: AgentLane;
+  parentEvents: EventRecord[];
+  status: RunDataset["run"]["status"];
+  resolvedModel: string;
+}
+
+interface BuildParentRunEndEventOptions {
+  snapshot: SessionLogSnapshot;
+  timing: SnapshotTiming;
+  mainLane: AgentLane;
+  status: RunDataset["run"]["status"];
+  resolvedModel: string;
+}
+
 export function buildDatasetFromSessionLog(snapshot: SessionLogSnapshot): RunDataset | null {
   const timing = resolveSnapshotTiming(snapshot);
   if (!timing) {
@@ -106,16 +123,20 @@ function buildParentLanes(
   };
 }
 
-function buildRunBoundaryContext(options: {
-  snapshot: SessionLogSnapshot;
-  timing: SnapshotTiming;
-  mainLane: AgentLane;
-  parentEvents: EventRecord[];
-  status: RunDataset["run"]["status"];
-  resolvedModel: string;
-}) {
+function buildRunBoundaryContext(options: BuildRunBoundaryContextOptions) {
+  const { mainLane, resolvedModel, snapshot, status, timing } = options;
+  const runStartEvent = buildParentRunStartEvent(options);
+  const runEndEvent = buildParentRunEndEvent({ snapshot, timing, mainLane, status, resolvedModel });
+
+  return {
+    runStartEvent,
+    runEndEvent,
+  };
+}
+
+function buildParentRunStartEvent(options: BuildRunBoundaryContextOptions) {
   const { mainLane, parentEvents, resolvedModel, snapshot, status, timing } = options;
-  const runStartEvent = buildRunStartEvent({
+  return buildRunStartEvent({
     sessionId: snapshot.sessionId,
     lane: mainLane,
     startTs: timing.startTs,
@@ -124,15 +145,15 @@ function buildRunBoundaryContext(options: {
     status,
     model: resolvedModel,
   });
+}
 
-  return {
-    runStartEvent,
-    runEndEvent: buildRunEndEvent({
-      sessionId: snapshot.sessionId,
-      lane: mainLane,
-      updatedTs: timing.updatedTs,
-      status,
-      model: resolvedModel,
-    }),
-  };
+function buildParentRunEndEvent(options: BuildParentRunEndEventOptions) {
+  const { snapshot, timing, mainLane, status, resolvedModel } = options;
+  return buildRunEndEvent({
+    sessionId: snapshot.sessionId,
+    lane: mainLane,
+    updatedTs: timing.updatedTs,
+    status,
+    model: resolvedModel,
+  });
 }

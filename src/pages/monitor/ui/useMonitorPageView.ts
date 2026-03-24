@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { type MutableRefObject, useEffect, useRef } from "react";
 import type { DrawerTab } from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import { useCompactViewport } from "../lib/useCompactViewport";
@@ -23,32 +23,21 @@ function useDrawerAndShortcutControls(
   const previousShortcutOpenRef = useRef(shortcutHelpOpen);
 
   useEffect(() => {
-    if (previousShortcutOpenRef.current && !shortcutHelpOpen) {
-      shortcutTriggerRef.current?.focus();
-    }
-
+    restoreShortcutFocus(
+      previousShortcutOpenRef.current,
+      shortcutHelpOpen,
+      shortcutTriggerRef.current,
+    );
     previousShortcutOpenRef.current = shortcutHelpOpen;
   }, [shortcutHelpOpen]);
 
-  const openDrawer = (tab: DrawerTab, target?: HTMLElement | null) => {
-    drawerTriggerRef.current = resolveFocusTarget(target);
-    actions.setDrawerTab(tab, true);
-  };
-
-  const closeDrawer = () => {
-    actions.setDrawerOpen(false);
-    window.requestAnimationFrame(() => {
-      drawerTriggerRef.current?.focus();
-    });
-  };
-
-  const toggleShortcuts = (target?: HTMLElement | null) => {
-    if (!shortcutHelpOpen) {
-      shortcutTriggerRef.current = resolveFocusTarget(target);
-    }
-
-    actions.toggleShortcuts();
-  };
+  const openDrawer = createOpenDrawer(actions, drawerTriggerRef);
+  const closeDrawer = createCloseDrawer(actions, drawerTriggerRef);
+  const toggleShortcuts = createToggleShortcuts(
+    actions,
+    shortcutHelpOpen,
+    shortcutTriggerRef,
+  );
 
   return {
     drawerTriggerRef,
@@ -56,6 +45,52 @@ function useDrawerAndShortcutControls(
     openDrawer,
     closeDrawer,
     toggleShortcuts,
+  };
+}
+
+function restoreShortcutFocus(
+  wasShortcutHelpOpen: boolean,
+  shortcutHelpOpen: boolean,
+  shortcutTarget: HTMLElement | null,
+) {
+  if (wasShortcutHelpOpen && !shortcutHelpOpen) {
+    shortcutTarget?.focus();
+  }
+}
+
+function createOpenDrawer(
+  actions: ReturnType<typeof useMonitorPageState>["actions"],
+  drawerTriggerRef: MutableRefObject<HTMLElement | null>,
+) {
+  return function openDrawer(tab: DrawerTab, target?: HTMLElement | null) {
+    drawerTriggerRef.current = resolveFocusTarget(target);
+    actions.setDrawerTab(tab, true);
+  };
+}
+
+function createCloseDrawer(
+  actions: ReturnType<typeof useMonitorPageState>["actions"],
+  drawerTriggerRef: MutableRefObject<HTMLElement | null>,
+) {
+  return function closeDrawer() {
+    actions.setDrawerOpen(false);
+    window.requestAnimationFrame(() => {
+      drawerTriggerRef.current?.focus();
+    });
+  };
+}
+
+function createToggleShortcuts(
+  actions: ReturnType<typeof useMonitorPageState>["actions"],
+  shortcutHelpOpen: boolean,
+  shortcutTriggerRef: MutableRefObject<HTMLElement | null>,
+) {
+  return function toggleShortcuts(target?: HTMLElement | null) {
+    if (!shortcutHelpOpen) {
+      shortcutTriggerRef.current = resolveFocusTarget(target);
+    }
+
+    actions.toggleShortcuts();
   };
 }
 

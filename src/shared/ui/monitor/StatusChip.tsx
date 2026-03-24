@@ -36,13 +36,14 @@ interface StatusChipProps {
   className?: string;
 }
 
-export function StatusChip({
-  status,
-  subtle = false,
-  className,
-}: StatusChipProps) {
-  const tone = STATUS_COLORS[status];
-  const shellStyle: CSSProperties = subtle
+interface StatusGlyphProps {
+  status: StatusChipStatus;
+  subtle: boolean;
+  tone: string;
+}
+
+function buildStatusChipStyle(tone: string, subtle: boolean): CSSProperties {
+  return subtle
     ? {
         color: "var(--color-text-secondary)",
       }
@@ -51,6 +52,33 @@ export function StatusChip({
         backgroundColor: `color-mix(in srgb, ${tone} 12%, var(--color-surface-raised))`,
         color: "var(--color-text)",
       };
+}
+
+function buildStatusChipClassName(subtle: boolean, className?: string) {
+  return cn(
+    "inline-flex w-fit items-center gap-2 rounded-full font-medium",
+    subtle
+      ? "border-transparent bg-transparent px-0 py-0 text-[0.72rem]"
+      : "border px-2.5 py-1 text-[0.8rem]",
+    className,
+  );
+}
+
+function StatusGlyph({ status, subtle, tone }: StatusGlyphProps) {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="monitor-status-glyph"
+      data-status={status}
+      className={cn("shrink-0 rounded-full", subtle ? "size-2" : "size-2.5")}
+      style={{ backgroundColor: tone }}
+    />
+  );
+}
+
+export function StatusChip({ status, subtle = false, className }: StatusChipProps) {
+  const tone = STATUS_COLORS[status];
+  const shellStyle = buildStatusChipStyle(tone, subtle);
 
   return (
     <Badge
@@ -58,25 +86,10 @@ export function StatusChip({
       data-status={status}
       data-subtle={subtle ? "true" : "false"}
       variant="outline"
-      className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full font-medium",
-        subtle
-          ? "border-transparent bg-transparent px-0 py-0 text-[0.72rem]"
-          : "border px-2.5 py-1 text-[0.8rem]",
-        className,
-      )}
+      className={buildStatusChipClassName(subtle, className)}
       style={shellStyle}
     >
-      <span
-        aria-hidden="true"
-        data-slot="monitor-status-glyph"
-        data-status={status}
-        className={cn(
-          "shrink-0 rounded-full",
-          subtle ? "size-2" : "size-2.5",
-        )}
-        style={{ backgroundColor: tone }}
-      />
+      <StatusGlyph status={status} subtle={subtle} tone={tone} />
       <span>{STATUS_LABELS[status]}</span>
     </Badge>
   );

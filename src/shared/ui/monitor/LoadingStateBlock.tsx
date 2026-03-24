@@ -16,26 +16,65 @@ interface LoadingStateBlockProps extends MonitorLoadingPresentation {
   skeletonRows?: number;
 }
 
+interface SkeletonRowProps {
+  title: string;
+  index: number;
+}
+
+interface LoadingTargetCardProps {
+  compact?: boolean;
+  targetEyebrow?: string;
+  targetMeta?: string;
+  targetTitle?: string;
+}
+
+interface LoadingCopyProps {
+  compact?: boolean;
+  message: string;
+  title: string;
+}
+
+interface LoadingProgressProps {
+  compact?: boolean;
+  phaseLabel: string;
+}
+
+interface LoadingSkeletonRowsProps {
+  skeletonRows?: number;
+  title: string;
+}
+
 const SKELETON_WIDTHS = [
   "w-[92%]",
   "w-[76%]",
   "w-[84%]",
 ];
 
+function buildSkeletonRowKey(title: string, rowNumber: number) {
+  return `${title}-row-${rowNumber}`;
+}
+
+function resolveSkeletonWidthClass(index: number) {
+  return SKELETON_WIDTHS[index % SKELETON_WIDTHS.length] ?? SKELETON_WIDTHS[0];
+}
+
+function SkeletonRow({ title, index }: SkeletonRowProps) {
+  const rowNumber = index + 1;
+  const widthClass = resolveSkeletonWidthClass(index);
+  return (
+    <div
+      className={cn(
+        "h-8 rounded-md bg-white/[0.04] motion-safe:animate-pulse motion-reduce:animate-none",
+        widthClass,
+      )}
+    />
+  );
+}
+
 function renderSkeletonRows(title: string, skeletonRows: number) {
-  return Array.from({ length: skeletonRows }, (_, index) => {
-    const rowNumber = index + 1;
-    const widthClass = SKELETON_WIDTHS[index % SKELETON_WIDTHS.length] ?? SKELETON_WIDTHS[0];
-    return (
-      <div
-        key={`${title}-row-${rowNumber}`}
-        className={cn(
-          "h-8 rounded-md bg-white/[0.04] motion-safe:animate-pulse motion-reduce:animate-none",
-          widthClass,
-        )}
-      />
-    );
-  });
+  return Array.from({ length: skeletonRows }, (_, index) => (
+    <SkeletonRow key={buildSkeletonRowKey(title, index + 1)} title={title} index={index} />
+  ));
 }
 
 function LoadingTargetCard({
@@ -43,10 +82,7 @@ function LoadingTargetCard({
   targetEyebrow,
   targetMeta,
   targetTitle,
-}: Pick<
-  LoadingStateBlockProps,
-  "compact" | "targetEyebrow" | "targetMeta" | "targetTitle"
->) {
+}: LoadingTargetCardProps) {
   if (!targetTitle) {
     return null;
   }
@@ -86,7 +122,7 @@ function LoadingCopy({
   compact,
   message,
   title,
-}: Pick<LoadingStateBlockProps, "compact" | "message" | "title">) {
+}: LoadingCopyProps) {
   return (
     <div className="grid gap-1">
       <h3
@@ -112,7 +148,7 @@ function LoadingCopy({
 function LoadingProgress({
   compact,
   phaseLabel,
-}: Pick<LoadingStateBlockProps, "compact" | "phaseLabel">) {
+}: LoadingProgressProps) {
   return (
     <div className="grid gap-2">
       <span
@@ -136,7 +172,7 @@ function LoadingProgress({
 function LoadingSkeletonRows({
   skeletonRows,
   title,
-}: Pick<LoadingStateBlockProps, "skeletonRows" | "title">) {
+}: LoadingSkeletonRowsProps) {
   const rowCount = skeletonRows ?? 0;
   if (rowCount <= 0) {
     return null;

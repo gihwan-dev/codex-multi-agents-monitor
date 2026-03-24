@@ -67,11 +67,12 @@ function resolveCurrentIndex(flatItems: FlatTreeItem[], activeTreeId: string) {
   return Math.max(flatItems.findIndex((item) => item.treeId === activeTreeId), 0);
 }
 
-function resolveVerticalTreeKeyAction(
-  key: string,
-  flatItems: FlatTreeItem[],
-  currentIndex: number,
-): WorkspaceTreeKeyAction | null {
+function resolveVerticalTreeKeyAction(options: {
+  key: string;
+  flatItems: FlatTreeItem[];
+  currentIndex: number;
+}): WorkspaceTreeKeyAction | null {
+  const { key, flatItems, currentIndex } = options;
   if (key !== "ArrowDown" && key !== "ArrowUp") {
     return null;
   }
@@ -177,7 +178,11 @@ export function resolveTreeKeyAction(
   }
 
   const currentIndex = resolveCurrentIndex(args.flatItems, args.activeTreeId);
-  const verticalAction = resolveVerticalTreeKeyAction(args.key, args.flatItems, currentIndex);
+  const verticalAction = resolveVerticalTreeKeyAction({
+    key: args.key,
+    flatItems: args.flatItems,
+    currentIndex,
+  });
   if (verticalAction) {
     return verticalAction;
   }

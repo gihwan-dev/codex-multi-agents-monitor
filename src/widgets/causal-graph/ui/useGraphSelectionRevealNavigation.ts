@@ -20,6 +20,29 @@ interface UseGraphSelectionRevealNavigationOptions {
   selectionRevealTarget: GraphSelectionRevealTarget | null;
 }
 
+interface ResolveSelectionRevealNavigationOptions {
+  availableCanvasHeight: number;
+  lastHandledNavigationRequestIdRef: RefObject<number>;
+  layout: GraphLayoutSnapshot;
+  renderedContentHeight: number;
+  runTraceId: string;
+  scrollRef: RefObject<HTMLDivElement | null>;
+  selectionNavigationRunId: string | null;
+  selectionNavigationRequestId: number;
+  selectionRevealTarget: GraphSelectionRevealTarget | null;
+}
+
+interface SelectionRevealContext {
+  element: HTMLDivElement;
+  revealRange: ReturnType<typeof resolveSelectionRevealRange>;
+}
+
+interface BuildSelectionRevealResolutionOptions {
+  availableCanvasHeight: number;
+  renderedContentHeight: number;
+  revealContext: SelectionRevealContext;
+}
+
 export function useGraphSelectionRevealNavigation(
   options: UseGraphSelectionRevealNavigationOptions,
 ) {
@@ -28,19 +51,30 @@ export function useGraphSelectionRevealNavigation(
   }, [options]);
 }
 
-function navigateSelectionReveal({
-  availableCanvasHeight,
-  lastHandledNavigationRequestIdRef,
-  layout,
-  renderedContentHeight,
-  runTraceId,
-  scheduleScrollTopUpdate,
-  scrollRef,
-  selectionNavigationRunId,
-  selectionNavigationRequestId,
-  selectionRevealTarget,
-}: UseGraphSelectionRevealNavigationOptions) {
-  const resolution = resolveSelectionRevealNavigation({
+function navigateSelectionReveal(options: UseGraphSelectionRevealNavigationOptions) {
+  const resolution = readSelectionRevealNavigation(options);
+  if (resolution.kind === "skip") {
+    return;
+  }
+
+  applySelectionRevealResolution(options, resolution);
+}
+
+function readSelectionRevealNavigation(
+  options: UseGraphSelectionRevealNavigationOptions,
+) {
+  const {
+    availableCanvasHeight,
+    lastHandledNavigationRequestIdRef,
+    layout,
+    renderedContentHeight,
+    runTraceId,
+    scrollRef,
+    selectionNavigationRunId,
+    selectionNavigationRequestId,
+    selectionRevealTarget,
+  } = options;
+  return resolveSelectionRevealNavigation({
     availableCanvasHeight,
     lastHandledNavigationRequestIdRef,
     layout,
@@ -51,10 +85,17 @@ function navigateSelectionReveal({
     selectionNavigationRequestId,
     selectionRevealTarget,
   });
-  if (resolution.kind === "skip") {
-    return;
-  }
+}
 
+function applySelectionRevealResolution(
+  options: UseGraphSelectionRevealNavigationOptions,
+  resolution: ReturnType<typeof resolveSelectionRevealNavigation>,
+) {
+  const {
+    lastHandledNavigationRequestIdRef,
+    scheduleScrollTopUpdate,
+    selectionNavigationRequestId,
+  } = options;
   lastHandledNavigationRequestIdRef.current = selectionNavigationRequestId;
   if (resolution.kind !== "scroll") {
     return;
@@ -74,20 +115,23 @@ function isRevealRangeVisible(
   return revealRange.top >= visibleTop && revealRange.bottom <= visibleBottom;
 }
 
-function resolveSelectionRevealNavigation({
-  availableCanvasHeight,
-  lastHandledNavigationRequestIdRef,
-  layout,
-  renderedContentHeight,
-  runTraceId,
-  scrollRef,
-  selectionNavigationRunId,
-  selectionNavigationRequestId,
-  selectionRevealTarget,
-}: Omit<UseGraphSelectionRevealNavigationOptions, "scheduleScrollTopUpdate">):
+function resolveSelectionRevealNavigation(
+  options: ResolveSelectionRevealNavigationOptions,
+):
   | { kind: "skip" }
   | { kind: "handled" }
   | { element: HTMLDivElement; kind: "scroll"; nextScrollTop: number } {
+  const {
+    availableCanvasHeight,
+    lastHandledNavigationRequestIdRef,
+    layout,
+    renderedContentHeight,
+    runTraceId,
+    scrollRef,
+    selectionNavigationRunId,
+    selectionNavigationRequestId,
+    selectionRevealTarget,
+  } = options;
   if (
     shouldSkipSelectionReveal({
       lastHandledNavigationRequestIdRef,
@@ -109,11 +153,11 @@ function resolveSelectionRevealNavigation({
     return { kind: "skip" };
   }
 
-  return buildSelectionRevealResolution(
+  return buildSelectionRevealResolution({
     availableCanvasHeight,
     renderedContentHeight,
     revealContext,
-  );
+  });
 }
 
 function shouldSkipSelectionReveal(
@@ -154,15 +198,11 @@ function readSelectionRevealContext(
 }
 
 function buildSelectionRevealResolution(
-  availableCanvasHeight: number,
-  renderedContentHeight: number,
-  revealContext: {
-    element: HTMLDivElement;
-    revealRange: ReturnType<typeof resolveSelectionRevealRange>;
-  },
+  options: BuildSelectionRevealResolutionOptions,
 ):
   | { kind: "handled" }
   | { element: HTMLDivElement; kind: "scroll"; nextScrollTop: number } {
+  const { availableCanvasHeight, renderedContentHeight, revealContext } = options;
   if (
     revealContext.revealRange === null ||
     isRevealRangeVisible(

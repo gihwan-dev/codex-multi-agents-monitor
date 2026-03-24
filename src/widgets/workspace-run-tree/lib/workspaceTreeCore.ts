@@ -23,21 +23,37 @@ export function flattenTree(
   workspaces: WorkspaceTreeItem[],
   expandedWorkspaceIds: string[],
 ): FlatTreeItem[] {
-  return workspaces.flatMap((workspace) => [
+  return workspaces.flatMap((workspace) =>
+    buildFlatWorkspaceTreeItems(workspace, expandedWorkspaceIds),
+  );
+}
+
+function buildFlatWorkspaceTreeItems(
+  workspace: WorkspaceTreeItem,
+  expandedWorkspaceIds: string[],
+) {
+  return [
     {
       treeId: buildWorkspaceTreeId(workspace.id),
       workspaceId: workspace.id,
       type: "workspace" as const,
     },
-    ...(expandedWorkspaceIds.includes(workspace.id)
-      ? getWorkspaceRuns(workspace).map((run) => ({
-          treeId: buildRunTreeId(workspace.id, run.id),
-          workspaceId: workspace.id,
-          type: "run" as const,
-          runId: run.id,
-        }))
-      : []),
-  ]);
+    ...buildFlatRunTreeItems(workspace, expandedWorkspaceIds),
+  ];
+}
+
+function buildFlatRunTreeItems(
+  workspace: WorkspaceTreeItem,
+  expandedWorkspaceIds: string[],
+) {
+  return expandedWorkspaceIds.includes(workspace.id)
+    ? getWorkspaceRuns(workspace).map((run) => ({
+        treeId: buildRunTreeId(workspace.id, run.id),
+        workspaceId: workspace.id,
+        type: "run" as const,
+        runId: run.id,
+      }))
+    : [];
 }
 
 export function areWorkspaceIdsEqual(left: string[], right: string[]) {

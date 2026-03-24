@@ -307,7 +307,12 @@ describe("multi-agent scene model", () => {
     const laneMetrics = computeLaneMetrics(1200, scene.lanes.length);
     const layoutResult = buildEventRects(scene, laneMetrics);
 
-    const range = computeVisibleRowRange(layoutResult.rowPositions, 0, 100_000, 3);
+    const range = computeVisibleRowRange({
+      rowPositions: layoutResult.rowPositions,
+      scrollTop: 0,
+      viewportHeight: 100_000,
+      overscanCount: 3,
+    });
 
     expect(range.startIndex).toBe(0);
     expect(range.endIndex).toBe(scene.rows.length);

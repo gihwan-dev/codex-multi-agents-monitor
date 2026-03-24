@@ -13,12 +13,51 @@ interface SubagentSignalOptions {
   sessionLinks: SessionLinkMaps;
 }
 
-export function collectSpawnAgentLinks({
-  entry,
-  indexedSubagents,
-  callMaps,
-  sessionLinks,
-}: SubagentSignalOptions) {
+interface SpawnAgentLink {
+  agentId: string | null | undefined;
+  sessionId: string;
+  spawnSourceEventId: string | null;
+}
+
+interface SpawnAgentLinkReadOptions {
+  entry: SessionLogSnapshot["entries"][number];
+  indexedSubagents: IndexedSubagents;
+  callMaps: CallMaps;
+}
+
+interface RegisterWaitAgentErrorOptions {
+  agentId: string;
+  agentStatus: unknown;
+  indexedSubagents: IndexedSubagents;
+  sessionLinks: SessionLinkMaps;
+}
+
+interface SpawnAgentCallContext {
+  functionCallId: string;
+  indexedSubagents: IndexedSubagents;
+  callMaps: CallMaps;
+}
+
+interface BuildSpawnAgentLinkOptions {
+  spawnCallContext: SpawnAgentCallContext;
+  matchedSubagent: IndexedSubagents["bySessionId"] extends Map<string, infer TValue>
+    ? TValue
+    : never;
+  agentId: string | null | undefined;
+}
+
+interface ResolvedSpawnAgentLink {
+  matchedSubagent: BuildSpawnAgentLinkOptions["matchedSubagent"];
+  agentId: string | null | undefined;
+}
+
+interface ResolveSpawnAgentLinkDetailsOptions {
+  indexedSubagents: IndexedSubagents;
+  parsedRecord: ReturnType<typeof parseJsonRecord>;
+}
+
+export function collectSpawnAgentLinks(options: SubagentSignalOptions) {
+  const { entry, indexedSubagents, callMaps, sessionLinks } = options;
   const spawnLink = readSpawnAgentLink({
     entry,
     indexedSubagents,
@@ -27,12 +66,8 @@ export function collectSpawnAgentLinks({
   applySpawnAgentLink(spawnLink, sessionLinks);
 }
 
-export function collectWaitAgentErrors({
-  entry,
-  indexedSubagents,
-  callMaps,
-  sessionLinks,
-}: SubagentSignalOptions) {
+export function collectWaitAgentErrors(options: SubagentSignalOptions) {
+  const { entry, indexedSubagents, callMaps, sessionLinks } = options;
   if (!isWaitToolOutput(entry, callMaps)) {
     return;
   }
@@ -57,37 +92,68 @@ function readWaitStatuses(entry: SessionLogSnapshot["entries"][number]) {
   return statuses && typeof statuses === "object" ? statuses : null;
 }
 
-function readSpawnAgentLink({
-  entry,
-  indexedSubagents,
-  callMaps,
-}: Pick<SubagentSignalOptions, "entry" | "indexedSubagents" | "callMaps">) {
-  if (callMaps.callIdToName.get(entry.functionCallId ?? "") !== "spawn_agent") {
+function readSpawnAgentLink(options: SpawnAgentLinkReadOptions) {
+  const { entry, indexedSubagents, callMaps } = options;
+  const spawnCallContext = resolveSpawnAgentCallContext({
+    functionCallId: entry.functionCallId ?? "",
+    indexedSubagents,
+    callMaps,
+  });
+  if (!spawnCallContext) {
     return null;
   }
 
-  const { agentId, nickname } = readAgentReference(parseJsonRecord(entry.text));
-  const matchedSubagent = resolveLinkedSubagent(indexedSubagents, agentId, nickname);
-  if (!matchedSubagent) {
+  const resolvedLink = resolveSpawnAgentLinkDetails(
+    {
+      indexedSubagents,
+      parsedRecord: parseJsonRecord(entry.text),
+    },
+  );
+  if (!resolvedLink) {
     return null;
   }
 
+  return buildSpawnAgentLink({
+    spawnCallContext,
+    matchedSubagent: resolvedLink.matchedSubagent,
+    agentId: resolvedLink.agentId,
+  });
+}
+
+function resolveSpawnAgentCallContext(
+  options: SpawnAgentCallContext,
+): SpawnAgentCallContext | null {
+  const { functionCallId, callMaps } = options;
+  if (!functionCallId) {
+    return null;
+  }
+
+  return callMaps.callIdToName.get(functionCallId) === "spawn_agent" ? options : null;
+}
+
+function buildSpawnAgentLink(options: BuildSpawnAgentLinkOptions): SpawnAgentLink {
+  const { spawnCallContext, matchedSubagent, agentId } = options;
   return {
     agentId,
     sessionId: matchedSubagent.sessionId,
     spawnSourceEventId:
-      callMaps.spawnCallIdToEventId.get(entry.functionCallId ?? "") ?? null,
+      spawnCallContext.callMaps.spawnCallIdToEventId.get(
+        spawnCallContext.functionCallId,
+      ) ?? null,
   };
 }
 
+function resolveSpawnAgentLinkDetails(
+  options: ResolveSpawnAgentLinkDetailsOptions,
+): ResolvedSpawnAgentLink | null {
+  const { indexedSubagents, parsedRecord } = options;
+  const { agentId, nickname } = readAgentReference(parsedRecord);
+  const matchedSubagent = resolveLinkedSubagent(indexedSubagents, agentId, nickname);
+  return matchedSubagent ? { matchedSubagent, agentId } : null;
+}
+
 function applySpawnAgentLink(
-  spawnLink:
-    | {
-        agentId: string | null | undefined;
-        sessionId: string;
-        spawnSourceEventId: string | null;
-      }
-    | null,
+  spawnLink: SpawnAgentLink | null,
   sessionLinks: SessionLinkMaps,
 ) {
   if (!spawnLink) {
@@ -105,17 +171,8 @@ function applySpawnAgentLink(
   }
 }
 
-function registerWaitAgentError({
-  agentId,
-  agentStatus,
-  indexedSubagents,
-  sessionLinks,
-}: {
-  agentId: string;
-  agentStatus: unknown;
-  indexedSubagents: IndexedSubagents;
-  sessionLinks: SessionLinkMaps;
-}) {
+function registerWaitAgentError(options: RegisterWaitAgentErrorOptions) {
+  const { agentId, agentStatus, indexedSubagents, sessionLinks } = options;
   const errored = readErroredStatus(agentStatus);
   if (!errored) {
     return;

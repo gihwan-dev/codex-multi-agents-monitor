@@ -21,35 +21,8 @@ interface CreateGraphScrollHandlerOptions {
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
-export function createGraphScrollHandler({
-  followLive,
-  followScrollTargetRef,
-  laneHeaderHeight,
-  laneHeaderHeightOverride,
-  laneStripRef,
-  latestVisibleEventId,
-  layout,
-  liveMode,
-  onPauseFollowLive,
-  renderedContentHeight,
-  scheduleScrollTopUpdate,
-  scrollRef,
-}: CreateGraphScrollHandlerOptions) {
-  return () =>
-    handleGraphScroll({
-      followLive,
-      followScrollTargetRef,
-      laneHeaderHeight,
-      laneHeaderHeightOverride,
-      laneStripRef,
-      latestVisibleEventId,
-      layout,
-      liveMode,
-      onPauseFollowLive,
-      renderedContentHeight,
-      scheduleScrollTopUpdate,
-      scrollRef,
-    });
+export function createGraphScrollHandler(options: CreateGraphScrollHandlerOptions) {
+  return () => handleGraphScroll(options);
 }
 
 function handleGraphScroll(options: CreateGraphScrollHandlerOptions) {
@@ -124,15 +97,24 @@ interface SyncFollowLiveStateOptions {
   stickyTop: number;
 }
 
-function syncFollowLiveState({
-  element,
-  followScrollTargetRef,
-  latestVisibleEventId,
-  layout,
-  onPauseFollowLive,
-  renderedContentHeight,
-  stickyTop,
-}: SyncFollowLiveStateOptions) {
+interface ResolveFollowViewportOptions {
+  element: HTMLDivElement;
+  latestVisibleEventId: string;
+  layout: GraphLayoutSnapshot;
+  renderedContentHeight: number;
+  stickyTop: number;
+}
+
+function syncFollowLiveState(options: SyncFollowLiveStateOptions) {
+  const {
+    element,
+    followScrollTargetRef,
+    latestVisibleEventId,
+    layout,
+    onPauseFollowLive,
+    renderedContentHeight,
+    stickyTop,
+  } = options;
   const followViewport = resolveFollowViewport({
     element,
     latestVisibleEventId,
@@ -147,19 +129,9 @@ function syncFollowLiveState({
   clearFollowLiveState(followScrollTargetRef, onPauseFollowLive);
 }
 
-function resolveFollowViewport({
-  element,
-  latestVisibleEventId,
-  layout,
-  renderedContentHeight,
-  stickyTop,
-}: {
-  element: HTMLDivElement;
-  latestVisibleEventId: string;
-  layout: GraphLayoutSnapshot;
-  renderedContentHeight: number;
-  stickyTop: number;
-}) {
+function resolveFollowViewport(options: ResolveFollowViewportOptions) {
+  const { element, latestVisibleEventId, layout, renderedContentHeight, stickyTop } =
+    options;
   const eventLayout = layout.eventById.get(latestVisibleEventId);
   if (!eventLayout || element.clientHeight <= 0 || element.clientWidth <= 0) {
     return null;

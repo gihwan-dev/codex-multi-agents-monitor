@@ -19,18 +19,20 @@ interface UseArchiveMonitorRequestsOptions {
   archiveSnapshotRequestIdRef: MonitorRequestRefs["archiveSnapshotRequestIdRef"];
 }
 
-function toOptionalArchiveSearch(value: string) {
-  const normalized = value.trim();
-  return normalized || undefined;
-}
-
-function requestArchiveIndexFromSource(args: {
+interface RequestArchiveIndexFromSourceArgs {
   archiveIndexRequestIdRef: MonitorRequestRefs["archiveIndexRequestIdRef"];
   dispatch: Dispatch<MonitorAction>;
   offset: number;
   append: boolean;
   search?: string;
-}) {
+}
+
+function toOptionalArchiveSearch(value: string) {
+  const normalized = value.trim();
+  return normalized || undefined;
+}
+
+function requestArchiveIndexFromSource(args: RequestArchiveIndexFromSourceArgs) {
   const requestId = args.archiveIndexRequestIdRef.current + 1;
   args.archiveIndexRequestIdRef.current = requestId;
   args.dispatch({ type: "begin-archived-index-request", requestId });
@@ -92,15 +94,10 @@ function selectArchivedSessionFromSource(args: {
     });
 }
 
-export function useArchiveMonitorRequests({
-  state,
-  dispatch,
-  cancelPendingSelectionLoad,
-  archiveIndexRequestIdRef,
-  archiveSnapshotRequestIdRef,
-}: UseArchiveMonitorRequestsOptions) {
-  const requestArchiveIndex = useEffectEvent(
-    (offset: number, append: boolean, search?: string) =>
+function useArchiveIndexRequester(options: UseArchiveMonitorRequestsOptions) {
+  const { archiveIndexRequestIdRef, dispatch, state } = options;
+  return {
+    requestArchiveIndex: useEffectEvent((offset: number, append: boolean, search?: string) =>
       requestArchiveIndexFromSource({
         archiveIndexRequestIdRef,
         dispatch,
@@ -108,19 +105,30 @@ export function useArchiveMonitorRequests({
         append,
         search,
       }),
-  );
+    ),
+    loadArchiveIndex: useEffectEvent((append: boolean) => {
+      const offset = append ? state.archivedIndex.length : 0;
+      requestArchiveIndexFromSource({
+        archiveIndexRequestIdRef,
+        dispatch,
+        offset,
+        append,
+        search: toOptionalArchiveSearch(state.archivedSearch),
+      });
+    }),
+  };
+}
 
-  const loadArchiveIndex = useEffectEvent((append: boolean) => {
-    const offset = append ? state.archivedIndex.length : 0;
-    requestArchiveIndex(offset, append, toOptionalArchiveSearch(state.archivedSearch));
-  });
-
-  const searchArchive = useEffectEvent((query: string) => {
+function useArchivedSessionSearch(dispatch: Dispatch<MonitorAction>, requestArchiveIndex: ReturnType<typeof useArchiveIndexRequester>["requestArchiveIndex"]) {
+  return useEffectEvent((query: string) => {
     dispatch({ type: "set-archived-search", value: query });
     requestArchiveIndex(0, false, toOptionalArchiveSearch(query));
   });
+}
 
-  const selectArchivedSession = useEffectEvent((filePath: string) =>
+function useArchivedSessionSelector(options: UseArchiveMonitorRequestsOptions) {
+  const { state, dispatch, cancelPendingSelectionLoad, archiveSnapshotRequestIdRef } = options;
+  return useEffectEvent((filePath: string) =>
     selectArchivedSessionFromSource({
       state,
       dispatch,
@@ -129,6 +137,13 @@ export function useArchiveMonitorRequests({
       filePath,
     }),
   );
+}
+
+export function useArchiveMonitorRequests(options: UseArchiveMonitorRequestsOptions) {
+  const { dispatch } = options;
+  const { requestArchiveIndex, loadArchiveIndex } = useArchiveIndexRequester(options);
+  const searchArchive = useArchivedSessionSearch(dispatch, requestArchiveIndex);
+  const selectArchivedSession = useArchivedSessionSelector(options);
 
   return {
     requestArchiveIndex,

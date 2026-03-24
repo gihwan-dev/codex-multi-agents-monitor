@@ -29,17 +29,13 @@ function createEmptyCallMaps(): CallMaps {
   };
 }
 
-function registerFunctionCall({
-  entry,
-  index,
-  sessionId,
-  callMaps,
-}: {
+function registerFunctionCall(options: {
   entry: SessionLogSnapshot["entries"][number];
   index: number;
   sessionId: string;
   callMaps: CallMaps;
 }) {
+  const { entry, index, sessionId, callMaps } = options;
   if (!isFunctionCallEntry(entry)) {
     return;
   }
@@ -48,12 +44,7 @@ function registerFunctionCall({
   registerFunctionCallEventId({ entry, index, sessionId, callMaps });
 }
 
-function registerFunctionCallEventId({
-  entry,
-  index,
-  sessionId,
-  callMaps,
-}: {
+function registerFunctionCallEventId(options: {
   entry: SessionLogSnapshot["entries"][number] & {
     functionCallId: string;
     functionName: string;
@@ -62,6 +53,7 @@ function registerFunctionCallEventId({
   sessionId: string;
   callMaps: CallMaps;
 }) {
+  const { entry, index, sessionId, callMaps } = options;
   if (parseRequiredTimestamp(entry.timestamp) === null) {
     return;
   }

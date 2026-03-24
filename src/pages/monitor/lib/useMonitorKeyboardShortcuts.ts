@@ -48,6 +48,56 @@ interface MonitorShortcutDispatch {
   preventDefault?: boolean;
 }
 
+interface ShortcutHelpToggleOptions {
+  event: MonitorKeyboardShortcutEvent;
+  normalizedKey: string;
+  dispatch: Dispatch<MonitorAction>;
+}
+
+interface SelectionNavigationOptions {
+  graphRows: GraphSceneRow[];
+  selection: SelectionState | null;
+  direction: "next" | "previous";
+}
+
+interface DatasetShortcutActionOptions {
+  normalizedKey: string;
+  activeDataset: RunDataset;
+  selection: SelectionState | null;
+  graphRows: GraphSceneRow[];
+}
+
+interface ToggleShortcutActionOptions {
+  normalizedKey: string;
+  activeDataset: RunDataset;
+}
+
+interface SelectionShortcutActionOptions {
+  normalizedKey: string;
+  selection: SelectionState | null;
+  graphRows: GraphSceneRow[];
+}
+
+interface DispatchShortcutActionOptions {
+  event: MonitorKeyboardShortcutEvent;
+  dispatch: Dispatch<MonitorAction>;
+  shortcutDispatch: MonitorShortcutDispatch | null;
+}
+
+interface MonitorKeyboardShortcutOptions {
+  event: MonitorKeyboardShortcutEvent;
+  context: MonitorKeyboardShortcutContext;
+}
+
+interface DatasetShortcutDispatchOptions {
+  event: MonitorKeyboardShortcutEvent;
+  normalizedKey: string;
+  context: Pick<
+    MonitorKeyboardShortcutContext,
+    "dispatch" | "activeDataset" | "selection" | "graphRows"
+  >;
+}
+
 function isShortcutHelpKey(
   event: MonitorKeyboardShortcutEvent,
   normalizedKey: string,
@@ -58,11 +108,8 @@ function isShortcutHelpKey(
   );
 }
 
-function handleShortcutHelpToggle(
-  event: MonitorKeyboardShortcutEvent,
-  normalizedKey: string,
-  dispatch: Dispatch<MonitorAction>,
-) {
+function handleShortcutHelpToggle(options: ShortcutHelpToggleOptions) {
+  const { event, normalizedKey, dispatch } = options;
   if (!isShortcutHelpKey(event, normalizedKey)) {
     return false;
   }
@@ -76,10 +123,9 @@ function handleShortcutHelpToggle(
 }
 
 function buildSelectionNavigationAction(
-  graphRows: GraphSceneRow[],
-  selection: SelectionState | null,
-  direction: "next" | "previous",
+  options: SelectionNavigationOptions,
 ): MonitorShortcutDispatch | null {
+  const { graphRows, selection, direction } = options;
   const nextSelectionId = getNextVisibleEventId(
     collectVisibleEventIds(graphRows),
     selection,
@@ -98,17 +144,10 @@ function buildSelectionNavigationAction(
   };
 }
 
-function resolveDatasetShortcutAction({
-  normalizedKey,
-  activeDataset,
-  selection,
-  graphRows,
-}: {
-  normalizedKey: string;
-  activeDataset: RunDataset;
-  selection: SelectionState | null;
-  graphRows: GraphSceneRow[];
-}): MonitorShortcutDispatch | null {
+function resolveToggleShortcutAction(
+  options: ToggleShortcutActionOptions,
+): MonitorShortcutDispatch | null {
+  const { normalizedKey, activeDataset } = options;
   switch (normalizedKey) {
     case "i":
       return { action: { type: "toggle-inspector" } };
@@ -121,20 +160,44 @@ function resolveDatasetShortcutAction({
       };
     case "c":
       return { action: { type: "set-drawer-tab", tab: "context", open: true } };
-    case "arrowdown":
-      return buildSelectionNavigationAction(graphRows, selection, "next");
-    case "arrowup":
-      return buildSelectionNavigationAction(graphRows, selection, "previous");
     default:
       return null;
   }
 }
 
-function dispatchShortcutAction(
-  event: MonitorKeyboardShortcutEvent,
-  dispatch: Dispatch<MonitorAction>,
-  shortcutDispatch: MonitorShortcutDispatch | null,
-) {
+function resolveSelectionShortcutAction(
+  options: SelectionShortcutActionOptions,
+): MonitorShortcutDispatch | null {
+  const { normalizedKey, selection, graphRows } = options;
+
+  switch (normalizedKey) {
+    case "arrowdown":
+      return buildSelectionNavigationAction({
+        graphRows,
+        selection,
+        direction: "next",
+      });
+    case "arrowup":
+      return buildSelectionNavigationAction({
+        graphRows,
+        selection,
+        direction: "previous",
+      });
+    default:
+      return null;
+  }
+}
+
+function resolveDatasetShortcutAction(
+  options: DatasetShortcutActionOptions,
+): MonitorShortcutDispatch | null {
+  return (
+    resolveToggleShortcutAction(options) ?? resolveSelectionShortcutAction(options)
+  );
+}
+
+function dispatchShortcutAction(options: DispatchShortcutActionOptions) {
+  const { event, dispatch, shortcutDispatch } = options;
   if (!shortcutDispatch) {
     return;
   }
@@ -146,52 +209,71 @@ function dispatchShortcutAction(
   dispatch(shortcutDispatch.action);
 }
 
-export function dispatchMonitorKeyboardShortcut(
-  event: MonitorKeyboardShortcutEvent,
-  {
-    dispatch,
-    activeDataset,
-    selection,
-    graphRows,
-  }: MonitorKeyboardShortcutContext,
+function dispatchDatasetShortcutAction(
+  options: DatasetShortcutDispatchOptions,
 ) {
-  if (isEditableKeyboardTarget(event.target)) {
-    return;
-  }
-
-  const normalizedKey = event.key.toLowerCase();
-  if (handleShortcutHelpToggle(event, normalizedKey, dispatch)) {
-    return;
-  }
-
+  const {
+    event,
+    normalizedKey,
+    context: { dispatch, activeDataset, selection, graphRows },
+  } = options;
   if (!activeDataset) {
     return;
   }
 
-  dispatchShortcutAction(
+  dispatchShortcutAction({
     event,
     dispatch,
-    resolveDatasetShortcutAction({
+    shortcutDispatch: resolveDatasetShortcutAction({
       normalizedKey,
       activeDataset,
       selection,
       graphRows,
     }),
-  );
+  });
 }
 
-export function useMonitorKeyboardShortcuts({
-  dispatch,
-  activeDataset,
-  selection,
-  graphRows,
-}: UseMonitorKeyboardShortcutsOptions) {
-  const keyHandler = useEffectEvent((event: KeyboardEvent) => {
-    dispatchMonitorKeyboardShortcut(event, {
+export function dispatchMonitorKeyboardShortcut(
+  options: MonitorKeyboardShortcutOptions,
+) {
+  const {
+    event,
+    context: { dispatch, activeDataset, selection, graphRows },
+  } = options;
+  if (isEditableKeyboardTarget(event.target)) {
+    return;
+  }
+
+  const normalizedKey = event.key.toLowerCase();
+  if (handleShortcutHelpToggle({ event, normalizedKey, dispatch })) {
+    return;
+  }
+
+  dispatchDatasetShortcutAction({
+    event,
+    normalizedKey,
+    context: {
       dispatch,
       activeDataset,
       selection,
       graphRows,
+      },
+    });
+}
+
+export function useMonitorKeyboardShortcuts(
+  options: UseMonitorKeyboardShortcutsOptions,
+) {
+  const { dispatch, activeDataset, selection, graphRows } = options;
+  const keyHandler = useEffectEvent((event: KeyboardEvent) => {
+    dispatchMonitorKeyboardShortcut({
+      event,
+      context: {
+        dispatch,
+        activeDataset,
+        selection,
+        graphRows,
+      },
     });
   });
 

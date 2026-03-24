@@ -17,31 +17,51 @@ interface UseGraphFollowLiveScrollOptions {
   stickyTop: number;
 }
 
+interface ResolveFollowLiveViewportOptions {
+  followLive: boolean;
+  latestVisibleEventId: GraphSceneModel["latestVisibleEventId"];
+  layout: GraphLayoutSnapshot;
+  liveMode: LiveMode;
+  renderedContentHeight: number;
+  scrollRef: RefObject<HTMLDivElement | null>;
+  stickyTop: number;
+}
+
+interface ReadFollowLiveContextOptions {
+  latestVisibleEventId: string;
+  layout: GraphLayoutSnapshot;
+  scrollRef: RefObject<HTMLDivElement | null>;
+}
+
 export function useGraphFollowLiveScroll(options: UseGraphFollowLiveScrollOptions) {
   useLayoutEffect(() => {
     syncFollowLiveViewport(options);
   }, [options]);
 }
 
-function syncFollowLiveViewport({
-  followLive,
-  followScrollTargetRef,
-  latestVisibleEventId,
-  layout,
-  liveMode,
-  renderedContentHeight,
-  scrollRef,
-  stickyTop,
-}: UseGraphFollowLiveScrollOptions) {
-  applyFollowLiveResolution(followScrollTargetRef, resolveFollowLiveViewport({
+function syncFollowLiveViewport(options: UseGraphFollowLiveScrollOptions) {
+  const {
     followLive,
+    followScrollTargetRef,
     latestVisibleEventId,
     layout,
     liveMode,
     renderedContentHeight,
     scrollRef,
     stickyTop,
-  }));
+  } = options;
+  applyFollowLiveResolution(
+    followScrollTargetRef,
+    resolveFollowLiveViewport({
+      followLive,
+      latestVisibleEventId,
+      layout,
+      liveMode,
+      renderedContentHeight,
+      scrollRef,
+      stickyTop,
+    }),
+  );
 }
 
 function hasReachedScrollTarget(
@@ -54,23 +74,9 @@ function hasReachedScrollTarget(
   );
 }
 
-function resolveFollowLiveViewport({
-  followLive,
-  latestVisibleEventId,
-  layout,
-  liveMode,
-  renderedContentHeight,
-  scrollRef,
-  stickyTop,
-}: {
-  followLive: boolean;
-  latestVisibleEventId: GraphSceneModel["latestVisibleEventId"];
-  layout: GraphLayoutSnapshot;
-  liveMode: LiveMode;
-  renderedContentHeight: number;
-  scrollRef: RefObject<HTMLDivElement | null>;
-  stickyTop: number;
-}):
+function resolveFollowLiveViewport(
+  options: ResolveFollowLiveViewportOptions,
+):
   | { kind: "clear" }
   | { kind: "skip" }
   | {
@@ -78,6 +84,15 @@ function resolveFollowLiveViewport({
       followTarget: { top: number; left: number };
       kind: "scroll";
     } {
+  const {
+    followLive,
+    latestVisibleEventId,
+    layout,
+    liveMode,
+    renderedContentHeight,
+    scrollRef,
+    stickyTop,
+  } = options;
   const activeEventId = readActiveFollowLiveEventId(
     followLive,
     latestVisibleEventId,
@@ -88,9 +103,11 @@ function resolveFollowLiveViewport({
   }
 
   const followLiveContext = readFollowLiveContext(
-    activeEventId,
-    layout,
-    scrollRef,
+    {
+      latestVisibleEventId: activeEventId,
+      layout,
+      scrollRef,
+    },
   );
   if (!followLiveContext) {
     return { kind: "skip" };
@@ -141,11 +158,8 @@ function readActiveFollowLiveEventId(
   return latestVisibleEventId;
 }
 
-function readFollowLiveContext(
-  latestVisibleEventId: string,
-  layout: GraphLayoutSnapshot,
-  scrollRef: RefObject<HTMLDivElement | null>,
-) {
+function readFollowLiveContext(options: ReadFollowLiveContextOptions) {
+  const { latestVisibleEventId, layout, scrollRef } = options;
   const element = scrollRef.current;
   const eventLayout = layout.eventById.get(latestVisibleEventId);
   if (!element || !eventLayout || isViewportUnavailable(element)) {

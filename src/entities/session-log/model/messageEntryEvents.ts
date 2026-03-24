@@ -66,14 +66,7 @@ function readMessagePreview(messageText: string | null) {
     : null;
 }
 
-function buildSpecialMessageEvent({
-  context,
-  previousEntry,
-  isSubagent,
-  firstUserPromptSeen,
-  preview,
-  messageText,
-}: {
+function buildSpecialMessageEvent(options: {
   context: MessageEventArgs["context"];
   previousEntry: MessageEventArgs["previousEntry"];
   isSubagent: boolean;
@@ -81,6 +74,14 @@ function buildSpecialMessageEvent({
   preview: string;
   messageText: string;
 }) {
+  const {
+    context,
+    previousEntry,
+    isSubagent,
+    firstUserPromptSeen,
+    preview,
+    messageText,
+  } = options;
   if (shouldBuildSystemInstructionEvent(isSubagent, messageText)) {
     return buildSystemInstructionEvent(context, preview, firstUserPromptSeen);
   }
@@ -149,19 +150,14 @@ function buildDelegatedPromptEvent(
   };
 }
 
-function buildStandardMessageEvent({
-  context,
-  userLane,
-  displayTitle,
-  preview,
-  firstUserPromptSeen,
-}: {
+function buildStandardMessageEvent(options: {
   context: MessageEventArgs["context"];
   userLane: MessageEventArgs["userLane"];
   displayTitle: string;
   preview: string;
   firstUserPromptSeen: boolean;
 }): MessageEventResult {
+  const { context, userLane, displayTitle, preview, firstUserPromptSeen } = options;
   const standardOptions = resolveStandardMessageEventOptions({
     context,
     userLane,

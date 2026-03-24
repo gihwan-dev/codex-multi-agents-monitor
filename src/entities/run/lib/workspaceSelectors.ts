@@ -70,14 +70,22 @@ function buildLastEventSummary(latestEvent: EventRecord | null) {
 
 function buildWorkspaceRunRow(dataset: RunDataset, referenceTimestamp: number): WorkspaceRunRow {
   const orderedEvents = sortEvents(dataset.events);
-  const lastActivityTs = latestActivityTimestamp(dataset);
+  return createWorkspaceRunRow({ dataset, orderedEvents, referenceTimestamp });
+}
 
+function createWorkspaceRunRow(options: {
+  dataset: RunDataset;
+  orderedEvents: EventRecord[];
+  referenceTimestamp: number;
+}): WorkspaceRunRow {
+  const { dataset, orderedEvents, referenceTimestamp } = options;
+  const lastActivityTs = latestActivityTimestamp(dataset);
+  const latestEvent = orderedEvents[orderedEvents.length - 1] ?? null;
   return {
     id: dataset.run.traceId,
     title: deriveWorkspaceRunTitle(dataset, orderedEvents),
     status: dataset.run.status,
-    lastEventSummary:
-      buildLastEventSummary(orderedEvents[orderedEvents.length - 1] ?? null),
+    lastEventSummary: buildLastEventSummary(latestEvent),
     lastActivityTs,
     relativeTime: formatRelativeTime(lastActivityTs, referenceTimestamp),
     liveMode: dataset.run.liveMode,
@@ -153,19 +161,20 @@ function buildReferenceTimestamp(datasets: RunDataset[]) {
     : 0;
 }
 
-export function buildWorkspaceTreeModel(
-  ...[
+interface BuildWorkspaceTreeModelOptions {
+  datasets: RunDataset[];
+  search: string;
+  quickFilter: WorkspaceQuickFilterKey;
+  workspaceIdentityOverrides?: WorkspaceIdentityOverrideMap;
+}
+
+export function buildWorkspaceTreeModel(options: BuildWorkspaceTreeModelOptions): WorkspaceTreeModel {
+  const {
     datasets,
     search,
     quickFilter,
     workspaceIdentityOverrides = {},
-  ]: [
-    RunDataset[],
-    string,
-    WorkspaceQuickFilterKey,
-    WorkspaceIdentityOverrideMap?,
-  ]
-): WorkspaceTreeModel {
+  } = options;
   const referenceTimestamp = buildReferenceTimestamp(datasets);
   const normalizedSearch = search.trim().toLowerCase();
   const workspaceMap = new Map<string, WorkspaceTreeItem>();

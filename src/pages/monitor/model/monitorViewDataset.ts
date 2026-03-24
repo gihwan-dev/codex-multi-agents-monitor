@@ -61,11 +61,11 @@ export function buildDatasetDerivedState(
     activeFollowLive: resolveActiveFollowLive(activeDataset, state),
     activeLiveConnection: resolveActiveLiveConnection(activeDataset, state),
     rawTabAvailable: activeDataset ? hasRawPayload(activeDataset) : false,
-    selectionRevealTarget: buildSelectionRevealTarget(
+    selectionRevealTarget: buildSelectionRevealTarget({
       activeDataset,
-      state.selection,
+      selection: state.selection,
       graphScene,
-    ),
+    }),
     inspectorSummary: activeDataset
       ? buildInspectorCausalSummary(
           activeDataset,

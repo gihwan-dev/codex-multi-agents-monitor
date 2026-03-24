@@ -23,17 +23,18 @@ import {
   resolveTreeKeyAction,
 } from "../lib/workspaceTreeUtils";
 
-export function useWorkspaceTreeModel({
-  datasets,
-  recentIndex,
-  recentIndexReady,
-  workspaceIdentityOverrides,
-}: {
+export function useWorkspaceTreeModel(options: {
   datasets: RunDataset[];
   recentIndex: RecentSessionIndexItem[];
   recentIndexReady: boolean;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }) {
+  const {
+    datasets,
+    recentIndex,
+    recentIndexReady,
+    workspaceIdentityOverrides,
+  } = options;
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const model = useMemo(
@@ -56,19 +57,20 @@ export function useWorkspaceTreeModel({
   return { search, setSearch, model };
 }
 
-export function useWorkspaceTreeSelectionSync({
-  activeRunId,
-  model,
-  setActiveTreeId,
-  setExpandedWorkspaceIds,
-  setOptimisticActiveRunId,
-}: {
+export function useWorkspaceTreeSelectionSync(options: {
   activeRunId: string;
   model: WorkspaceTreeModel;
   setActiveTreeId: Dispatch<SetStateAction<string>>;
   setExpandedWorkspaceIds: Dispatch<SetStateAction<string[]>>;
   setOptimisticActiveRunId: Dispatch<SetStateAction<string>>;
 }) {
+  const {
+    activeRunId,
+    model,
+    setActiveTreeId,
+    setExpandedWorkspaceIds,
+    setOptimisticActiveRunId,
+  } = options;
   useEffect(() => {
     setOptimisticActiveRunId((current) => (current === activeRunId ? current : activeRunId));
     setExpandedWorkspaceIds((current) => {

@@ -172,12 +172,12 @@ export function refreshRecentSnapshot(
     },
     liveConnectionByRunId:
       dataset.run.liveMode === "live"
-        ? updateLiveConnectionMap(
-            state.liveConnectionByRunId,
-            dataset.run.traceId,
+        ? updateLiveConnectionMap({
+            liveConnectionByRunId: state.liveConnectionByRunId,
+            traceId: dataset.run.traceId,
             dataset,
-            nextFollowLive,
-          )
+            followLive: nextFollowLive,
+          })
         : remainingConnections,
     selection: resolveSelectionAfterRecentRefresh(state, dataset, nextFollowLive),
     ...resolveDatasetDrawerTab(state, dataset),

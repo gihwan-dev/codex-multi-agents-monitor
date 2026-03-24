@@ -24,19 +24,44 @@ interface GraphSceneRowsArgs {
   hasMultiAgentTopology: boolean;
 }
 
+interface BuildGapHiddenEventIdsArgs {
+  events: EventRecord[];
+  visibleEventIdSet: Set<string>;
+  gapStart: number;
+  gapEnd: number;
+}
+
+interface BuildGapRowArgs {
+  dataset: RunDataset;
+  previousEvent: EventRecord | undefined;
+  event: EventRecord;
+  visibleEventIdSet: Set<string>;
+  idleLaneCount: number;
+}
+
+interface BuildEventRowArgs {
+  event: EventRecord;
+  selection: SelectionState | null;
+  selectionPathEventIds: Set<string>;
+  hasMultiAgentTopology: boolean;
+}
+
+interface AppendSceneEventRowsOptions {
+  state: ReturnType<typeof createGraphSceneRowsState>;
+  visibleEvents: EventRecord[];
+  laneIds: Set<string>;
+  rowArgs: Pick<
+    GraphSceneRowsArgs,
+    "dataset" | "visibleLaneCount" | "selection" | "selectionPathEventIds" | "hasMultiAgentTopology"
+  >;
+}
+
 function buildGapLabel(durationMs: number, idleLaneCount: number) {
   const laneLabel = idleLaneCount === 1 ? "lane" : "lanes";
   return `${formatDuration(durationMs)} idle · ${idleLaneCount} ${laneLabel} idle`;
 }
 
-function buildGapHiddenEventIds(
-  args: {
-    events: EventRecord[];
-    visibleEventIdSet: Set<string>;
-    gapStart: number;
-    gapEnd: number;
-  },
-) {
+function buildGapHiddenEventIds(args: BuildGapHiddenEventIdsArgs) {
   return args.events
     .filter(
       (event) =>
@@ -56,15 +81,7 @@ function resolveGapWindow(previousEvent: EventRecord | undefined, event: EventRe
     : null;
 }
 
-function buildGapRow(
-  args: {
-    dataset: RunDataset;
-    previousEvent: EventRecord | undefined;
-    event: EventRecord;
-    visibleEventIdSet: Set<string>;
-    idleLaneCount: number;
-  },
-) {
+function buildGapRow(args: BuildGapRowArgs) {
   const gapWindow = resolveGapWindow(args.previousEvent, args.event);
   if (!gapWindow) {
     return null;
@@ -85,14 +102,11 @@ function buildGapRow(
   };
 }
 
-function buildEventRow(
-  args: {
-    event: EventRecord;
-    selection: SelectionState | null;
-    selectionPathEventIds: Set<string>;
-    hasMultiAgentTopology: boolean;
-  },
-) {
+function resolveEventRowSummary(event: EventRecord) {
+  return event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a";
+}
+
+function buildEventRow(args: BuildEventRowArgs) {
   const { event, selection, selectionPathEventIds, hasMultiAgentTopology } = args;
 
   return {
@@ -101,7 +115,7 @@ function buildEventRow(
     eventId: event.eventId,
     laneId: event.laneId,
     title: event.title,
-    summary: event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a",
+    summary: resolveEventRowSummary(event),
     status: event.status,
     waitReason: event.waitReason,
     timeLabel: formatTimestamp(event.startTs),
@@ -159,15 +173,7 @@ function createGraphSceneRowsState(visibleEvents: EventRecord[]) {
   };
 }
 
-function appendSceneEventRows(options: {
-  state: ReturnType<typeof createGraphSceneRowsState>;
-  visibleEvents: EventRecord[];
-  laneIds: Set<string>;
-  rowArgs: Pick<
-    GraphSceneRowsArgs,
-    "dataset" | "visibleLaneCount" | "selection" | "selectionPathEventIds" | "hasMultiAgentTopology"
-  >;
-}) {
+function appendSceneEventRows(options: AppendSceneEventRowsOptions) {
   for (const [index, event] of options.visibleEvents.entries()) {
     appendGapRow(options.state.result, {
       dataset: options.rowArgs.dataset,
@@ -190,15 +196,16 @@ function appendSceneEventRows(options: {
   }
 }
 
-export function buildGraphSceneRows({
-  dataset,
-  visibleEvents,
-  laneIds,
-  visibleLaneCount,
-  selection,
-  selectionPathEventIds,
-  hasMultiAgentTopology,
-}: GraphSceneRowsArgs): GraphSceneRowsResult {
+export function buildGraphSceneRows(args: GraphSceneRowsArgs): GraphSceneRowsResult {
+  const {
+    dataset,
+    visibleEvents,
+    laneIds,
+    visibleLaneCount,
+    selection,
+    selectionPathEventIds,
+    hasMultiAgentTopology,
+  } = args;
   const state = createGraphSceneRowsState(visibleEvents);
 
   appendSceneEventRows({

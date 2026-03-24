@@ -27,6 +27,51 @@ interface MergeCandidate {
   targetTs: number;
 }
 
+interface SingleSessionIdOptions {
+  event: EventRecord;
+  args: BuildSubagentMergeEdgesArgs;
+}
+
+interface BuildMergeEdgeOptions {
+  event: EventRecord;
+  sessionId: string;
+  args: BuildSubagentMergeEdgesArgs;
+  edgeId: string;
+  payloadSuffix: string;
+}
+
+interface ResolveMergeSourceOptions {
+  sessionId: string;
+  targetEventId: string;
+  args: BuildSubagentMergeEdgesArgs;
+}
+
+interface MergeSourceTimingOptions {
+  lastEventId: string;
+  targetEventId: string;
+  args: BuildSubagentMergeEdgesArgs;
+}
+
+interface SpawnFallbackEventIdOptions {
+  sessionId: string;
+  lastEventId: string;
+  args: BuildSubagentMergeEdgesArgs;
+}
+
+interface UpsertMergeCandidateOptions {
+  sessionId: string;
+  edge: EdgeRecord | null;
+  args: BuildSubagentMergeEdgesArgs;
+  mergeCandidates: Map<string, MergeCandidate>;
+}
+
+interface MergeCandidateBuildOptions {
+  event: EventRecord;
+  sessionId: string;
+  args: BuildSubagentMergeEdgesArgs;
+  mergeCandidates: Map<string, MergeCandidate>;
+}
+
 export function buildSubagentMergeEdges(
   args: BuildSubagentMergeEdgesArgs,
 ) {
@@ -45,25 +90,17 @@ function collectCloseAgentMergeEdges(
       continue;
     }
 
-    const sessionId = resolveSingleSessionId(event, args);
+    const sessionId = resolveSingleSessionId({ event, args });
     if (!sessionId) {
       continue;
     }
 
-    upsertMergeCandidate(
-      {
-        sessionId,
-        edge: buildMergeEdge({
-          event,
-          sessionId,
-          args,
-          edgeId: `merge:close:${sessionId}`,
-          payloadSuffix: "result",
-        }),
-        args,
-        mergeCandidates,
-      },
-    );
+    buildCloseAgentMergeCandidate({
+      event,
+      sessionId,
+      args,
+      mergeCandidates,
+    });
   }
 }
 
@@ -76,29 +113,55 @@ function collectWaitAgentMergeEdges(
       continue;
     }
 
-    for (const sessionId of resolveWaitSessionIds(event, args)) {
-      upsertMergeCandidate(
-        {
-          sessionId,
-          edge: buildMergeEdge({
-            event,
-            sessionId,
-            args,
-            edgeId: `merge:wait:${sessionId}`,
-            payloadSuffix: "joined",
-          }),
-          args,
-          mergeCandidates,
-        },
-      );
+    for (const sessionId of resolveWaitSessionIds({ event, args })) {
+      buildWaitAgentMergeCandidate({
+        event,
+        sessionId,
+        args,
+        mergeCandidates,
+      });
     }
   }
 }
 
-function resolveSingleSessionId(
-  event: EventRecord,
-  args: BuildSubagentMergeEdgesArgs,
-) {
+function buildCloseAgentMergeCandidate(options: MergeCandidateBuildOptions) {
+  const { event, sessionId, args, mergeCandidates } = options;
+  const edge = buildMergeEdge({
+    event,
+    sessionId,
+    args,
+    edgeId: `merge:close:${sessionId}`,
+    payloadSuffix: "result",
+  });
+
+  upsertMergeCandidate({
+    sessionId,
+    edge,
+    args,
+    mergeCandidates,
+  });
+}
+
+function buildWaitAgentMergeCandidate(options: MergeCandidateBuildOptions) {
+  const { event, sessionId, args, mergeCandidates } = options;
+  const edge = buildMergeEdge({
+    event,
+    sessionId,
+    args,
+    edgeId: `merge:wait:${sessionId}`,
+    payloadSuffix: "joined",
+  });
+
+  upsertMergeCandidate({
+    sessionId,
+    edge,
+    args,
+    mergeCandidates,
+  });
+}
+
+function resolveSingleSessionId(options: SingleSessionIdOptions) {
+  const { event, args } = options;
   const parsedArgs = readParentFunctionArgs(event, args.sessionLinks);
   const agentId = typeof parsedArgs?.id === "string" ? parsedArgs.id : null;
   return agentId
@@ -106,30 +169,20 @@ function resolveSingleSessionId(
     : undefined;
 }
 
-function resolveWaitSessionIds(
-  event: EventRecord,
-  args: BuildSubagentMergeEdgesArgs,
-) {
-  return readStringArray(readParentFunctionArgs(event, args.sessionLinks), "ids")
+function resolveWaitSessionIds(options: SingleSessionIdOptions) {
+  const { event, args } = options;
+  return readStringArray({
+    record: readParentFunctionArgs(event, args.sessionLinks),
+    key: "ids",
+  })
     .map((agentId) =>
       resolveLinkedSessionId(agentId, args.indexedSubagents, args.sessionLinks),
     )
     .filter((sessionId): sessionId is string => sessionId !== undefined);
 }
 
-function buildMergeEdge({
-  event,
-  sessionId,
-  args,
-  edgeId,
-  payloadSuffix,
-}: {
-  event: EventRecord;
-  sessionId: string;
-  args: BuildSubagentMergeEdgesArgs;
-  edgeId: string;
-  payloadSuffix: string;
-}) {
+function buildMergeEdge(options: BuildMergeEdgeOptions) {
+  const { event, sessionId, args, edgeId, payloadSuffix } = options;
   const targetEventId = readTargetEventId(event, args);
   const sourceEventId = resolveMergeSource({ sessionId, targetEventId, args });
   if (!sourceEventId) {
@@ -157,56 +210,34 @@ function readTargetEventId(
   return args.sessionLinks.callEventToOutputEvent.get(event.eventId) ?? event.eventId;
 }
 
-function resolveMergeSource({
-  sessionId,
-  targetEventId,
-  args,
-}: {
-  sessionId: string;
-  targetEventId: string;
-  args: BuildSubagentMergeEdgesArgs;
-}) {
+function resolveMergeSource(options: ResolveMergeSourceOptions) {
+  const { sessionId, targetEventId, args } = options;
   const lastEventId =
     args.latestSubagentEventBySessionId.get(sessionId)?.eventId ?? null;
   if (!lastEventId) {
     return null;
   }
 
-  return shouldUseLatestSubagentEvent(lastEventId, targetEventId, args)
+  return shouldUseLatestSubagentEvent({ lastEventId, targetEventId, args })
     ? lastEventId
-    : readSpawnFallbackEventId(sessionId, lastEventId, args);
+    : readSpawnFallbackEventId({ sessionId, lastEventId, args });
 }
 
-function shouldUseLatestSubagentEvent(
-  lastEventId: string,
-  targetEventId: string,
-  args: BuildSubagentMergeEdgesArgs,
-) {
+function shouldUseLatestSubagentEvent(options: MergeSourceTimingOptions) {
+  const { lastEventId, targetEventId, args } = options;
   const sourceTs = args.eventsById.get(lastEventId)?.startTs ?? 0;
   const targetTs = args.eventsById.get(targetEventId)?.startTs ?? 0;
   return sourceTs <= targetTs;
 }
 
-function readSpawnFallbackEventId(
-  sessionId: string,
-  lastEventId: string,
-  args: BuildSubagentMergeEdgesArgs,
-) {
+function readSpawnFallbackEventId(options: SpawnFallbackEventIdOptions) {
+  const { sessionId, lastEventId, args } = options;
   const spawnedEventId = `${sessionId}:spawn`;
   return args.eventsById.has(spawnedEventId) ? spawnedEventId : lastEventId;
 }
 
-function upsertMergeCandidate({
-  sessionId,
-  edge,
-  args,
-  mergeCandidates,
-}: {
-  sessionId: string;
-  edge: EdgeRecord | null;
-  args: BuildSubagentMergeEdgesArgs;
-  mergeCandidates: Map<string, MergeCandidate>;
-}) {
+function upsertMergeCandidate(options: UpsertMergeCandidateOptions) {
+  const { sessionId, edge, args, mergeCandidates } = options;
   if (!edge) {
     return;
   }

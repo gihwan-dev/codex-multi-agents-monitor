@@ -32,17 +32,24 @@ export function buildLatestSubagentEventBySessionId(events: EventRecord[]) {
   return latestBySessionId;
 }
 
-export function findClosestParentEvent(
-  parentEvents: EventRecord[],
-  targetTs: number,
-): string {
-  const closestEvent =
-    findLatestParentBeforeTarget(parentEvents, targetTs) ??
-    findNearestParentByTimestamp(parentEvents, targetTs);
-  return closestEvent?.eventId ?? "";
+interface FindClosestParentEventOptions {
+  parentEvents: EventRecord[];
+  targetTs: number;
 }
 
-function findLatestParentBeforeTarget(
+export function findClosestParentEvent(options: FindClosestParentEventOptions): string {
+  return resolveClosestParentEventId(options) ?? "";
+}
+
+function resolveClosestParentEventId(options: FindClosestParentEventOptions) {
+  const { parentEvents, targetTs } = options;
+  return (
+    findLatestParentBeforeTargetId(parentEvents, targetTs) ??
+    findNearestParentByTimestampId(parentEvents, targetTs)
+  );
+}
+
+function findLatestParentBeforeTargetId(
   parentEvents: EventRecord[],
   targetTs: number,
 ) {
@@ -57,10 +64,10 @@ function findLatestParentBeforeTarget(
     }
   }
 
-  return latestParent;
+  return latestParent?.eventId;
 }
 
-function findNearestParentByTimestamp(
+function findNearestParentByTimestampId(
   parentEvents: EventRecord[],
   targetTs: number,
 ) {
@@ -75,7 +82,7 @@ function findNearestParentByTimestamp(
     }
   }
 
-  return closestEvent;
+  return closestEvent?.eventId;
 }
 
 function isCloserParentEvent(delta: number, closestDelta: number) {

@@ -44,12 +44,12 @@ export function setActiveRunState(state: MonitorState, traceId: string): Monitor
         }
       : state.followLiveByRunId,
     liveConnectionByRunId: followLive
-      ? updateLiveConnectionMap(
-          state.liveConnectionByRunId,
+      ? updateLiveConnectionMap({
+          liveConnectionByRunId: state.liveConnectionByRunId,
           traceId,
           dataset,
-          true,
-        )
+          followLive: true,
+        })
       : state.liveConnectionByRunId,
     ...resolveDatasetDrawerTab(state, dataset),
   };
@@ -76,12 +76,12 @@ export function navigateSelectionState(
         : state.followLiveByRunId,
     liveConnectionByRunId:
       shouldPauseFollowLive && activeDataset
-        ? updateLiveConnectionMap(
-            state.liveConnectionByRunId,
-            activeDataset.run.traceId,
-            activeDataset,
-            false,
-          )
+        ? updateLiveConnectionMap({
+            liveConnectionByRunId: state.liveConnectionByRunId,
+            traceId: activeDataset.run.traceId,
+            dataset: activeDataset,
+            followLive: false,
+          })
         : state.liveConnectionByRunId,
   };
 }
@@ -96,18 +96,19 @@ export function toggleFollowLiveState(
   }
 
   const nextFollow = !(state.followLiveByRunId[traceId] ?? false);
+  const liveConnectionByRunId = updateLiveConnectionMap({
+    liveConnectionByRunId: state.liveConnectionByRunId,
+    traceId,
+    dataset,
+    followLive: nextFollow,
+  });
   return {
     ...state,
     followLiveByRunId: {
       ...state.followLiveByRunId,
       [traceId]: nextFollow,
     },
-    liveConnectionByRunId: updateLiveConnectionMap(
-      state.liveConnectionByRunId,
-      traceId,
-      dataset,
-      nextFollow,
-    ),
+    liveConnectionByRunId,
   };
 }
 
@@ -124,12 +125,7 @@ export function setFollowLiveState(
       [traceId]: value,
     },
     liveConnectionByRunId: dataset
-      ? updateLiveConnectionMap(
-          state.liveConnectionByRunId,
-          traceId,
-          dataset,
-          value,
-        )
+      ? updateLiveConnectionMap({ liveConnectionByRunId: state.liveConnectionByRunId, traceId, dataset, followLive: value })
       : {
           ...state.liveConnectionByRunId,
           [traceId]: value ? "live" : "paused",
@@ -203,13 +199,7 @@ export function applyFixtureFrameState(state: MonitorState): MonitorState {
     datasets: state.datasets.map((item) =>
       item.run.traceId === traceId ? snapshot.dataset : item,
     ),
-    liveConnectionByRunId: updateLiveConnectionMap(
-      state.liveConnectionByRunId,
-      traceId,
-      snapshot.dataset,
-      followLive,
-      snapshot.connection,
-    ),
+    liveConnectionByRunId: updateLiveConnectionMap({ liveConnectionByRunId: state.liveConnectionByRunId, traceId, dataset: snapshot.dataset, followLive, nextConnection: snapshot.connection }),
     selection: resolveFixtureFrameSelection(state, snapshot.dataset),
     appliedLiveFrames: state.appliedLiveFrames + 1,
   };

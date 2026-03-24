@@ -19,20 +19,42 @@ interface OutputCollectionOptions {
   sessionLinks: SessionLinkMaps;
 }
 
+interface FillMissingSpawnSourceEventsOptions {
+  parentEvents: EventRecord[];
+  subagents: TimedSubagentSnapshot[];
+  subagentToSpawnSource: Map<string, string>;
+}
+
+interface ParentFunctionArgsOptions {
+  entries: SessionLogSnapshot["entries"];
+  callMaps: CallMaps;
+  sessionLinks: SessionLinkMaps;
+}
+
+interface LinkOutputEventOptions {
+  entry: SessionLogSnapshot["entries"][number];
+  index: number;
+  sessionId: string;
+  callMaps: CallMaps;
+  sessionLinks: SessionLinkMaps;
+}
+
+interface LinkFallbackSpawnSourceOptions {
+  subagent: TimedSubagentSnapshot;
+  index: number;
+  spawnToolEvents: EventRecord[];
+  subagentToSpawnSource: Map<string, string>;
+}
+
 export function collectOutputLinks(options: OutputCollectionOptions) {
   collectParentFunctionArgs(options);
   collectFunctionCallOutputs(options);
 }
 
-export function fillMissingSpawnSourceEvents({
-  parentEvents,
-  subagents,
-  subagentToSpawnSource,
-}: {
-  parentEvents: EventRecord[];
-  subagents: TimedSubagentSnapshot[];
-  subagentToSpawnSource: Map<string, string>;
-}) {
+export function fillMissingSpawnSourceEvents(
+  options: FillMissingSpawnSourceEventsOptions,
+) {
+  const { parentEvents, subagents, subagentToSpawnSource } = options;
   if (subagentToSpawnSource.size >= subagents.length) {
     return;
   }
@@ -46,11 +68,8 @@ export function fillMissingSpawnSourceEvents({
   }
 }
 
-function collectParentFunctionArgs({
-  entries,
-  callMaps,
-  sessionLinks,
-}: Pick<OutputCollectionOptions, "entries" | "callMaps" | "sessionLinks">) {
+function collectParentFunctionArgs(options: ParentFunctionArgsOptions) {
+  const { entries, callMaps, sessionLinks } = options;
   for (const entry of entries) {
     if (!isFunctionCallEntry(entry)) {
       continue;
@@ -78,16 +97,8 @@ function collectFunctionCallOutputs(options: OutputCollectionOptions) {
   }
 }
 
-function linkOutputEvent({
-  entry,
-  index,
-  sessionId,
-  callMaps,
-  sessionLinks,
-}: {
-  entry: SessionLogSnapshot["entries"][number];
-  index: number;
-} & Pick<OutputCollectionOptions, "callMaps" | "sessionId" | "sessionLinks">) {
+function linkOutputEvent(options: LinkOutputEventOptions) {
+  const { entry, index, sessionId, callMaps, sessionLinks } = options;
   const outputEventId = buildOutputEventId(sessionId, entry, index);
   const pairedCallEventId = callMaps.callEventIdByCallId.get(entry.functionCallId ?? "");
   if (outputEventId && pairedCallEventId) {
@@ -107,17 +118,8 @@ function buildOutputEventId(
   return buildEntryEventId(sessionId, entry, index);
 }
 
-function linkFallbackSpawnSource({
-  subagent,
-  index,
-  spawnToolEvents,
-  subagentToSpawnSource,
-}: {
-  subagent: TimedSubagentSnapshot;
-  index: number;
-  spawnToolEvents: EventRecord[];
-  subagentToSpawnSource: Map<string, string>;
-}) {
+function linkFallbackSpawnSource(options: LinkFallbackSpawnSourceOptions) {
+  const { subagent, index, spawnToolEvents, subagentToSpawnSource } = options;
   if (
     subagentToSpawnSource.has(subagent.sessionId) ||
     index >= spawnToolEvents.length

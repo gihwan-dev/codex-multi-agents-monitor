@@ -13,12 +13,15 @@ interface UseGraphViewportMeasurementsOptions {
   viewportRef: RefObject<HTMLDivElement | null>;
 }
 
-export function useGraphViewportMeasurements({
-  laneHeaderHeightOverride,
-  laneStripRef,
-  viewportHeightOverride,
-  viewportRef,
-}: UseGraphViewportMeasurementsOptions) {
+export function useGraphViewportMeasurements(
+  options: UseGraphViewportMeasurementsOptions,
+) {
+  const {
+    laneHeaderHeightOverride,
+    laneStripRef,
+    viewportHeightOverride,
+    viewportRef,
+  } = options;
   const [viewportWidth, setViewportWidth] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(viewportHeightOverride ?? 0);
   const [laneHeaderHeight, setLaneHeaderHeight] = useState(laneHeaderHeightOverride ?? 0);
@@ -115,28 +118,44 @@ interface ApplyViewportMeasurementsOptions {
   viewportHeightOverride?: number;
 }
 
-function applyViewportMeasurements({
-  laneHeaderHeightOverride,
-  laneStripRef,
-  setLaneHeaderHeight,
-  setViewportHeight,
-  setViewportWidth,
-  viewportElement,
-  viewportHeightOverride,
-}: ApplyViewportMeasurementsOptions) {
+interface MeasuredValueUpdateOptions {
+  override: number | undefined;
+  nextValue: number;
+  setValue: Dispatch<SetStateAction<number>>;
+}
+
+function updateMeasuredValue(options: MeasuredValueUpdateOptions) {
+  const { override, nextValue, setValue } = options;
+  if (override !== undefined) {
+    return;
+  }
+
+  setValue((current) => (current === nextValue ? current : nextValue));
+}
+
+function applyViewportMeasurements(options: ApplyViewportMeasurementsOptions) {
+  const {
+    laneHeaderHeightOverride,
+    laneStripRef,
+    setLaneHeaderHeight,
+    setViewportHeight,
+    setViewportWidth,
+    viewportElement,
+    viewportHeightOverride,
+  } = options;
   const nextViewportWidth = Math.round(viewportElement.clientWidth);
   const nextViewportHeight = Math.round(viewportElement.clientHeight);
   const nextLaneHeaderHeight = laneStripRef.current?.offsetHeight ?? 0;
 
   setViewportWidth((current) => (current === nextViewportWidth ? current : nextViewportWidth));
-  if (viewportHeightOverride === undefined) {
-    setViewportHeight((current) =>
-      current === nextViewportHeight ? current : nextViewportHeight,
-    );
-  }
-  if (laneHeaderHeightOverride === undefined) {
-    setLaneHeaderHeight((current) =>
-      current === nextLaneHeaderHeight ? current : nextLaneHeaderHeight,
-    );
-  }
+  updateMeasuredValue({
+    override: viewportHeightOverride,
+    nextValue: nextViewportHeight,
+    setValue: setViewportHeight,
+  });
+  updateMeasuredValue({
+    override: laneHeaderHeightOverride,
+    nextValue: nextLaneHeaderHeight,
+    setValue: setLaneHeaderHeight,
+  });
 }

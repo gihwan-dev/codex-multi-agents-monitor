@@ -67,25 +67,46 @@ function upsertThread(workspace: WorkspaceTreeItem, source: SidebarRunSource) {
   return nextThread;
 }
 
-function appendSidebarRunSource({
-  workspaceMap,
-  source,
-  normalizedSearch,
-  referenceTimestamp,
-}: {
+function appendSidebarRunSource(options: {
   workspaceMap: Map<string, WorkspaceTreeItem>;
   source: SidebarRunSource;
   normalizedSearch: string;
   referenceTimestamp: number;
 }) {
-  const runRow: WorkspaceRunRow = {
-    ...source.row,
-    relativeTime: formatRelativeTime(source.row.lastActivityTs, referenceTimestamp),
-  };
-  if (normalizedSearch && !buildSearchTarget(source, runRow).includes(normalizedSearch)) {
+  const { workspaceMap, source, normalizedSearch, referenceTimestamp } = options;
+  const runRow = buildSidebarRunRow(source, referenceTimestamp);
+  if (shouldSkipSidebarRunSource(source, runRow, normalizedSearch)) {
     return;
   }
 
+  appendSidebarRun(workspaceMap, source, runRow);
+}
+
+function buildSidebarRunRow(
+  source: SidebarRunSource,
+  referenceTimestamp: number,
+): WorkspaceRunRow {
+  return {
+    ...source.row,
+    relativeTime: formatRelativeTime(source.row.lastActivityTs, referenceTimestamp),
+  };
+}
+
+function shouldSkipSidebarRunSource(
+  source: SidebarRunSource,
+  runRow: WorkspaceRunRow,
+  normalizedSearch: string,
+) {
+  return normalizedSearch
+    ? !buildSearchTarget(source, runRow).includes(normalizedSearch)
+    : false;
+}
+
+function appendSidebarRun(
+  workspaceMap: Map<string, WorkspaceTreeItem>,
+  source: SidebarRunSource,
+  runRow: WorkspaceRunRow,
+) {
   const workspace = workspaceMap.get(source.workspaceId) ?? buildWorkspaceItem(source);
   const thread = upsertThread(workspace, source);
   thread.runs.push(runRow);
@@ -113,12 +134,8 @@ function sortWorkspaceTreeItems(workspaces: WorkspaceTreeItem[]) {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function resolveWorkspaceIdentity({
-  projectId,
-  repoPath,
-  displayName,
-  workspaceIdentityOverrides,
-}: ResolveWorkspaceIdentityOptions) {
+export function resolveWorkspaceIdentity(options: ResolveWorkspaceIdentityOptions) {
+  const { projectId, repoPath, displayName, workspaceIdentityOverrides } = options;
   const workspaceIdentity = workspaceIdentityOverrides[repoPath];
   return {
     id: workspaceIdentity?.originPath ?? projectId,

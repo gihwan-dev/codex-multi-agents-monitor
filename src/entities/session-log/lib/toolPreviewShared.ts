@@ -31,11 +31,11 @@ export function readAgentReference(record: JsonRecord | null): AgentReference {
   };
 }
 
-export function readStringArray(
-  record: JsonRecord | null,
-  key: string,
-): string[] {
-  const value = record?.[key];
+export function readStringArray(options: {
+  record: JsonRecord | null;
+  key: string;
+}): string[] {
+  const value = options.record?.[options.key];
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];

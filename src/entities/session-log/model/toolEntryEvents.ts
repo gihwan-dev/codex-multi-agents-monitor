@@ -90,7 +90,7 @@ function resolveFunctionCallInputPreview(
 
   return functionName === "update_plan"
     ? null
-    : extractToolInputPreview(functionName, rawPreview);
+    : extractToolInputPreview({ toolName: functionName, rawPreview });
 }
 
 function resolveFunctionCallOutputPreview(
@@ -98,7 +98,7 @@ function resolveFunctionCallOutputPreview(
   rawPreview: string | null,
 ) {
   if (functionName === "update_plan" || functionName === "request_user_input") {
-    return extractToolInputPreview(functionName, rawPreview);
+    return extractToolInputPreview({ toolName: functionName, rawPreview });
   }
 
   return null;

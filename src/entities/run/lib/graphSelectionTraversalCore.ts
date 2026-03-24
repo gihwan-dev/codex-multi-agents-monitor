@@ -106,28 +106,46 @@ function includeRelatedEvents(
 ) {
   const nextDepth = args.step.depth + 1;
 
-  enqueueEvent(
-    args.state,
-    args.context.previousByEventId.get(args.event.eventId)?.eventId,
-    nextDepth,
-  );
-  enqueueEvent(
-    args.state,
-    args.context.nextByEventId.get(args.event.eventId)?.eventId,
-    nextDepth,
-  );
-  enqueueEvent(args.state, args.event.parentId, nextDepth);
+  includeSiblingLaneEvents(args, nextDepth);
+  includeChildEvents(args, nextDepth);
+  includeIncomingEdges(args, nextDepth);
+  includeOutgoingEdges(args, nextDepth);
+}
 
+function includeSiblingLaneEvents(
+  args: Parameters<typeof includeRelatedEvents>[0],
+  nextDepth: number,
+) {
+  enqueueEvent(args.state, args.context.previousByEventId.get(args.event.eventId)?.eventId, nextDepth);
+  enqueueEvent(args.state, args.context.nextByEventId.get(args.event.eventId)?.eventId, nextDepth);
+  enqueueEvent(args.state, args.event.parentId, nextDepth);
+}
+
+function includeChildEvents(
+  args: Parameters<typeof includeRelatedEvents>[0],
+  nextDepth: number,
+) {
   for (const childEventId of args.context.childEventIdsByParentId.get(args.event.eventId) ?? []) {
     enqueueEvent(args.state, childEventId, nextDepth);
   }
+}
 
+function includeIncomingEdges(
+  args: Parameters<typeof includeRelatedEvents>[0],
+  nextDepth: number,
+) {
   includeEdgeEndpoints({
     state: args.state,
     edges: args.context.incomingByEventId.get(args.event.eventId) ?? [],
     nextDepth,
     targetKey: "sourceEventId",
   });
+}
+
+function includeOutgoingEdges(
+  args: Parameters<typeof includeRelatedEvents>[0],
+  nextDepth: number,
+) {
   includeEdgeEndpoints({
     state: args.state,
     edges: args.context.outgoingByEventId.get(args.event.eventId) ?? [],

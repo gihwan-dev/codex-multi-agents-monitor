@@ -79,21 +79,22 @@ function advanceCursorY(cursorY: number, height: number, hasMoreRows: boolean) {
   return cursorY + height + (hasMoreRows ? ROW_GAP : 0);
 }
 
-function appendRowLayout(
-  buffers: {
-    eventById: Map<string, EventLayout>;
-    laneCenterById: Map<string, number>;
-    laneIndexById: Map<string, number>;
-    rowGuideYByEventId: Map<string, number>;
-    rowPositions: RowPosition[];
-  },
-  options: {
-    row: GraphSceneModel["rows"][number];
-    index: number;
-    cursorY: number;
-    laneMetrics: LaneMetrics;
-  },
-) {
+interface RowLayoutBuffers {
+  eventById: Map<string, EventLayout>;
+  laneCenterById: Map<string, number>;
+  laneIndexById: Map<string, number>;
+  rowGuideYByEventId: Map<string, number>;
+  rowPositions: RowPosition[];
+}
+
+interface AppendRowLayoutOptions {
+  row: GraphSceneModel["rows"][number];
+  index: number;
+  cursorY: number;
+  laneMetrics: LaneMetrics;
+}
+
+function appendRowLayout(buffers: RowLayoutBuffers, options: AppendRowLayoutOptions) {
   const height = options.row.kind === "gap" ? GAP_ROW_HEIGHT : EVENT_ROW_HEIGHT;
   buffers.rowPositions.push(
     buildRowPosition({
@@ -203,7 +204,10 @@ export function buildGraphLayoutSnapshot(
     laneCenterById,
     eventById,
     rowGuideYByEventId,
-    edgeRoutes: buildEdgeRouteLayouts(scene.edgeBundles, eventById),
+    edgeRoutes: buildEdgeRouteLayouts({
+      edgeBundles: scene.edgeBundles,
+      eventById,
+    }),
     rowPositions,
   };
 }

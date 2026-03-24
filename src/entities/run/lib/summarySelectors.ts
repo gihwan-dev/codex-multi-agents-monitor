@@ -77,47 +77,86 @@ function resolveBlockerLaneName(dataset: RunDataset, blockerEvent: EventRecord |
   return dataset.lanes.find((lane) => lane.laneId === blockerEvent.laneId)?.name ?? blockerEvent.title;
 }
 
-export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
-  const events = sortEvents(dataset.events);
-  const firstError = events.find(
-    (event) => event.status === "failed" || event.eventType === "error",
-  );
-  const waitingEvent = [...events]
-    .filter((event) => BLOCKING_STATUSES.includes(event.status as (typeof BLOCKING_STATUSES)[number]))
-    .sort((left, right) => right.durationMs - left.durationMs)[0];
-  const lastHandoff = findLastHandoff(dataset, events);
-  const finalArtifact = dataset.artifacts.find(
-    (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
-  );
-  const expensive = [...events].sort((left, right) => right.costUsd - left.costUsd)[0];
+function createAnomalyJump(
+  label: string,
+  selection: AnomalyJump["selection"],
+  emphasis: AnomalyJump["emphasis"],
+) {
+  return { label, selection, emphasis } satisfies AnomalyJump;
+}
 
-  return [
-    waitingEvent && {
-      label: "Longest wait",
-      selection: { kind: "event" as const, id: waitingEvent.eventId },
-      emphasis: "warning" as const,
-    },
-    firstError && {
-      label: "First error",
-      selection: { kind: "event" as const, id: firstError.eventId },
-      emphasis: "danger" as const,
-    },
-    expensive && {
-      label: "Most expensive",
-      selection: { kind: "event" as const, id: expensive.eventId },
-      emphasis: "accent" as const,
-    },
-    lastHandoff && {
-      label: "Last handoff",
-      selection: { kind: "edge" as const, id: lastHandoff.edgeId },
-      emphasis: "accent" as const,
-    },
-    finalArtifact && {
-      label: "Final artifact",
-      selection: { kind: "artifact" as const, id: finalArtifact.artifactId },
-      emphasis: "default" as const,
-    },
-  ].filter(Boolean) as AnomalyJump[];
+function appendAnomalyJump(
+  jumps: AnomalyJump[],
+  jump: AnomalyJump | null,
+) {
+  if (jump) {
+    jumps.push(jump);
+  }
+}
+
+function resolveWaitingEventJump(waitingEvent: EventRecord | undefined) {
+  return waitingEvent
+    ? createAnomalyJump("Longest wait", { kind: "event", id: waitingEvent.eventId }, "warning")
+    : null;
+}
+
+function resolveFirstErrorJump(firstError: EventRecord | undefined) {
+  return firstError
+    ? createAnomalyJump("First error", { kind: "event", id: firstError.eventId }, "danger")
+    : null;
+}
+
+function resolveExpensiveJump(expensive: EventRecord | undefined) {
+  return expensive
+    ? createAnomalyJump("Most expensive", { kind: "event", id: expensive.eventId }, "accent")
+    : null;
+}
+
+function resolveLastHandoffJump(lastHandoff: ReturnType<typeof findLastHandoff>) {
+  return lastHandoff
+    ? createAnomalyJump("Last handoff", { kind: "edge", id: lastHandoff.edgeId }, "accent")
+    : null;
+}
+
+function resolveFinalArtifactJump(finalArtifact: RunDataset["artifacts"][number] | undefined) {
+  return finalArtifact
+    ? createAnomalyJump(
+        "Final artifact",
+        { kind: "artifact", id: finalArtifact.artifactId },
+        "default",
+      )
+    : null;
+}
+
+function collectAnomalyCandidates(dataset: RunDataset) {
+  const events = sortEvents(dataset.events);
+  return {
+    firstError: events.find((event) => event.status === "failed" || event.eventType === "error"),
+    waitingEvent: [...events]
+      .filter((event) =>
+        BLOCKING_STATUSES.includes(event.status as (typeof BLOCKING_STATUSES)[number]),
+      )
+      .sort((left, right) => right.durationMs - left.durationMs)[0],
+    lastHandoff: findLastHandoff(dataset, events),
+    finalArtifact: dataset.artifacts.find(
+      (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
+    ),
+    expensive: [...events].sort((left, right) => right.costUsd - left.costUsd)[0],
+  };
+}
+
+export function buildAnomalyJumps(dataset: RunDataset): AnomalyJump[] {
+  const { firstError, waitingEvent, lastHandoff, finalArtifact, expensive } =
+    collectAnomalyCandidates(dataset);
+  const jumps: AnomalyJump[] = [];
+
+  appendAnomalyJump(jumps, resolveWaitingEventJump(waitingEvent));
+  appendAnomalyJump(jumps, resolveFirstErrorJump(firstError));
+  appendAnomalyJump(jumps, resolveExpensiveJump(expensive));
+  appendAnomalyJump(jumps, resolveLastHandoffJump(lastHandoff));
+  appendAnomalyJump(jumps, resolveFinalArtifactJump(finalArtifact));
+
+  return jumps;
 }
 
 export function buildSummaryFacts(

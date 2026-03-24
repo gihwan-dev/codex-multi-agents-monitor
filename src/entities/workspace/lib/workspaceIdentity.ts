@@ -34,22 +34,28 @@ export function buildResolvedWorkspaceIdentityMap(
   );
 }
 
+interface SanitizeWorkspaceIdentityOptions {
+  identity: Partial<WorkspaceIdentityOverride>;
+  fallback: WorkspaceIdentityOverride;
+}
+
 export function sanitizeWorkspaceIdentity(
-  identity: Partial<WorkspaceIdentityOverride>,
-  fallback: WorkspaceIdentityOverride,
+  options: SanitizeWorkspaceIdentityOptions,
 ): WorkspaceIdentityOverride {
+  const { identity, fallback } = options;
   return {
-    originPath:
-      typeof identity.originPath === "string" && identity.originPath.trim().length
-        ? identity.originPath
-        : fallback.originPath,
-    displayName:
-      typeof identity.displayName === "string" && identity.displayName.trim().length
-        ? identity.displayName
-        : fallback.displayName,
-    isWorktree:
-      typeof identity.isWorktree === "boolean" ? identity.isWorktree : fallback.isWorktree,
+    originPath: resolveIdentityString(identity.originPath, fallback.originPath),
+    displayName: resolveIdentityString(identity.displayName, fallback.displayName),
+    isWorktree: resolveIdentityBoolean(identity.isWorktree, fallback.isWorktree),
   };
+}
+
+function resolveIdentityString(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim().length ? value : fallback;
+}
+
+function resolveIdentityBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function resolveFallbackWorkspaceDisplayName(name: string, repoPath: string) {

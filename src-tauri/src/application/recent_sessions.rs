@@ -736,39 +736,7 @@ mod tests {
     #[test]
     fn excludes_archived_threads_from_recent_index() {
         let ctx = RecentSessionTestContext::new("recent-index-archived");
-        let workspace_path = ctx.projects_root.join("demo-app");
-        let archived_session_file = ctx.sessions_root.join("archived-live.jsonl");
-        let visible_session_file = ctx.sessions_root.join("visible-live.jsonl");
-        let state_database = ctx.codex_home.join("state_9.sqlite");
-
-        create_git_workspace(&workspace_path);
-        create_state_database(&state_database, &[]);
-        persist_thread_fixture(
-            &state_database,
-            ThreadFixture {
-                header: session_meta_line("session-archived", &workspace_path),
-                session_id: "session-archived",
-                session_file: &archived_session_file,
-                source: "desktop",
-                workspace_path: &workspace_path,
-                updated_at: 1_742_428_801,
-                archived: true,
-                events: ARCHIVED_THREAD_MESSAGE,
-            },
-        );
-        persist_thread_fixture(
-            &state_database,
-            ThreadFixture {
-                header: session_meta_line("session-visible", &workspace_path),
-                session_id: "session-visible",
-                session_file: &visible_session_file,
-                source: "desktop",
-                workspace_path: &workspace_path,
-                updated_at: 1_742_428_802,
-                archived: false,
-                events: VISIBLE_THREAD_MESSAGE,
-            },
-        );
+        setup_archived_recent_index_fixture(&ctx);
 
         let items = load_recent_session_index_from_disk().expect("recent index should load");
 
@@ -807,6 +775,42 @@ mod tests {
             load_recent_session_snapshot_from_disk(session_file.to_string_lossy().as_ref());
 
         assert!(snapshot.is_none());
+    }
+
+    fn setup_archived_recent_index_fixture(ctx: &RecentSessionTestContext) {
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let archived_session_file = ctx.sessions_root.join("archived-live.jsonl");
+        let visible_session_file = ctx.sessions_root.join("visible-live.jsonl");
+        let state_database = ctx.codex_home.join("state_9.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        persist_thread_fixture(
+            &state_database,
+            ThreadFixture {
+                header: session_meta_line("session-archived", &workspace_path),
+                session_id: "session-archived",
+                session_file: &archived_session_file,
+                source: "desktop",
+                workspace_path: &workspace_path,
+                updated_at: 1_742_428_801,
+                archived: true,
+                events: ARCHIVED_THREAD_MESSAGE,
+            },
+        );
+        persist_thread_fixture(
+            &state_database,
+            ThreadFixture {
+                header: session_meta_line("session-visible", &workspace_path),
+                session_id: "session-visible",
+                session_file: &visible_session_file,
+                source: "desktop",
+                workspace_path: &workspace_path,
+                updated_at: 1_742_428_802,
+                archived: false,
+                events: VISIBLE_THREAD_MESSAGE,
+            },
+        );
     }
 
     #[test]

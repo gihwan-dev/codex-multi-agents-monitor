@@ -147,40 +147,16 @@ function buildVisibleRowPadding(rowPositions: RowPosition[], endIndex: number, s
   };
 }
 
-type ComputeVisibleRowRangeOptions = {
+export type ComputeVisibleRowRangeOptions = {
   rowPositions: RowPosition[];
   scrollTop: number;
   viewportHeight: number;
   overscanCount: number;
 };
 
-function resolveVisibleRowRangeOptions(
-  args:
-    | [ComputeVisibleRowRangeOptions]
-    | [RowPosition[], number, number, number],
-): ComputeVisibleRowRangeOptions {
-  if (Array.isArray(args[0])) {
-    const [rowPositions, scrollTop, viewportHeight, overscanCount] =
-      args as [RowPosition[], number, number, number];
-    return { rowPositions, scrollTop, viewportHeight, overscanCount };
-  }
-
-  return args[0];
-}
-
-export function computeVisibleRowRange(options: ComputeVisibleRowRangeOptions): VisibleRowRange;
 export function computeVisibleRowRange(
-  rowPositions: RowPosition[],
-  scrollTop: number,
-  viewportHeight: number,
-  overscanCount: number,
-): VisibleRowRange;
-export function computeVisibleRowRange(
-  ...args:
-    | [ComputeVisibleRowRangeOptions]
-    | [RowPosition[], number, number, number]
+  options: ComputeVisibleRowRangeOptions,
 ): VisibleRowRange {
-  const options = resolveVisibleRowRangeOptions(args);
   if (options.rowPositions.length === 0) {
     return { startIndex: 0, endIndex: 0, topPadding: 0, bottomPadding: 0 };
   }

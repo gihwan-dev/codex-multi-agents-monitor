@@ -22,15 +22,9 @@ interface BuildRunEndEventOptions {
   model: string;
 }
 
-export function buildRunStartEvent({
-  sessionId,
-  lane,
-  startTs,
-  firstEventTs,
-  hasParentEvents,
-  status,
-  model,
-}: BuildRunStartEventOptions): EventRecord {
+export function buildRunStartEvent(options: BuildRunStartEventOptions): EventRecord {
+  const { sessionId, lane, startTs, firstEventTs, hasParentEvents, status, model } =
+    options;
   return {
     eventId: `${sessionId}:run-start`,
     parentId: null,
@@ -66,13 +60,8 @@ export function buildRunStartEvent({
   };
 }
 
-export function buildRunEndEvent({
-  sessionId,
-  lane,
-  updatedTs,
-  status,
-  model,
-}: BuildRunEndEventOptions): EventRecord | null {
+export function buildRunEndEvent(options: BuildRunEndEventOptions): EventRecord | null {
+  const { sessionId, lane, updatedTs, status, model } = options;
   if (status === "running") return null;
 
   const { eventType, title } = resolveRunEndMetadata(status);

@@ -55,11 +55,8 @@ export function useMonitorRequestRefs(): MonitorRequestRefs {
   };
 }
 
-export function activateCachedDataset({
-  state,
-  dispatch,
-  filePath,
-}: ActivateCachedDatasetOptions) {
+export function activateCachedDataset(options: ActivateCachedDatasetOptions) {
+  const { state, dispatch, filePath } = options;
   const cachedDataset = state.hydratedDatasetsByFilePath[filePath];
   if (!cachedDataset) {
     return false;
@@ -69,27 +66,17 @@ export function activateCachedDataset({
   return true;
 }
 
-export function beginSnapshotRequest({
-  requestIdRef,
-  filePath,
-  dispatch,
-  type,
-}: BeginSnapshotRequestOptions) {
+export function beginSnapshotRequest(options: BeginSnapshotRequestOptions) {
+  const { requestIdRef, filePath, dispatch, type } = options;
   const requestId = requestIdRef.current + 1;
   requestIdRef.current = requestId;
   dispatch({ type, requestId, filePath });
   return requestId;
 }
 
-export function resolveSnapshotRequest({
-  dispatch,
-  requestId,
-  filePath,
-  dataset,
-  beginType,
-  resolveType,
-  finishType,
-}: ResolveSnapshotRequestOptions) {
+export function resolveSnapshotRequest(options: ResolveSnapshotRequestOptions) {
+  const { dispatch, requestId, filePath, dataset, beginType, resolveType, finishType } =
+    options;
   if (!dataset) {
     dispatch({ type: finishType, requestId });
     return;
@@ -111,15 +98,19 @@ export function resolveSnapshotRequest({
 }
 
 export function useCancelPendingSelectionLoad(
-  dispatch: Dispatch<MonitorAction>,
-  {
-    recentSnapshotRequestIdRef,
-    archiveSnapshotRequestIdRef,
-  }: Pick<
+  options: {
+    dispatch: Dispatch<MonitorAction>;
+  } & Pick<
     MonitorRequestRefs,
     "recentSnapshotRequestIdRef" | "archiveSnapshotRequestIdRef"
   >,
 ) {
+  const {
+    dispatch,
+    recentSnapshotRequestIdRef,
+    archiveSnapshotRequestIdRef,
+  } = options;
+
   return useEffectEvent(() => {
     const nextRecentRequestId = recentSnapshotRequestIdRef.current + 1;
     recentSnapshotRequestIdRef.current = nextRecentRequestId;

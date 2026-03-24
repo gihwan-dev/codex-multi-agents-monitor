@@ -97,13 +97,9 @@ function resolveEntryDrivenStatus(
 ): RunStatus {
   const hasAbort = hasInterruptedEntry(entries);
   const hasOpenTask = hasOpenTaskWindow(entries);
-  if (!latestMessage) {
-    return resolveStatusWithoutLatestMessage(hasAbort, hasOpenTask);
-  }
-  if (isInterruptedAfterLatestMessage(entries, latestMessage, hasAbort)) {
-    return "interrupted";
-  }
-  return hasOpenTask ? "running" : resolveMessageDrivenStatus(entries, latestMessage);
+  return latestMessage
+    ? resolveLatestMessageStatus(entries, latestMessage, hasAbort, hasOpenTask)
+    : resolveStatusWithoutLatestMessage(hasAbort, hasOpenTask);
 }
 
 function resolveStatusWithoutLatestMessage(
@@ -139,6 +135,28 @@ function isInterruptedAfterLatestMessage(
   return abortTs !== null && msgTs !== null && abortTs >= msgTs;
 }
 
+function resolveLatestMessageStatus(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot,
+  hasAbort: boolean,
+  hasOpenTask: boolean,
+): RunStatus {
+  const interrupted = isInterruptedAfterLatestMessage(entries, latestMessage, hasAbort);
+  if (interrupted) {
+    return "interrupted";
+  }
+
+  return resolveLatestMessageOpenTaskStatus(entries, latestMessage, hasOpenTask);
+}
+
+function resolveLatestMessageOpenTaskStatus(
+  entries: SessionEntrySnapshot[],
+  latestMessage: SessionEntrySnapshot,
+  hasOpenTask: boolean,
+): RunStatus {
+  return hasOpenTask ? "running" : resolveMessageDrivenStatus(entries, latestMessage);
+}
+
 function resolveMessageDrivenStatus(
   entries: SessionEntrySnapshot[],
   latestMessage: SessionEntrySnapshot,
@@ -152,10 +170,10 @@ function resolveMessageDrivenStatus(
     return "running";
   }
 
-  return hasCompletionAfter(entries, msgTs) ? "done" : "running";
+  return hasTaskCompletionAfter(entries, msgTs) ? "done" : "running";
 }
 
-function hasCompletionAfter(entries: SessionEntrySnapshot[], msgTs: number) {
+function hasTaskCompletionAfter(entries: SessionEntrySnapshot[], msgTs: number) {
   return entries.some((entry) => {
     if (entry.entryType !== "task_complete") {
       return false;

@@ -7,19 +7,14 @@ import {
 } from "./sessionLinkOutputCollection";
 import type { IndexedSubagents, SessionLinkMaps } from "./sessionLinkTypes";
 
-export function buildSessionLinkMaps({
-  sessionId,
-  entries,
-  parentEvents,
-  subagents,
-  indexedSubagents,
-}: {
+export function buildSessionLinkMaps(options: {
   sessionId: string;
   entries: SessionLogSnapshot["entries"];
   parentEvents: EventRecord[];
   subagents: TimedSubagentSnapshot[];
   indexedSubagents: IndexedSubagents;
 }): SessionLinkMaps {
+  const { sessionId, entries, parentEvents, subagents, indexedSubagents } = options;
   const callMaps = buildCallMaps({ sessionId, entries });
   const sessionLinks = buildEmptySessionLinks();
 
@@ -30,13 +25,11 @@ export function buildSessionLinkMaps({
     callMaps,
     sessionLinks,
   });
-  fillMissingSpawnSourceEvents(
-    {
-      parentEvents,
-      subagents,
-      subagentToSpawnSource: sessionLinks.subagentToSpawnSource,
-    },
-  );
+  fillMissingSpawnSourceEvents({
+    parentEvents,
+    subagents,
+    subagentToSpawnSource: sessionLinks.subagentToSpawnSource,
+  });
 
   return sessionLinks;
 }

@@ -7,15 +7,12 @@ export function applyTokenCountToLastEvent(
   rawTokenCount: string | null,
 ) {
   const lastEvent = events[events.length - 1];
-  const tokens = parseTokenPayload(rawTokenCount);
+  const tokens = normalizeTokenCounts(parseTokenPayload(rawTokenCount));
   if (!lastEvent || !tokens) {
     return;
   }
 
-  lastEvent.tokensIn = tokens.in ?? 0;
-  lastEvent.tokensOut = tokens.out ?? 0;
-  lastEvent.reasoningTokens = tokens.reasoning ?? 0;
-  lastEvent.cacheReadTokens = tokens.cached ?? 0;
+  Object.assign(lastEvent, tokens);
 }
 
 export function createEntryEvent({
@@ -35,8 +32,9 @@ export function createEntryEvent({
   waitReason,
   errorMessage,
 }: EntryContext & EntryEventOptions): EventRecord {
+  const defaultMetrics = buildDefaultEventMetrics();
   return {
-    eventId: buildEntryEventId(lane.threadId, entry, index),
+    eventId: resolveEntryEventId(lane.threadId, entry, index),
     parentId: null,
     linkIds: [],
     laneId: lane.laneId,
@@ -58,6 +56,20 @@ export function createEntryEvent({
     provider: "OpenAI",
     model,
     toolName: toolName ?? null,
+    ...defaultMetrics,
+  };
+}
+
+function resolveEntryEventId(
+  threadId: string,
+  entry: EntryContext["entry"],
+  index: number,
+) {
+  return buildEntryEventId(threadId, entry, index);
+}
+
+function buildDefaultEventMetrics() {
+  return {
     tokensIn: 0,
     tokensOut: 0,
     reasoningTokens: 0,
@@ -67,7 +79,40 @@ export function createEntryEvent({
     finishReason: null,
     rawInput: null,
     rawOutput: null,
-  };
+  } satisfies Pick<
+    EventRecord,
+    | "tokensIn"
+    | "tokensOut"
+    | "reasoningTokens"
+    | "cacheReadTokens"
+    | "cacheWriteTokens"
+    | "costUsd"
+    | "finishReason"
+    | "rawInput"
+    | "rawOutput"
+  >;
+}
+
+function normalizeTokenCounts(
+  tokens: ReturnType<typeof parseTokenPayload>,
+) {
+  if (!tokens) {
+    return null;
+  }
+
+  return {
+    tokensIn: resolveTokenCount(tokens.in),
+    tokensOut: resolveTokenCount(tokens.out),
+    reasoningTokens: resolveTokenCount(tokens.reasoning),
+    cacheReadTokens: resolveTokenCount(tokens.cached),
+  } satisfies Pick<
+    EventRecord,
+    "tokensIn" | "tokensOut" | "reasoningTokens" | "cacheReadTokens"
+  >;
+}
+
+function resolveTokenCount(value: number | undefined) {
+  return typeof value === "number" ? value : 0;
 }
 
 function parseTokenPayload(rawTokenCount: string | null) {

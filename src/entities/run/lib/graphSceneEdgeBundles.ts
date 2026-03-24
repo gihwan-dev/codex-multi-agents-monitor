@@ -185,15 +185,18 @@ function appendDatasetEdgeBundle(
   });
 }
 
-export function buildGraphSceneEdgeBundles({
-  dataset,
-  laneIds,
-  selection,
-  selectionPathEventIds,
-  selectionPathEdgeIds,
-  hasMultiAgentTopology,
-  visibleRowsByEventId,
-}: GraphSceneEdgeBundleArgs): GraphSceneModel["edgeBundles"] {
+export function buildGraphSceneEdgeBundles(
+  options: GraphSceneEdgeBundleArgs,
+): GraphSceneModel["edgeBundles"] {
+  const {
+    dataset,
+    laneIds,
+    selection,
+    selectionPathEventIds,
+    selectionPathEdgeIds,
+    hasMultiAgentTopology,
+    visibleRowsByEventId,
+  } = options;
   const edgeBundleMap = buildGraphSceneEdgeBundleMap({
     dataset,
     laneIds,

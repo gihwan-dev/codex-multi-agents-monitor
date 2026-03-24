@@ -3,7 +3,7 @@ use crate::{
         is_conductor_workspace_path, resolve_archived_workspace_identity,
     },
     domain::{
-        ingest_policy::{filter_archived_index, ARCHIVED_INDEX_SCAN_LIMIT},
+        ingest_policy::{filter_archived_index, ArchivedIndexQuery, ARCHIVED_INDEX_SCAN_LIMIT},
         session::{ArchivedSessionIndex, ArchivedSessionIndexResult, SessionLogSnapshot},
     },
     infrastructure::{
@@ -16,12 +16,9 @@ use crate::{
 use std::{fs, io, path::Path};
 
 pub(crate) fn load_archived_session_index(
-    offset: usize,
-    limit: usize,
-    search: Option<String>,
-    index: &[ArchivedSessionIndex],
+    query: ArchivedIndexQuery<'_>,
 ) -> ArchivedSessionIndexResult {
-    filter_archived_index(index, offset, limit, search)
+    filter_archived_index(query)
 }
 
 pub(crate) fn build_archived_index() -> io::Result<Vec<ArchivedSessionIndex>> {
@@ -54,38 +51,53 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     }
 
     let mut snapshot = build_archived_session_snapshot(path).ok()??;
+    snapshot.subagents = collect_archived_subagents(path, &canonical_path, &snapshot);
 
-    if let Some(parent_dir) = path.parent() {
-        if let Ok(dir_entries) = fs::read_dir(parent_dir) {
-            for entry in dir_entries.flatten() {
-                let sub_path = entry.path();
-                if sub_path == canonical_path {
-                    continue;
-                }
-                if sub_path
-                    .extension()
-                    .and_then(|extension| extension.to_str())
-                    != Some("jsonl")
-                {
-                    continue;
-                }
-                if let Ok(Some(subagent)) = read_subagent_snapshot(&sub_path) {
-                    if subagent.parent_thread_id == snapshot.session_id
-                        || snapshot
-                            .forked_from_id
-                            .as_ref()
-                            .is_some_and(|forked_from_id| {
-                                subagent.parent_thread_id == *forked_from_id
-                            })
-                    {
-                        snapshot.subagents.push(subagent);
-                    }
-                }
+    Some(snapshot)
+}
+
+fn collect_archived_subagents(
+    path: &Path,
+    canonical_path: &Path,
+    snapshot: &SessionLogSnapshot,
+) -> Vec<crate::domain::session::SubagentSnapshot> {
+    let Some(parent_dir) = path.parent() else {
+        return Vec::new();
+    };
+    let Ok(dir_entries) = fs::read_dir(parent_dir) else {
+        return Vec::new();
+    };
+
+    let mut subagents = Vec::new();
+    for entry in dir_entries.flatten() {
+        let sub_path = entry.path();
+        if !is_subagent_candidate_path(&sub_path, canonical_path) {
+            continue;
+        }
+        if let Ok(Some(subagent)) = read_subagent_snapshot(&sub_path) {
+            if is_snapshot_subagent(snapshot, &subagent.parent_thread_id) {
+                subagents.push(subagent);
             }
         }
     }
 
-    Some(snapshot)
+    subagents
+}
+
+fn is_subagent_candidate_path(sub_path: &Path, canonical_path: &Path) -> bool {
+    sub_path != canonical_path
+        && sub_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("jsonl")
+}
+
+fn is_snapshot_subagent(snapshot: &SessionLogSnapshot, parent_thread_id: &str) -> bool {
+    snapshot.session_id == parent_thread_id
+        || snapshot
+            .forked_from_id
+            .as_ref()
+            .is_some_and(|forked_from_id| forked_from_id == parent_thread_id)
 }
 
 fn build_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedSessionIndex>> {

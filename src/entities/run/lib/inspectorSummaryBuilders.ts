@@ -50,9 +50,23 @@ function buildTokenFact(event: EventRecord): SummaryFact | null {
 
 export function buildEventFacts(event: EventRecord): SummaryFact[] {
   const facts: Array<SummaryFact | null> = [
+    ...buildCoreEventFacts(event),
+    ...buildOptionalEventFacts(event),
+  ];
+
+  return facts.filter(Boolean) as SummaryFact[];
+}
+
+function buildCoreEventFacts(event: EventRecord) {
+  return [
     { label: "Status", value: event.status },
     { label: "Started", value: formatTimestamp(event.startTs) },
     { label: "Duration", value: formatDuration(event.durationMs) },
+  ] satisfies Array<SummaryFact | null>;
+}
+
+function buildOptionalEventFacts(event: EventRecord) {
+  return [
     event.toolName ? { label: "Tool", value: event.toolName } : null,
     event.model && event.model !== "human" ? { label: "Model", value: event.model } : null,
     buildTokenFact(event),
@@ -62,9 +76,7 @@ export function buildEventFacts(event: EventRecord): SummaryFact[] {
     event.finishReason && event.finishReason !== "stop"
       ? { label: "Finish", value: event.finishReason, emphasis: "warning" }
       : null,
-  ];
-
-  return facts.filter(Boolean) as SummaryFact[];
+  ] satisfies Array<SummaryFact | null>;
 }
 
 function buildUpstreamJumps(event: EventRecord, context: InspectorContext) {
@@ -164,16 +176,17 @@ export function buildEventInspectorSummary(
   const upstream = buildUpstreamJumps(event, context);
   const downstream = buildDownstreamJumps(event, context);
   const impact = buildEventImpactSummary(event, downstream, context);
+  const preview = event.outputPreview ?? event.inputPreview ?? "n/a";
 
   return {
     title: event.title,
-    preview: event.outputPreview ?? event.inputPreview ?? "n/a",
+    preview,
     facts: buildEventFacts(event),
     whyBlocked: impact.whyBlocked,
     upstream,
     downstream,
     nextAction: impact.nextAction,
-    payloadPreview: event.outputPreview ?? event.inputPreview ?? "n/a",
+    payloadPreview: preview,
     rawStatusLabel: buildRawStatusLabel(event, rawEnabled),
     affectedAgentCount: impact.affectedAgentCount,
     downstreamWaitingCount: impact.downstreamWaitingCount,

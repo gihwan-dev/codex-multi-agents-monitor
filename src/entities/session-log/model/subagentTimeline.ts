@@ -41,13 +41,10 @@ interface SubagentTimelineBuffers {
   edges: EdgeRecord[];
 }
 
-export function buildSubagentTimeline({
-  snapshot,
-  mainLane,
-  parentEvents,
-  parentTimelineEvents,
-  resolvedModel,
-}: BuildSubagentTimelineOptions): BuildSubagentTimelineResult {
+export function buildSubagentTimeline(
+  options: BuildSubagentTimelineOptions,
+): BuildSubagentTimelineResult {
+  const { snapshot, mainLane, parentEvents, parentTimelineEvents, resolvedModel } = options;
   const timelineContext = createSubagentTimelineContext(snapshot, parentEvents);
   const buffers = createSubagentTimelineBuffers();
 

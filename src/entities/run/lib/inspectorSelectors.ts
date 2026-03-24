@@ -17,10 +17,14 @@ function findSelectionDetails(
   dataset: RunDataset,
   selection: SelectionState | null,
 ): EventRecord | RunDataset["edges"][number] | RunDataset["artifacts"][number] | null {
-  if (!selection) {
-    return null;
-  }
+  return selection ? resolveSelectionDetails({ dataset, selection }) : null;
+}
 
+function resolveSelectionDetails(options: {
+  dataset: RunDataset;
+  selection: SelectionState;
+}) {
+  const { dataset, selection } = options;
   if (selection.kind === "event") {
     return dataset.events.find((event) => event.eventId === selection.id) ?? null;
   }
@@ -32,10 +36,20 @@ function findSelectionDetails(
   return dataset.artifacts.find((artifact) => artifact.artifactId === selection.id) ?? null;
 }
 
-function buildInspectorContext(dataset: RunDataset) {
-  const { incomingByEventId, outgoingByEventId } = buildEdgeMaps(dataset);
-  const { previousByEventId } = buildLaneEventMaps(dataset);
-  const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+function createBuildEventJump(options: {
+  dataset: RunDataset;
+  eventsById: Map<string, EventRecord>;
+  incomingByEventId: Map<string, RunDataset["edges"]>;
+  outgoingByEventId: Map<string, RunDataset["edges"]>;
+  previousByEventId: Map<string, EventRecord>;
+}) {
+  const {
+    dataset,
+    eventsById,
+    incomingByEventId,
+    outgoingByEventId,
+    previousByEventId,
+  } = options;
   const buildEventJump = (eventId: string, label: string, description: string) => ({
     label,
     description,
@@ -53,6 +67,19 @@ function buildInspectorContext(dataset: RunDataset) {
       buildEventJump,
     },
   };
+}
+
+function buildInspectorContext(dataset: RunDataset) {
+  const { incomingByEventId, outgoingByEventId } = buildEdgeMaps(dataset);
+  const { previousByEventId } = buildLaneEventMaps(dataset);
+  const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+  return createBuildEventJump({
+    dataset,
+    eventsById,
+    incomingByEventId,
+    outgoingByEventId,
+    previousByEventId,
+  });
 }
 
 function buildSelectionSummary(

@@ -6,15 +6,39 @@ import type {
   RoutePort,
 } from "./graphLayoutTypes";
 
+interface MovePointOptions {
+  point: Point;
+  side: PortSide;
+  distance: number;
+}
+
+interface VerticalRoutePortOptions {
+  layout: EventLayout;
+  side: "top" | "bottom";
+  offset: number;
+  edgePadding: number;
+}
+
+interface HorizontalRoutePortOptions {
+  layout: EventLayout;
+  side: "left" | "right";
+  offset: number;
+  edgePadding: number;
+}
+
+interface BuildRoutePortOptions {
+  layout: EventLayout;
+  side: PortSide;
+  offset: number;
+  edgePadding: number;
+}
+
 export function getSortAxis(rect: Rect, side: PortSide): number {
   return side === "top" || side === "bottom" ? rectCenterX(rect) : rectCenterY(rect);
 }
 
-export function movePoint(
-  point: Point,
-  side: PortSide,
-  distance: number,
-): Point {
+export function movePoint(options: MovePointOptions): Point {
+  const { point, side, distance } = options;
   switch (side) {
     case "top":
       return { x: point.x, y: point.y - distance };
@@ -75,14 +99,7 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function buildVerticalRoutePort(
-  args: {
-    layout: EventLayout;
-    side: "top" | "bottom";
-    offset: number;
-    edgePadding: number;
-  },
-): RoutePort {
+function buildVerticalRoutePort(args: VerticalRoutePortOptions): RoutePort {
   return {
     eventId: args.layout.eventId,
     side: args.side,
@@ -99,14 +116,7 @@ function buildVerticalRoutePort(
   };
 }
 
-function buildHorizontalRoutePort(
-  args: {
-    layout: EventLayout;
-    side: "left" | "right";
-    offset: number;
-    edgePadding: number;
-  },
-): RoutePort {
+function buildHorizontalRoutePort(args: HorizontalRoutePortOptions): RoutePort {
   return {
     eventId: args.layout.eventId,
     side: args.side,
@@ -123,9 +133,8 @@ function buildHorizontalRoutePort(
   };
 }
 
-export function buildRoutePort(
-  ...[layout, side, offset, edgePadding]: [EventLayout, PortSide, number, number]
-): RoutePort {
+export function buildRoutePort(options: BuildRoutePortOptions): RoutePort {
+  const { layout, side, offset, edgePadding } = options;
   return side === "top" || side === "bottom"
     ? buildVerticalRoutePort({ layout, side, offset, edgePadding })
     : buildHorizontalRoutePort({ layout, side, offset, edgePadding });

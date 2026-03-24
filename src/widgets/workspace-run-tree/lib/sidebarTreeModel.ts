@@ -136,13 +136,14 @@ function buildDatasetSources(
   return datasets.map((dataset) => buildDatasetSource(dataset, workspaceIdentityOverrides));
 }
 
-export function buildSidebarTreeModel({
-  datasets,
-  recentIndex,
-  recentIndexReady,
-  search,
-  workspaceIdentityOverrides,
-}: BuildSidebarTreeModelOptions) {
+export function buildSidebarTreeModel(options: BuildSidebarTreeModelOptions) {
+  const {
+    datasets,
+    recentIndex,
+    recentIndexReady,
+    search,
+    workspaceIdentityOverrides,
+  } = options;
   if (!recentIndexReady) {
     return buildWorkspaceTreeFromSources(
       buildDatasetSources(datasets, workspaceIdentityOverrides),

@@ -46,7 +46,7 @@ export function GraphEventCard({
         cardClasses,
       )}
       style={{
-        ...buildCardStyle(eventType, selected, inPath),
+        ...buildCardStyle({ eventType, selected, inPath }),
         top: `${eventLayout.cardRect.y - rowAnchorTop}px`,
         width: `${eventLayout.cardRect.width}px`,
       }}

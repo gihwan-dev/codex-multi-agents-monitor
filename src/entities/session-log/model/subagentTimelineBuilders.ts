@@ -5,10 +5,12 @@ import { buildLaneEventsFromEntries } from "./eventBuilder";
 import { buildRunEndEvent } from "./runBoundaryEvents";
 import type { TimedSubagentSnapshot } from "./types";
 
+type LaneStatus = AgentLane["laneStatus"];
+
 export interface SubagentStatus {
   subError: string | null;
   subModel: string;
-  subStatus: AgentLane["laneStatus"];
+  subStatus: LaneStatus;
 }
 
 interface BuildSubagentTimelineEntryOptions {
@@ -18,6 +20,38 @@ interface BuildSubagentTimelineEntryOptions {
   resolvedModel: string;
   subagentToSpawnSource: Map<string, string>;
   waitAgentErrors: Map<string, string>;
+}
+
+interface BuildSubagentSpawnEventOptions {
+  subagent: TimedSubagentSnapshot;
+  lane: AgentLane;
+  subModel: string;
+  subError: string | null;
+  subFirstEventTs: number;
+}
+
+interface BuildSubagentEventListOptions {
+  subagent: TimedSubagentSnapshot;
+  lane: AgentLane;
+  laneEvents: EventRecord[];
+  spawnEvent: EventRecord;
+  subStatus: LaneStatus;
+  subModel: string;
+}
+
+interface BuildSubagentSpawnEdgeOptions {
+  subagent: TimedSubagentSnapshot;
+  lane: AgentLane;
+  spawnEvent: EventRecord;
+  mainLane: AgentLane;
+  parentTimelineEvents: EventRecord[];
+  subagentToSpawnSource: Map<string, string>;
+}
+
+interface BuildSubagentTimelineResult {
+  lane: AgentLane;
+  events: EventRecord[];
+  edge: EdgeRecord;
 }
 
 export function resolveSubagentStatus(
@@ -52,14 +86,17 @@ export function buildSubagentLane(
   };
 }
 
-export function buildSubagentTimelineEntry({
-  subagent,
-  mainLane,
-  parentTimelineEvents,
-  resolvedModel,
-  subagentToSpawnSource,
-  waitAgentErrors,
-}: BuildSubagentTimelineEntryOptions) {
+export function buildSubagentTimelineEntry(
+  options: BuildSubagentTimelineEntryOptions,
+): BuildSubagentTimelineResult {
+  const {
+    subagent,
+    mainLane,
+    parentTimelineEvents,
+    resolvedModel,
+    subagentToSpawnSource,
+    waitAgentErrors,
+  } = options;
   const { subError, subModel, subStatus } = resolveSubagentStatus(
     subagent,
     resolvedModel,
@@ -83,25 +120,34 @@ export function buildSubagentTimelineEntry({
     subError,
     subFirstEventTs: laneEvents[0]?.startTs ?? subagent.startedTs,
   });
+  const events = buildSubagentEventList({
+    subagent,
+    lane,
+    laneEvents,
+    spawnEvent,
+    subStatus,
+    subModel,
+  });
+  const edge = buildSubagentSpawnEdge({
+    subagent,
+    lane,
+    spawnEvent,
+    mainLane,
+    parentTimelineEvents,
+    subagentToSpawnSource,
+  });
 
   return {
     lane,
-    events: buildSubagentEventList({ subagent, lane, laneEvents, spawnEvent, subStatus, subModel }),
-    edge: buildSubagentSpawnEdge({
-      subagent,
-      lane,
-      spawnEvent,
-      mainLane,
-      parentTimelineEvents,
-      subagentToSpawnSource,
-    }),
+    events,
+    edge,
   };
 }
 
 function normalizeSubagentStatus(
   subagent: TimedSubagentSnapshot,
   subError: string | null,
-): AgentLane["laneStatus"] {
+): LaneStatus {
   const baseStatus = deriveSessionLogStatus(subagent.entries, true);
   if (subError && baseStatus !== "interrupted") {
     return "interrupted";
@@ -112,19 +158,10 @@ function normalizeSubagentStatus(
   return baseStatus;
 }
 
-function buildSubagentSpawnEvent({
-  subagent,
-  lane,
-  subModel,
-  subError,
-  subFirstEventTs,
-}: {
-  subagent: TimedSubagentSnapshot;
-  lane: AgentLane;
-  subModel: string;
-  subError: string | null;
-  subFirstEventTs: number;
-}): EventRecord {
+function buildSubagentSpawnEvent(
+  options: BuildSubagentSpawnEventOptions,
+): EventRecord {
+  const { subagent, lane, subModel, subError, subFirstEventTs } = options;
   return {
     eventId: `${subagent.sessionId}:spawn`,
     parentId: null,
@@ -160,21 +197,8 @@ function buildSubagentSpawnEvent({
   };
 }
 
-function buildSubagentEventList({
-  subagent,
-  lane,
-  laneEvents,
-  spawnEvent,
-  subStatus,
-  subModel,
-}: {
-  subagent: TimedSubagentSnapshot;
-  lane: AgentLane;
-  laneEvents: EventRecord[];
-  spawnEvent: EventRecord;
-  subStatus: AgentLane["laneStatus"];
-  subModel: string;
-}) {
+function buildSubagentEventList(options: BuildSubagentEventListOptions) {
+  const { subagent, lane, laneEvents, spawnEvent, subStatus, subModel } = options;
   const endEvent = buildRunEndEvent({
     sessionId: subagent.sessionId,
     lane,
@@ -185,24 +209,18 @@ function buildSubagentEventList({
   return [spawnEvent, ...laneEvents, ...(endEvent ? [endEvent] : [])];
 }
 
-function buildSubagentSpawnEdge({
-  subagent,
-  lane,
-  spawnEvent,
-  mainLane,
-  parentTimelineEvents,
-  subagentToSpawnSource,
-}: {
-  subagent: TimedSubagentSnapshot;
-  lane: AgentLane;
-  spawnEvent: EventRecord;
-  mainLane: AgentLane;
-  parentTimelineEvents: EventRecord[];
-  subagentToSpawnSource: Map<string, string>;
-}) {
+function buildSubagentSpawnEdge(options: BuildSubagentSpawnEdgeOptions) {
+  const {
+    subagent,
+    lane,
+    spawnEvent,
+    mainLane,
+    parentTimelineEvents,
+    subagentToSpawnSource,
+  } = options;
   const sourceEventId =
     subagentToSpawnSource.get(subagent.sessionId) ??
-    findClosestParentEvent(parentTimelineEvents, subagent.startedTs);
+    findClosestParentEvent({ parentEvents: parentTimelineEvents, targetTs: subagent.startedTs });
   return {
     edgeId: `spawn:${subagent.sessionId}`,
     edgeType: "spawn",

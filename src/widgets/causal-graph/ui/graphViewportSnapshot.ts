@@ -15,12 +15,10 @@ interface BuildGraphViewportSnapshotOptions {
   viewportWidth: number;
 }
 
-export function buildGraphViewportSnapshot({
-  availableCanvasHeight,
-  scene,
-  scrollTop,
-  viewportWidth,
-}: BuildGraphViewportSnapshotOptions) {
+export function buildGraphViewportSnapshot(
+  options: BuildGraphViewportSnapshotOptions,
+) {
+  const { availableCanvasHeight, scene, scrollTop, viewportWidth } = options;
   const layout = buildGraphLayoutSnapshot(scene, viewportWidth);
   const bundleById = new Map(scene.edgeBundles.map((bundle) => [bundle.id, bundle]));
   const renderedContentHeight = computeRenderedContentHeight(
@@ -44,12 +42,12 @@ export function buildGraphViewportSnapshot({
     gridTemplateColumns: `${TIME_GUTTER}px repeat(${scene.lanes.length || 1}, ${layout.laneMetrics.laneWidth}px)`,
     layout,
     renderedContentHeight,
-    visibleEdgeRoutes: computeVisibleEdgeRoutes(
-      layout.edgeRoutes,
+    visibleEdgeRoutes: computeVisibleEdgeRoutes({
+      edgeRoutes: layout.edgeRoutes,
       scrollTop,
-      availableCanvasHeight,
-      500,
-    ),
+      viewportHeight: availableCanvasHeight,
+      overscanPx: 500,
+    }),
     visibleRowPositions: layout.rowPositions.slice(
       visibleRange.startIndex,
       visibleRange.endIndex,

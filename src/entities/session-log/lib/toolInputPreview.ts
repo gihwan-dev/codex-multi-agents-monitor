@@ -5,6 +5,11 @@ import {
 
 type InputPreviewReader = (record: Record<string, unknown>) => string | null | undefined;
 
+interface ExtractToolInputPreviewOptions {
+  toolName: string;
+  rawPreview: string | null;
+}
+
 const NULL_INPUT_PREVIEW_TOOLS = new Set([
   "list_mcp_resources",
   "list_mcp_resource_templates",
@@ -25,20 +30,23 @@ const STRUCTURED_INPUT_PREVIEW_READERS: Partial<
   write_stdin: readWriteStdinPreview,
 };
 
-export function extractToolInputPreview(
-  toolName: string,
-  rawPreview: string | null,
-): string | null {
-  if (!rawPreview) {
-    return null;
-  }
+export function extractToolInputPreview(options: ExtractToolInputPreviewOptions): string | null {
+  return options.rawPreview
+    ? resolveToolInputPreview({ toolName: options.toolName, rawPreview: options.rawPreview })
+    : null;
+}
 
+function resolveToolInputPreview(options: {
+  toolName: string;
+  rawPreview: string;
+}) {
+  const { toolName, rawPreview } = options;
   const structuredPreview = readStructuredInputPreview(toolName, rawPreview);
   if (structuredPreview !== undefined) {
     return structuredPreview;
   }
 
-  return toolName === "apply_patch" ? extractApplyPatchTarget(rawPreview) : rawPreview;
+  return resolveFallbackInputPreview(toolName, rawPreview);
 }
 
 function readStructuredInputPreview(
@@ -104,6 +112,10 @@ function readWriteStdinPreview(record: Record<string, unknown>) {
 function extractApplyPatchTarget(rawPreview: string) {
   const fileMatch = rawPreview.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
   return fileMatch ? fileMatch[1].trim() : rawPreview;
+}
+
+function resolveFallbackInputPreview(toolName: string, rawPreview: string) {
+  return toolName === "apply_patch" ? extractApplyPatchTarget(rawPreview) : rawPreview;
 }
 
 function readString(value: unknown): string | null {

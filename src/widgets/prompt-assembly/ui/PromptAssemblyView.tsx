@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { PromptAssembly, PromptLayerType } from "../../../entities/run";
 import { cn } from "../../../shared/lib";
+import { formatBytes } from "./promptAssemblyFormat";
 
 const DYNAMIC_LAYER_TYPES: ReadonlySet<PromptLayerType> = new Set([
   "user",
@@ -30,12 +31,6 @@ const LAYER_ACCENTS: Record<PromptLayerType, string> = {
   "subagent-notification": "var(--color-stale)",
 };
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  return kb < 100 ? `${kb.toFixed(1)} KB` : `${Math.round(kb)} KB`;
-}
-
 interface PromptAssemblyViewProps {
   assembly: PromptAssembly;
   rawEnabled: boolean;
@@ -48,10 +43,55 @@ interface PromptLayerCardProps {
   layer: PromptAssembly["layers"][number];
 }
 
-export function PromptAssemblyView({
-  assembly,
-  rawEnabled,
-}: PromptAssemblyViewProps) {
+interface PromptAssemblyHeaderProps {
+  assembly: PromptAssembly;
+}
+
+interface PromptAssemblyEmptyStateProps {
+  assembly: PromptAssembly;
+}
+
+interface PromptLayerToggleProps {
+  expanded: boolean;
+  layer: PromptAssembly["layers"][number];
+  onToggle: (layerId: string) => void;
+}
+
+interface PromptLayerPreviewProps {
+  preview: string;
+}
+
+interface PromptLayerContentProps {
+  rawContent: string | null;
+  rawVisible: boolean;
+}
+
+function PromptAssemblyHeader({ assembly }: PromptAssemblyHeaderProps) {
+  return (
+    <div
+      data-slot="prompt-assembly-header"
+      className="flex flex-wrap items-center justify-between gap-2"
+    >
+      <span className="text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        Prompt Context Assembly
+      </span>
+      <span
+        data-slot="prompt-assembly-size"
+        className="text-[0.72rem] tabular-nums text-[var(--color-text-tertiary)]"
+      >
+        {assembly.layers.length} layers · {formatBytes(assembly.totalContentLength)}
+      </span>
+    </div>
+  );
+}
+
+function PromptAssemblyEmptyState({ assembly }: PromptAssemblyEmptyStateProps) {
+  return assembly.layers.length === 0 ? (
+    <p className="text-sm text-muted-foreground">No prompt assembly data available.</p>
+  ) : null;
+}
+
+export function PromptAssemblyView({ assembly, rawEnabled }: PromptAssemblyViewProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const toggleLayer = (layerId: string) => {
@@ -71,20 +111,7 @@ export function PromptAssemblyView({
       data-slot="prompt-assembly"
       className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3"
     >
-      <div
-        data-slot="prompt-assembly-header"
-        className="flex flex-wrap items-center justify-between gap-2"
-      >
-        <span className="text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Prompt Context Assembly
-        </span>
-        <span
-          data-slot="prompt-assembly-size"
-          className="text-[0.72rem] tabular-nums text-[var(--color-text-tertiary)]"
-        >
-          {assembly.layers.length} layers · {formatBytes(assembly.totalContentLength)}
-        </span>
-      </div>
+      <PromptAssemblyHeader assembly={assembly} />
 
       {assembly.layers.map((layer) => (
         <PromptLayerCard
@@ -96,9 +123,7 @@ export function PromptAssemblyView({
         />
       ))}
 
-      {assembly.layers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No prompt assembly data available.</p>
-      ) : null}
+      <PromptAssemblyEmptyState assembly={assembly} />
     </div>
   );
 }
@@ -141,11 +166,7 @@ function PromptLayerToggle({
   expanded,
   layer,
   onToggle,
-}: {
-  expanded: boolean;
-  layer: PromptAssembly["layers"][number];
-  onToggle: (layerId: string) => void;
-}) {
+}: PromptLayerToggleProps) {
   return (
     <button
       type="button"
@@ -176,7 +197,7 @@ function PromptLayerToggle({
   );
 }
 
-function PromptLayerPreview({ preview }: { preview: string }) {
+function PromptLayerPreview({ preview }: PromptLayerPreviewProps) {
   return (
     <div
       data-slot="prompt-layer-preview"
@@ -190,10 +211,7 @@ function PromptLayerPreview({ preview }: { preview: string }) {
 function PromptLayerContent({
   rawContent,
   rawVisible,
-}: {
-  rawContent: string | null;
-  rawVisible: boolean;
-}) {
+}: PromptLayerContentProps) {
   return (
     <div
       data-slot="prompt-layer-content"

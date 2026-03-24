@@ -12,6 +12,12 @@ interface SelectionLoadingPresentation {
   targetMeta?: string;
 }
 
+interface BuildSelectionRevealTargetOptions {
+  activeDataset: MonitorState["datasets"][number] | null;
+  selection: SelectionState | null;
+  graphScene: GraphSceneModel;
+}
+
 function collectVisibleEventIds(graphScene: GraphSceneModel) {
   return new Set(
     graphScene.rows.flatMap((row) => (row.kind === "event" ? [row.eventId] : [])),
@@ -67,10 +73,9 @@ function resolveArtifactRevealTarget(
 }
 
 export function buildSelectionRevealTarget(
-  activeDataset: MonitorState["datasets"][number] | null,
-  selection: SelectionState | null,
-  graphScene: GraphSceneModel,
+  options: BuildSelectionRevealTargetOptions,
 ): GraphSelectionRevealTarget | null {
+  const { activeDataset, selection, graphScene } = options;
   if (!activeDataset || !selection) {
     return null;
   }

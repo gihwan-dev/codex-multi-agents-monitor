@@ -59,7 +59,14 @@ type DatasetActivationPatch = Pick<
 
 export function buildDatasetActivationPatch(state: MonitorState, dataset: RunDataset): DatasetActivationPatch {
   const followLive = dataset.run.liveMode === "live";
-  const liveConnectionByRunId = followLive ? updateLiveConnectionMap(state.liveConnectionByRunId, dataset.run.traceId, dataset, true) : state.liveConnectionByRunId;
+  const liveConnectionByRunId = followLive
+    ? updateLiveConnectionMap({
+        liveConnectionByRunId: state.liveConnectionByRunId,
+        traceId: dataset.run.traceId,
+        dataset,
+        followLive: true,
+      })
+    : state.liveConnectionByRunId;
 
   return {
     activeRunId: dataset.run.traceId,

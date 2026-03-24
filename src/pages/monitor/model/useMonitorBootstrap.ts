@@ -18,6 +18,37 @@ interface UseMonitorBootstrapOptions {
 
 const LIVE_RECENT_POLL_INTERVAL_MS = 2_000;
 
+type InitialRecentSnapshotState = Pick<
+  UseMonitorBootstrapOptions,
+  "activeDataset" | "recentIndex" | "recentIndexReady" | "recentSnapshotLoadingId"
+>;
+
+type RecentRefreshState = Pick<
+  UseMonitorBootstrapOptions,
+  "activeDataset" | "activeFollowLive" | "activeSessionFilePath" | "recentIndex"
+>;
+
+interface UseInitialRecentSnapshotOptions extends InitialRecentSnapshotState {
+  requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+}
+
+interface UseRecentLiveRefreshOptions extends RecentRefreshState {
+  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+}
+
+interface MonitorBootstrapRefs {
+  requestRecentIndexRef: MutableRefObject<() => void>;
+  requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+  requestArchiveIndexRef: MutableRefObject<
+    UseMonitorBootstrapOptions["requestArchiveIndex"]
+  >;
+  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+}
+
+interface MonitorBootstrapEffectOptions
+  extends UseMonitorBootstrapOptions,
+    MonitorBootstrapRefs {}
+
 function useLatestRef<T>(value: T) {
   const ref = useRef(value);
 
@@ -26,6 +57,23 @@ function useLatestRef<T>(value: T) {
   }, [value]);
 
   return ref;
+}
+
+function useMonitorBootstrapRefs(
+  options: Pick<
+    UseMonitorBootstrapOptions,
+    | "refreshRecentSnapshot"
+    | "requestArchiveIndex"
+    | "requestRecentIndex"
+    | "requestRecentSnapshot"
+  >,
+): MonitorBootstrapRefs {
+  return {
+    requestRecentIndexRef: useLatestRef(options.requestRecentIndex),
+    requestRecentSnapshotRef: useLatestRef(options.requestRecentSnapshot),
+    requestArchiveIndexRef: useLatestRef(options.requestArchiveIndex),
+    refreshRecentSnapshotRef: useLatestRef(options.refreshRecentSnapshot),
+  };
 }
 
 function useRecentIndexBootstrapRequest(
@@ -58,15 +106,8 @@ function useArchiveIndexBootstrapRequest(
   }, []);
 }
 
-function shouldRequestInitialRecentSnapshot({
-  activeDataset,
-  recentIndex,
-  recentIndexReady,
-  recentSnapshotLoadingId,
-}: Pick<
-  UseMonitorBootstrapOptions,
-  "activeDataset" | "recentIndex" | "recentIndexReady" | "recentSnapshotLoadingId"
->) {
+function shouldRequestInitialRecentSnapshot(options: InitialRecentSnapshotState) {
+  const { activeDataset, recentIndex, recentIndexReady, recentSnapshotLoadingId } = options;
   return Boolean(
     recentIndexReady &&
       recentIndex.length > 0 &&
@@ -75,14 +116,7 @@ function shouldRequestInitialRecentSnapshot({
   );
 }
 
-function useInitialRecentSnapshot(
-  options: Pick<
-    UseMonitorBootstrapOptions,
-    "activeDataset" | "recentIndex" | "recentIndexReady" | "recentSnapshotLoadingId"
-  > & {
-    requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
-  },
-) {
+function useInitialRecentSnapshot(options: UseInitialRecentSnapshotOptions) {
   const {
     activeDataset,
     recentIndex,
@@ -113,17 +147,13 @@ function useInitialRecentSnapshot(
   ]);
 }
 
-function shouldRefreshRecentSnapshot(
-  {
+function shouldRefreshRecentSnapshot(options: RecentRefreshState) {
+  const {
     activeDataset,
     activeFollowLive,
     activeSessionFilePath,
     recentIndex,
-  }: Pick<
-    UseMonitorBootstrapOptions,
-    "activeDataset" | "activeFollowLive" | "activeSessionFilePath" | "recentIndex"
-  >,
-) {
+  } = options;
   if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath) {
     return false;
   }
@@ -136,26 +166,20 @@ function shouldRefreshRecentSnapshot(
   );
 }
 
-function useRecentLiveRefresh(
-  {
+function useRecentLiveRefresh(options: UseRecentLiveRefreshOptions) {
+  const {
     activeDataset,
     activeFollowLive,
     activeSessionFilePath,
     recentIndex,
-  }: Pick<
-    UseMonitorBootstrapOptions,
-    "activeDataset" | "activeFollowLive" | "activeSessionFilePath" | "recentIndex"
-  >,
-  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>,
-) {
-  const shouldRefresh = shouldRefreshRecentSnapshot(
-    {
-      activeDataset,
-      activeFollowLive,
-      activeSessionFilePath,
-      recentIndex,
-    },
-  );
+    refreshRecentSnapshotRef,
+  } = options;
+  const shouldRefresh = shouldRefreshRecentSnapshot({
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+  });
 
   useEffect(() => {
     if (!shouldRefresh || !activeSessionFilePath) {
@@ -173,23 +197,26 @@ function useRecentLiveRefresh(
   }, [activeSessionFilePath, refreshRecentSnapshotRef, shouldRefresh]);
 }
 
-export function useMonitorBootstrap({
-  activeDataset,
-  activeFollowLive,
-  activeSessionFilePath,
-  recentIndex,
-  recentIndexReady,
-  recentSnapshotLoadingId,
-  refreshRecentSnapshot,
-  requestArchiveIndex,
-  requestRecentIndex,
-  requestRecentSnapshot,
-}: UseMonitorBootstrapOptions) {
-  const requestRecentIndexRef = useLatestRef(requestRecentIndex);
-  const requestRecentSnapshotRef = useLatestRef(requestRecentSnapshot);
-  const requestArchiveIndexRef = useLatestRef(requestArchiveIndex);
-  const refreshRecentSnapshotRef = useLatestRef(refreshRecentSnapshot);
+export function useMonitorBootstrap(options: UseMonitorBootstrapOptions) {
+  useMonitorBootstrapEffects({
+    ...options,
+    ...useMonitorBootstrapRefs(options),
+  });
+}
 
+function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
+  const {
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
+    recentIndexReady,
+    recentSnapshotLoadingId,
+    requestRecentIndexRef,
+    requestRecentSnapshotRef,
+    requestArchiveIndexRef,
+    refreshRecentSnapshotRef,
+  } = options;
   useRecentIndexBootstrapRequest(requestRecentIndexRef);
   useArchiveIndexBootstrapRequest(requestArchiveIndexRef);
   useInitialRecentSnapshot({
@@ -199,13 +226,11 @@ export function useMonitorBootstrap({
     recentSnapshotLoadingId,
     requestRecentSnapshotRef,
   });
-  useRecentLiveRefresh(
-    {
-      activeDataset,
-      activeFollowLive,
-      activeSessionFilePath,
-      recentIndex,
-    },
+  useRecentLiveRefresh({
+    activeDataset,
+    activeFollowLive,
+    activeSessionFilePath,
+    recentIndex,
     refreshRecentSnapshotRef,
-  );
+  });
 }

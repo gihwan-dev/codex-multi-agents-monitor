@@ -261,7 +261,12 @@ describe("graphLayout", () => {
   it("computeVisibleRowRange returns all rows when viewport exceeds content", () => {
     const scene = createSyntheticScene();
     const layout = buildGraphLayoutSnapshot(scene, 820);
-    const range = computeVisibleRowRange(layout.rowPositions, 0, 10000, 3);
+    const range = computeVisibleRowRange({
+      rowPositions: layout.rowPositions,
+      scrollTop: 0,
+      viewportHeight: 10000,
+      overscanCount: 3,
+    });
 
     expect(range.startIndex).toBe(0);
     expect(range.endIndex).toBe(scene.rows.length);
@@ -276,7 +281,12 @@ describe("graphLayout", () => {
     const scrollTop = rowHeight * 5;
     const viewportHeight = rowHeight * 3;
 
-    const range = computeVisibleRowRange(layout.rowPositions, scrollTop, viewportHeight, 2);
+    const range = computeVisibleRowRange({
+      rowPositions: layout.rowPositions,
+      scrollTop,
+      viewportHeight,
+      overscanCount: 2,
+    });
 
     expect(range.startIndex).toBeGreaterThanOrEqual(3);
     expect(range.startIndex).toBeLessThanOrEqual(5);
@@ -286,7 +296,12 @@ describe("graphLayout", () => {
   });
 
   it("computeVisibleRowRange handles empty rowPositions", () => {
-    const range = computeVisibleRowRange([], 0, 500, 3);
+    const range = computeVisibleRowRange({
+      rowPositions: [],
+      scrollTop: 0,
+      viewportHeight: 500,
+      overscanCount: 3,
+    });
 
     expect(range.startIndex).toBe(0);
     expect(range.endIndex).toBe(0);
@@ -297,7 +312,12 @@ describe("graphLayout", () => {
   it("computeVisibleRowRange at scrollTop=0 starts from index 0", () => {
     const scene = createLargeScene(20);
     const layout = buildGraphLayoutSnapshot(scene, 820);
-    const range = computeVisibleRowRange(layout.rowPositions, 0, 400, 3);
+    const range = computeVisibleRowRange({
+      rowPositions: layout.rowPositions,
+      scrollTop: 0,
+      viewportHeight: 400,
+      overscanCount: 3,
+    });
 
     expect(range.startIndex).toBe(0);
     expect(range.endIndex).toBeGreaterThan(0);
@@ -310,10 +330,20 @@ describe("graphLayout", () => {
     const allRoutes = layout.edgeRoutes;
     expect(allRoutes.length).toBeGreaterThan(0);
 
-    const farBelowRoutes = computeVisibleEdgeRoutes(allRoutes, 100000, 500, 500);
+    const farBelowRoutes = computeVisibleEdgeRoutes({
+      edgeRoutes: allRoutes,
+      scrollTop: 100000,
+      viewportHeight: 500,
+      overscanPx: 500,
+    });
     expect(farBelowRoutes.length).toBe(0);
 
-    const allVisibleRoutes = computeVisibleEdgeRoutes(allRoutes, 0, 10000, 500);
+    const allVisibleRoutes = computeVisibleEdgeRoutes({
+      edgeRoutes: allRoutes,
+      scrollTop: 0,
+      viewportHeight: 10000,
+      overscanPx: 500,
+    });
     expect(allVisibleRoutes.length).toBe(allRoutes.length);
   });
 

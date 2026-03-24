@@ -95,15 +95,9 @@ function refreshRecentSnapshotFromSource(args: {
     });
 }
 
-export function useRecentMonitorRequests({
-  state,
-  dispatch,
-  cancelPendingSelectionLoad,
-  recentSnapshotRequestIdRef,
-  recentLiveRefreshInFlightRef,
-}: UseRecentMonitorRequestsOptions) {
-  const requestRecentIndex = useEffectEvent(() => requestRecentIndexFromSource(dispatch));
-  const requestRecentSnapshot = useEffectEvent((filePath: string) =>
+function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
+  const { state, dispatch, cancelPendingSelectionLoad, recentSnapshotRequestIdRef } = options;
+  return useEffectEvent((filePath: string) =>
     requestRecentSnapshotFromSource({
       state,
       dispatch,
@@ -112,13 +106,24 @@ export function useRecentMonitorRequests({
       filePath,
     }),
   );
-  const refreshRecentSnapshot = useEffectEvent((filePath: string) =>
+}
+
+function useRecentSnapshotRefresher(options: UseRecentMonitorRequestsOptions) {
+  const { dispatch, recentLiveRefreshInFlightRef } = options;
+  return useEffectEvent((filePath: string) =>
     refreshRecentSnapshotFromSource({
       dispatch,
       recentLiveRefreshInFlightRef,
       filePath,
     }),
   );
+}
+
+export function useRecentMonitorRequests(options: UseRecentMonitorRequestsOptions) {
+  const { dispatch } = options;
+  const requestRecentIndex = useEffectEvent(() => requestRecentIndexFromSource(dispatch));
+  const requestRecentSnapshot = useRecentSnapshotRequester(options);
+  const refreshRecentSnapshot = useRecentSnapshotRefresher(options);
 
   return {
     requestRecentIndex,

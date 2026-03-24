@@ -10,6 +10,17 @@ import { sortEvents } from "./selectorShared.js";
 
 const LARGE_RUN_LANE_THRESHOLD = 8;
 
+function toGraphLane(lane: RunDataset["lanes"][number]) {
+  return {
+    laneId: lane.laneId,
+    name: lane.name,
+    role: lane.role,
+    model: lane.model,
+    badge: lane.badge,
+    status: lane.laneStatus,
+  };
+}
+
 function buildGraphLanes(dataset: RunDataset) {
   const visibleLanes = dataset.lanes.filter(
     (lane, index) =>
@@ -17,14 +28,7 @@ function buildGraphLanes(dataset: RunDataset) {
   );
 
   return {
-    lanes: visibleLanes.map((lane) => ({
-      laneId: lane.laneId,
-      name: lane.name,
-      role: lane.role,
-      model: lane.model,
-      badge: lane.badge,
-      status: lane.laneStatus,
-    })),
+    lanes: visibleLanes.map(toGraphLane),
     hiddenLaneCount: Math.max(dataset.lanes.length - visibleLanes.length, 0),
   };
 }

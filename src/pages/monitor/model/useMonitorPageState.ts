@@ -7,10 +7,6 @@ import { useLiveFixturePlayback } from "./useLiveFixturePlayback";
 import { useMonitorBootstrap } from "./useMonitorBootstrap";
 import { useMonitorRequestController } from "./useMonitorRequestController";
 
-function buildMonitorPageActions(options: Parameters<typeof createMonitorActions>[0]) {
-  return createMonitorActions(options);
-}
-
 function useMonitorPageRuntime() {
   const [state, dispatch] = useReducer(monitorStateReducer, undefined, createMonitorInitialState);
   const derivedState = deriveMonitorViewState(state);
@@ -45,19 +41,11 @@ function useMonitorPageRuntime() {
 
 export function useMonitorPageState() {
   const { state, dispatch, derivedState, controller } = useMonitorPageRuntime();
+  const actions = createMonitorActions({ state, dispatch, activeDataset: derivedState.activeDataset, activeFollowLive: derivedState.activeFollowLive, loadArchiveIndex: controller.loadArchiveIndex, searchArchive: controller.searchArchive, selectArchivedSession: controller.selectArchivedSession, requestRecentSnapshot: controller.requestRecentSnapshot });
 
   return {
     state,
     ...derivedState,
-    actions: buildMonitorPageActions({
-      state,
-      dispatch,
-      activeDataset: derivedState.activeDataset,
-      activeFollowLive: derivedState.activeFollowLive,
-      loadArchiveIndex: controller.loadArchiveIndex,
-      searchArchive: controller.searchArchive,
-      selectArchivedSession: controller.selectArchivedSession,
-      requestRecentSnapshot: controller.requestRecentSnapshot,
-    }),
+    actions,
   };
 }

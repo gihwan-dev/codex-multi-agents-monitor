@@ -50,13 +50,14 @@ export function buildNormalizedImportRun(
   };
 }
 
-export function normalizeImportArtifacts(
-  artifacts: RawImportPayload["artifacts"],
-  options: RedactionOptions,
-): RunDataset["artifacts"] {
+export function normalizeImportArtifacts(options: {
+  artifacts: RawImportPayload["artifacts"];
+  redaction: RedactionOptions;
+}): RunDataset["artifacts"] {
+  const { artifacts, redaction } = options;
   return artifacts.map((item) => ({
     ...item,
-    rawContent: options.allowRaw && !options.noRawStorage ? item.rawContent : null,
+    rawContent: redaction.allowRaw && !redaction.noRawStorage ? item.rawContent : null,
   }));
 }
 

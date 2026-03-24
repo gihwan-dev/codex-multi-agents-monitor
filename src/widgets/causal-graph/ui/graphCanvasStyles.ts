@@ -21,11 +21,12 @@ export const GRAPH_STATUS_COLORS: Record<RunStatus, string> = {
   disconnected: "var(--color-disconnected)",
 };
 
-export function buildCardStyle(
-  eventType: string,
-  selected: boolean,
-  inPath: boolean,
-): CSSProperties {
+export function buildCardStyle(options: {
+  eventType: string;
+  selected: boolean;
+  inPath: boolean;
+}): CSSProperties {
+  const { eventType, selected, inPath } = options;
   const base: CSSProperties = {
     minHeight: 80,
     borderWidth: 1,

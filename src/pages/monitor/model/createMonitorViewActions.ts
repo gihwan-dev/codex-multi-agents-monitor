@@ -14,11 +14,18 @@ interface CreateMonitorViewActionsOptions {
   activeFollowLive: boolean;
 }
 
-function buildSelectionActions({
-  activeDataset,
-  activeFollowLive,
-  dispatch,
-}: CreateMonitorViewActionsOptions) {
+function buildSelectionActions(options: CreateMonitorViewActionsOptions) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return createSelectionActions({ activeDataset, activeFollowLive, dispatch });
+}
+
+function createSelectionActions(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
   return {
     selectRun(traceId: string) {
       dispatch({ type: "set-active-run", traceId });
@@ -76,58 +83,102 @@ function buildDrawerActions({
   };
 }
 
-function buildLiveActions({
-  activeDataset,
-  activeFollowLive,
-  dispatch,
-}: CreateMonitorViewActionsOptions) {
+function buildLiveActions(options: CreateMonitorViewActionsOptions) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return createLiveActions({ activeDataset, activeFollowLive, dispatch });
+}
+
+function dispatchFollowLiveToggle(
+  dispatch: Dispatch<MonitorAction>,
+  activeDataset: NonNullable<CreateMonitorViewActionsOptions["activeDataset"]>,
+) {
+  dispatch({
+    type: "toggle-follow-live",
+    traceId: activeDataset.run.traceId,
+  });
+}
+
+function selectLatestLiveEvent(
+  dispatch: Dispatch<MonitorAction>,
+  activeDataset: NonNullable<CreateMonitorViewActionsOptions["activeDataset"]>,
+) {
+  const latestEvent = activeDataset.events[activeDataset.events.length - 1];
+  if (!latestEvent) {
+    return;
+  }
+
+  dispatch({
+    type: "set-selection",
+    selection: { kind: "event", id: latestEvent.eventId },
+  });
+}
+
+function createLiveActions(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
   return {
-    toggleFollowLive() {
-      if (!activeDataset) {
-        return;
-      }
+    toggleFollowLive: createToggleFollowLiveAction(options),
+    pauseFollowLive: createPauseFollowLiveAction(options),
+    toggleGap: createToggleGapAction(options),
+  };
+}
 
-      dispatch({
-        type: "toggle-follow-live",
-        traceId: activeDataset.run.traceId,
-      });
+function createToggleFollowLiveAction(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return function toggleFollowLive() {
+    if (!activeDataset) {
+      return;
+    }
 
-      if (!activeFollowLive && activeDataset.run.liveMode === "live") {
-        const latestEvent = activeDataset.events[activeDataset.events.length - 1];
-        if (latestEvent) {
-          dispatch({
-            type: "set-selection",
-            selection: { kind: "event", id: latestEvent.eventId },
-          });
-        }
-      }
-    },
-    pauseFollowLive() {
-      if (!activeDataset) {
-        return;
-      }
+    dispatchFollowLiveToggle(dispatch, activeDataset);
+    if (!activeFollowLive && activeDataset.run.liveMode === "live") {
+      selectLatestLiveEvent(dispatch, activeDataset);
+    }
+  };
+}
 
-      if (!activeFollowLive || activeDataset.run.liveMode !== "live") {
-        return;
-      }
+function createPauseFollowLiveAction(
+  options: Pick<
+    CreateMonitorViewActionsOptions,
+    "activeDataset" | "activeFollowLive" | "dispatch"
+  >,
+) {
+  const { activeDataset, activeFollowLive, dispatch } = options;
+  return function pauseFollowLive() {
+    if (!activeDataset || !activeFollowLive || activeDataset.run.liveMode !== "live") {
+      return;
+    }
 
-      dispatch({
-        type: "set-follow-live",
-        traceId: activeDataset.run.traceId,
-        value: false,
-      });
-    },
-    toggleGap(gapId: string) {
-      if (!activeDataset) {
-        return;
-      }
+    dispatch({
+      type: "set-follow-live",
+      traceId: activeDataset.run.traceId,
+      value: false,
+    });
+  };
+}
 
-      dispatch({
-        type: "toggle-gap",
-        traceId: activeDataset.run.traceId,
-        gapId,
-      });
-    },
+function createToggleGapAction(
+  options: Pick<CreateMonitorViewActionsOptions, "activeDataset" | "dispatch">,
+) {
+  const { activeDataset, dispatch } = options;
+  return function toggleGap(gapId: string) {
+    if (!activeDataset) {
+      return;
+    }
+
+    dispatch({
+      type: "toggle-gap",
+      traceId: activeDataset.run.traceId,
+      gapId,
+    });
   };
 }
 
