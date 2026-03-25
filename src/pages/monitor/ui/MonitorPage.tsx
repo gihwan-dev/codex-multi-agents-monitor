@@ -27,15 +27,20 @@ interface PendingEventOptions {
   onConsumed?: () => void;
 }
 
+function applyPendingNavigation(opts: PendingEventOptions) {
+  if (!opts.pendingEventId) return;
+  const event = opts.events?.find((e) => e.eventId === opts.pendingEventId);
+  if (event) {
+    opts.navigateToItem({ kind: "event", id: event.eventId });
+  }
+  opts.onConsumed?.();
+}
+
 function usePendingEventNavigation(opts: PendingEventOptions) {
+  const { pendingEventId, events, navigateToItem, onConsumed } = opts;
   useEffect(() => {
-    if (!opts.pendingEventId) return;
-    const event = opts.events?.find((e) => e.eventId === opts.pendingEventId);
-    if (event) {
-      opts.navigateToItem({ kind: "event", id: event.eventId });
-    }
-    opts.onConsumed?.();
-  }, [opts.pendingEventId, opts.events, opts.navigateToItem, opts.onConsumed]);
+    applyPendingNavigation({ pendingEventId, events, navigateToItem, onConsumed });
+  }, [pendingEventId, events, navigateToItem, onConsumed]);
 }
 
 export function MonitorPage(props: MonitorPageProps) {

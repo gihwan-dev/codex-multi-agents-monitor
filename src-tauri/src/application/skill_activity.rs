@@ -15,7 +15,7 @@ fn collect_session_files(limit: usize) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     collect_jsonl_files(&codex_home.join("sessions"), &mut files)?;
     collect_jsonl_files(&codex_home.join("archived_sessions"), &mut files)?;
-    files.sort_by(|a, b| recent_file_modified_at(b).cmp(&recent_file_modified_at(a)));
+    files.sort_by_key(|b| std::cmp::Reverse(recent_file_modified_at(b)));
     if limit > 0 {
         files.truncate(limit);
     }
@@ -29,10 +29,56 @@ fn extract_session_id(entry: &Value) -> Option<String> {
         .map(String::from)
 }
 
-fn extract_updated_at(entry: &Value) -> Option<String> {
-    entry.get("timestamp")
-        .and_then(Value::as_str)
-        .map(String::from)
+struct SessionScanState {
+    session_id: String,
+    last_timestamp: String,
+    records: Vec<SkillInvocationRecord>,
+}
+
+fn parse_line(line: &str) -> Option<Value> {
+    serde_json::from_str(line).ok()
+}
+
+fn process_entry(entry: &Value, state: &mut SessionScanState) {
+    let entry_type = entry.get("type").and_then(Value::as_str).unwrap_or("");
+
+    if entry_type == "session_meta" {
+        if let Some(id) = extract_session_id(entry) {
+            state.session_id = id;
+        }
+    }
+
+    if let Some(ts) = entry.get("timestamp").and_then(Value::as_str) {
+        state.last_timestamp = ts.to_owned();
+    }
+
+    if entry_type == "response_item" {
+        collect_skill_names_from_entry(entry, state);
+    }
+}
+
+fn collect_skill_names_from_entry(entry: &Value, state: &mut SessionScanState) {
+    let payload = match entry.get("payload").and_then(Value::as_object) {
+        Some(p) if p.get("role").and_then(Value::as_str) == Some("user") => p,
+        _ => return,
+    };
+    let content = match payload.get("content").and_then(Value::as_array) {
+        Some(c) => c,
+        None => return,
+    };
+
+    for item in content {
+        if let Some(text) = item.get("text").and_then(Value::as_str) {
+            let trimmed = text.trim();
+            if trimmed.starts_with("<skill>") {
+                state.records.push(SkillInvocationRecord {
+                    skill_name: extract_skill_name_public(trimmed),
+                    session_id: state.session_id.clone(),
+                    timestamp: state.last_timestamp.clone(),
+                });
+            }
+        }
+    }
 }
 
 fn scan_skill_invocations_in_file(path: &PathBuf) -> Vec<SkillInvocationRecord> {
@@ -40,77 +86,20 @@ fn scan_skill_invocations_in_file(path: &PathBuf) -> Vec<SkillInvocationRecord> 
         Ok(f) => f,
         Err(_) => return Vec::new(),
     };
-    let reader = BufReader::new(file);
-    let mut records = Vec::new();
-    let mut session_id = String::new();
-    let mut last_timestamp = String::new();
 
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-        let entry: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        let entry_type = entry.get("type").and_then(Value::as_str).unwrap_or("");
-        if entry_type == "session_meta" {
-            if let Some(id) = extract_session_id(&entry) {
-                session_id = id;
-            }
-        }
-
-        if let Some(ts) = extract_updated_at(&entry) {
-            last_timestamp = ts;
-        }
-
-        if entry_type != "response_item" {
-            continue;
-        }
-
-        scan_entry_for_skills(&entry, &session_id, &last_timestamp, &mut records);
-    }
-
-    records
-}
-
-fn scan_entry_for_skills(
-    entry: &Value,
-    session_id: &str,
-    timestamp: &str,
-    records: &mut Vec<SkillInvocationRecord>,
-) {
-    let payload = match entry.get("payload").and_then(Value::as_object) {
-        Some(p) => p,
-        None => return,
-    };
-    let role = payload.get("role").and_then(Value::as_str).unwrap_or("");
-    if role != "user" {
-        return;
-    }
-    let content = match payload.get("content").and_then(Value::as_array) {
-        Some(c) => c,
-        None => return,
+    let mut state = SessionScanState {
+        session_id: String::new(),
+        last_timestamp: String::new(),
+        records: Vec::new(),
     };
 
-    for item in content {
-        let text = match item.get("text").and_then(Value::as_str) {
-            Some(t) => t,
-            None => continue,
-        };
-        let trimmed = text.trim();
-        if !trimmed.starts_with("<skill>") {
-            continue;
+    for line in BufReader::new(file).lines().map_while(Result::ok) {
+        if let Some(entry) = parse_line(&line) {
+            process_entry(&entry, &mut state);
         }
-        let name = extract_skill_name_public(trimmed);
-        records.push(SkillInvocationRecord {
-            skill_name: name,
-            session_id: session_id.to_owned(),
-            timestamp: timestamp.to_owned(),
-        });
     }
+
+    state.records
 }
 
 pub(crate) fn scan_skill_activity_from_disk(limit: usize) -> io::Result<SkillActivityScanResult> {

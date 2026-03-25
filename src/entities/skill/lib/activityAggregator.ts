@@ -63,17 +63,21 @@ interface BuildItemOptions {
   now: number;
 }
 
+function sortInvocationsDesc(invocations: readonly SkillInvocationSummary[]): SkillInvocationSummary[] {
+  return [...invocations].sort((a, b) => b.timestamp - a.timestamp);
+}
+
 function buildItemFromInvocations(opts: BuildItemOptions): SkillActivityItem {
-  const sorted = [...opts.invocations].sort((a, b) => b.timestamp - a.timestamp);
-  const lastTs = sorted[0]?.timestamp ?? null;
+  const sorted = sortInvocationsDesc(opts.invocations);
+  const latest = sorted[0];
 
   return {
     skillName: opts.skillName,
-    tags: deriveTags(opts.inCatalog, lastTs, opts.now),
+    tags: deriveTags(opts.inCatalog, latest?.timestamp ?? null, opts.now),
     description: opts.description,
     invocationCount: opts.invocations.length,
-    lastInvocationTs: lastTs,
-    lastInvocationAgent: sorted[0]?.agentName ?? null,
+    lastInvocationTs: latest?.timestamp ?? null,
+    lastInvocationAgent: latest?.agentName ?? null,
     recentInvocations: sorted.slice(0, MAX_RECENT_INVOCATIONS),
     catalogSource: opts.catalogSource,
   };
