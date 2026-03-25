@@ -12,6 +12,7 @@ import {
   sortSkills,
 } from "../../../entities/skill";
 import { INITIAL_SKILL_ACTIVITY_STATE, skillActivityReducer } from "./reducer";
+import type { ScanRangeValue } from "./types";
 
 interface UseSkillActivityPageViewOptions {
   datasets: readonly RunDataset[];
@@ -20,28 +21,28 @@ interface UseSkillActivityPageViewOptions {
   onNavigateToEvent: (eventId: string) => void;
 }
 
-function useScanInvocations() {
+function useScanInvocations(scanRange: number) {
   const [scanResult, setScanResult] = useState<readonly SkillInvocationSummary[]>([]);
   const [scanLoading, setScanLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setScanLoading(true);
-    loadSkillActivityScan().then((result) => {
+    loadSkillActivityScan(scanRange).then((result) => {
       if (!cancelled) {
         setScanResult(result);
         setScanLoading(false);
       }
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [scanRange]);
 
   return { scanResult, scanLoading };
 }
 
 export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) {
   const [state, dispatch] = useReducer(skillActivityReducer, INITIAL_SKILL_ACTIVITY_STATE);
-  const { scanResult, scanLoading } = useScanInvocations();
+  const { scanResult, scanLoading } = useScanInvocations(state.scanRange);
 
   const allItems = useMemo(
     () => buildSkillActivityItems({ datasets: opts.datasets, activeRunId: opts.activeRunId, externalInvocations: scanResult }),
@@ -71,6 +72,7 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
     setSort: (field: SkillSortField) => dispatch({ type: "set-sort", field }),
     setStatusFilter: (filter: SkillStatusFilter) => dispatch({ type: "set-status-filter", filter }),
     setSearch: (query: string) => dispatch({ type: "set-search", query }),
+    setScanRange: (range: ScanRangeValue) => dispatch({ type: "set-scan-range", range }),
     onSkillClick: handleSkillClick,
     onNavigateToMonitor: opts.onNavigateToMonitor,
   };

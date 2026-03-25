@@ -21,9 +21,9 @@ function toInvocationSummary(record: SkillInvocationRecord): SkillInvocationSumm
   };
 }
 
-export async function loadSkillActivityScan(): Promise<SkillInvocationSummary[]> {
+export async function loadSkillActivityScan(limit: number): Promise<SkillInvocationSummary[]> {
   try {
-    const result = await invokeTauri<SkillActivityScanResult>("scan_skill_activity");
+    const result = await invokeTauri<SkillActivityScanResult>("scan_skill_activity", { limit });
     return result.invocations.map(toInvocationSummary);
   } catch {
     return [];

@@ -13,11 +13,14 @@ export function SkillActivityPageContent(view: SkillActivityPageView) {
         searchQuery={view.state.searchQuery}
         statusFilter={view.state.statusFilter}
         sortField={view.state.sortField}
+        scanRange={view.state.scanRange}
         totalCount={view.totalCount}
         visibleCount={view.items.length}
+        scanLoading={view.scanLoading}
         onSearchChange={view.setSearch}
         onStatusFilterChange={view.setStatusFilter}
         onSortChange={view.setSort}
+        onScanRangeChange={view.setScanRange}
       />
       <SkillActivityGrid
         items={view.items}

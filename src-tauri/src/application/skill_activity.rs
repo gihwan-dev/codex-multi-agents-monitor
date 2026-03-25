@@ -10,15 +10,15 @@ use std::{
     path::PathBuf,
 };
 
-const MAX_SCAN_FILES: usize = 200;
-
-fn collect_session_files() -> io::Result<Vec<PathBuf>> {
+fn collect_session_files(limit: usize) -> io::Result<Vec<PathBuf>> {
     let codex_home = resolve_codex_home()?;
     let mut files = Vec::new();
     collect_jsonl_files(&codex_home.join("sessions"), &mut files)?;
     collect_jsonl_files(&codex_home.join("archived_sessions"), &mut files)?;
     files.sort_by(|a, b| recent_file_modified_at(b).cmp(&recent_file_modified_at(a)));
-    files.truncate(MAX_SCAN_FILES);
+    if limit > 0 {
+        files.truncate(limit);
+    }
     Ok(files)
 }
 
@@ -113,8 +113,8 @@ fn scan_entry_for_skills(
     }
 }
 
-pub(crate) fn scan_skill_activity_from_disk() -> io::Result<SkillActivityScanResult> {
-    let files = collect_session_files()?;
+pub(crate) fn scan_skill_activity_from_disk(limit: usize) -> io::Result<SkillActivityScanResult> {
+    let files = collect_session_files(limit)?;
     let mut invocations = Vec::new();
 
     for path in &files {

@@ -71,10 +71,10 @@ pub(crate) fn refresh_archived_session_index(cache: tauri::State<'_, ArchivedInd
 }
 
 #[tauri::command]
-pub(crate) async fn scan_skill_activity() -> SkillActivityScanResult {
-    tauri::async_runtime::spawn_blocking(
-        application::skill_activity::scan_skill_activity_from_disk,
-    )
+pub(crate) async fn scan_skill_activity(limit: usize) -> SkillActivityScanResult {
+    tauri::async_runtime::spawn_blocking(move || {
+        application::skill_activity::scan_skill_activity_from_disk(limit)
+    })
     .await
     .ok()
     .and_then(Result::ok)

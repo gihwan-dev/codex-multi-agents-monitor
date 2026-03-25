@@ -8,16 +8,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../shared/ui/primitives/select";
+import { SCAN_RANGE_OPTIONS, type ScanRangeValue } from "../model/types";
 
 interface SkillActivityToolbarProps {
   searchQuery: string;
   statusFilter: SkillStatusFilter;
   sortField: SkillSortField;
+  scanRange: ScanRangeValue;
   totalCount: number;
   visibleCount: number;
+  scanLoading: boolean;
   onSearchChange: (query: string) => void;
   onStatusFilterChange: (filter: SkillStatusFilter) => void;
   onSortChange: (field: SkillSortField) => void;
+  onScanRangeChange: (range: ScanRangeValue) => void;
 }
 
 const SORT_OPTIONS: { value: SkillSortField; label: string }[] = [
@@ -27,29 +31,36 @@ const SORT_OPTIONS: { value: SkillSortField; label: string }[] = [
   { value: "invocationCount", label: "Call count" },
 ];
 
-export function SkillActivityToolbar({
-  searchQuery,
-  statusFilter,
-  sortField,
-  totalCount,
-  visibleCount,
-  onSearchChange,
-  onStatusFilterChange,
-  onSortChange,
-}: SkillActivityToolbarProps) {
+export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Input
         type="search"
         placeholder="Search skills…"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
+        value={props.searchQuery}
+        onChange={(e) => props.onSearchChange(e.target.value)}
         className="h-8 w-52 text-sm"
       />
 
       <Select
-        value={statusFilter}
-        onValueChange={(value) => onStatusFilterChange(value as SkillStatusFilter)}
+        value={String(props.scanRange)}
+        onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}
+      >
+        <SelectTrigger className="h-8 w-36 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SCAN_RANGE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={String(opt.value)}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={props.statusFilter}
+        onValueChange={(value) => props.onStatusFilterChange(value as SkillStatusFilter)}
       >
         <SelectTrigger className="h-8 w-36 text-sm">
           <SelectValue placeholder="All statuses" />
@@ -65,8 +76,8 @@ export function SkillActivityToolbar({
       </Select>
 
       <Select
-        value={sortField}
-        onValueChange={(value) => onSortChange(value as SkillSortField)}
+        value={props.sortField}
+        onValueChange={(value) => props.onSortChange(value as SkillSortField)}
       >
         <SelectTrigger className="h-8 w-32 text-sm">
           <SelectValue placeholder="Sort by" />
@@ -81,9 +92,7 @@ export function SkillActivityToolbar({
       </Select>
 
       <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-        {visibleCount === totalCount
-          ? `${totalCount} skills`
-          : `${visibleCount} / ${totalCount} skills`}
+        {props.scanLoading ? "Scanning…" : `${props.visibleCount} / ${props.totalCount} skills`}
       </span>
     </div>
   );
