@@ -10,6 +10,7 @@ interface MonitorTopBarActionsProps {
   onExport: (target: HTMLElement) => void;
   onToggleFollowLive: () => void;
   onToggleShortcuts: (target?: HTMLElement | null) => void;
+  onNavigateToSkills?: () => void;
 }
 
 function resolveFollowLiveLabel(dataset: RunDataset | null, followLive: boolean) {
@@ -29,11 +30,17 @@ export function MonitorTopBarActions({
   onExport,
   onToggleFollowLive,
   onToggleShortcuts,
+  onNavigateToSkills,
 }: MonitorTopBarActionsProps) {
   const followLiveDisabled = actionsDisabled || dataset?.run.liveMode !== "live";
 
   return (
     <div className="flex flex-wrap justify-end gap-2">
+      {onNavigateToSkills && (
+        <Button type="button" variant="outline" className={chromeActionClassName} onClick={onNavigateToSkills}>
+          Skills
+        </Button>
+      )}
       <Button type="button" variant={followLive ? "default" : "outline"} disabled={followLiveDisabled} onClick={onToggleFollowLive} className={resolveFollowLiveButtonClassName(followLive)}>
         {resolveFollowLiveLabel(dataset, followLive)}
       </Button>

@@ -3,7 +3,7 @@ use crate::{
     domain::ingest_policy::ArchivedIndexQuery,
     domain::session::{
         ArchivedSessionIndex, ArchivedSessionIndexResult, RecentSessionIndexItem,
-        SessionLogSnapshot,
+        SessionLogSnapshot, SkillActivityScanResult,
     },
     state::archive_cache::ArchivedIndexCache,
 };
@@ -68,6 +68,17 @@ pub(crate) async fn load_archived_session_snapshot(
 #[tauri::command]
 pub(crate) fn refresh_archived_session_index(cache: tauri::State<'_, ArchivedIndexCache>) {
     cache.clear();
+}
+
+#[tauri::command]
+pub(crate) async fn scan_skill_activity(limit: usize) -> SkillActivityScanResult {
+    tauri::async_runtime::spawn_blocking(move || {
+        application::skill_activity::scan_skill_activity_from_disk(limit)
+    })
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .unwrap_or(SkillActivityScanResult { invocations: vec![] })
 }
 
 async fn load_or_build_archived_index(cache: tauri::State<'_, ArchivedIndexCache>) -> Vec<ArchivedSessionIndex> {

@@ -13,6 +13,7 @@ use serde_json::Value;
 use self::classification::{classify_developer_content, classify_user_context};
 
 pub(crate) use self::classification::is_system_boilerplate_text;
+pub(crate) use self::classification::extract_skill_name_public;
 pub(crate) use self::entry_snapshot::{
     extract_entry_snapshot, extract_error_hint, extract_turn_context_model,
 };
@@ -46,7 +47,7 @@ pub(crate) fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemb
 
         if matches!(
             layer_type.as_str(),
-            "user" | "skill" | "subagent-notification"
+            "user" | "subagent-notification"
         ) {
             continue;
         }

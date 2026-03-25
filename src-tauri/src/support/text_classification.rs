@@ -57,6 +57,10 @@ pub(crate) fn is_system_boilerplate_text(text: &str) -> bool {
         || is_delegated_plan_text(trimmed)
 }
 
+pub(crate) fn extract_skill_name_public(text: &str) -> String {
+    extract_skill_name(text)
+}
+
 fn extract_skill_name(text: &str) -> String {
     if let Some(start) = text.find("<name>") {
         let after = &text[start + 6..];
