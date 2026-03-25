@@ -10,8 +10,6 @@ export function resolveToggleShortcutAction(
   options: ResolveToggleShortcutActionOptions,
 ): MonitorShortcutDispatch | null {
   switch (options.normalizedKey) {
-    case "i":
-      return { action: { type: "toggle-inspector" } };
     case ".":
       return { action: { type: "toggle-follow-live", traceId: options.activeDataset.run.traceId } };
     case "c":

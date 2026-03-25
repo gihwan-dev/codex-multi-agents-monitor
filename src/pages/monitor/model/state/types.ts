@@ -20,7 +20,6 @@ export interface MonitorState {
   selectionNavigationRunId: string | null;
   drawerTab: DrawerTab;
   drawerOpen: boolean;
-  inspectorOpen: boolean;
   followLiveByRunId: Record<string, boolean>;
   liveConnectionByRunId: Record<string, LiveConnection>;
   collapsedGapIds: Record<string, string[]>;
@@ -57,7 +56,6 @@ export type MonitorAction =
   | { type: "navigate-selection"; selection: SelectionState }
   | { type: "set-drawer-tab"; tab: DrawerTab; open?: boolean }
   | { type: "set-drawer-open"; open: boolean }
-  | { type: "toggle-inspector" }
   | { type: "toggle-follow-live"; traceId: string }
   | { type: "set-follow-live"; traceId: string; value: boolean }
   | { type: "toggle-gap"; traceId: string; gapId: string }
