@@ -36,14 +36,15 @@ export function PromptLayerCard({
       style={buildLayerStyle(LAYER_ACCENTS[layer.layerType])}
     >
       <PromptLayerToggle expanded={expanded} layer={layer} onToggle={onToggle} />
-      <PromptLayerPreview preview={layer.preview} />
       {expanded ? (
         <PromptLayerContent
           label={layer.label}
           preview={layer.preview}
           rawContent={layer.rawContent}
         />
-      ) : null}
+      ) : (
+        <PromptLayerPreview preview={layer.preview} />
+      )}
     </div>
   );
 }
