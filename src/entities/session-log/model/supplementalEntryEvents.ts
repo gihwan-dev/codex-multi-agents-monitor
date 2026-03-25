@@ -56,19 +56,13 @@ function buildContextCompactedEvent(context: EntryContext) {
     ? sanitizeMessagePreview(context.entry.text)
     : "Context reduced to fit within the model window";
 
-  const event = createEntryEvent({
+  return createEntryEvent({
     ...context,
     eventType: "note",
     title: "Context compacted",
     inputPreview: null,
     outputPreview: preview,
   });
-
-  if (context.entry.functionArgumentsPreview) {
-    event.rawOutput = context.entry.functionArgumentsPreview;
-  }
-
-  return event;
 }
 
 function buildSupplementalTextEvent(context: EntryContext) {

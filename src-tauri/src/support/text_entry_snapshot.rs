@@ -403,17 +403,7 @@ fn build_web_search_preview(context: &SnapshotContext<'_>) -> Option<String> {
 
 fn build_compacted_summary_snapshot(context: &SnapshotContext<'_>) -> SessionEntrySnapshot {
     let summary = summarize_replacement_history(context.payload);
-    let transcript = format_replacement_transcript(context.payload);
-
-    SessionEntrySnapshot {
-        timestamp: context.timestamp.clone(),
-        entry_type: "context_compacted".to_owned(),
-        role: None,
-        text: summary,
-        function_name: None,
-        function_call_id: None,
-        function_arguments_preview: transcript,
-    }
+    build_text_snapshot(context, "context_compacted", summary)
 }
 
 fn summarize_replacement_history(payload: &Map<String, Value>) -> Option<String> {
@@ -453,68 +443,6 @@ fn count_roles_in_history(items: &[Value]) -> (usize, usize, usize) {
     }
 
     (user, developer, assistant)
-}
-
-fn format_replacement_transcript(payload: &Map<String, Value>) -> Option<String> {
-    let items = payload.get("replacement_history").and_then(Value::as_array)?;
-    if items.is_empty() {
-        return None;
-    }
-
-    let mut lines = Vec::new();
-    for (index, item) in items.iter().enumerate() {
-        let item_type = item.get("type").and_then(Value::as_str).unwrap_or("unknown");
-        if item_type == "compaction" {
-            lines.push(format!("[{}] ── compacted summary (encrypted) ──", index + 1));
-            continue;
-        }
-
-        let role = item.get("role").and_then(Value::as_str).unwrap_or("unknown");
-        let content_parts = format_content_parts(item);
-        let header = format!("[{}] {}:", index + 1, role);
-
-        if content_parts.is_empty() {
-            lines.push(format!("{} (empty)", header));
-        } else {
-            lines.push(header);
-            lines.push(content_parts);
-        }
-
-        lines.push(String::new());
-    }
-
-    Some(lines.join("\n"))
-}
-
-fn format_content_parts(item: &Value) -> String {
-    let Some(content) = item.get("content").and_then(Value::as_array) else {
-        return String::new();
-    };
-
-    let mut parts = Vec::new();
-    for part in content {
-        let part_type = part.get("type").and_then(Value::as_str).unwrap_or("");
-        match part_type {
-            "input_text" | "output_text" | "text" => {
-                if let Some(text) = part.get("text").and_then(Value::as_str) {
-                    parts.push(truncate_utf8_safe(text.trim(), 500));
-                }
-            }
-            "tool_use" => {
-                let name = part.get("name").and_then(Value::as_str).unwrap_or("unknown");
-                parts.push(format!("[tool_use: {}]", name));
-            }
-            "tool_result" => {
-                parts.push("[tool_result]".to_owned());
-            }
-            "input_image" => {
-                parts.push("[image]".to_owned());
-            }
-            _ => {}
-        }
-    }
-
-    parts.join("\n")
 }
 
 fn collect_tool_names_from_history(items: &[Value], max: usize) -> Vec<String> {
