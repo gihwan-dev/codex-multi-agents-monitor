@@ -55,6 +55,7 @@ function buildContextCompactedEvent(context: EntryContext) {
   const preview = context.entry.text
     ? sanitizeMessagePreview(context.entry.text)
     : "Context reduced to fit within the model window";
+
   return createEntryEvent({
     ...context,
     eventType: "note",

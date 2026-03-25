@@ -45,10 +45,7 @@ pub(crate) fn extract_error_hint(entry: &Value) -> Option<String> {
 pub(crate) fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
     let context = SnapshotContext::from_entry(entry)?;
     if entry.get("type").and_then(Value::as_str) == Some("compacted") {
-        let summary = context
-            .string("summary")
-            .map(|s| truncate_utf8_safe(s, 2000));
-        return Some(build_text_snapshot(&context, "context_compacted", summary));
+        return Some(build_compacted_summary_snapshot(&context));
     }
 
     if let Some(snapshot) = build_message_entry(&context) {
@@ -402,6 +399,72 @@ fn build_web_search_preview(context: &SnapshotContext<'_>) -> Option<String> {
                 .and_then(Value::as_str)
                 .map(|query| truncate_utf8_safe(query, 200))
         })
+}
+
+fn build_compacted_summary_snapshot(context: &SnapshotContext<'_>) -> SessionEntrySnapshot {
+    let summary = summarize_replacement_history(context.payload);
+    build_text_snapshot(context, "context_compacted", summary)
+}
+
+fn summarize_replacement_history(payload: &Map<String, Value>) -> Option<String> {
+    let items = payload.get("replacement_history").and_then(Value::as_array)?;
+    if items.is_empty() {
+        return None;
+    }
+
+    let (user_count, developer_count, assistant_count) = count_roles_in_history(items);
+    let tool_names = collect_tool_names_from_history(items, 5);
+
+    let total = items.len();
+    let mut summary = format!(
+        "{total} messages compacted ({user_count} user, {developer_count} developer, {assistant_count} assistant)"
+    );
+
+    if !tool_names.is_empty() {
+        summary.push_str(" · tools: ");
+        summary.push_str(&tool_names.join(", "));
+    }
+
+    Some(summary)
+}
+
+fn count_roles_in_history(items: &[Value]) -> (usize, usize, usize) {
+    let mut user = 0;
+    let mut developer = 0;
+    let mut assistant = 0;
+
+    for item in items {
+        match item.get("role").and_then(Value::as_str) {
+            Some("user") => user += 1,
+            Some("developer") => developer += 1,
+            Some("assistant") => assistant += 1,
+            _ => {}
+        }
+    }
+
+    (user, developer, assistant)
+}
+
+fn collect_tool_names_from_history(items: &[Value], max: usize) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+
+    for item in items {
+        let Some(content) = item.get("content").and_then(Value::as_array) else {
+            continue;
+        };
+        for part in content {
+            if part.get("type").and_then(Value::as_str) != Some("tool_use") {
+                continue;
+            }
+            if let Some(name) = part.get("name").and_then(Value::as_str) {
+                if names.len() < max && !names.iter().any(|n| n == name) {
+                    names.push(name.to_owned());
+                }
+            }
+        }
+    }
+
+    names
 }
 
 fn build_empty_snapshot(context: &SnapshotContext<'_>, entry_type: &str) -> SessionEntrySnapshot {

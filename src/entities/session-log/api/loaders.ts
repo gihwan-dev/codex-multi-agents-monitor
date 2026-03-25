@@ -87,7 +87,7 @@ export async function loadArchivedSessionIndex(
   try {
     return await invokeTauri<ArchivedSessionIndexResult>(
       "load_archived_session_index",
-      { offset, limit, search: normalizeArchivedSearch(search) },
+      { query: { offset, limit, search: normalizeArchivedSearch(search) } },
     );
   } catch {
     return null;

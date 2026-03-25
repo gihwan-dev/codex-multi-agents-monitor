@@ -33,7 +33,24 @@ function applyLaneEventResult(
   result: LaneEventLoopResult,
 ) {
   if (result.event) {
-    events.push(result.event);
+    deduplicateOrAppend(events, result.event);
   }
   return result.firstUserPromptSeen;
+}
+
+function deduplicateOrAppend(events: EventRecord[], event: EventRecord) {
+  const last = events[events.length - 1];
+  const isCompactedPair =
+    last?.title === "Context compacted" &&
+    event.title === "Context compacted" &&
+    last.startTs === event.startTs;
+
+  if (isCompactedPair) {
+    if (last.outputPreview === "Context reduced to fit within the model window") {
+      events[events.length - 1] = event;
+    }
+    return;
+  }
+
+  events.push(event);
 }
