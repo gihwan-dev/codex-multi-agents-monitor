@@ -89,6 +89,74 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+describe("CausalGraphView edge rendering", () => {
+  it("renders edge route elements with paths and ports for multi-agent scenes", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+
+    expect(scene.edgeBundles.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const routeElements = container.querySelectorAll('[data-slot="graph-route"]');
+    expect(routeElements.length).toBeGreaterThan(0);
+
+    const portElements = container.querySelectorAll('[data-slot="graph-route-port"]');
+    expect(portElements.length).toBeGreaterThanOrEqual(routeElements.length * 2);
+
+    for (const route of routeElements) {
+      const path = route.querySelector("path");
+      expect(path).not.toBeNull();
+      expect(path?.getAttribute("d")).toBeTruthy();
+    }
+  });
+
+  it("renders interactive hit-target layer alongside visual edges", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const hitboxes = container.querySelectorAll('[data-slot="graph-route-hitbox"]');
+    expect(hitboxes.length).toBeGreaterThan(0);
+
+    const routeElements = container.querySelectorAll('[data-slot="graph-route"]');
+    expect(hitboxes.length).toBe(routeElements.length);
+  });
+});
+
 describe("CausalGraphView selection reveal", () => {
   it("scrolls when a navigation request targets an offscreen event", async () => {
     const dataset = requireDataset("trace-fix-002");
