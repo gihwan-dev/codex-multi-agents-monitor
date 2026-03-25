@@ -403,7 +403,20 @@ fn build_web_search_preview(context: &SnapshotContext<'_>) -> Option<String> {
 
 fn build_compacted_summary_snapshot(context: &SnapshotContext<'_>) -> SessionEntrySnapshot {
     let summary = summarize_replacement_history(context.payload);
-    build_text_snapshot(context, "context_compacted", summary)
+    let raw_json = context
+        .payload
+        .get("replacement_history")
+        .map(|v| v.to_string());
+
+    SessionEntrySnapshot {
+        timestamp: context.timestamp.clone(),
+        entry_type: "context_compacted".to_owned(),
+        role: None,
+        text: summary,
+        function_name: None,
+        function_call_id: None,
+        function_arguments_preview: raw_json,
+    }
 }
 
 fn summarize_replacement_history(payload: &Map<String, Value>) -> Option<String> {

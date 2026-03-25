@@ -8,13 +8,6 @@ use crate::{
     state::archive_cache::ArchivedIndexCache,
 };
 
-#[derive(Debug, serde::Deserialize)]
-pub(crate) struct LoadArchivedSessionIndexArgs {
-    offset: usize,
-    limit: usize,
-    search: Option<String>,
-}
-
 #[tauri::command]
 pub(crate) async fn load_recent_session_index() -> Vec<RecentSessionIndexItem> {
     tauri::async_runtime::spawn_blocking(
@@ -36,18 +29,25 @@ pub(crate) async fn load_recent_session_snapshot(file_path: String) -> Option<Se
     .flatten()
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct ArchivedSessionQuery {
+    offset: usize,
+    limit: usize,
+    search: Option<String>,
+}
+
 #[tauri::command]
 pub(crate) async fn load_archived_session_index(
-    args: LoadArchivedSessionIndexArgs,
+    query: ArchivedSessionQuery,
     cache: tauri::State<'_, ArchivedIndexCache>,
 ) -> Result<ArchivedSessionIndexResult, String> {
     let index = load_or_build_archived_index(cache).await;
 
     Ok(application::archived_sessions::load_archived_session_index(
         ArchivedIndexQuery {
-            offset: args.offset,
-            limit: args.limit,
-            search: args.search,
+            offset: query.offset,
+            limit: query.limit,
+            search: query.search,
             index: &index,
         },
     ))

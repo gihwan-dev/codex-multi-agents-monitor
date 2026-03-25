@@ -439,9 +439,7 @@ describe("sessionLogLoader", () => {
     const result = await loadArchivedSessionIndex(20, 50, "");
 
     expect(mockedInvokeTauri).toHaveBeenCalledWith("load_archived_session_index", {
-      offset: 20,
-      limit: 50,
-      search: null,
+      query: { offset: 20, limit: 50, search: null },
     });
     expect(result).toEqual(archiveResult);
   });
@@ -457,9 +455,7 @@ describe("sessionLogLoader", () => {
     const result = await loadArchivedSessionIndex(20, 50, "  codex  ");
 
     expect(mockedInvokeTauri).toHaveBeenCalledWith("load_archived_session_index", {
-      offset: 20,
-      limit: 50,
-      search: "codex",
+      query: { offset: 20, limit: 50, search: "codex" },
     });
     expect(result).toEqual(archiveResult);
   });
