@@ -204,23 +204,15 @@ test("drawer stays hidden until an explicit drawer action", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Bottom drawer" })).toHaveCount(0);
 });
 
-test("mobile starts with collapsed inspector and preserves selection when reopened", async ({
+test("mobile inspector is always visible and shows causal summary", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBuiltApp(page);
 
   const compactInspector = page.locator('[data-slot="compact-inspector"]');
-  await expect(compactInspector.getByRole("button", { name: "Open" })).toBeVisible();
-  await expect(compactInspector).toContainText("Planner blocked");
-
-  await compactInspector.getByRole("button", { name: "Open" }).click();
-  await expect(compactInspector.getByRole("button", { name: "Close" })).toBeVisible();
+  await expect(compactInspector).toBeVisible();
   await expect(compactInspector).toContainText("Summary");
-
-  await page.keyboard.press("i");
-  await expect(compactInspector.getByRole("button", { name: "Open" })).toBeVisible();
-  await expect(compactInspector).toContainText("Planner blocked");
 });
 
 test("dense parallel run surfaces degradation copy without losing reachability", async ({
