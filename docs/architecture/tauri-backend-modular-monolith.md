@@ -6,6 +6,8 @@
 
 이번 리팩터링 이후 `src-tauri/src/lib.rs` 는 bootstrap only 파일이고, 실제 로직은 `commands / application / domain / infrastructure / state / support` 아래로 분리한다.
 
+세션 저장소의 실제 온디스크 구조와 SQLite/JSONL schema는 [`../CODEX_DATA_STORAGE.md`](../CODEX_DATA_STORAGE.md)에 별도로 정리한다. 이 문서는 backend 모듈 경계와 command contract만 다룬다.
+
 ## Module Tree
 
 ```text

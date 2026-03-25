@@ -1,453 +1,537 @@
-# Codex 데이터 저장소 구조
+# Codex Data Storage
 
-Codex CLI(`~/.codex/`)의 데이터 구조와 본 앱의 Rust 백엔드가 이를 읽는 방식을 정리한다.
+이 문서는 로컬 `~/.codex` 아티팩트와 이 저장소의 Tauri backend 구현을 기준으로, Codex가 세션 데이터를 어떻게 저장하고 관리하는지 정리한다. 목적은 화면/FE 설명이 아니라 온디스크 데이터 구조, 관계, 그리고 backend read path를 정확히 문서화하는 것이다.
 
-## 디렉토리 레이아웃
+## Scope
 
-```
+- SSOT:
+  - 로컬 `~/.codex` 실데이터
+  - `src-tauri/src/infrastructure/filesystem.rs`
+  - `src-tauri/src/infrastructure/state_sqlite.rs`
+  - `src-tauri/src/infrastructure/session_jsonl.rs`
+  - `src-tauri/src/support/text_entry_snapshot.rs`
+  - `src-tauri/src/application/recent_sessions.rs`
+  - `src-tauri/src/application/archived_sessions.rs`
+  - `src-tauri/src/domain/ingest_policy.rs`
+  - `src-tauri/src/commands/sessions.rs`
+  - `src-tauri/src/state/archive_cache.rs`
+- 제외 범위:
+  - frontend 화면 구조
+  - task bundle의 normalized store / renderer 설명
+  - interaction / accessibility / graph view behavior
+
+## Storage Root Resolution
+
+Codex home은 다음 순서로 결정된다.
+
+1. `CODEX_HOME` 환경 변수가 있으면 그 경로 사용
+2. 없으면 `$HOME/.codex` 사용
+
+현재 monitor backend는 이 경로 아래의 JSONL/SQLite를 read-only로 읽는다.
+
+## Storage Layers
+
+세션과 직접 관련된 핵심 저장 계층은 아래 네 개다.
+
+| Layer | Canonical role |
+| --- | --- |
+| `sessions/YYYY/MM/DD/*.jsonl` | live 세션의 append-only transcript |
+| `archived_sessions/*.jsonl` | archived 세션의 transcript |
+| `state.sqlite`, `state_*.sqlite` | thread index / metadata / archive flag / subagent edge / dynamic tool catalog |
+| `session_index.jsonl` | 작은 보조 인덱스, canonical source 아님 |
+
+2026년 3월 25일 현재 이 머신에서 관찰한 값은 다음과 같았다.
+
+- `state_5.sqlite.threads`: 총 `2941` rows
+- 그중 live (`archived = 0`): `783`
+- 그중 archived (`archived = 1`): `2158`
+- `session_index.jsonl`: `6` lines
+
+즉, `session_index.jsonl`은 전체 세션 인덱스가 아니라 최근 일부 thread만 담는 얇은 side index로 보는 편이 정확하다.
+
+## Directory Layout
+
+```text
 ~/.codex/
-├── state_5.sqlite          # 핵심 상태 DB (threads, logs, spawn edges)
-├── logs_1.sqlite           # 애플리케이션 이벤트 로그
-├── sqlite/codex-dev.db     # Desktop 앱 메타 (automations, inbox)
-│
-├── sessions/               # 최근/라이브 세션 JSONL (날짜별 정리)
-│   └── YYYY/MM/DD/
-│       └── rollout-{ISO}-{UUIDv7}.jsonl
-│
-├── archived_sessions/      # 아카이브 세션 JSONL (flat directory)
-│   └── rollout-{ISO}-{UUIDv7}.jsonl
-│
-├── session_index.jsonl     # 최근 세션 캐시 인덱스 (경량)
-├── history.jsonl           # 사용자 입력 히스토리
-├── config.toml             # 설정 (모델, MCP 서버, 프로필 등)
-├── auth.json               # 인증 정보 (암호화)
-├── internal_storage.json   # 내부 플래그
-├── automations/            # 자동화 설정
-├── skills/                 # 설치된 스킬
-├── agents/                 # 에이전트 설정 참조
-├── shell_snapshots/        # 터미널 출력 스냅샷
-├── cache/                  # 런타임 캐시
-└── log/                    # 애플리케이션 로그
+  sessions/YYYY/MM/DD/rollout-<timestamp>-<thread_id>.jsonl
+  archived_sessions/rollout-<timestamp>-<thread_id>.jsonl
+  state.sqlite or state_*.sqlite
+  logs_*.sqlite
+  session_index.jsonl
+  .codex-global-state.json
+  shell_snapshots/*.sh
+  sqlite/codex-dev.db
 ```
 
-## SQLite 데이터베이스
+핵심 역할은 아래와 같다.
 
-### state_N.sqlite (핵심 상태)
+| Path | Role |
+| --- | --- |
+| `sessions/YYYY/MM/DD/*.jsonl` | live session transcript 본문 |
+| `archived_sessions/*.jsonl` | archived session transcript 본문 |
+| `state.sqlite`, `state_*.sqlite` | canonical thread index / metadata DB |
+| `logs_*.sqlite` | runtime/telemetry log DB |
+| `session_index.jsonl` | 작은 MRU 성격의 보조 인덱스 |
+| `.codex-global-state.json` | global app/workspace state, 세션 본문 저장소는 아님 |
+| `shell_snapshots/*.sh` | shell snapshot 보조 파일 |
+| `sqlite/codex-dev.db` | automation/inbox 계열 DB, session core storage는 아님 |
 
-가장 최근 수정된 `state_*.sqlite` 파일이 사용된다. READ_ONLY로 연다.
+## Canonical Relationships
 
-#### threads 테이블
+Codex 세션은 JSONL과 SQLite가 서로 중복된 키를 가지는 구조다.
 
-세션/스레드 메타데이터. `archived = 0`이면 라이브, `1`이면 아카이브.
+- `threads.id` = JSONL `session_meta.payload.id` = 파일명 suffix의 thread id
+- `threads.rollout_path` = 해당 thread의 canonical JSONL 경로
+- `threads.archived` = live/archived 상태
+- archived row의 `rollout_path`는 `archived_sessions/*.jsonl`를 가리킨다
+- `thread_spawn_edges.child_thread_id` = subagent thread id
+- JSONL `payload.source.subagent.thread_spawn.parent_thread_id` = parent thread id
+- `thread_dynamic_tools.thread_id` = JSONL `session_meta.payload.dynamic_tools`를 가진 thread id
 
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| `id` | TEXT PK | 세션 UUID (UUIDv7) |
-| `rollout_path` | TEXT | JSONL 파일 경로 |
-| `created_at` | INTEGER | 생성 타임스탬프 |
-| `updated_at` | INTEGER | 최종 갱신 타임스탬프 |
-| `source` | TEXT | "vscode", "cli", "desktop" |
-| `cwd` | TEXT | 작업 디렉토리 |
-| `title` | TEXT | 세션 제목 |
-| `archived` | INTEGER | 0=라이브, 1=아카이브 |
-| `agent_nickname` | TEXT | 서브에이전트 닉네임 (nullable) |
-| `agent_role` | TEXT | 서브에이전트 역할 (nullable) |
-| `model` | TEXT | 사용 모델 (e.g., "gpt-5.4") |
-| `first_user_message` | TEXT | 첫 사용자 메시지 (500자) |
+즉, transcript 본문은 JSONL에 있고, 탐색/정렬/상태 관리는 SQLite에 중복 저장되어 있다.
 
-#### thread_spawn_edges 테이블
+## State SQLite Selection
 
-부모-자식 스레드 관계. **인덱스 포함.**
+backend는 `~/.codex` 루트에서 다음 파일명을 후보로 본다.
 
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| `parent_thread_id` | TEXT | 부모 세션 UUID |
-| `child_thread_id` | TEXT PK | 자식 세션 UUID |
-| `status` | TEXT | 관계 상태 |
+- `state.sqlite`
+- `state_*.sqlite`
 
-인덱스: `idx_thread_spawn_edges_parent_status(parent_thread_id, status)`
+여러 파일이 있으면 수정 시각이 가장 최신인 파일 하나만 선택한다. 현재 monitor backend는 이 선택된 DB를 read-only로 연다.
 
-> **참고:** 현재 이 테이블은 비어 있을 수 있다. Codex CLI 버전에 따라 채워지는 시점이 다르다.
+## `threads` Table
 
-#### logs 테이블
+현재 로컬 `state_5.sqlite`에서 직접 확인한 `threads` 스키마는 아래와 같다.
 
-애플리케이션 진단 로그 (901K+ rows).
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `id` | `TEXT` | thread/session id, primary key |
+| `rollout_path` | `TEXT` | transcript JSONL 파일 절대 경로 |
+| `created_at` | `INTEGER` | 생성 시각 |
+| `updated_at` | `INTEGER` | 최근 갱신 시각 |
+| `source` | `TEXT` | source 문자열 또는 subagent provenance를 직렬화한 JSON 문자열 |
+| `model_provider` | `TEXT` | model provider |
+| `cwd` | `TEXT` | 세션 workspace path |
+| `title` | `TEXT` | title 성격의 텍스트 |
+| `sandbox_policy` | `TEXT` | sandbox policy |
+| `approval_mode` | `TEXT` | approval policy |
+| `tokens_used` | `INTEGER` | 누적 token 사용량 메타 |
+| `has_user_event` | `INTEGER` | user event 존재 여부 |
+| `archived` | `INTEGER` | archive flag (`0` or `1`) |
+| `archived_at` | `INTEGER` | archived 시각 |
+| `git_sha` | `TEXT` | workspace git sha |
+| `git_branch` | `TEXT` | workspace git branch |
+| `git_origin_url` | `TEXT` | workspace origin URL |
+| `cli_version` | `TEXT` | Codex version |
+| `first_user_message` | `TEXT` | 첫 user message |
+| `agent_nickname` | `TEXT` | subagent nickname |
+| `agent_role` | `TEXT` | subagent role |
+| `memory_mode` | `TEXT` | memory mode |
+| `model` | `TEXT` | model name |
+| `reasoning_effort` | `TEXT` | reasoning effort |
+| `agent_path` | `TEXT` | agent task path |
 
-### logs_1.sqlite (이벤트 로그)
+인덱스는 `created_at`, `updated_at`, `archived`, `source`, `model_provider` 기준으로 생성돼 있다.
 
-| 테이블 | rows | 설명 |
-|--------|------|------|
-| `logs` | 526K+ | 구조화된 이벤트 로그 (`ts`, `level`, `target`, `thread_id`) |
+주의할 점은 다음과 같다.
 
-### sqlite/codex-dev.db (Desktop 메타)
+- `source`는 단순 enum이 아니라 사실상 union이다.
+- root thread에서는 `vscode`, `cli`, `exec` 같은 문자열이 관찰됐다.
+- subagent thread에서는 JSON object가 아니라 JSON object를 문자열로 직렬화한 값이 저장된다.
+- monitor backend가 live recent index에서 인정하는 source는 현재 `desktop`, `cli`, `vscode`뿐이다. 즉, 저장된 source universe와 monitor가 노출하는 source universe는 완전히 같지 않다.
+- `title`과 `first_user_message`는 짧은 UI label이 아니라, 실제로는 긴 multiline 첫 프롬프트가 그대로 들어갈 수 있다.
 
-| 테이블 | 설명 |
-|--------|------|
-| `automations` | 자동화 스케줄 (rrule, prompt, cwds) |
-| `automation_runs` | 자동화 실행 이력 |
-| `inbox_items` | 알림 인박스 |
+monitor backend가 recent live thread 후보를 읽을 때 실제 사용하는 컬럼은 아래 네 개뿐이다.
 
-## JSONL 세션 로그 포맷
+```sql
+SELECT id, rollout_path, source, cwd
+FROM threads
+WHERE archived = 0
+ORDER BY updated_at DESC, id DESC
+```
 
-각 세션은 하나의 `.jsonl` 파일. 각 줄은 독립 JSON 객체.
+하지만 세션 저장 구조를 이해하려면 나머지 컬럼도 중요하다. 특히 `archived_at`, `title`, `first_user_message`, `agent_*`, `model`, `reasoning_effort`는 session lifecycle과 provenance를 설명하는 핵심 메타데이터다.
 
-### 줄 타입 (type 필드)
+## `thread_spawn_edges` Table
 
-| type | 설명 |
-|------|------|
-| `session_meta` | 세션 초기화 메타 (첫 줄) |
-| `event_msg` | 턴 시작/종료/사용자 메시지 |
-| `response_item` | LLM 응답, 함수 호출, 함수 결과 |
-| `turn_context` | 턴 설정 (모델, 샌드박스, 승인 정책) |
+subagent parent-child 관계는 SQLite에서도 별도 edge table로 유지된다.
 
-### session_meta 구조 (부모 세션)
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `parent_thread_id` | `TEXT` | 부모 thread id |
+| `child_thread_id` | `TEXT` | 자식 thread id, primary key |
+| `status` | `TEXT` | edge status |
 
-```jsonc
+인덱스는 `(parent_thread_id, status)`로 잡혀 있다. 현재 로컬 데이터에서는 `open`과 `closed` 둘 다 관찰됐다.
+
+이 테이블은 Codex가 thread graph를 별도 관리한다는 신호다. 다만 monitor backend는 이 table을 직접 읽지 않고, JSONL `thread_spawn` 메타를 기준으로 subagent를 붙인다.
+
+## `thread_dynamic_tools` Table
+
+dynamic tool catalog도 SQLite에 별도 정규화돼 있다.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `thread_id` | `TEXT` | thread id |
+| `position` | `INTEGER` | tool ordering |
+| `name` | `TEXT` | tool name |
+| `description` | `TEXT` | tool description |
+| `input_schema` | `TEXT` | tool input schema JSON |
+| `defer_loading` | `INTEGER` | lazy loading flag |
+
+2026년 3월 25일 현재 로컬 DB에서 `thread_dynamic_tools`는 `541` rows가 관찰됐다.
+
+이 값은 JSONL `session_meta.payload.dynamic_tools[]`와 중복 저장된 것으로 보인다. 다만 필드 casing은 다르다.
+
+- JSONL: `inputSchema`, `deferLoading`
+- SQLite: `input_schema`, `defer_loading`
+
+## Adjacent SQLite Tables
+
+현재 `state_5.sqlite`에는 session core schema 외에도 다음 table이 존재했다.
+
+- `_sqlx_migrations`
+- `jobs`
+- `agent_jobs`
+- `agent_job_items`
+- `stage1_outputs`
+- `backfill_state`
+- `logs`
+
+이 저장소의 monitor backend는 위 table들을 세션 read path에서 직접 사용하지 않는다.
+
+## Runtime Log Stores
+
+현재 로컬 환경에서는 log 성격의 SQLite table이 두 군데에서 관찰됐다.
+
+### `state_5.sqlite::logs`
+
+```sql
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    ts_nanos INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    target TEXT NOT NULL,
+    message TEXT,
+    module_path TEXT,
+    file TEXT,
+    line INTEGER,
+    thread_id TEXT,
+    process_uuid TEXT,
+    estimated_bytes INTEGER NOT NULL DEFAULT 0
+);
+```
+
+### `logs_1.sqlite::logs`
+
+```sql
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    ts_nanos INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    target TEXT NOT NULL,
+    feedback_log_body TEXT,
+    module_path TEXT,
+    file TEXT,
+    line INTEGER,
+    thread_id TEXT,
+    process_uuid TEXT,
+    estimated_bytes INTEGER NOT NULL DEFAULT 0
+);
+```
+
+둘 다 `thread_id`로 session과 연결할 수 있지만, monitor backend는 현재 이 log store를 읽지 않는다. 따라서 writer policy, rotation, 이중 저장 여부는 이 저장소 코드만으로 단정하지 않는다.
+
+## JSONL Transcript Format
+
+세션 본문은 append-only JSONL이다. 한 줄당 하나의 event record가 기록된다.
+
+live 파일명 패턴:
+
+```text
+~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<thread_id>.jsonl
+```
+
+archived 파일명 패턴:
+
+```text
+~/.codex/archived_sessions/rollout-<timestamp>-<thread_id>.jsonl
+```
+
+## First Line Contract: `session_meta`
+
+backend는 첫 줄을 특별 취급한다. 정확히는 첫 줄의 top-level `type`을 강하게 검증하지는 않지만, 첫 줄에 `payload` object가 있고 그 안에 session metadata가 들어 있다고 가정한다.
+
+즉, 첫 줄이 없거나 `payload`가 없으면 session을 유효하게 해석할 수 없다.
+
+### Root Thread `session_meta`
+
+2026년 3월 25일 현재 root thread 첫 줄에서 관찰한 핵심 key는 아래와 같았다.
+
+- `id`
+- `timestamp`
+- `cwd`
+- `originator`
+- `cli_version`
+- `source`
+- `model_provider`
+- `base_instructions`
+- `dynamic_tools`
+- `git`
+
+실제 shape는 대략 아래와 같다.
+
+```json
 {
   "type": "session_meta",
-  "timestamp": "2026-03-07T05:45:04Z",
   "payload": {
-    "id": "019cc6d3-...",              // 세션 UUID
-    "timestamp": "2026-03-07T05:44:48Z",
-    "cwd": "/Users/.../project",
+    "id": "<thread_id>",
+    "timestamp": "<iso8601>",
+    "cwd": "<workspace>",
     "originator": "Codex Desktop",
-    "cli_version": "0.108.0-alpha.12",
-    "source": "vscode",               // "vscode" | "cli" | "desktop"
+    "cli_version": "<version>",
+    "source": "vscode",
     "model_provider": "openai",
-    "base_instructions": { "text": "..." }
-  }
-}
-```
-
-### session_meta 구조 (서브에이전트 세션)
-
-```jsonc
-{
-  "type": "session_meta",
-  "payload": {
-    "id": "019cc6d5-...",              // 서브에이전트 UUID
-    "forked_from_id": "019cc6d3-...", // 부모 세션 UUID
-    "agent_nickname": "Helmholtz",
-    "agent_role": "explorer",
-    "source": {
-      "subagent": {
-        "thread_spawn": {
-          "parent_thread_id": "019cc6d3-...",
-          "depth": 1,
-          "agent_nickname": "Helmholtz",
-          "agent_role": "explorer"
-        }
+    "base_instructions": { "text": "<full instruction text>" },
+    "dynamic_tools": [
+      {
+        "name": "read_thread_terminal",
+        "description": "<tool description>",
+        "inputSchema": { "...": "..." },
+        "deferLoading": false
       }
+    ],
+    "git": {
+      "branch": "<branch>",
+      "commit_hash": "<sha>",
+      "repository_url": "<origin>"
     }
   }
 }
 ```
 
-### 부모-자식 연결 방식
+### Child / Subagent `session_meta`
 
-서브에이전트 세션 파일의 구조:
-1. **Fork context**: 부모 세션의 `session_meta` + 부모 턴 엔트리 복제
-2. **Fork boundary**: 두 번째 `session_meta` (서브에이전트 자신의 메타)
-3. **서브에이전트 엔트리**: fork boundary 이후의 고유 엔트리
+subagent thread 첫 줄에서는 위 root key에 더해 다음 key가 관찰됐다.
 
-Rust 백엔드의 `SubagentCollector`는 `past_fork_boundary` 플래그로 fork context를 제거한다.
+- `forked_from_id`
+- `agent_nickname`
+- `agent_role`
+- `agent_path`
 
-### event_msg payload.type 값
+그리고 `source`는 문자열이 아니라 nested object가 된다.
 
-| payload.type | 설명 |
-|---|---|
-| `task_started` | 턴 시작 (`turn_id`, `model_context_window`) |
-| `task_complete` | 턴 종료 (`turn_id`, `last_agent_message`) |
-| `user_message` | 사용자 입력 (`message`, `images`) |
-| `token_count` | 토큰 사용량/레이트 리밋 |
-
-### response_item payload.type 값
-
-| payload.type | 설명 |
-|---|---|
-| `message` | 텍스트 메시지 (`role`, `content[]`) |
-| `function_call` | 도구 호출 (`name`, `call_id`, `arguments`) |
-| `function_call_output` | 도구 결과 (`call_id`, `output`) |
-
-## Rust 백엔드 데이터 접근 패턴
-
-### 라이브 세션 로딩
-
-```
-state_N.sqlite → threads WHERE archived=0
-  ↓
-LiveThreadRow[] (id, rollout_path, source, cwd)
-  ↓ parse_recent_index_entry()  [첫 80줄 + 마지막 128KB]
-RecentSessionIndexItem (사이드바 표시용 경량 데이터)
-  ↓ parse_live_session_snapshot()  [전체 파싱]
-SessionLogSnapshot
-  ↓ append_recent_subagents()  [sessions/ 전체 스캔!]
-SessionLogSnapshot { subagents: [...] }
+```json
+{
+  "type": "session_meta",
+  "payload": {
+    "id": "<child_thread_id>",
+    "forked_from_id": "<parent_or_fork_origin_id>",
+    "timestamp": "<iso8601>",
+    "cwd": "<workspace>",
+    "source": {
+      "subagent": {
+        "thread_spawn": {
+          "parent_thread_id": "<parent_thread_id>",
+          "depth": 1,
+          "agent_path": "/root/<task_name>",
+          "agent_nickname": "<nickname>",
+          "agent_role": "<role>"
+        }
+      }
+    },
+    "agent_nickname": "<nickname>",
+    "agent_role": "<role>",
+    "agent_path": "/root/<task_name>"
+  }
+}
 ```
 
-### 아카이브 세션 로딩
+중요한 점은 다음과 같다.
 
-```
-~/.codex/archived_sessions/*.jsonl
-  ↓ collect_jsonl_files()  [재귀 수집]
-  ↓ parse_archived_index_entry()  [첫 50줄]
-ArchivedSessionIndex[] (사이드바 표시용)
-  ↓ parse_archived_session_snapshot()  [전체 파싱]
-SessionLogSnapshot
-  ↓ collect_archived_subagents()  [같은 디렉토리 전체 스캔!]
-SessionLogSnapshot { subagents: [...] }
-```
+- JSONL `payload.source`는 object인데, SQLite `threads.source`에서는 이 object가 문자열로 직렬화돼 저장된다.
+- monitor backend가 subagent 관계를 복원할 때 핵심으로 보는 값은 `payload.source.subagent.thread_spawn.parent_thread_id`다.
+- child transcript에서는 첫 줄 외에 추가 `session_meta` / `turn_context` line이 뒤에 더 나타날 수 있다. 하지만 parser는 첫 줄만 canonical header로 사용한다.
 
-### 서브에이전트 탐색 (현재 구현)
+## Top-Level Record Types
 
-세션 1개 로드 시:
-1. 디렉토리 내 **모든 `.jsonl` 파일** 수집
-2. 각 파일의 **첫 줄을 열어** `session_meta` 파싱
-3. `source.subagent.thread_spawn.parent_thread_id` 매칭 확인
-4. 매칭되면 `SubagentSnapshot`으로 파싱
+2026년 3월 25일 현재 로컬 transcript에서 관찰한 top-level `type`은 아래와 같았다.
 
-**문제점:** O(n) brute-force 스캔. archived_sessions에 2000+ 파일이면 세션 하나 로드에 2000번 파일 I/O.
+- `session_meta`
+- `turn_context`
+- `event_msg`
+- `response_item`
 
-### Tauri 명령 API
+현재 backend code는 여기에 더해 top-level `type = "compacted"`도 특별 처리한다.
 
-| 명령 | 입력 | 출력 |
-|------|------|------|
-| `load_recent_session_index` | - | `Vec<RecentSessionIndexItem>` |
-| `load_recent_session_snapshot` | `filePath` | `SessionLogSnapshot` |
-| `load_archived_session_index` | `{offset, limit, search}` | `ArchivedSessionIndexResult` |
-| `load_archived_session_snapshot` | `filePath` | `SessionLogSnapshot` |
+즉, transcript를 읽을 때는 top-level `type`과 `payload.type`을 분리해서 봐야 한다.
 
-## 최적화 기회
+## `turn_context`
 
-### thread_spawn_edges 테이블 (현재 비어 있음)
+`turn_context`는 turn 단위 실행 컨텍스트 snapshot이다. 현재 로컬 데이터에서 관찰한 key는 아래와 같다.
 
-`state_5.sqlite`에 `thread_spawn_edges` 테이블과 인덱스가 존재하지만, Codex CLI가 아직 이 테이블을 채우지 않고 있다 (0 rows). 향후 채워지면 직접 활용 가능.
+- `turn_id`
+- `cwd`
+- `current_date`
+- `timezone`
+- `approval_policy`
+- `sandbox_policy`
+- `model`
+- `personality`
+- `collaboration_mode`
+- `realtime_active`
+- `effort`
+- `summary`
+- `user_instructions`
+- `developer_instructions`
+- `truncation_policy`
 
-### threads.source 컬럼 (현재 사용 가능)
+monitor backend는 여기서 특히 `model`을 추출해 recent index / snapshot metadata에 사용한다.
 
-서브에이전트 스레드의 `source` 컬럼에 `parent_thread_id`가 JSON으로 저장되어 있다:
+## `payload.type` Families
 
-```sql
--- 부모 세션의 모든 서브에이전트 + 파일 경로를 즉시 조회 (검증 완료)
-SELECT id, agent_nickname, agent_role, rollout_path
-FROM threads
-WHERE source LIKE '%{parent_session_id}%';
-```
+현재 로컬 transcript에서 직접 관찰한 `payload.type`과 key shape는 아래와 같다.
 
-> `json_extract()`는 부모 세션의 `source`가 순수 문자열(`"vscode"`)이라 malformed JSON 에러가 발생한다. `LIKE`가 더 안정적.
+| `payload.type` | Observed keys |
+| --- | --- |
+| `message` | `content`, `role`, `type` |
+| `function_call` | `arguments`, `call_id`, `name`, `type` |
+| `function_call_output` | `call_id`, `output`, `type` |
+| `reasoning` | `content`, `encrypted_content`, `summary`, `type` |
+| `agent_message` | `memory_citation`, `message`, `phase`, `type` |
+| `task_started` | `collaboration_mode_kind`, `model_context_window`, `turn_id`, `type` |
+| `token_count` | `info`, `rate_limits`, `type` |
+| `turn_aborted` | `reason`, `turn_id`, `type` |
+| `user_message` | `images`, `local_images`, `message`, `text_elements`, `type` |
 
-이를 활용하면 디렉토리 전체 스캔(2187+ 파일 I/O) 없이 서브에이전트를 즉시 찾을 수 있다. 관련 이슈: #42
+실제 top-level container 기준으로는 대략 이렇게 나뉜다.
 
-## 스캔 리밋 & 인덱스 정책
+- `response_item`: `message`, `function_call`, `function_call_output`, `reasoning`
+- `event_msg`: `task_started`, `user_message`, `token_count`, `agent_message`, `turn_aborted`
 
-Rust 백엔드의 JSONL 파싱은 전체 파일을 읽지 않고 제한된 범위만 스캔한다.
+## Entry Types Consumed By The Monitor Backend
 
-| 상수 | 값 | 용도 |
-|------|---|------|
-| `MAX_RECENT_SESSIONS` | 24 | 사이드바 최근 세션 최대 수 |
-| `RECENT_INDEX_PREFIX_SCAN_LIMIT` | 80 | JSONL 파일 앞에서 스캔하는 줄 수 |
-| `RECENT_INDEX_TAIL_BYTES` | 128 KB | JSONL 파일 끝에서 읽는 바이트 수 |
-| `RECENT_INDEX_TAIL_ENTRY_LIMIT` | 120 | tail 버퍼에서 파싱하는 최대 엔트리 수 |
-| `ARCHIVED_INDEX_SCAN_LIMIT` | 50 | 아카이브 인덱스 스캔 줄 수 |
+monitor backend가 transcript line을 `SessionEntrySnapshot`으로 승격하는 타입은 `src-tauri/src/support/text_entry_snapshot.rs` 기준 아래와 같다.
 
-아카이브 인덱스는 `ArchivedIndexCache`(in-memory Mutex)로 캐싱된다. `refresh_archived_session_index` 명령 호출 시에만 갱신.
+- `message`
+- `function_call`
+- `function_call_output`
+- `custom_tool_call`
+- `custom_tool_call_output`
+- `web_search_call`
+- `reasoning`
+- `task_started`
+- `task_complete`
+- `agent_message`
+- `context_compacted`
+- `turn_aborted`
+- `thread_rolled_back`
+- `agent_reasoning`
+- `item_completed`
+- `token_count`
+- top-level `compacted`
 
-## 프롬프트 어셈블리
+즉, Codex가 저장하는 raw event universe가 곧바로 monitor read model이 되는 것은 아니다. monitor는 일부 payload만 골라서 snapshot으로 재구성한다.
 
-세션의 시스템 프롬프트가 어떤 레이어로 구성되는지를 추출한다. `response_item` 엔트리 중 첫 `task_complete` 이전의 developer/system 메시지를 분류한다.
+## Session Lifecycle And Read Paths
 
-| 콘텐츠 시작 패턴 | layer_type | label |
-|---|---|---|
-| `<permissions` | `permissions` | Permissions & Sandbox |
-| `<app-context>` | `app-context` | App Context |
-| `<collaboration_mode>` | `collaboration-mode` | Collaboration Mode |
-| `<apps_instructions>` | `apps` | Apps / Connectors |
-| `<skills_instructions>` | `skills-catalog` | Skills Catalog |
-| `# AGENTS.md instructions` | `agents` | AGENTS.md |
-| `<environment_context>` | `environment` | Environment Context |
-| `Automation:` | `automation` | Automation Envelope |
-| `PLEASE IMPLEMENT THIS PLAN` | `delegated` | Delegated Plan |
-| `<skill>` | `skill` | Skill: {name} |
-| `<subagent_notification>` | `subagent-notification` | Subagent Notification |
+현재 monitor backend의 세션 관리 로직은 live와 archived에서 다르게 동작한다.
 
-`base_instructions.text`는 별도로 `system / Base Instructions` 레이어로 추출된다.
+### Recent Live Index
 
-## 엔트리 스냅샷 빌드
+1. 최신 state DB를 고른다.
+2. `threads WHERE archived = 0`을 `updated_at DESC, id DESC`로 읽는다.
+3. source가 monitor 지원 목록(`desktop`, `cli`, `vscode`)인지 확인한다.
+4. `rollout_path`가 실제 `~/.codex/sessions` 아래 canonical path인지 검증한다.
+5. workspace identity를 복원할 수 있는 row만 남긴다.
+6. 각 JSONL에 대해:
+   - 앞부분 `80` lines까지만 prefix scan해서 `model`, `first_user_message`, `title`을 추출한다.
+   - 뒤에서 `131072` bytes를 읽고 최대 `120` entry까지만 tail scan해서 `updated_at`, `status`, `last_event_summary`를 추출한다.
+7. 최대 `24`개까지만 recent index에 노출한다.
 
-Rust 백엔드가 JSONL 엔트리를 `SessionEntrySnapshot`으로 변환할 때의 특수 처리:
+즉, recent 목록은 "SQLite 정렬 + 가벼운 JSONL 보강" 구조다.
 
-### function_call arguments_preview
+### Live Snapshot
 
-| 함수명 | 추출 방식 |
-|--------|----------|
-| `exec_command` | args에서 `cmd` 필드만 추출 |
-| `spawn_agent`, `close_agent` 등 | 전체 args (2000자 제한) |
-| `apply_patch` | 패치 헤더에서 파일 경로 요약 |
-| 기타 | 첫 200자 |
+live snapshot 하나를 열 때는 다음을 수행한다.
 
-### message text 추출
+1. 선택된 `file_path`가 `~/.codex/sessions` 아래인지 canonical path로 검증
+2. 해당 JSONL 전체를 읽어 main session snapshot 구성
+3. `~/.codex/sessions` 전체를 재귀 스캔
+4. 각 JSONL을 subagent candidate로 읽고 `parent_thread_id`가 현재 session 또는 `forked_from_id`와 맞으면 subagent로 attach
 
-`content[]` 배열의 각 항목을 `\n`으로 조인:
-- `input_text`, `output_text` → `text` 필드 추출
-- `input_image` → `[Image]`로 대체
-- 기타 타입 → 스킵
+즉, live snapshot은 파일 하나만 읽지 않고, 관련 subagent를 찾기 위해 `sessions` 트리 전체를 다시 훑는다.
 
-### context_compacted 요약
+### Archived Index
 
-`replacement_history`에서 역할별 메시지 수와 상위 5개 도구를 집계:
-```
-"42 messages compacted (3 user, 5 developer, 34 assistant) · tools: exec_command, apply_patch, ..."
-```
+archived index는 SQLite `threads`보다 `archived_sessions` 디렉터리 스캔이 기준이다.
 
-## 워크스페이스 식별
+1. `~/.codex/archived_sessions` 전체 JSONL을 재귀 수집
+2. 각 파일의 첫 `session_meta`를 읽고 subagent session은 제외
+3. 파일당 최대 `50` lines까지만 훑어 model / first user message를 추출
+4. 전체 결과를 메모리 cache에 저장
 
-### Git 해석 전략
+현재 구현상 archived index item의 `updatedAt`은 별도 계산 없이 `startedAt`과 같은 값으로 채워지고, `messageCount`도 `0`으로 유지된다.
 
-1. `.git`이 디렉토리면 → 표준 레포, 경로 정규화
-2. `.git`이 파일이면 → linked worktree, `gitdir:` → `commondir` → 부모 레포 해석
+### Archived Snapshot
 
-### Conductor 워크스페이스 제외
+archived snapshot은 live보다 좁은 범위를 훑는다.
 
-경로에 `["conductor", "workspaces", _, _]` 패턴이 포함되면 라이브 세션에서 제외. Conductor 도구의 격리된 작업 디렉토리가 UI를 오염시키는 것을 방지.
+1. 선택된 `file_path`가 `~/.codex/archived_sessions` 아래인지 canonical path로 검증
+2. 대상 archived JSONL 전체를 읽어 main snapshot 구성
+3. 같은 디렉터리의 sibling `.jsonl`만 subagent candidate로 검사
 
-### 라이브 세션 소스 필터
+즉, archived는 live처럼 전체 `sessions` 트리를 재귀 스캔하지 않는다.
 
-`LIVE_SESSION_SOURCES`: `"desktop"`, `"cli"`, `"vscode"` 만 허용. 다른 source의 스레드는 사이드바에 표시되지 않는다.
+## Cache Behavior
 
-## 에러 처리
+현재 command layer 캐시 정책은 비대칭이다.
 
-| 상황 | 동작 |
-|------|------|
-| JSONL 줄 파싱 실패 | 해당 줄 스킵, 다음 줄 계속 |
-| 파일 I/O 에러 | 스캔 중단 (수집된 엔트리만 반환) |
-| SQLite 연결 실패 | `io::Error`로 래핑, 호출자에 전파 |
-| rollout_path 파일 없음 | `Ok(None)` 반환, 해당 세션 스킵 |
-| Git 메타데이터 없음 | 경로 이름으로 폴백 |
+- `load_recent_session_index`: 캐시 없음
+- `load_recent_session_snapshot`: 캐시 없음
+- `load_archived_session_index`: `ArchivedIndexCache` 사용
+- `load_archived_session_snapshot`: 캐시 없음
+- `refresh_archived_session_index`: archived cache만 clear
 
-## 부가 파일
+즉, recent는 항상 최신 디스크 상태를 우선하고, archived index만 메모리 캐시를 쓴다.
 
-| 파일/디렉토리 | 설명 |
-|---|---|
-| `config.toml` | 모델(`gpt-5.4`), 프로필, MCP 서버, `[agents]` (max_depth=1, max_threads=8), 프로젝트 신뢰 수준 |
-| `rules/default.rules` | 셸 명령 허용/차단 규칙 (`prefix_rule()` 형식, git/pnpm/gh 등) |
-| `history.jsonl` | 사용자 입력 히스토리 (`{session_id, ts, text}`, ~50건) |
-| `models_cache.json` | OpenAI 모델 레지스트리 캐시 (50+ 모델, `fetched_at` 포함) |
-| `version.json` | 업데이트 확인 (`latest_version`, `last_checked_at`) |
-| `.codex-global-state.json` | Electron 앱 상태 (workspace-roots, atom-state 등) |
-| `memories/` | 에이전트 메모리 (현재 비어 있음) |
-| `shell_snapshots/` | zsh 환경 덤프 (`{UUID}.{ns}.sh`, ~398KB/건) |
-| `automations/` | 자동화별 디렉토리 (`automation.toml` + `memory.md`) |
-| `skills/` | 스킬 라이브러리 (31개 symlink + 5개 실제 디렉토리) |
-| `vendor_imports/` | 공식 스킬 로컬 캐시 (`skills-curated-cache.json`, 50+ 스킬) |
-| `worktrees/` | Git worktree 격리 환경 (4자리 hex 이름, 22개) |
+## Side Index Files
 
-## 라이브 세션 폴링 아키텍처
+### `session_index.jsonl`
 
-**파일 워칭 없음.** Rust 백엔드에 FSEvents/inotify 등 파일 감시가 없다. 프론트엔드가 2초 간격으로 Tauri RPC를 폴링한다.
+현재 관찰된 row shape:
 
-```
-프론트엔드 (React)
-  ↓ LIVE_RECENT_POLL_INTERVAL_MS = 2000ms
-  ↓ loadRecentSessionSnapshot(filePath)
-Tauri 백엔드 (Rust)
-  ↓ parse_live_session_snapshot()  [매번 파일 전체 재파싱]
-SessionLogSnapshot
-  ↓ 프론트엔드 diff
-  ↓ mergeLiveEvents()  [eventId 기반 중복 제거]
-UI 갱신
+```json
+{
+  "id": "<thread_id>",
+  "thread_name": "<short summary>",
+  "updated_at": "<iso8601>"
+}
 ```
 
-### 폴링 조건
+이 파일은 canonical full index가 아니다.
 
-다음 조건이 모두 충족될 때만 폴링 활성화:
-- 세션이 recent index에 존재
-- `isArchived === false`
-- `liveMode === "live"`
-- `activeFollowLive === true` (사용자가 follow 모드 활성화)
+- `threads.title`과 달리 `thread_name`은 짧은 요약 문구다.
+- 2026년 3월 25일 현재 이 머신에서는 `session_index.jsonl`이 `6` lines뿐이었지만, `threads`는 `2941` rows였다.
+- monitor backend는 이 파일을 읽지 않는다.
 
-사용자가 이벤트를 클릭하면 `followLive → false`로 전환되어 폴링 중단.
+### `.codex-global-state.json`
 
-### 라이브 연결 상태
+workspace roots, prompt history, app persistence가 섞여 있는 전역 상태 파일이다. session transcript나 canonical thread index가 아니라 global app state 성격이 강하다.
 
-| 상태 | 의미 |
-|------|------|
-| `live` | 활성 세션, 업데이트 추적 중 |
-| `paused` | 활성이지만 사용자가 수동 탐색 중 |
-| `stale` | 파일은 있지만 마지막 갱신이 임계값 초과 |
-| `disconnected` | 세션 접근 불가 |
+## Confirmed vs Observed
 
-## 세션 상태 도출
+이 문서는 다음 구분을 따른다.
 
-세션의 `status`는 파일 메타데이터가 아닌 **엔트리 내용 분석**으로 결정된다 (`derive_recent_index_status`):
+- confirmed:
+  - 로컬 `~/.codex` 실파일/실DB에서 직접 확인한 스키마와 예시
+  - 현재 저장소의 Rust backend가 실제로 읽는 경로와 필드
+- observed but not promoted to hard claim:
+  - log DB가 두 군데 보인다는 사실 이후의 writer/rotation 해석
+  - monitor backend가 아직 읽지 않는 부가 table의 장기 용도
 
-| 조건 | 상태 |
-|------|------|
-| 마지막 메시지에 `<turn_aborted>` 태그 | `interrupted` |
-| abort 이벤트가 마지막 메시지 이후 발생 | `interrupted` |
-| 마지막 메시지가 user role + `task_complete` 없음 | `running` |
-| 마지막 메시지가 assistant role 또는 `task_complete` 존재 | `done` |
-| 메시지 없음 | `done` (abort 있으면 `interrupted`) |
+핵심 요약은 다음 한 줄로 압축된다.
 
-기본 제목(`DEFAULT_THREAD_TITLE`): `"새 스레드"`. 제목 없는 세션은 사이드바에서 숨겨질 수 있다.
-
-## 프론트엔드 엣지 빌드 알고리즘
-
-백엔드는 엣지를 전송하지 않는다. 프론트엔드가 `SessionLogSnapshot.subagents`에서 재구축한다.
-
-### Spawn 엣지 (서브에이전트 생성)
-
-```
-sourceEventId = subagentToSpawnSource.get(sessionId)   // 1순위: 명시적 매핑
-             ?? findClosestParentEvent(parentEvents, targetTs)  // 2순위: 시간 기반
-             ?? nthSpawnEvent  // 3순위: 위치 기반 폴백
-```
-
-- `edgeType`: `"spawn"`
-- `edgeId`: `spawn:{sessionId}`
-- source: 부모의 `spawn_agent` 호출 이벤트
-- target: 서브에이전트의 합성 spawn 이벤트
-
-### Merge 엣지 (서브에이전트 완료)
-
-두 가지 경로:
-1. **close_agent**: 단일 `agentId`를 `args.id`에서 읽음
-2. **wait_agent / wait**: `args.ids[]` 배열에서 여러 에이전트 읽음
-
-```
-sourceEventId = latestSubagentEvent  // 서브에이전트의 마지막 비종료 이벤트
-             ?? spawnedEvent         // 폴백: 합성 spawn 이벤트
-targetEventId = callEventToOutputEvent.get(callEventId)  // 도구 결과 이벤트
-             ?? callEventId          // 폴백: 도구 호출 이벤트 자체
-```
-
-- `edgeType`: `"merge"`
-- `edgeId`: `merge:close:{sessionId}` 또는 `merge:wait:{sessionId}`
-
-### 세션 링크 맵 구축 (3단계)
-
-1. **buildCallMaps**: 엔트리 스캔 → `callIdToName`, `spawnCallIdToEventId` 인덱스
-2. **collectOutputLinks**: function_call_output 파싱 → `callEventToOutputEvent`, `codexAgentIdToSessionId`, `parentFunctionArgsByEventId`
-3. **fillMissingSpawnSourceEvents**: 미매핑 spawn 보완 → 시간순 정렬 후 n번째 서브에이전트 ↔ n번째 spawn 이벤트 위치 매칭
-
-## 프론트엔드 데이터 변환 파이프라인
-
-```
-SessionLogSnapshot (Tauri RPC)
-  ↓ Web Worker (비동기, UI 블로킹 방지)
-  ↓ buildDatasetFromSessionLog()
-  │
-  ├─ buildParentRunContext()     → mainLane, userLane, parentEvents
-  ├─ buildSubagentTimeline()     → lanes[], events[], spawn edges[]
-  │   ├─ indexSubagents()        → bySessionId, byNickname
-  │   └─ buildSessionLinkMaps() → callMaps, outputLinks, spawnLinks
-  ├─ buildTimelineEdges()        → spawn + merge edges
-  └─ calculateSummaryMetrics()   → peakParallelism, tokenCount 등
-  ↓
-RunDataset (lanes + events + edges + artifacts + promptAssembly)
-  ↓
-Monitor state (reducer)
-  ↓
-Graph / Timeline / Inspector UI
-```
-
-> `summaryMetrics`는 Rust가 아닌 프론트엔드에서 EventRecord 그래프로부터 계산된다.
+`Codex session = transcript JSONL + SQLite thread index/metadata + optional side indexes`, 그리고 monitor backend는 live에서는 SQLite를 entry point로, archived에서는 archived JSONL 디렉터리 스캔을 entry point로 사용한다.
