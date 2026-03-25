@@ -28,10 +28,10 @@ export function SkillActivityRow({ item, onSkillClick }: SkillActivityRowProps) 
       className="grid w-full grid-cols-[8rem_1fr_6rem_6rem] items-center gap-3 border-b border-white/5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/[0.03] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
     >
       <SkillStatusBadge status={item.status} />
-      <div className="min-w-0">
-        <span className="font-medium text-foreground">{item.skillName}</span>
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="shrink-0 font-medium text-foreground">{item.skillName}</span>
         {item.description && (
-          <span className="ml-2 truncate text-xs text-muted-foreground">
+          <span className="truncate text-xs text-muted-foreground">
             {item.description}
           </span>
         )}
