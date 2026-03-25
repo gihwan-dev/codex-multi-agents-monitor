@@ -56,8 +56,6 @@ function renderInspector(
       summary: buildSummary(),
       onSelectJump: noop,
       onOpenDrawer: (_tab: DrawerTab) => noop(),
-      onToggleOpen: noop,
-      open: true,
       compact: false,
       ...props,
     }),
@@ -65,7 +63,7 @@ function renderInspector(
 }
 
 describe("CausalInspectorPane", () => {
-  it("열린 inspector는 핵심 원인과 payload 액션을 함께 렌더링한다", () => {
+  it("inspector는 핵심 원인과 payload 액션을 함께 렌더링한다", () => {
     const markup = renderInspector();
 
     expect(markup).toContain("Direct cause");
@@ -79,19 +77,14 @@ describe("CausalInspectorPane", () => {
     expect(markup).toContain("Context");
     expect(markup).toContain("Log");
     expect(markup).toContain("Raw");
-    expect(markup).toContain("Close");
   });
 
-  it("compact로 닫힌 inspector는 요약과 상위 세 개 fact만 미리보기로 보여준다", () => {
-    const markup = renderInspector({ open: false, compact: true });
+  it("compact inspector도 동일한 섹션을 렌더링한다", () => {
+    const markup = renderInspector({ compact: true });
 
-    expect(markup).toContain("Selection summary");
-    expect(markup).toContain("Blocked tool handoff");
-    expect(markup).toContain("trace-fix-002");
-    expect(markup).toContain("planner");
-    expect(markup).toContain("tool result");
-    expect(markup).not.toContain("should be hidden in compact summary");
-    expect(markup).toContain("Open");
+    expect(markup).toContain("Direct cause");
+    expect(markup).toContain("Upstream chain");
+    expect(markup).toContain("Downstream impact");
   });
 
   it("요약이 없으면 비어 있는 inspector 안내 문구를 렌더링한다", () => {

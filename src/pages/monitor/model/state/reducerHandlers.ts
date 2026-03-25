@@ -53,7 +53,6 @@ export const monitorActionHandlers: MonitorActionHandlerMap = {
     drawerOpen: action.open ?? state.drawerOpen,
   }),
   "set-drawer-open": (state, action) => ({ ...state, drawerOpen: action.open }),
-  "toggle-inspector": (state) => ({ ...state, inspectorOpen: !state.inspectorOpen }),
   "toggle-follow-live": (state, action) => toggleFollowLiveState(state, action.traceId),
   "set-follow-live": (state, action) =>
     setFollowLiveState(state, action.traceId, action.value),

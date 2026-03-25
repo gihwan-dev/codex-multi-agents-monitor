@@ -26,8 +26,6 @@ export function MonitorInspectorRail(view: MonitorPageView) {
         summary={view.inspectorSummary}
         onSelectJump={view.actions.navigateToItem}
         onOpenDrawer={view.openDrawer}
-        onToggleOpen={view.actions.toggleInspector}
-        open={view.state.inspectorOpen}
       />
     </aside>
   );

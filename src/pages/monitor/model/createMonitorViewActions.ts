@@ -71,9 +71,6 @@ function buildDrawerActions({
     setDrawerOpen(open: boolean) {
       dispatch({ type: "set-drawer-open", open });
     },
-    toggleInspector() {
-      dispatch({ type: "toggle-inspector" });
-    },
     toggleShortcuts() {
       dispatch({ type: "toggle-shortcuts" });
     },

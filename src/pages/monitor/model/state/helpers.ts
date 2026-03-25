@@ -109,10 +109,6 @@ function resolveInitialActiveDataset() {
   return FIXTURE_DATASETS.find((item) => item.run.traceId === DEFAULT_ACTIVE_RUN_ID) ?? fallbackDataset;
 }
 
-function resolveInitialViewportMode() {
-  return typeof window !== "undefined" ? window.innerWidth <= 720 : false;
-}
-
 function buildInitialDatasetState(activeDataset: RunDataset) {
   return {
     datasets: FIXTURE_DATASETS,
@@ -127,18 +123,18 @@ function buildInitialDatasetState(activeDataset: RunDataset) {
   };
 }
 
-function buildInitialPanelState(compactViewport: boolean): Pick<MonitorState, "drawerTab" | "drawerOpen" | "inspectorOpen" | "railWidth" | "inspectorWidth" | "importText" | "allowRawImport" | "noRawStorage" | "exportText" | "shortcutHelpOpen" | "appliedLiveFrames"> {
-  return { drawerTab: "artifacts" as MonitorState["drawerTab"], drawerOpen: false, inspectorOpen: !compactViewport, railWidth: DEFAULT_RAIL_WIDTH, inspectorWidth: DEFAULT_INSPECTOR_WIDTH, importText: FIXTURE_IMPORT_TEXT, allowRawImport: false, noRawStorage: true, exportText: "", shortcutHelpOpen: false, appliedLiveFrames: 0 };
+function buildInitialPanelState(): Pick<MonitorState, "drawerTab" | "drawerOpen" | "railWidth" | "inspectorWidth" | "importText" | "allowRawImport" | "noRawStorage" | "exportText" | "shortcutHelpOpen" | "appliedLiveFrames"> {
+  return { drawerTab: "artifacts" as MonitorState["drawerTab"], drawerOpen: false, railWidth: DEFAULT_RAIL_WIDTH, inspectorWidth: DEFAULT_INSPECTOR_WIDTH, importText: FIXTURE_IMPORT_TEXT, allowRawImport: false, noRawStorage: true, exportText: "", shortcutHelpOpen: false, appliedLiveFrames: 0 };
 }
 
 function buildInitialRequestState(): Pick<MonitorState, "recentIndex" | "recentIndexLoading" | "recentIndexReady" | "recentIndexError" | "selectionLoadState" | "recentSnapshotLoadingId" | "recentSnapshotRequestId" | "archivedIndex" | "archivedTotal" | "archivedHasMore" | "archivedSearch" | "archivedIndexLoading" | "archivedIndexError" | "archivedSnapshotLoading" | "archivedIndexRequestId" | "archivedSnapshotRequestId" | "archiveSectionOpen"> {
   return { recentIndex: [], recentIndexLoading: false, recentIndexReady: false, recentIndexError: null, selectionLoadState: null, recentSnapshotLoadingId: null, recentSnapshotRequestId: 0, archivedIndex: [], archivedTotal: 0, archivedHasMore: false, archivedSearch: "", archivedIndexLoading: false, archivedIndexError: null, archivedSnapshotLoading: false, archivedIndexRequestId: 0, archivedSnapshotRequestId: 0, archiveSectionOpen: false };
 }
 
-function buildInitialMonitorState(activeDataset: RunDataset, compactViewport: boolean): MonitorState {
-  return { ...buildInitialDatasetState(activeDataset), ...buildInitialPanelState(compactViewport), ...buildInitialRequestState() };
+function buildInitialMonitorState(activeDataset: RunDataset): MonitorState {
+  return { ...buildInitialDatasetState(activeDataset), ...buildInitialPanelState(), ...buildInitialRequestState() };
 }
 
 export function createMonitorInitialState(): MonitorState {
-  return buildInitialMonitorState(resolveInitialActiveDataset(), resolveInitialViewportMode());
+  return buildInitialMonitorState(resolveInitialActiveDataset());
 }
