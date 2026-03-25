@@ -3,11 +3,13 @@ export { buildSkillActivityItems } from "./lib/activityAggregator";
 export { parseCatalogSkills } from "./lib/catalogParser";
 export { scanSkillInvocations } from "./lib/invocationScanner";
 export {
+  filterSkillsByFreshness,
   filterSkillsBySearch,
-  filterSkillsByStatus,
+  filterSkillsBySource,
+  type SkillFreshnessFilter,
   type SkillSortDirection,
   type SkillSortField,
-  type SkillStatusFilter,
+  type SkillSourceFilter,
   sortSkills,
 } from "./lib/skillSorting";
 export * from "./model/types";

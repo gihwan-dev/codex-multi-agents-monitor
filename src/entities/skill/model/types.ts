@@ -1,12 +1,18 @@
-export const SKILL_STATUSES = [
-  "active-run",
-  "recently-used",
-  "stale",
-  "never-seen",
-  "unlisted",
-] as const;
+export const FRESHNESS_TAGS = ["active", "recent", "stale", "unused"] as const;
+export const SOURCE_TAGS = ["cataloged", "unlisted"] as const;
 
-export type SkillStatus = (typeof SKILL_STATUSES)[number];
+export type FreshnessTag = (typeof FRESHNESS_TAGS)[number];
+export type SourceTag = (typeof SOURCE_TAGS)[number];
+
+export interface SkillTags {
+  freshness: FreshnessTag;
+  source: SourceTag;
+}
+
+export const FRESHNESS_THRESHOLDS = {
+  activeWithinMs: 7 * 24 * 60 * 60 * 1000,
+  recentWithinMs: 30 * 24 * 60 * 60 * 1000,
+} as const;
 
 export interface SkillCatalogEntry {
   skillName: string;
@@ -24,10 +30,9 @@ export interface SkillInvocationSummary {
 
 export interface SkillActivityItem {
   skillName: string;
-  status: SkillStatus;
+  tags: SkillTags;
   description: string;
   invocationCount: number;
-  currentRunInvocations: number;
   lastInvocationTs: number | null;
   lastInvocationAgent: string | null;
   recentInvocations: SkillInvocationSummary[];

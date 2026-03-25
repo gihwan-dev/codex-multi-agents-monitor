@@ -12,7 +12,7 @@ interface SkillActivityGridProps {
 
 function GridHeader() {
   return (
-    <div className="grid grid-cols-[8rem_1fr_6rem_6rem] gap-3 border-b border-white/8 px-4 py-2 text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="grid grid-cols-[10rem_1fr_6rem_6rem] gap-3 border-b border-white/8 px-4 py-2 text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
       <span>Status</span>
       <span>Skill</span>
       <span className="text-right">Calls</span>

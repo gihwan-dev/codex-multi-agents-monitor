@@ -1,23 +1,23 @@
-import type { SkillActivityItem, SkillStatus } from "../model/types";
+import type { FreshnessTag, SkillActivityItem, SourceTag } from "../model/types";
 
-export type SkillSortField = "name" | "status" | "lastInvocation" | "invocationCount";
+export type SkillSortField = "name" | "freshness" | "lastInvocation" | "invocationCount";
 export type SkillSortDirection = "asc" | "desc";
-export type SkillStatusFilter = SkillStatus | "all";
+export type SkillFreshnessFilter = FreshnessTag | "all";
+export type SkillSourceFilter = SourceTag | "all";
 
-const STATUS_ORDER: Record<SkillStatus, number> = {
-  "active-run": 0,
-  "recently-used": 1,
-  unlisted: 2,
-  stale: 3,
-  "never-seen": 4,
+const FRESHNESS_ORDER: Record<FreshnessTag, number> = {
+  active: 0,
+  recent: 1,
+  stale: 2,
+  unused: 3,
 };
 
 function compareByName(a: SkillActivityItem, b: SkillActivityItem): number {
   return a.skillName.localeCompare(b.skillName);
 }
 
-function compareByStatus(a: SkillActivityItem, b: SkillActivityItem): number {
-  const diff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+function compareByFreshness(a: SkillActivityItem, b: SkillActivityItem): number {
+  const diff = FRESHNESS_ORDER[a.tags.freshness] - FRESHNESS_ORDER[b.tags.freshness];
   return diff !== 0 ? diff : compareByName(a, b);
 }
 
@@ -35,7 +35,7 @@ function compareByInvocationCount(a: SkillActivityItem, b: SkillActivityItem): n
 
 const COMPARATORS: Record<SkillSortField, (a: SkillActivityItem, b: SkillActivityItem) => number> = {
   name: compareByName,
-  status: compareByStatus,
+  freshness: compareByFreshness,
   lastInvocation: compareByLastInvocation,
   invocationCount: compareByInvocationCount,
 };
@@ -50,12 +50,20 @@ export function sortSkills(
   return [...items].sort((a, b) => comparator(a, b) * multiplier);
 }
 
-export function filterSkillsByStatus(
+export function filterSkillsByFreshness(
   items: readonly SkillActivityItem[],
-  filter: SkillStatusFilter,
+  filter: SkillFreshnessFilter,
 ): SkillActivityItem[] {
   if (filter === "all") return [...items];
-  return items.filter((item) => item.status === filter);
+  return items.filter((item) => item.tags.freshness === filter);
+}
+
+export function filterSkillsBySource(
+  items: readonly SkillActivityItem[],
+  filter: SkillSourceFilter,
+): SkillActivityItem[] {
+  if (filter === "all") return [...items];
+  return items.filter((item) => item.tags.source === filter);
 }
 
 export function filterSkillsBySearch(

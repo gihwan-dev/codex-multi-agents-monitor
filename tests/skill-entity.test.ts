@@ -3,8 +3,8 @@ import type { PromptLayer, RunDataset } from "../src/entities/run/index.js";
 import { parseCatalogSkills } from "../src/entities/skill/lib/catalogParser.js";
 import { scanSkillInvocations } from "../src/entities/skill/lib/invocationScanner.js";
 import { buildSkillActivityItems } from "../src/entities/skill/lib/activityAggregator.js";
-import { sortSkills, filterSkillsByStatus, filterSkillsBySearch } from "../src/entities/skill/lib/skillSorting.js";
-import type { SkillActivityItem } from "../src/entities/skill/model/types.js";
+import { sortSkills, filterSkillsByFreshness, filterSkillsBySearch } from "../src/entities/skill/lib/skillSorting.js";
+import type { SkillActivityItem, SkillTags } from "../src/entities/skill/model/types.js";
 
 function makeCatalogLayer(overrides: Partial<PromptLayer> = {}): PromptLayer {
   return {
@@ -206,16 +206,19 @@ describe("activityAggregator", () => {
       },
     });
 
-    const items = buildSkillActivityItems({ datasets: [activeDataset, olderDataset], activeRunId: "active-run" });
+    const now = Date.now();
+    const items = buildSkillActivityItems({ datasets: [activeDataset, olderDataset], activeRunId: "active-run", now });
 
     const commitItem = items.find((i) => i.skillName === "commit");
-    expect(commitItem?.status).toBe("active-run");
+    expect(commitItem?.tags.source).toBe("cataloged");
+    expect(commitItem?.tags.freshness).not.toBe("unused");
 
     const testItem = items.find((i) => i.skillName === "test");
-    expect(testItem?.status).toBe("recently-used");
+    expect(testItem?.tags.source).toBe("cataloged");
 
     const reviewItem = items.find((i) => i.skillName === "review");
-    expect(reviewItem?.status).toBe("never-seen");
+    expect(reviewItem?.tags.freshness).toBe("unused");
+    expect(reviewItem?.tags.source).toBe("cataloged");
   });
 
   it("marks unlisted skills correctly", () => {
@@ -230,7 +233,7 @@ describe("activityAggregator", () => {
 
     const items = buildSkillActivityItems({ datasets: [dataset], activeRunId: "run-1" });
     const unlisted = items.find((i) => i.skillName === "unknown-skill");
-    expect(unlisted?.status).toBe("unlisted");
+    expect(unlisted?.tags.source).toBe("unlisted");
     expect(unlisted?.catalogSource).toBeNull();
   });
 
@@ -241,10 +244,14 @@ describe("activityAggregator", () => {
 });
 
 describe("skillSorting", () => {
+  function tags(freshness: SkillTags["freshness"], source: SkillTags["source"] = "cataloged"): SkillTags {
+    return { freshness, source };
+  }
+
   const items: SkillActivityItem[] = [
-    { skillName: "beta", status: "never-seen", description: "", invocationCount: 0, currentRunInvocations: 0, lastInvocationTs: null, lastInvocationAgent: null, recentInvocations: [], catalogSource: "c1" },
-    { skillName: "alpha", status: "active-run", description: "alpha desc", invocationCount: 5, currentRunInvocations: 3, lastInvocationTs: 2000, lastInvocationAgent: "main", recentInvocations: [], catalogSource: "c1" },
-    { skillName: "gamma", status: "recently-used", description: "gamma search", invocationCount: 2, currentRunInvocations: 0, lastInvocationTs: 1000, lastInvocationAgent: "sub", recentInvocations: [], catalogSource: "c1" },
+    { skillName: "beta", tags: tags("unused"), description: "", invocationCount: 0, lastInvocationTs: null, lastInvocationAgent: null, recentInvocations: [], catalogSource: "c1" },
+    { skillName: "alpha", tags: tags("active"), description: "alpha desc", invocationCount: 5, lastInvocationTs: 2000, lastInvocationAgent: "main", recentInvocations: [], catalogSource: "c1" },
+    { skillName: "gamma", tags: tags("recent"), description: "gamma search", invocationCount: 2, lastInvocationTs: 1000, lastInvocationAgent: "sub", recentInvocations: [], catalogSource: "c1" },
   ];
 
   it("sorts by name ascending", () => {
@@ -252,10 +259,10 @@ describe("skillSorting", () => {
     expect(sorted.map((i) => i.skillName)).toEqual(["alpha", "beta", "gamma"]);
   });
 
-  it("sorts by status (active-run first)", () => {
-    const sorted = sortSkills(items, "status", "asc");
-    expect(sorted[0].status).toBe("active-run");
-    expect(sorted[2].status).toBe("never-seen");
+  it("sorts by freshness (active first)", () => {
+    const sorted = sortSkills(items, "freshness", "asc");
+    expect(sorted[0].tags.freshness).toBe("active");
+    expect(sorted[2].tags.freshness).toBe("unused");
   });
 
   it("sorts by invocation count descending", () => {
@@ -270,8 +277,8 @@ describe("skillSorting", () => {
     expect(sorted[1].skillName).toBe("gamma");
   });
 
-  it("filters by status", () => {
-    const filtered = filterSkillsByStatus(items, "active-run");
+  it("filters by freshness", () => {
+    const filtered = filterSkillsByFreshness(items, "active");
     expect(filtered).toHaveLength(1);
     expect(filtered[0].skillName).toBe("alpha");
   });
@@ -288,8 +295,8 @@ describe("skillSorting", () => {
     expect(filtered[0].skillName).toBe("gamma");
   });
 
-  it("returns all items for 'all' status filter", () => {
-    const filtered = filterSkillsByStatus(items, "all");
+  it("returns all items for 'all' freshness filter", () => {
+    const filtered = filterSkillsByFreshness(items, "all");
     expect(filtered).toHaveLength(3);
   });
 

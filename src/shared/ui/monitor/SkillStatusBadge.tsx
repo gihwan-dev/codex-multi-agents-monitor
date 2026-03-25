@@ -1,37 +1,63 @@
-import type { SkillStatus } from "../../../entities/skill";
+import type { SkillTags } from "../../../entities/skill";
 import { cn } from "../../lib";
 import { Badge } from "../primitives/badge";
-import { SKILL_STATUS_COLORS, SKILL_STATUS_LABELS } from "./SkillStatusBadge.constants";
+import {
+  FRESHNESS_COLORS,
+  FRESHNESS_DESCRIPTIONS,
+  FRESHNESS_LABELS,
+  SOURCE_COLORS,
+  SOURCE_DESCRIPTIONS,
+  SOURCE_LABELS,
+} from "./SkillStatusBadge.constants";
 
-interface SkillStatusBadgeProps {
-  status: SkillStatus;
+interface TagBadgeProps {
+  label: string;
+  tone: string;
+  tooltip: string;
   className?: string;
 }
 
-export function SkillStatusBadge({ status, className }: SkillStatusBadgeProps) {
-  const tone = SKILL_STATUS_COLORS[status];
-
+function TagBadge({ label, tone, tooltip, className }: TagBadgeProps) {
   return (
     <Badge
-      data-slot="skill-status-badge"
-      data-status={status}
       variant="outline"
+      title={tooltip}
       className={cn(
-        "inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.72rem] font-medium",
+        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[0.65rem] font-medium leading-5",
         className,
       )}
       style={{
         borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
-        backgroundColor: `color-mix(in srgb, ${tone} 12%, var(--color-surface-raised))`,
+        backgroundColor: `color-mix(in srgb, ${tone} 10%, var(--color-surface-raised))`,
         color: tone,
       }}
     >
-      <span
-        className="inline-block size-1.5 rounded-full"
-        style={{ backgroundColor: tone }}
-        aria-hidden="true"
-      />
-      <span>{SKILL_STATUS_LABELS[status]}</span>
+      <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: tone }} aria-hidden="true" />
+      {label}
     </Badge>
+  );
+}
+
+interface SkillTagBadgesProps {
+  tags: SkillTags;
+  className?: string;
+}
+
+export function SkillTagBadges({ tags, className }: SkillTagBadgesProps) {
+  return (
+    <div className={cn("flex items-center gap-1", className)}>
+      <TagBadge
+        label={FRESHNESS_LABELS[tags.freshness]}
+        tone={FRESHNESS_COLORS[tags.freshness]}
+        tooltip={FRESHNESS_DESCRIPTIONS[tags.freshness]}
+      />
+      {tags.source === "unlisted" && (
+        <TagBadge
+          label={SOURCE_LABELS[tags.source]}
+          tone={SOURCE_COLORS[tags.source]}
+          tooltip={SOURCE_DESCRIPTIONS[tags.source]}
+        />
+      )}
+    </div>
   );
 }

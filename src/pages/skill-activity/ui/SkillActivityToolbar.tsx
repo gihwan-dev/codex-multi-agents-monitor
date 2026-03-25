@@ -1,5 +1,14 @@
-import { SKILL_STATUSES, type SkillSortField, type SkillStatusFilter } from "../../../entities/skill";
-import { SKILL_STATUS_LABELS } from "../../../shared/ui/monitor/SkillStatusBadge.constants";
+import {
+  FRESHNESS_TAGS,
+  type SkillFreshnessFilter,
+  type SkillSortField,
+  type SkillSourceFilter,
+  SOURCE_TAGS,
+} from "../../../entities/skill";
+import {
+  FRESHNESS_LABELS,
+  SOURCE_LABELS,
+} from "../../../shared/ui/monitor/SkillStatusBadge.constants";
 import { Input } from "../../../shared/ui/primitives/input";
 import {
   Select,
@@ -12,20 +21,22 @@ import { SCAN_RANGE_OPTIONS, type ScanRangeValue } from "../model/types";
 
 interface SkillActivityToolbarProps {
   searchQuery: string;
-  statusFilter: SkillStatusFilter;
+  freshnessFilter: SkillFreshnessFilter;
+  sourceFilter: SkillSourceFilter;
   sortField: SkillSortField;
   scanRange: ScanRangeValue;
   totalCount: number;
   visibleCount: number;
   scanLoading: boolean;
   onSearchChange: (query: string) => void;
-  onStatusFilterChange: (filter: SkillStatusFilter) => void;
+  onFreshnessFilterChange: (filter: SkillFreshnessFilter) => void;
+  onSourceFilterChange: (filter: SkillSourceFilter) => void;
   onSortChange: (field: SkillSortField) => void;
   onScanRangeChange: (range: ScanRangeValue) => void;
 }
 
 const SORT_OPTIONS: { value: SkillSortField; label: string }[] = [
-  { value: "status", label: "Status" },
+  { value: "freshness", label: "Freshness" },
   { value: "name", label: "Name" },
   { value: "lastInvocation", label: "Last seen" },
   { value: "invocationCount", label: "Call count" },
@@ -39,54 +50,51 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
         placeholder="Search skills…"
         value={props.searchQuery}
         onChange={(e) => props.onSearchChange(e.target.value)}
-        className="h-8 w-52 text-sm"
+        className="h-8 w-48 text-sm"
       />
 
-      <Select
-        value={String(props.scanRange)}
-        onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}
-      >
-        <SelectTrigger className="h-8 w-36 text-sm">
+      <Select value={String(props.scanRange)} onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}>
+        <SelectTrigger className="h-8 w-32 text-sm">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {SCAN_RANGE_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={String(opt.value)}>
-              {opt.label}
-            </SelectItem>
+            <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
           ))}
         </SelectContent>
       </Select>
 
-      <Select
-        value={props.statusFilter}
-        onValueChange={(value) => props.onStatusFilterChange(value as SkillStatusFilter)}
-      >
-        <SelectTrigger className="h-8 w-36 text-sm">
-          <SelectValue placeholder="All statuses" />
+      <Select value={props.freshnessFilter} onValueChange={(v) => props.onFreshnessFilterChange(v as SkillFreshnessFilter)}>
+        <SelectTrigger className="h-8 w-28 text-sm">
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          {SKILL_STATUSES.map((status) => (
-            <SelectItem key={status} value={status}>
-              {SKILL_STATUS_LABELS[status]}
-            </SelectItem>
+          <SelectItem value="all">All freshness</SelectItem>
+          {FRESHNESS_TAGS.map((tag) => (
+            <SelectItem key={tag} value={tag}>{FRESHNESS_LABELS[tag]}</SelectItem>
           ))}
         </SelectContent>
       </Select>
 
-      <Select
-        value={props.sortField}
-        onValueChange={(value) => props.onSortChange(value as SkillSortField)}
-      >
-        <SelectTrigger className="h-8 w-32 text-sm">
-          <SelectValue placeholder="Sort by" />
+      <Select value={props.sourceFilter} onValueChange={(v) => props.onSourceFilterChange(v as SkillSourceFilter)}>
+        <SelectTrigger className="h-8 w-28 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All sources</SelectItem>
+          {SOURCE_TAGS.map((tag) => (
+            <SelectItem key={tag} value={tag}>{SOURCE_LABELS[tag]}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={props.sortField} onValueChange={(v) => props.onSortChange(v as SkillSortField)}>
+        <SelectTrigger className="h-8 w-28 text-sm">
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {SORT_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
           ))}
         </SelectContent>
       </Select>

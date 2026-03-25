@@ -1,4 +1,4 @@
-import type { SkillSortDirection, SkillSortField, SkillStatusFilter } from "../../../entities/skill";
+import type { SkillFreshnessFilter, SkillSortDirection, SkillSortField, SkillSourceFilter } from "../../../entities/skill";
 
 export const SCAN_RANGE_OPTIONS = [
   { value: 50, label: "Recent 50" },
@@ -12,15 +12,15 @@ export type ScanRangeValue = (typeof SCAN_RANGE_OPTIONS)[number]["value"];
 export interface SkillActivityPageState {
   sortField: SkillSortField;
   sortDirection: SkillSortDirection;
-  statusFilter: SkillStatusFilter;
+  freshnessFilter: SkillFreshnessFilter;
+  sourceFilter: SkillSourceFilter;
   searchQuery: string;
-  selectedSkillName: string | null;
   scanRange: ScanRangeValue;
 }
 
 export type SkillActivityPageAction =
   | { type: "set-sort"; field: SkillSortField }
-  | { type: "set-status-filter"; filter: SkillStatusFilter }
+  | { type: "set-freshness-filter"; filter: SkillFreshnessFilter }
+  | { type: "set-source-filter"; filter: SkillSourceFilter }
   | { type: "set-search"; query: string }
-  | { type: "select-skill"; skillName: string | null }
   | { type: "set-scan-range"; range: ScanRangeValue };

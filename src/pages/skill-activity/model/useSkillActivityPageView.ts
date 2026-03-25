@@ -2,13 +2,15 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import type { RunDataset } from "../../../entities/run";
 import {
   buildSkillActivityItems,
+  filterSkillsByFreshness,
   filterSkillsBySearch,
-  filterSkillsByStatus,
+  filterSkillsBySource,
   loadSkillActivityScan,
   type SkillActivityItem,
+  type SkillFreshnessFilter,
   type SkillInvocationSummary,
   type SkillSortField,
-  type SkillStatusFilter,
+  type SkillSourceFilter,
   sortSkills,
 } from "../../../entities/skill";
 import { INITIAL_SKILL_ACTIVITY_STATE, skillActivityReducer } from "./reducer";
@@ -52,10 +54,11 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
   const hasCatalog = allItems.some((item) => item.catalogSource !== null);
 
   const filteredItems = useMemo(() => {
-    const byStatus = filterSkillsByStatus(allItems, state.statusFilter);
-    const bySearch = filterSkillsBySearch(byStatus, state.searchQuery);
-    return sortSkills(bySearch, state.sortField, state.sortDirection);
-  }, [allItems, state.statusFilter, state.searchQuery, state.sortField, state.sortDirection]);
+    let result = filterSkillsByFreshness(allItems, state.freshnessFilter);
+    result = filterSkillsBySource(result, state.sourceFilter);
+    result = filterSkillsBySearch(result, state.searchQuery);
+    return sortSkills(result, state.sortField, state.sortDirection);
+  }, [allItems, state.freshnessFilter, state.sourceFilter, state.searchQuery, state.sortField, state.sortDirection]);
 
   const handleSkillClick = (item: SkillActivityItem) => {
     if (item.recentInvocations.length > 0) {
@@ -70,7 +73,8 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
     totalCount: allItems.length,
     scanLoading,
     setSort: (field: SkillSortField) => dispatch({ type: "set-sort", field }),
-    setStatusFilter: (filter: SkillStatusFilter) => dispatch({ type: "set-status-filter", filter }),
+    setFreshnessFilter: (filter: SkillFreshnessFilter) => dispatch({ type: "set-freshness-filter", filter }),
+    setSourceFilter: (filter: SkillSourceFilter) => dispatch({ type: "set-source-filter", filter }),
     setSearch: (query: string) => dispatch({ type: "set-search", query }),
     setScanRange: (range: ScanRangeValue) => dispatch({ type: "set-scan-range", range }),
     onSkillClick: handleSkillClick,

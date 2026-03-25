@@ -1,6 +1,6 @@
 import type { SkillActivityItem } from "../../../entities/skill";
 import { formatRelativeTime } from "../../../shared/lib/format/monitor";
-import { SkillStatusBadge } from "../../../shared/ui/monitor/SkillStatusBadge";
+import { SkillTagBadges } from "../../../shared/ui/monitor/SkillStatusBadge";
 
 interface SkillActivityRowProps {
   item: SkillActivityItem;
@@ -25,9 +25,9 @@ export function SkillActivityRow({ item, onSkillClick }: SkillActivityRowProps) 
       type="button"
       disabled={!hasInvocations}
       onClick={() => onSkillClick(item)}
-      className="grid w-full grid-cols-[8rem_1fr_6rem_6rem] items-center gap-3 border-b border-white/5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/[0.03] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+      className="grid w-full grid-cols-[10rem_1fr_6rem_6rem] items-center gap-3 border-b border-white/5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/[0.03] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
     >
-      <SkillStatusBadge status={item.status} />
+      <SkillTagBadges tags={item.tags} />
       <div className="flex min-w-0 items-baseline gap-2">
         <span className="shrink-0 font-medium text-foreground">{item.skillName}</span>
         {item.description && (
