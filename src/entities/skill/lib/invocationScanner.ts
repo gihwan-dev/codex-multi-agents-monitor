@@ -9,8 +9,18 @@ function isSkillLayer(layerType: string): boolean {
   return layerType === "skill";
 }
 
+const SKILL_LABEL_PREFIX = "Skill: ";
+
+function extractSkillNameFromLabel(label: string): string {
+  const trimmed = label.trim();
+  if (trimmed.startsWith(SKILL_LABEL_PREFIX)) {
+    return trimmed.slice(SKILL_LABEL_PREFIX.length).trim();
+  }
+  return trimmed;
+}
+
 function buildLayerInvocation(label: string, layerId: string, dataset: RunDataset): SkillInvocationSummary | null {
-  const skillName = label.trim();
+  const skillName = extractSkillNameFromLabel(label);
   if (!skillName) return null;
   return { skillName, traceId: dataset.run.traceId, eventId: layerId, timestamp: dataset.run.startTs, agentName: dataset.session.owner };
 }

@@ -1,8 +1,9 @@
 import type { PromptLayer } from "../../run";
 import type { SkillCatalogEntry } from "../model/types";
 
-const SKILL_LINK_PATTERN = /\[([^\]]+)\]\([^)]*SKILL\.md[^)]*\)/g;
+const SKILL_BULLET_WITH_FILE_PATTERN = /^[-*]\s+([^:]+):\s*(.+?)\s*\(file:\s*[^)]+\)\s*$/gm;
 const SKILL_BULLET_PATTERN = /^[-*]\s+(\S+):\s*(.+)$/gm;
+const SKILL_LINK_PATTERN = /\[([^\]]+)\]\([^)]*SKILL\.md[^)]*\)/g;
 
 interface CollectorState {
   seen: Set<string>;
@@ -18,18 +19,17 @@ function addMatch(state: CollectorState, rawName: string, description: string): 
   }
 }
 
-function extractSkillLinks(text: string, catalogSource: string): SkillCatalogEntry[] {
-  const state: CollectorState = { seen: new Set(), entries: [], catalogSource };
-  for (const match of text.matchAll(SKILL_LINK_PATTERN)) {
-    addMatch(state, match[1], "");
-  }
-  return state.entries;
+interface ExtractOptions {
+  text: string;
+  catalogSource: string;
+  pattern: RegExp;
+  descIndex: number;
 }
 
-function extractSkillBullets(text: string, catalogSource: string): SkillCatalogEntry[] {
-  const state: CollectorState = { seen: new Set(), entries: [], catalogSource };
-  for (const match of text.matchAll(SKILL_BULLET_PATTERN)) {
-    addMatch(state, match[1], match[2].trim());
+function extractWithPattern(opts: ExtractOptions): SkillCatalogEntry[] {
+  const state: CollectorState = { seen: new Set(), entries: [], catalogSource: opts.catalogSource };
+  for (const match of opts.text.matchAll(opts.pattern)) {
+    addMatch(state, match[1], match[opts.descIndex]?.trim() ?? "");
   }
   return state.entries;
 }
@@ -38,8 +38,12 @@ export function parseCatalogSkills(layer: PromptLayer): SkillCatalogEntry[] {
   const source = layer.rawContent ?? layer.preview;
   if (!source) return [];
 
-  const linkEntries = extractSkillLinks(source, layer.layerId);
-  if (linkEntries.length > 0) return linkEntries;
+  const catalogSource = layer.layerId;
+  const withFile = extractWithPattern({ text: source, catalogSource, pattern: SKILL_BULLET_WITH_FILE_PATTERN, descIndex: 2 });
+  if (withFile.length > 0) return withFile;
 
-  return extractSkillBullets(source, layer.layerId);
+  const bullets = extractWithPattern({ text: source, catalogSource, pattern: SKILL_BULLET_PATTERN, descIndex: 2 });
+  if (bullets.length > 0) return bullets;
+
+  return extractWithPattern({ text: source, catalogSource, pattern: SKILL_LINK_PATTERN, descIndex: 0 });
 }

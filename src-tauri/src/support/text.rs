@@ -46,7 +46,7 @@ pub(crate) fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemb
 
         if matches!(
             layer_type.as_str(),
-            "user" | "skill" | "subagent-notification"
+            "user" | "subagent-notification"
         ) {
             continue;
         }

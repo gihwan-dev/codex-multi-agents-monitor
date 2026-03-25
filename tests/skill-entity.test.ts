@@ -59,18 +59,26 @@ function makeMinimalDataset(overrides: Partial<RunDataset> = {}): RunDataset {
 }
 
 describe("catalogParser", () => {
-  it("extracts skills from markdown links", () => {
+  it("extracts skills from real codex format (bullet with file path)", () => {
     const layer = makeCatalogLayer({
-      preview: "[$commit](/path/to/SKILL.md) - commit tool\n[$test](/path/to/SKILL.md) - test runner",
+      rawContent: [
+        "<skills_instructions>",
+        "## Skills",
+        "### Available skills",
+        "- commit: Generate conventional commit messages (file: /path/to/commit/SKILL.md)",
+        "- test: Run test suites with Vitest (file: /path/to/test/SKILL.md)",
+        "</skills_instructions>",
+      ].join("\n"),
     });
 
     const result = parseCatalogSkills(layer);
     expect(result).toHaveLength(2);
     expect(result[0].skillName).toBe("commit");
+    expect(result[0].description).toBe("Generate conventional commit messages");
     expect(result[1].skillName).toBe("test");
   });
 
-  it("extracts skills from bullet list when no links found", () => {
+  it("extracts skills from simple bullet list", () => {
     const layer = makeCatalogLayer({
       preview: "- commit: Generate commit messages\n- test: Run test suites",
     });
@@ -81,9 +89,19 @@ describe("catalogParser", () => {
     expect(result[0].description).toBe("Generate commit messages");
   });
 
+  it("extracts skills from markdown links as fallback", () => {
+    const layer = makeCatalogLayer({
+      preview: "[$commit](/path/to/SKILL.md)\n[$test](/path/to/SKILL.md)",
+    });
+
+    const result = parseCatalogSkills(layer);
+    expect(result).toHaveLength(2);
+    expect(result[0].skillName).toBe("commit");
+  });
+
   it("deduplicates skill names", () => {
     const layer = makeCatalogLayer({
-      preview: "[$commit](/a/SKILL.md)\n[$commit](/b/SKILL.md)",
+      rawContent: "- commit: desc A (file: /a/SKILL.md)\n- commit: desc B (file: /b/SKILL.md)",
     });
 
     const result = parseCatalogSkills(layer);
@@ -97,8 +115,8 @@ describe("catalogParser", () => {
 
   it("prefers rawContent over preview when available", () => {
     const layer = makeCatalogLayer({
-      preview: "[$commit](/SKILL.md)",
-      rawContent: "[$commit](/SKILL.md)\n[$test](/SKILL.md)",
+      preview: "<skills_instructions>\n## Skills",
+      rawContent: "- commit: Commit tool (file: /a/SKILL.md)\n- test: Test runner (file: /b/SKILL.md)",
     });
 
     const result = parseCatalogSkills(layer);
@@ -107,12 +125,12 @@ describe("catalogParser", () => {
 });
 
 describe("invocationScanner", () => {
-  it("scans skill layers from prompt assembly", () => {
+  it("scans skill layers from prompt assembly (real Codex label format)", () => {
     const dataset = makeMinimalDataset({
       promptAssembly: {
         layers: [
-          { layerId: "l1", layerType: "skill", label: "commit", preview: "...", contentLength: 100, rawContent: null },
-          { layerId: "l2", layerType: "skill", label: "test", preview: "...", contentLength: 100, rawContent: null },
+          { layerId: "l1", layerType: "skill", label: "Skill: commit", preview: "...", contentLength: 100, rawContent: null },
+          { layerId: "l2", layerType: "skill", label: "Skill: test", preview: "...", contentLength: 100, rawContent: null },
           { layerId: "l3", layerType: "system", label: "Base", preview: "...", contentLength: 100, rawContent: null },
         ],
         totalContentLength: 300,
@@ -164,13 +182,14 @@ describe("activityAggregator", () => {
       promptAssembly: {
         layers: [
           {
-            layerId: "cat-1", layerType: "skills-catalog", label: "Catalog",
-            preview: "- commit: Commit tool\n- test: Test tool\n- review: Review tool",
-            contentLength: 100, rawContent: null,
+            layerId: "cat-1", layerType: "skills-catalog", label: "Skills Catalog",
+            preview: "<skills_instructions>...",
+            contentLength: 200,
+            rawContent: "- commit: Commit tool (file: /a/SKILL.md)\n- test: Test tool (file: /b/SKILL.md)\n- review: Review tool (file: /c/SKILL.md)",
           },
-          { layerId: "sk-1", layerType: "skill", label: "commit", preview: "...", contentLength: 50, rawContent: null },
+          { layerId: "sk-1", layerType: "skill", label: "Skill: commit", preview: "...", contentLength: 50, rawContent: null },
         ],
-        totalContentLength: 150,
+        totalContentLength: 250,
       },
     });
 
@@ -181,7 +200,7 @@ describe("activityAggregator", () => {
       },
       promptAssembly: {
         layers: [
-          { layerId: "sk-2", layerType: "skill", label: "test", preview: "...", contentLength: 50, rawContent: null },
+          { layerId: "sk-2", layerType: "skill", label: "Skill: test", preview: "...", contentLength: 50, rawContent: null },
         ],
         totalContentLength: 50,
       },
@@ -203,7 +222,7 @@ describe("activityAggregator", () => {
     const dataset = makeMinimalDataset({
       promptAssembly: {
         layers: [
-          { layerId: "sk-1", layerType: "skill", label: "unknown-skill", preview: "...", contentLength: 50, rawContent: null },
+          { layerId: "sk-1", layerType: "skill", label: "Skill: unknown-skill", preview: "...", contentLength: 50, rawContent: null },
         ],
         totalContentLength: 50,
       },

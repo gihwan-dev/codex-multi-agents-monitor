@@ -7,6 +7,12 @@ interface PromptAssemblyOptions {
 
 type PromptAssemblyLayerSnapshot = NonNullable<SessionLogSnapshot["promptAssembly"]>[number];
 
+const RAW_ALWAYS_INCLUDED_TYPES = new Set<string>(["skills-catalog", "skill"]);
+
+function shouldIncludeRaw(layerType: string, globalIncludeRaw: boolean): boolean {
+  return globalIncludeRaw || RAW_ALWAYS_INCLUDED_TYPES.has(layerType);
+}
+
 function createPromptAssemblyLayerBuilder(
   sessionId: string,
   includeRaw: boolean,
@@ -21,7 +27,7 @@ function createPromptAssemblyLayerBuilder(
       label: layer.label,
       preview: layer.preview,
       contentLength: layer.contentLength,
-      rawContent: includeRaw ? layer.rawContent : null,
+      rawContent: shouldIncludeRaw(layer.layerType, includeRaw) ? layer.rawContent : null,
     };
   };
 }
