@@ -206,7 +206,7 @@ describe("activityAggregator", () => {
       },
     });
 
-    const items = buildSkillActivityItems([activeDataset, olderDataset], "active-run");
+    const items = buildSkillActivityItems({ datasets: [activeDataset, olderDataset], activeRunId: "active-run" });
 
     const commitItem = items.find((i) => i.skillName === "commit");
     expect(commitItem?.status).toBe("active-run");
@@ -228,7 +228,7 @@ describe("activityAggregator", () => {
       },
     });
 
-    const items = buildSkillActivityItems([dataset], "run-1");
+    const items = buildSkillActivityItems({ datasets: [dataset], activeRunId: "run-1" });
     const unlisted = items.find((i) => i.skillName === "unknown-skill");
     expect(unlisted?.status).toBe("unlisted");
     expect(unlisted?.catalogSource).toBeNull();
@@ -236,7 +236,7 @@ describe("activityAggregator", () => {
 
   it("returns empty array for datasets without catalog or skills", () => {
     const dataset = makeMinimalDataset();
-    expect(buildSkillActivityItems([dataset], "run-1")).toHaveLength(0);
+    expect(buildSkillActivityItems({ datasets: [dataset], activeRunId: "run-1" })).toHaveLength(0);
   });
 });
 

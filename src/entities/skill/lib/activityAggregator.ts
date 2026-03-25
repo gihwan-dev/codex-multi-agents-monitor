@@ -95,12 +95,17 @@ function buildUnlistedItems(
     );
 }
 
-export function buildSkillActivityItems(
-  datasets: readonly RunDataset[],
-  activeRunId: string,
-): SkillActivityItem[] {
+export interface BuildSkillActivityOptions {
+  datasets: readonly RunDataset[];
+  activeRunId: string;
+  externalInvocations?: readonly SkillInvocationSummary[];
+}
+
+export function buildSkillActivityItems(opts: BuildSkillActivityOptions): SkillActivityItem[] {
+  const { datasets, activeRunId, externalInvocations = [] } = opts;
   const catalog = collectCatalogEntries(datasets);
   const knownSkillNames = new Set(catalog.keys());
-  const grouped = groupInvocationsBySkill(datasets.flatMap((ds) => scanSkillInvocations(ds, knownSkillNames)));
+  const datasetInvocations = datasets.flatMap((ds) => scanSkillInvocations(ds, knownSkillNames));
+  const grouped = groupInvocationsBySkill([...datasetInvocations, ...externalInvocations]);
   return [...buildCatalogItems(catalog, grouped, activeRunId), ...buildUnlistedItems(knownSkillNames, grouped, activeRunId)];
 }

@@ -18,6 +18,7 @@ pub fn run() {
             commands::sessions::load_archived_session_index,
             commands::sessions::load_archived_session_snapshot,
             commands::sessions::refresh_archived_session_index,
+            commands::sessions::scan_skill_activity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

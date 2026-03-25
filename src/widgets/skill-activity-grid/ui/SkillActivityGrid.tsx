@@ -6,6 +6,7 @@ import { SkillActivityRow } from "./SkillActivityRow";
 interface SkillActivityGridProps {
   items: readonly SkillActivityItem[];
   hasCatalog: boolean;
+  loading?: boolean;
   onSkillClick: (item: SkillActivityItem) => void;
 }
 
@@ -20,7 +21,15 @@ function GridHeader() {
   );
 }
 
-export function SkillActivityGrid({ items, hasCatalog, onSkillClick }: SkillActivityGridProps) {
+export function SkillActivityGrid({ items, hasCatalog, loading, onSkillClick }: SkillActivityGridProps) {
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        Scanning sessions for skill activity…
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return <SkillActivityEmptyState hasCatalog={hasCatalog} />;
   }

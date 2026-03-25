@@ -1,10 +1,12 @@
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import type { RunDataset } from "../../../entities/run";
 import {
   buildSkillActivityItems,
   filterSkillsBySearch,
   filterSkillsByStatus,
+  loadSkillActivityScan,
   type SkillActivityItem,
+  type SkillInvocationSummary,
   type SkillSortField,
   type SkillStatusFilter,
   sortSkills,
@@ -18,17 +20,32 @@ interface UseSkillActivityPageViewOptions {
   onNavigateToEvent: (eventId: string) => void;
 }
 
-export function useSkillActivityPageView({
-  datasets,
-  activeRunId,
-  onNavigateToMonitor,
-  onNavigateToEvent,
-}: UseSkillActivityPageViewOptions) {
+function useScanInvocations() {
+  const [scanResult, setScanResult] = useState<readonly SkillInvocationSummary[]>([]);
+  const [scanLoading, setScanLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setScanLoading(true);
+    loadSkillActivityScan().then((result) => {
+      if (!cancelled) {
+        setScanResult(result);
+        setScanLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  return { scanResult, scanLoading };
+}
+
+export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) {
   const [state, dispatch] = useReducer(skillActivityReducer, INITIAL_SKILL_ACTIVITY_STATE);
+  const { scanResult, scanLoading } = useScanInvocations();
 
   const allItems = useMemo(
-    () => buildSkillActivityItems(datasets, activeRunId),
-    [datasets, activeRunId],
+    () => buildSkillActivityItems({ datasets: opts.datasets, activeRunId: opts.activeRunId, externalInvocations: scanResult }),
+    [opts.datasets, opts.activeRunId, scanResult],
   );
 
   const hasCatalog = allItems.some((item) => item.catalogSource !== null);
@@ -41,7 +58,7 @@ export function useSkillActivityPageView({
 
   const handleSkillClick = (item: SkillActivityItem) => {
     if (item.recentInvocations.length > 0) {
-      onNavigateToEvent(item.recentInvocations[0].eventId);
+      opts.onNavigateToEvent(item.recentInvocations[0].eventId);
     }
   };
 
@@ -50,10 +67,11 @@ export function useSkillActivityPageView({
     items: filteredItems,
     hasCatalog,
     totalCount: allItems.length,
+    scanLoading,
     setSort: (field: SkillSortField) => dispatch({ type: "set-sort", field }),
     setStatusFilter: (filter: SkillStatusFilter) => dispatch({ type: "set-status-filter", filter }),
     setSearch: (query: string) => dispatch({ type: "set-search", query }),
     onSkillClick: handleSkillClick,
-    onNavigateToMonitor,
+    onNavigateToMonitor: opts.onNavigateToMonitor,
   };
 }

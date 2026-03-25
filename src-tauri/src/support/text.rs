@@ -13,6 +13,7 @@ use serde_json::Value;
 use self::classification::{classify_developer_content, classify_user_context};
 
 pub(crate) use self::classification::is_system_boilerplate_text;
+pub(crate) use self::classification::extract_skill_name_public;
 pub(crate) use self::entry_snapshot::{
     extract_entry_snapshot, extract_error_hint, extract_turn_context_model,
 };

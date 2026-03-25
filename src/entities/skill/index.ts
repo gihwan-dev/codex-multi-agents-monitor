@@ -1,3 +1,4 @@
+export { loadSkillActivityScan } from "./api/loadSkillActivity";
 export { buildSkillActivityItems } from "./lib/activityAggregator";
 export { parseCatalogSkills } from "./lib/catalogParser";
 export { scanSkillInvocations } from "./lib/invocationScanner";

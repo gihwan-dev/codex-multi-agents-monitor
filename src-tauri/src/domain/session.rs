@@ -93,3 +93,17 @@ pub(crate) struct ArchivedSessionIndexResult {
     pub(crate) total: usize,
     pub(crate) has_more: bool,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillInvocationRecord {
+    pub(crate) skill_name: String,
+    pub(crate) session_id: String,
+    pub(crate) timestamp: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillActivityScanResult {
+    pub(crate) invocations: Vec<SkillInvocationRecord>,
+}
