@@ -12,32 +12,30 @@ const FRESHNESS_ORDER: Record<FreshnessTag, number> = {
   unused: 3,
 };
 
-function compareByName(a: SkillActivityItem, b: SkillActivityItem): number {
+function byName(a: SkillActivityItem, b: SkillActivityItem): number {
   return a.skillName.localeCompare(b.skillName);
 }
 
-function compareByFreshness(a: SkillActivityItem, b: SkillActivityItem): number {
+function byFreshness(a: SkillActivityItem, b: SkillActivityItem): number {
   const diff = FRESHNESS_ORDER[a.tags.freshness] - FRESHNESS_ORDER[b.tags.freshness];
-  return diff !== 0 ? diff : compareByName(a, b);
+  return diff !== 0 ? diff : byName(a, b);
 }
 
-function compareByLastInvocation(a: SkillActivityItem, b: SkillActivityItem): number {
-  const aTs = a.lastInvocationTs ?? 0;
-  const bTs = b.lastInvocationTs ?? 0;
-  const diff = aTs - bTs;
-  return diff !== 0 ? diff : compareByName(a, b);
+function byLastInvocation(a: SkillActivityItem, b: SkillActivityItem): number {
+  const diff = (a.lastInvocationTs ?? 0) - (b.lastInvocationTs ?? 0);
+  return diff !== 0 ? diff : byName(a, b);
 }
 
-function compareByInvocationCount(a: SkillActivityItem, b: SkillActivityItem): number {
+function byCount(a: SkillActivityItem, b: SkillActivityItem): number {
   const diff = a.invocationCount - b.invocationCount;
-  return diff !== 0 ? diff : compareByName(a, b);
+  return diff !== 0 ? diff : byName(a, b);
 }
 
 const COMPARATORS: Record<SkillSortField, (a: SkillActivityItem, b: SkillActivityItem) => number> = {
-  name: compareByName,
-  freshness: compareByFreshness,
-  lastInvocation: compareByLastInvocation,
-  invocationCount: compareByInvocationCount,
+  name: byName,
+  freshness: byFreshness,
+  lastInvocation: byLastInvocation,
+  invocationCount: byCount,
 };
 
 export function sortSkills(
@@ -45,9 +43,9 @@ export function sortSkills(
   field: SkillSortField,
   direction: SkillSortDirection,
 ): SkillActivityItem[] {
-  const comparator = COMPARATORS[field];
-  const multiplier = direction === "asc" ? 1 : -1;
-  return [...items].sort((a, b) => comparator(a, b) * multiplier);
+  const cmp = COMPARATORS[field];
+  const m = direction === "asc" ? 1 : -1;
+  return [...items].sort((a, b) => cmp(a, b) * m);
 }
 
 export function filterSkillsByFreshness(
@@ -55,7 +53,7 @@ export function filterSkillsByFreshness(
   filter: SkillFreshnessFilter,
 ): SkillActivityItem[] {
   if (filter === "all") return [...items];
-  return items.filter((item) => item.tags.freshness === filter);
+  return items.filter((i) => i.tags.freshness === filter);
 }
 
 export function filterSkillsBySource(
@@ -63,18 +61,16 @@ export function filterSkillsBySource(
   filter: SkillSourceFilter,
 ): SkillActivityItem[] {
   if (filter === "all") return [...items];
-  return items.filter((item) => item.tags.source === filter);
+  return items.filter((i) => i.tags.source === filter);
 }
 
 export function filterSkillsBySearch(
   items: readonly SkillActivityItem[],
   query: string,
 ): SkillActivityItem[] {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return [...items];
+  const q = query.trim().toLowerCase();
+  if (!q) return [...items];
   return items.filter(
-    (item) =>
-      item.skillName.toLowerCase().includes(trimmed) ||
-      item.description.toLowerCase().includes(trimmed),
+    (i) => i.skillName.toLowerCase().includes(q) || i.description.toLowerCase().includes(q),
   );
 }

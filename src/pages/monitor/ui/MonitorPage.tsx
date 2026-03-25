@@ -5,54 +5,38 @@ import { useMonitorPageView } from "./useMonitorPageView";
 
 interface MonitorPageProps {
   onNavigateToSkills?: () => void;
-  onDatasetsSync?: (datasets: readonly RunDataset[], activeRunId: string) => void;
+  onDatasetsSync?: (ds: readonly RunDataset[], id: string) => void;
   pendingEventId?: string | null;
   onPendingEventConsumed?: () => void;
 }
 
-function useDatasetsSync(
+function useSyncEffect(
   datasets: readonly RunDataset[],
   activeRunId: string,
-  onSync?: (datasets: readonly RunDataset[], activeRunId: string) => void,
+  onSync?: (ds: readonly RunDataset[], id: string) => void,
+) {
+  useEffect(() => { onSync?.(datasets, activeRunId); }, [datasets, activeRunId, onSync]);
+}
+
+function usePendingNavigation(
+  eventId: string | null | undefined,
+  events: readonly { eventId: string }[] | undefined,
+  navigate: (s: { kind: "event"; id: string }) => void,
 ) {
   useEffect(() => {
-    onSync?.(datasets, activeRunId);
-  }, [datasets, activeRunId, onSync]);
-}
-
-interface PendingEventOptions {
-  pendingEventId: string | null | undefined;
-  events: readonly { eventId: string }[] | undefined;
-  navigateToItem: (s: { kind: "event"; id: string }) => void;
-  onConsumed?: () => void;
-}
-
-function applyPendingNavigation(opts: PendingEventOptions) {
-  if (!opts.pendingEventId) return;
-  const event = opts.events?.find((e) => e.eventId === opts.pendingEventId);
-  if (event) {
-    opts.navigateToItem({ kind: "event", id: event.eventId });
-  }
-  opts.onConsumed?.();
-}
-
-function usePendingEventNavigation(opts: PendingEventOptions) {
-  const { pendingEventId, events, navigateToItem, onConsumed } = opts;
-  useEffect(() => {
-    applyPendingNavigation({ pendingEventId, events, navigateToItem, onConsumed });
-  }, [pendingEventId, events, navigateToItem, onConsumed]);
+    if (!eventId) return;
+    const found = events?.find((e) => e.eventId === eventId);
+    if (found) navigate({ kind: "event", id: found.eventId });
+  }, [eventId, events, navigate]);
 }
 
 export function MonitorPage(props: MonitorPageProps) {
   const view = useMonitorPageView();
 
-  useDatasetsSync(view.state.datasets, view.state.activeRunId, props.onDatasetsSync);
-  usePendingEventNavigation({
-    pendingEventId: props.pendingEventId,
-    events: view.activeDataset?.events,
-    navigateToItem: view.actions.navigateToItem,
-    onConsumed: props.onPendingEventConsumed,
-  });
+  useSyncEffect(view.state.datasets, view.state.activeRunId, props.onDatasetsSync);
+  usePendingNavigation(props.pendingEventId, view.activeDataset?.events, view.actions.navigateToItem);
+
+  useEffect(() => { if (props.pendingEventId) props.onPendingEventConsumed?.(); }, [props.pendingEventId, props.onPendingEventConsumed]);
 
   return <MonitorPageContent {...view} onNavigateToSkills={props.onNavigateToSkills} />;
 }

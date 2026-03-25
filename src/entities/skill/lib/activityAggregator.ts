@@ -6,7 +6,10 @@ import { scanSkillInvocations } from "./invocationScanner";
 
 const MAX_RECENT_INVOCATIONS = 10;
 
-function addLayerEntriesToCatalog(layers: readonly PromptLayer[], catalog: Map<string, SkillCatalogEntry>): void {
+function addLayerEntries(
+  layers: readonly PromptLayer[],
+  catalog: Map<string, SkillCatalogEntry>,
+): void {
   for (const layer of layers) {
     if (layer.layerType !== "skills-catalog") continue;
     for (const entry of parseCatalogSkills(layer)) {
@@ -17,44 +20,46 @@ function addLayerEntriesToCatalog(layers: readonly PromptLayer[], catalog: Map<s
   }
 }
 
-function collectCatalogEntries(datasets: readonly RunDataset[]): Map<string, SkillCatalogEntry> {
+function collectCatalog(datasets: readonly RunDataset[]): Map<string, SkillCatalogEntry> {
   const catalog = new Map<string, SkillCatalogEntry>();
   for (const ds of datasets) {
     if (ds.promptAssembly?.layers) {
-      addLayerEntriesToCatalog(ds.promptAssembly.layers, catalog);
+      addLayerEntries(ds.promptAssembly.layers, catalog);
     }
   }
   return catalog;
 }
 
-function groupInvocationsBySkill(invocations: SkillInvocationSummary[]): Map<string, SkillInvocationSummary[]> {
+function groupBySkill(
+  invocations: SkillInvocationSummary[],
+): Map<string, SkillInvocationSummary[]> {
   const grouped = new Map<string, SkillInvocationSummary[]>();
   for (const inv of invocations) {
     const list = grouped.get(inv.skillName);
-    if (list) {
-      list.push(inv);
-    } else {
-      grouped.set(inv.skillName, [inv]);
-    }
+    if (list) list.push(inv);
+    else grouped.set(inv.skillName, [inv]);
   }
   return grouped;
 }
 
 function deriveFreshness(lastTs: number | null, now: number): FreshnessTag {
   if (lastTs === null) return "unused";
-  const ageMs = now - lastTs;
-  if (ageMs <= FRESHNESS_THRESHOLDS.activeWithinMs) return "active";
-  if (ageMs <= FRESHNESS_THRESHOLDS.recentWithinMs) return "recent";
+  const age = now - lastTs;
+  if (age <= FRESHNESS_THRESHOLDS.activeWithinMs) return "active";
+  if (age <= FRESHNESS_THRESHOLDS.recentWithinMs) return "recent";
   return "stale";
 }
 
 function deriveTags(inCatalog: boolean, lastTs: number | null, now: number): SkillTags {
   const source: SourceTag = inCatalog ? "cataloged" : "unlisted";
-  const freshness = deriveFreshness(lastTs, now);
-  return { freshness, source };
+  return { freshness: deriveFreshness(lastTs, now), source };
 }
 
-interface BuildItemOptions {
+function latestInvocation(sorted: readonly SkillInvocationSummary[]): SkillInvocationSummary | undefined {
+  return sorted[0];
+}
+
+interface ItemBuildInput {
   skillName: string;
   inCatalog: boolean;
   description: string;
@@ -63,46 +68,19 @@ interface BuildItemOptions {
   now: number;
 }
 
-function sortInvocationsDesc(invocations: readonly SkillInvocationSummary[]): SkillInvocationSummary[] {
-  return [...invocations].sort((a, b) => b.timestamp - a.timestamp);
-}
-
-function buildItemFromInvocations(opts: BuildItemOptions): SkillActivityItem {
-  const sorted = sortInvocationsDesc(opts.invocations);
-  const latest = sorted[0];
-
+function buildItem(input: ItemBuildInput): SkillActivityItem {
+  const sorted = [...input.invocations].sort((a, b) => b.timestamp - a.timestamp);
+  const latest = latestInvocation(sorted);
   return {
-    skillName: opts.skillName,
-    tags: deriveTags(opts.inCatalog, latest?.timestamp ?? null, opts.now),
-    description: opts.description,
-    invocationCount: opts.invocations.length,
+    skillName: input.skillName,
+    tags: deriveTags(input.inCatalog, latest?.timestamp ?? null, input.now),
+    description: input.description,
+    invocationCount: input.invocations.length,
     lastInvocationTs: latest?.timestamp ?? null,
     lastInvocationAgent: latest?.agentName ?? null,
     recentInvocations: sorted.slice(0, MAX_RECENT_INVOCATIONS),
-    catalogSource: opts.catalogSource,
+    catalogSource: input.catalogSource,
   };
-}
-
-function buildCatalogItems(
-  catalog: Map<string, SkillCatalogEntry>,
-  grouped: Map<string, SkillInvocationSummary[]>,
-  now: number,
-): SkillActivityItem[] {
-  return [...catalog.entries()].map(([skillName, entry]) =>
-    buildItemFromInvocations({ skillName, inCatalog: true, description: entry.description, catalogSource: entry.catalogSource, invocations: grouped.get(skillName) ?? [], now }),
-  );
-}
-
-function buildUnlistedItems(
-  catalog: ReadonlySet<string>,
-  grouped: Map<string, SkillInvocationSummary[]>,
-  now: number,
-): SkillActivityItem[] {
-  return [...grouped.entries()]
-    .filter(([skillName]) => !catalog.has(skillName))
-    .map(([skillName, invocations]) =>
-      buildItemFromInvocations({ skillName, inCatalog: false, description: "", catalogSource: null, invocations, now }),
-    );
 }
 
 export interface BuildSkillActivityOptions {
@@ -114,9 +92,19 @@ export interface BuildSkillActivityOptions {
 
 export function buildSkillActivityItems(opts: BuildSkillActivityOptions): SkillActivityItem[] {
   const { datasets, externalInvocations = [], now = Date.now() } = opts;
-  const catalog = collectCatalogEntries(datasets);
-  const knownSkillNames = new Set(catalog.keys());
-  const datasetInvocations = datasets.flatMap((ds) => scanSkillInvocations(ds, knownSkillNames));
-  const grouped = groupInvocationsBySkill([...datasetInvocations, ...externalInvocations]);
-  return [...buildCatalogItems(catalog, grouped, now), ...buildUnlistedItems(knownSkillNames, grouped, now)];
+  const catalog = collectCatalog(datasets);
+  const known = new Set(catalog.keys());
+  const all = datasets.flatMap((ds) => scanSkillInvocations(ds, known));
+  const grouped = groupBySkill([...all, ...externalInvocations]);
+
+  const catalogItems = [...catalog.entries()].map(([name, entry]) =>
+    buildItem({ skillName: name, inCatalog: true, description: entry.description, catalogSource: entry.catalogSource, invocations: grouped.get(name) ?? [], now }),
+  );
+  const unlistedItems = [...grouped.entries()]
+    .filter(([name]) => !known.has(name))
+    .map(([name, invocations]) =>
+      buildItem({ skillName: name, inCatalog: false, description: "", catalogSource: null, invocations, now }),
+    );
+
+  return [...catalogItems, ...unlistedItems];
 }
