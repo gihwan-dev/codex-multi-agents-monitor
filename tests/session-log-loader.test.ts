@@ -785,7 +785,7 @@ describe("sessionLogLoader", () => {
     expect(reasoning[0].title).toBe("Reasoning");
   });
 
-  it("context_compacted shows descriptive output preview", () => {
+  it("context_compacted falls back to default message when no summary", () => {
     const dataset = expectDataset(
       buildSnapshot([
         makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
@@ -808,6 +808,33 @@ describe("sessionLogLoader", () => {
     );
     expect(compacted.eventType).toBe("note");
     expect(compacted.outputPreview).toBe("Context reduced to fit within the model window");
+  });
+
+  it("context_compacted shows summary text when available", () => {
+    const dataset = expectDataset(
+      buildSnapshot([
+        makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Go"),
+        {
+          timestamp: "2026-03-19T10:05:00.000Z",
+          entryType: "context_compacted",
+          role: null,
+          text: "Compressed 47 messages into a summary covering file edits and test runs",
+          functionName: null,
+          functionCallId: null,
+          functionArgumentsPreview: null,
+        },
+      ]),
+    );
+
+    const compacted = expectEvent(
+      dataset,
+      (event) => event.title === "Context compacted",
+      "expected compacted note event with summary",
+    );
+    expect(compacted.eventType).toBe("note");
+    expect(compacted.outputPreview).toBe(
+      "Compressed 47 messages into a summary covering file edits and test runs",
+    );
   });
 
   it("turn_aborted shows reason in both outputPreview and errorMessage", () => {

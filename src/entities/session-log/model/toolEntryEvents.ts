@@ -21,6 +21,8 @@ export function buildFunctionCallEvent(context: EntryContext): EventRecord {
     toolName: functionName,
   });
 
+  baseEvent.rawInput = entry.functionArgumentsPreview ?? null;
+
   return baseEvent;
 }
 
@@ -47,9 +49,7 @@ export function buildFunctionCallOutputEvent(
     errorMessage: failure?.errorMessage,
   });
 
-  if (failure) {
-    event.status = "failed";
-  }
+  Object.assign(event, { rawOutput: entry.text ?? null, ...(failure && { status: "failed" as const }) });
 
   return event;
 }

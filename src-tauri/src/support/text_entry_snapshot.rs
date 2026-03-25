@@ -45,7 +45,10 @@ pub(crate) fn extract_error_hint(entry: &Value) -> Option<String> {
 pub(crate) fn extract_entry_snapshot(entry: &Value) -> Option<SessionEntrySnapshot> {
     let context = SnapshotContext::from_entry(entry)?;
     if entry.get("type").and_then(Value::as_str) == Some("compacted") {
-        return Some(build_empty_snapshot(&context, "context_compacted"));
+        let summary = context
+            .string("summary")
+            .map(|s| truncate_utf8_safe(s, 2000));
+        return Some(build_text_snapshot(&context, "context_compacted", summary));
     }
 
     if let Some(snapshot) = build_message_entry(&context) {
@@ -178,7 +181,12 @@ fn build_state_entry(context: &SnapshotContext<'_>) -> Option<SessionEntrySnapsh
         "task_started" => Some(build_empty_snapshot(context, "task_started")),
         "task_complete" => Some(build_task_complete_entry(context)),
         "agent_message" => Some(build_agent_message_entry(context)),
-        "context_compacted" => Some(build_empty_snapshot(context, "context_compacted")),
+        "context_compacted" => {
+            let text = context
+                .string("summary")
+                .map(|s| truncate_utf8_safe(s, 2000));
+            Some(build_text_snapshot(context, "context_compacted", text))
+        }
         "turn_aborted" => Some(build_reason_entry(context, "turn_aborted")),
         "thread_rolled_back" => Some(build_reason_entry(context, "thread_rolled_back")),
         "agent_reasoning" => Some(build_agent_reasoning_entry(context)),

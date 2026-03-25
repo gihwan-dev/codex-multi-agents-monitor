@@ -12,7 +12,6 @@ import {
 interface PromptLayerCardProps {
   expanded: boolean;
   onToggle: (layerId: string) => void;
-  rawEnabled: boolean;
   layer: PromptAssembly["layers"][number];
 }
 
@@ -20,7 +19,6 @@ export function PromptLayerCard({
   expanded,
   layer,
   onToggle,
-  rawEnabled,
 }: PromptLayerCardProps) {
   const isDynamic = DYNAMIC_LAYER_TYPES.has(layer.layerType);
 
@@ -38,13 +36,15 @@ export function PromptLayerCard({
       style={buildLayerStyle(LAYER_ACCENTS[layer.layerType])}
     >
       <PromptLayerToggle expanded={expanded} layer={layer} onToggle={onToggle} />
-      <PromptLayerPreview preview={layer.preview} />
       {expanded ? (
         <PromptLayerContent
-          rawVisible={rawEnabled && layer.rawContent !== null}
+          label={layer.label}
+          preview={layer.preview}
           rawContent={layer.rawContent}
         />
-      ) : null}
+      ) : (
+        <PromptLayerPreview preview={layer.preview} />
+      )}
     </div>
   );
 }

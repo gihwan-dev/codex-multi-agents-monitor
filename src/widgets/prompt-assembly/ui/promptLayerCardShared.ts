@@ -9,8 +9,6 @@ export const DYNAMIC_LAYER_TYPES: ReadonlySet<PromptLayerType> = new Set([
   "delegated",
 ]);
 
-export const HIDDEN_RAW_MESSAGE = "Raw context hidden by default.";
-
 export const LAYER_ACCENTS: Record<PromptLayerType, string> = {
   system: "var(--color-text-tertiary)",
   permissions: "var(--color-text-tertiary)",

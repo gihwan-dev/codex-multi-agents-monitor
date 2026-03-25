@@ -15,7 +15,9 @@ interface GraphEventCardProps {
     : never;
   eventType: Extract<GraphSceneModel["rows"][number], { kind: "event" }>["eventType"];
   inPath: boolean;
+  inputPreview: string | null;
   onSelect: () => void;
+  outputPreview: string | null;
   rowAnchorTop: number;
   selected: boolean;
   status: RunStatus;
@@ -28,7 +30,9 @@ export function GraphEventCard({
   eventLayout,
   eventType,
   inPath,
+  inputPreview,
   onSelect,
+  outputPreview,
   rowAnchorTop,
   selected,
   status,
@@ -36,6 +40,7 @@ export function GraphEventCard({
   title,
 }: GraphEventCardProps) {
   const cardClasses = resolveEventCardClasses(eventType);
+  const summaryLine = outputPreview ?? inputPreview ?? (summary !== "n/a" ? summary : null);
 
   return (
     <button
@@ -66,12 +71,12 @@ export function GraphEventCard({
         </span>
         <GraphStatusDot status={status} />
       </div>
-      {summary !== "n/a" ? (
+      {summaryLine ? (
         <p
           data-slot="graph-card-summary"
           className="line-clamp-2 text-[0.72rem] leading-[1.3] text-[var(--color-text-muted)]"
         >
-          {summary}
+          {summaryLine}
         </p>
       ) : null}
     </button>
