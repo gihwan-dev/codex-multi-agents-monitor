@@ -8,15 +8,9 @@ type AppView = "monitor" | "skill-activity";
 
 function useViewState() {
   const [currentView, setCurrentView] = useState<AppView>("monitor");
-  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const goToSkills = useCallback(() => setCurrentView("skill-activity"), []);
   const goToMonitor = useCallback(() => setCurrentView("monitor"), []);
-  const consumePendingEvent = useCallback(() => setPendingEventId(null), []);
-  const navigateToEvent = useCallback((eventId: string) => {
-    setPendingEventId(eventId);
-    setCurrentView("monitor");
-  }, []);
-  return { currentView, pendingEventId, goToSkills, goToMonitor, consumePendingEvent, navigateToEvent };
+  return { currentView, goToSkills, goToMonitor };
 }
 
 function useDatasetsRef() {
@@ -41,8 +35,6 @@ export function App() {
         <MonitorPage
           onNavigateToSkills={view.goToSkills}
           onDatasetsSync={data.sync}
-          pendingEventId={view.pendingEventId}
-          onPendingEventConsumed={view.consumePendingEvent}
         />
       </div>
       {view.currentView === "skill-activity" && (
@@ -51,7 +43,6 @@ export function App() {
           datasets={data.datasetsRef.current}
           activeRunId={data.activeRunIdRef.current}
           onNavigateToMonitor={view.goToMonitor}
-          onNavigateToEvent={view.navigateToEvent}
         />
       )}
     </ThemeProvider>

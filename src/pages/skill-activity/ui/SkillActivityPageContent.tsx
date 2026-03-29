@@ -29,7 +29,6 @@ export function SkillActivityPageContent(view: SkillActivityPageView) {
         items={view.items}
         hasCatalog={view.hasCatalog}
         loading={view.scanLoading}
-        onSkillClick={view.onSkillClick}
       />
     </div>
   );
