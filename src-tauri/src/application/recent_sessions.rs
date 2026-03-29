@@ -892,7 +892,7 @@ mod tests {
         );
         let matched_subagent_file = ctx.sessions_root.join("sqlite-source-sub.jsonl");
         let serialized_source = r#"{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Gauss","agent_role":"worker"}}}"#;
-        persist_live_thread_fixture(
+        persist_live_thread_fixture((
             &state_database,
             "session-001",
             &selected_file,
@@ -901,7 +901,7 @@ mod tests {
             1_742_428_803,
             session_meta_line_with_source_and_fork("session-001", &workspace_path, "desktop", None),
             SELECTED_SESSION_EVENTS,
-        );
+        ));
         write_worker_subagent_session(
             &matched_subagent_file,
             "sub-sqlite-source",
@@ -933,7 +933,7 @@ mod tests {
         );
         let late_subagent_file = ctx.sessions_root.join("late-subagent.jsonl");
 
-        persist_live_thread_fixture(
+        persist_live_thread_fixture((
             &state_database,
             "session-001",
             &selected_file,
@@ -942,7 +942,7 @@ mod tests {
             1_742_428_805,
             session_meta_line("session-001", &workspace_path),
             SELECTED_SESSION_EVENTS,
-        );
+        ));
         write_late_subagent_resume_session(
             &late_subagent_file,
             "sub-late-live",

@@ -150,16 +150,28 @@ pub(crate) fn insert_thread_row(
     );
 }
 
-pub(crate) fn persist_live_thread_fixture(
-    state_database: &Path,
-    session_id: &str,
-    session_file: &Path,
-    source: &str,
-    workspace_path: &Path,
-    updated_at: i64,
-    header: String,
-    events: &[&str],
-) {
+pub(crate) type LiveThreadFixtureArgs<'a> = (
+    &'a Path,
+    &'a str,
+    &'a Path,
+    &'a str,
+    &'a Path,
+    i64,
+    String,
+    &'a [&'a str],
+);
+
+pub(crate) fn persist_live_thread_fixture(fixture: LiveThreadFixtureArgs<'_>) {
+    let (
+        state_database,
+        session_id,
+        session_file,
+        source,
+        workspace_path,
+        updated_at,
+        header,
+        events,
+    ) = fixture;
     write_session_lines(
         session_file,
         std::iter::once(header)
