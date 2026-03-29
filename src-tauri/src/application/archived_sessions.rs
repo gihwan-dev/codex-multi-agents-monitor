@@ -1,6 +1,6 @@
 use crate::{
     application::{
-        session_relationships::load_snapshot_subagents,
+        session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
         workspace_identity::{is_conductor_workspace_path, resolve_archived_workspace_identity},
     },
     domain::{
@@ -54,24 +54,37 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     let mut snapshot = build_archived_session_snapshot(path).ok()??;
     snapshot.subagents = load_archived_subagents_best_effort(
         &snapshot,
-        &archived_root,
-        &canonical_path,
-        &codex_home,
+        &ArchivedSubagentScope {
+            archived_root: &archived_root,
+            canonical_path: &canonical_path,
+            codex_home: &codex_home,
+        },
     );
 
     Some(snapshot)
 }
 
+struct ArchivedSubagentScope<'a> {
+    archived_root: &'a Path,
+    canonical_path: &'a Path,
+    codex_home: &'a Path,
+}
+
 fn load_archived_subagents_best_effort(
     snapshot: &SessionLogSnapshot,
-    archived_root: &Path,
-    canonical_path: &Path,
-    codex_home: &Path,
+    scope: &ArchivedSubagentScope<'_>,
 ) -> Vec<crate::domain::session::SubagentSnapshot> {
-    let relationship_hints = load_thread_subagent_hints(codex_home).unwrap_or_default();
+    let relationship_hints = load_thread_subagent_hints(scope.codex_home).unwrap_or_default();
 
-    load_snapshot_subagents(snapshot, archived_root, canonical_path, &relationship_hints)
-        .unwrap_or_default()
+    load_snapshot_subagents(
+        SnapshotSubagentSearch {
+            snapshot,
+            search_root: scope.archived_root,
+            selected_file: scope.canonical_path,
+        },
+        &relationship_hints,
+    )
+    .unwrap_or_default()
 }
 
 fn collect_archived_session_files(archived_root: &Path) -> io::Result<Vec<PathBuf>> {
@@ -134,12 +147,38 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
 
 #[cfg(test)]
 mod tests {
-    use super::{load_archived_session_snapshot_from_disk, load_archived_subagents_best_effort};
+    use super::{
+        load_archived_session_snapshot_from_disk, load_archived_subagents_best_effort,
+        ArchivedSubagentScope,
+    };
     use crate::domain::session::SessionLogSnapshot;
     use crate::test_support::{
-        session_meta_line_with_fork, write_session_lines, RecentSessionTestContext,
+        session_meta_line_with_fork, write_session_lines, write_worker_subagent_session,
+        RecentSessionTestContext,
     };
     use std::path::Path;
+
+    fn write_archived_nested_subagent_fixture(
+        selected_file: &Path,
+        nested_subagent_file: &Path,
+        workspace_path: &Path,
+    ) {
+        write_session_lines(
+            selected_file,
+            vec![
+                session_meta_line_with_fork("archived-parent", workspace_path, Some("fork-root")),
+                r#"{"timestamp":"2026-03-21T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect archived snapshot"}]}}"#
+                    .to_owned(),
+            ],
+        );
+        write_worker_subagent_session(
+            nested_subagent_file,
+            "archived-child",
+            "fork-root",
+            "Turing",
+            "Nested archived child",
+        );
+    }
 
     #[test]
     fn loads_archived_subagents_from_nested_paths_with_shared_relationship_resolution() {
@@ -149,29 +188,10 @@ mod tests {
         let selected_file = archived_root.join("2026/parent.jsonl");
         let nested_subagent_file = archived_root.join("2026/agents/nested-subagent.jsonl");
 
-        std::fs::create_dir_all(selected_file.parent().expect("parent dir should exist"))
-            .expect("selected parent dir should exist");
-        std::fs::create_dir_all(
-            nested_subagent_file
-                .parent()
-                .expect("nested parent dir should exist"),
-        )
-        .expect("nested subagent dir should exist");
-        write_session_lines(
+        write_archived_nested_subagent_fixture(
             &selected_file,
-            vec![
-                session_meta_line_with_fork("archived-parent", &workspace_path, Some("fork-root")),
-                r#"{"timestamp":"2026-03-21T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect archived snapshot"}]}}"#
-                    .to_owned(),
-            ],
-        );
-        write_session_lines(
             &nested_subagent_file,
-            [
-                r#"{"timestamp":"2026-03-21T00:01:00.000Z","type":"session_meta","payload":{"id":"archived-child","source":{"subagent":{"thread_spawn":{"parent_thread_id":"fork-root","depth":1,"agent_nickname":"Turing","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-21T00:01:00.000Z"}}"#,
-                r#"{"timestamp":"2026-03-21T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#,
-                r#"{"timestamp":"2026-03-21T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Nested archived child"}]}}"#,
-            ],
+            &workspace_path,
         );
 
         let snapshot =
@@ -203,9 +223,11 @@ mod tests {
 
         let subagents = load_archived_subagents_best_effort(
             &snapshot,
-            Path::new("/definitely/missing/archived-root"),
-            Path::new("/definitely/missing/archived-root/parent.jsonl"),
-            Path::new("/definitely/missing/codex-home"),
+            &ArchivedSubagentScope {
+                archived_root: Path::new("/definitely/missing/archived-root"),
+                canonical_path: Path::new("/definitely/missing/archived-root/parent.jsonl"),
+                codex_home: Path::new("/definitely/missing/codex-home"),
+            },
         );
 
         assert!(subagents.is_empty());

@@ -1,6 +1,6 @@
 use crate::{
     application::{
-        session_relationships::load_snapshot_subagents,
+        session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
         workspace_identity::resolve_live_session_workspace_identity,
     },
     domain::{
@@ -77,9 +77,11 @@ pub(crate) fn load_recent_session_snapshot_from_disk(
             .ok()??;
     let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
     snapshot.subagents = load_snapshot_subagents(
-        &snapshot,
-        &selection.sessions_root,
-        &selection.candidate.file_path,
+        SnapshotSubagentSearch {
+            snapshot: &snapshot,
+            search_root: &selection.sessions_root,
+            selected_file: &selection.candidate.file_path,
+        },
         &relationship_hints,
     )
     .ok()?;
@@ -241,12 +243,17 @@ mod tests {
         domain::session::RecentSessionIndexItem,
         test_support::{
             create_git_workspace, create_linked_worktree, create_state_database, insert_thread_row,
-            insert_thread_row_with_archive_flag, insert_thread_spawn_edge, session_meta_line,
-            session_meta_line_with_fork, session_meta_line_with_source,
-            session_meta_line_with_source_and_fork, write_session_lines, RecentSessionTestContext,
+            insert_thread_row_with_archive_flag, insert_thread_spawn_edge,
+            persist_live_thread_fixture, session_meta_line, session_meta_line_with_fork,
+            session_meta_line_with_source,
+            session_meta_line_with_source_and_fork, write_late_subagent_resume_session,
+            write_session_lines, write_worker_subagent_session, RecentSessionTestContext,
         },
     };
-    use std::{fs, path::Path};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     const LIGHTWEIGHT_SCAN_EVENTS: &[&str] = &[
         r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#,
@@ -340,6 +347,21 @@ mod tests {
     fn load_recent_snapshot(path: &Path) -> crate::domain::session::SessionLogSnapshot {
         load_recent_session_snapshot_from_disk(path.to_string_lossy().as_ref())
             .expect("selected recent snapshot should exist")
+    }
+
+    fn prepare_recent_snapshot_fixture(
+        test_name: &str,
+        session_file_name: &str,
+        state_file_name: &str,
+    ) -> (RecentSessionTestContext, PathBuf, PathBuf, PathBuf) {
+        let ctx = RecentSessionTestContext::new(test_name);
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let selected_file = ctx.sessions_root.join(session_file_name);
+        let state_database = ctx.codex_home.join(state_file_name);
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        (ctx, workspace_path, selected_file, state_database)
     }
 
     #[test]
@@ -863,42 +885,29 @@ mod tests {
 
     #[test]
     fn attaches_subagent_from_sqlite_source_provenance_when_edges_are_missing() {
-        let ctx = RecentSessionTestContext::new("recent-detail-sqlite-source");
-        let workspace_path = ctx.projects_root.join("demo-app");
-        let selected_file = ctx.sessions_root.join("selected-source-provenance.jsonl");
+        let (ctx, workspace_path, selected_file, state_database) = prepare_recent_snapshot_fixture(
+            "recent-detail-sqlite-source",
+            "selected-source-provenance.jsonl",
+            "state_14.sqlite",
+        );
         let matched_subagent_file = ctx.sessions_root.join("sqlite-source-sub.jsonl");
-        let state_database = ctx.codex_home.join("state_14.sqlite");
         let serialized_source = r#"{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Gauss","agent_role":"worker"}}}"#;
-
-        create_git_workspace(&workspace_path);
-        create_state_database(&state_database, &[]);
-        write_session_lines(
-            &selected_file,
-            session_lines(
-                session_meta_line_with_source_and_fork(
-                    "session-001",
-                    &workspace_path,
-                    "desktop",
-                    None,
-                ),
-                SELECTED_SESSION_EVENTS,
-            ),
-        );
-        write_session_lines(
-            &matched_subagent_file,
-            [
-                r#"{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{"id":"sub-sqlite-source","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Gauss","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:01:00.000Z"}}"#,
-                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#,
-                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"SQLite provenance child"}]}}"#,
-            ],
-        );
-        insert_thread_row(
+        persist_live_thread_fixture(
             &state_database,
             "session-001",
             &selected_file,
             "desktop",
             &workspace_path,
             1_742_428_803,
+            session_meta_line_with_source_and_fork("session-001", &workspace_path, "desktop", None),
+            SELECTED_SESSION_EVENTS,
+        );
+        write_worker_subagent_session(
+            &matched_subagent_file,
+            "sub-sqlite-source",
+            "session-001",
+            "Gauss",
+            "SQLite provenance child",
         );
         insert_thread_row(
             &state_database,
@@ -908,7 +917,6 @@ mod tests {
             &workspace_path,
             1_742_428_804,
         );
-
         let snapshot = load_recent_snapshot(&selected_file);
 
         assert_eq!(snapshot.subagents.len(), 1);
@@ -918,42 +926,30 @@ mod tests {
 
     #[test]
     fn attaches_late_subagent_without_absorbing_resumed_parent_entries() {
-        let ctx = RecentSessionTestContext::new("recent-detail-late-subagent");
-        let workspace_path = ctx.projects_root.join("demo-app");
-        let selected_file = ctx.sessions_root.join("selected-late-subagent.jsonl");
+        let (ctx, workspace_path, selected_file, state_database) = prepare_recent_snapshot_fixture(
+            "recent-detail-late-subagent",
+            "selected-late-subagent.jsonl",
+            "state_15.sqlite",
+        );
         let late_subagent_file = ctx.sessions_root.join("late-subagent.jsonl");
-        let state_database = ctx.codex_home.join("state_15.sqlite");
 
-        create_git_workspace(&workspace_path);
-        create_state_database(&state_database, &[]);
-        write_session_lines(
-            &selected_file,
-            session_lines(
-                session_meta_line("session-001", &workspace_path),
-                SELECTED_SESSION_EVENTS,
-            ),
-        );
-        write_session_lines(
-            &late_subagent_file,
-            [
-                r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
-                r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
-                r#"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent prelude"}]}}"#,
-                r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-late-live","forked_from_id":"session-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Ada","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
-                r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
-                r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child work"}]}}"#,
-                r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
-                r#"{"timestamp":"2026-03-18T09:15:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p2"}}"#,
-                r#"{"timestamp":"2026-03-18T09:15:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent resumed"}]}}"#,
-            ],
-        );
-        insert_thread_row(
+        persist_live_thread_fixture(
             &state_database,
             "session-001",
             &selected_file,
             "desktop",
             &workspace_path,
             1_742_428_805,
+            session_meta_line("session-001", &workspace_path),
+            SELECTED_SESSION_EVENTS,
+        );
+        write_late_subagent_resume_session(
+            &late_subagent_file,
+            "sub-late-live",
+            "session-001",
+            "session-001",
+            "Ada",
+            "Child work",
         );
 
         let snapshot = load_recent_snapshot(&selected_file);

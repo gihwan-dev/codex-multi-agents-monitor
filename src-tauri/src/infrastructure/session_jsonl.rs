@@ -116,36 +116,48 @@ pub(crate) fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<S
         let line = line?;
 
         if subagent_meta.is_none() {
-            let Some(meta) = parse_session_meta_line(&line) else {
-                if parse_entry_line(&line).is_some() {
-                    saw_prelude_entries = true;
-                }
-                continue;
-            };
-            let Some(found_subagent_meta) = build_subagent_meta(session_file, &meta) else {
-                saw_prelude_entries = true;
-                continue;
-            };
-
-            collector = Some(SubagentCollector::new(
-                found_subagent_meta.started_at.clone(),
-                saw_prelude_entries,
-            ));
-            subagent_meta = Some(found_subagent_meta);
+            if let Some(found_subagent_meta) =
+                find_subagent_meta(session_file, &line, &mut saw_prelude_entries)
+            {
+                collector = Some(SubagentCollector::new(
+                    found_subagent_meta.started_at.clone(),
+                    saw_prelude_entries,
+                ));
+                subagent_meta = Some(found_subagent_meta);
+            }
             continue;
         }
 
-        let Some(entry) = parse_entry_line(&line) else {
-            continue;
-        };
-        if let Some(collector) = collector.as_mut() {
-            collector.consume(entry);
-        }
+        consume_subagent_entry_line(&line, collector.as_mut());
     }
 
     match (subagent_meta, collector) {
         (Some(subagent_meta), Some(collector)) => Ok(Some(collector.finish(subagent_meta))),
         _ => Ok(None),
+    }
+}
+
+fn find_subagent_meta(
+    session_file: &Path,
+    line: &str,
+    saw_prelude_entries: &mut bool,
+) -> Option<SubagentMeta> {
+    let Some(meta) = parse_session_meta_line(line) else {
+        *saw_prelude_entries |= parse_entry_line(line).is_some();
+        return None;
+    };
+
+    let found_subagent_meta = build_subagent_meta(session_file, &meta);
+    *saw_prelude_entries |= found_subagent_meta.is_none();
+    found_subagent_meta
+}
+
+fn consume_subagent_entry_line(line: &str, collector: Option<&mut SubagentCollector>) {
+    let Some(entry) = parse_entry_line(line) else {
+        return;
+    };
+    if let Some(collector) = collector {
+        collector.consume(entry);
     }
 }
 
