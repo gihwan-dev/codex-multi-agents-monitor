@@ -16,6 +16,8 @@ let originalClientHeight: PropertyDescriptor | undefined;
 let originalClientWidth: PropertyDescriptor | undefined;
 let originalOffsetHeight: PropertyDescriptor | undefined;
 let originalScrollTo: PropertyDescriptor | undefined;
+let originalRequestAnimationFrame: typeof globalThis.requestAnimationFrame | undefined;
+let originalCancelAnimationFrame: typeof globalThis.cancelAnimationFrame | undefined;
 
 function requireDataset(traceId: string) {
   const dataset = FIXTURE_DATASETS.find((item) => item.run.traceId === traceId);
@@ -49,6 +51,8 @@ beforeEach(() => {
   originalClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
   originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
   originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTo");
+  originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
 
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     configurable: true,
@@ -72,6 +76,11 @@ beforeEach(() => {
     configurable: true,
     value: scrollToMock,
   });
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  }) as typeof globalThis.requestAnimationFrame;
+  globalThis.cancelAnimationFrame = vi.fn();
 });
 
 afterEach(async () => {
@@ -85,6 +94,9 @@ afterEach(async () => {
   restoreDescriptor("clientWidth", originalClientWidth);
   restoreDescriptor("offsetHeight", originalOffsetHeight);
   restoreDescriptor("scrollTo", originalScrollTo);
+  globalThis.requestAnimationFrame = originalRequestAnimationFrame as typeof globalThis.requestAnimationFrame;
+  globalThis.cancelAnimationFrame =
+    originalCancelAnimationFrame as typeof globalThis.cancelAnimationFrame;
 
   vi.clearAllMocks();
 });
@@ -158,6 +170,57 @@ describe("CausalGraphView edge rendering", () => {
 });
 
 describe("CausalGraphView selection reveal", () => {
+  it("reports the viewport-focused event and updates it after scrolling", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+    const onViewportFocusEventChange = vi.fn();
+    const firstVisibleEventId = scene.rows.find((row) => row.kind === "event")?.eventId ?? null;
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          onViewportFocusEventChange,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    expect(onViewportFocusEventChange).toHaveBeenCalledWith(firstVisibleEventId);
+
+    const scrollElement = container.querySelector('[data-slot="graph-scroll"]');
+    expect(scrollElement).not.toBeNull();
+    if (!scrollElement) {
+      throw new Error("graph scroll area missing");
+    }
+
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 1200,
+    });
+
+    await act(async () => {
+      scrollElement.dispatchEvent(new Event("scroll"));
+    });
+
+    expect(onViewportFocusEventChange).toHaveBeenLastCalledWith(
+      expect.any(String),
+    );
+    expect(onViewportFocusEventChange.mock.calls.at(-1)?.[0]).not.toBe(
+      firstVisibleEventId,
+    );
+  });
+
   it("scrolls when a navigation request targets an offscreen event", async () => {
     const dataset = requireDataset("trace-fix-002");
     const targetEventId = dataset.events[dataset.events.length - 1]?.eventId;

@@ -39,6 +39,7 @@ export interface SessionLogSnapshot {
   startedAt: string;
   updatedAt: string;
   model: string | null;
+  maxContextWindowTokens?: number | null;
   entries: SessionEntrySnapshot[];
   subagents?: SubagentSnapshot[];
   isArchived?: boolean;

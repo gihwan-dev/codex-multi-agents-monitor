@@ -60,6 +60,7 @@ function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
     environment: "Desktop",
     liveMode: !snapshot.isArchived && isRunning ? "live" : "imported",
     summaryMetrics: buildEmptySummaryMetrics(),
+    maxContextWindowTokens: snapshot.maxContextWindowTokens ?? null,
     finalArtifactId: null,
     selectedByDefaultId: combinedTimeline.selectedByDefaultId,
     rawIncluded: false,

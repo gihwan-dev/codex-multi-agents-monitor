@@ -8,6 +8,7 @@ use crate::{
         session::{ArchivedSessionIndex, ArchivedSessionIndexResult, SessionLogSnapshot},
     },
     infrastructure::{
+        codex_config::load_model_context_window,
         filesystem::{collect_jsonl_files, resolve_codex_home},
         session_jsonl::{parse_archived_index_entry, parse_archived_session_snapshot},
         state_sqlite::load_thread_subagent_hints,
@@ -52,6 +53,7 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     }
 
     let mut snapshot = build_archived_session_snapshot(path).ok()??;
+    snapshot.max_context_window_tokens = load_model_context_window(&codex_home).ok().flatten();
     snapshot.subagents = load_archived_subagents_best_effort(
         &snapshot,
         &ArchivedSubagentScope {
@@ -137,6 +139,7 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
+            max_context_window_tokens: None,
             entries: parsed.entries,
             subagents: Vec::new(),
             is_archived: true,
@@ -215,6 +218,7 @@ mod tests {
             started_at: "2026-03-20T00:00:00.000Z".to_owned(),
             updated_at: "2026-03-20T00:00:00.000Z".to_owned(),
             model: None,
+            max_context_window_tokens: None,
             entries: Vec::new(),
             subagents: Vec::new(),
             is_archived: true,

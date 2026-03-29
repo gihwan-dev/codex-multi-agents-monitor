@@ -20,6 +20,20 @@ export const EMPTY_GRAPH_SCENE: GraphSceneModel = {
   lanes: [],
   rows: [],
   edgeBundles: [],
+  contextObservability: {
+    activeEventId: null,
+    activeEventTitle: null,
+    activeLaneId: null,
+    activeSource: "latest",
+    activeContextWindowTokens: 0,
+    activeCumulativeContextTokens: 0,
+    peakContextWindowTokens: 0,
+    peakCumulativeContextTokens: 0,
+    maxContextWindowTokens: null,
+    laneSummaries: [],
+    timelinePoints: [],
+    pointsByEventId: new Map(),
+  },
   selectionPath: {
     eventIds: [],
     edgeIds: [],
@@ -73,6 +87,7 @@ export function buildDatasetDerivedState(
           activeDataset.run.rawIncluded,
         )
       : null,
+    contextObservability: activeDataset ? graphScene.contextObservability : null,
     summaryFacts: activeDataset
       ? buildSummaryFacts(activeDataset, graphScene.selectionPath)
       : [],

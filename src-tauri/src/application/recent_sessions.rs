@@ -13,6 +13,7 @@ use crate::{
         workspace::WorkspaceIdentity,
     },
     infrastructure::{
+        codex_config::load_model_context_window,
         filesystem::{resolve_codex_home, resolve_projects_root},
         session_jsonl::{
             parse_live_session_snapshot, parse_recent_index_entry, RecentIndexParseOptions,
@@ -185,6 +186,7 @@ fn build_recent_session_snapshot(
         started_at: parsed.started_at,
         updated_at: parsed.updated_at,
         model: parsed.model,
+        max_context_window_tokens: None,
         entries: parsed.entries,
         subagents: Vec::new(),
         is_archived: false,
@@ -198,6 +200,8 @@ pub(crate) fn load_recent_session_snapshot(
     let mut snapshot =
         build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
             .ok()??;
+    snapshot.max_context_window_tokens =
+        load_model_context_window(&selection.codex_home).ok().flatten();
     let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
     snapshot.subagents = load_snapshot_subagents(
         SnapshotSubagentSearch {

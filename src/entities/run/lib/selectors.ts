@@ -1,3 +1,4 @@
+export { focusContextObservability } from "./contextObservability.js";
 export { buildGraphSceneModel } from "./graphSceneSelectors.js";
 export { buildInspectorCausalSummary } from "./inspectorSelectors.js";
 export {

@@ -1,6 +1,12 @@
-import type { EventRecord, RunDataset, SelectionState } from "../model/types.js";
+import type {
+  ContextTimelinePoint,
+  EventRecord,
+  RunDataset,
+  SelectionState,
+} from "../model/types.js";
 
 export interface GraphSceneRowsArgs {
+  contextPointsByEventId: Map<string, ContextTimelinePoint>;
   dataset: RunDataset;
   visibleEvents: EventRecord[];
   laneIds: Set<string>;
@@ -26,6 +32,7 @@ export interface BuildGapRowArgs {
 }
 
 export interface BuildEventRowArgs {
+  contextPoint: ContextTimelinePoint | null;
   event: EventRecord;
   selection: SelectionState | null;
   selectionPathEventIds: Set<string>;

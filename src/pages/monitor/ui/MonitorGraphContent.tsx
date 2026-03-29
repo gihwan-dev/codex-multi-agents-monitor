@@ -15,6 +15,7 @@ export function MonitorGraphContent(view: MonitorPageView) {
     <CausalGraphView
       scene={view.graphScene}
       onSelect={view.actions.selectItem}
+      onViewportFocusEventChange={view.setViewportFocusEventId}
       selectionNavigationRequestId={view.state.selectionNavigationRequestId}
       selectionNavigationRunId={view.state.selectionNavigationRunId}
       runTraceId={view.displayDataset.run.traceId}

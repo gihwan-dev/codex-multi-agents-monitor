@@ -3,6 +3,11 @@ import type {
   EventRecord,
   GraphSceneRow,
 } from "../model/types.js";
+import {
+  buildEventRowSelectionMetrics,
+  buildEventRowTokenMetrics,
+  resolveEventRowSummary,
+} from "./graphSceneEventRowHelpers.js";
 import type {
   BuildEventRowArgs,
   BuildGapHiddenEventIdsArgs,
@@ -24,7 +29,12 @@ interface AppendSceneEventRowsOptions {
   laneIds: Set<string>;
   rowArgs: Pick<
     GraphSceneRowsArgs,
-    "dataset" | "visibleLaneCount" | "selection" | "selectionPathEventIds" | "hasMultiAgentTopology"
+    | "contextPointsByEventId"
+    | "dataset"
+    | "visibleLaneCount"
+    | "selection"
+    | "selectionPathEventIds"
+    | "hasMultiAgentTopology"
   >;
 }
 
@@ -74,12 +84,8 @@ function buildGapRow(args: BuildGapRowArgs) {
   };
 }
 
-function resolveEventRowSummary(event: EventRecord) {
-  return event.waitReason ?? event.outputPreview ?? event.inputPreview ?? "n/a";
-}
-
 function buildEventRow(args: BuildEventRowArgs) {
-  const { event, selection, selectionPathEventIds, hasMultiAgentTopology } = args;
+  const { event } = args;
 
   return {
     kind: "event" as const,
@@ -94,10 +100,10 @@ function buildEventRow(args: BuildEventRowArgs) {
     waitReason: event.waitReason,
     timeLabel: formatTimestamp(event.startTs),
     durationLabel: formatDuration(event.durationMs),
-    inPath: hasMultiAgentTopology && selectionPathEventIds.has(event.eventId),
-    selected: selection?.kind === "event" && selection.id === event.eventId,
+    ...buildEventRowSelectionMetrics(args),
     eventType: event.eventType,
     toolName: event.toolName,
+    ...buildEventRowTokenMetrics(args),
   };
 }
 
@@ -162,6 +168,7 @@ function appendSceneEventRows(options: AppendSceneEventRowsOptions) {
     }
 
     appendVisibleEventRow(options.state.result, options.state.seenEventIds, {
+      contextPoint: options.rowArgs.contextPointsByEventId.get(event.eventId) ?? null,
       event,
       selection: options.rowArgs.selection,
       selectionPathEventIds: options.rowArgs.selectionPathEventIds,
@@ -187,6 +194,7 @@ export function buildGraphSceneRows(args: GraphSceneRowsArgs): GraphSceneRowsRes
     visibleEvents,
     laneIds,
     rowArgs: {
+      contextPointsByEventId: args.contextPointsByEventId,
       dataset,
       visibleLaneCount,
       selection,

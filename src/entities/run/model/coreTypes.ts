@@ -45,6 +45,7 @@ export interface RunRecord {
   environment: RunEnvironment;
   liveMode: LiveMode;
   summaryMetrics: SummaryMetrics;
+  maxContextWindowTokens?: number | null;
   finalArtifactId: string | null;
   selectedByDefaultId: string | null;
   rawIncluded: boolean;
