@@ -6,7 +6,6 @@ import {
   filterSkillsBySearch,
   filterSkillsBySource,
   loadSkillActivityScan,
-  type SkillActivityItem,
   type SkillFreshnessFilter,
   type SkillInvocationSummary,
   type SkillSortField,
@@ -20,7 +19,6 @@ interface UseSkillActivityPageViewOptions {
   datasets: readonly RunDataset[];
   activeRunId: string;
   onNavigateToMonitor: () => void;
-  onNavigateToEvent: (eventId: string) => void;
 }
 
 function useScanInvocations(scanRange: number) {
@@ -60,12 +58,6 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
     return sortSkills(result, state.sortField, state.sortDirection);
   }, [allItems, state.freshnessFilter, state.sourceFilter, state.searchQuery, state.sortField, state.sortDirection]);
 
-  const handleSkillClick = (item: SkillActivityItem) => {
-    if (item.recentInvocations.length > 0) {
-      opts.onNavigateToEvent(item.recentInvocations[0].eventId);
-    }
-  };
-
   return {
     state,
     items: filteredItems,
@@ -77,7 +69,6 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
     setSourceFilter: (filter: SkillSourceFilter) => dispatch({ type: "set-source-filter", filter }),
     setSearch: (query: string) => dispatch({ type: "set-search", query }),
     setScanRange: (range: ScanRangeValue) => dispatch({ type: "set-scan-range", range }),
-    onSkillClick: handleSkillClick,
     onNavigateToMonitor: opts.onNavigateToMonitor,
   };
 }

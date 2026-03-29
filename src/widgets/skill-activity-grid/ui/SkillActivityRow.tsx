@@ -4,7 +4,6 @@ import { SkillTagBadges } from "../../../shared/ui/monitor/SkillStatusBadge";
 
 interface SkillActivityRowProps {
   item: SkillActivityItem;
-  onSkillClick: (item: SkillActivityItem) => void;
 }
 
 function formatCount(count: number): string {
@@ -17,15 +16,11 @@ function formatLastSeen(ts: number | null): string {
   return `${formatRelativeTime(ts)} ago`;
 }
 
-export function SkillActivityRow({ item, onSkillClick }: SkillActivityRowProps) {
-  const hasInvocations = item.invocationCount > 0;
-
+export function SkillActivityRow({ item }: SkillActivityRowProps) {
   return (
-    <button
-      type="button"
-      disabled={!hasInvocations}
-      onClick={() => onSkillClick(item)}
-      className="grid w-full grid-cols-[10rem_1fr_6rem_6rem] items-center gap-3 border-b border-white/5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/[0.03] disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+    <div
+      data-slot="skill-activity-row"
+      className="grid grid-cols-[10rem_1fr_6rem_6rem] items-center gap-3 border-b border-white/5 px-4 py-2.5 text-left text-sm"
     >
       <SkillTagBadges tags={item.tags} />
       <div className="flex min-w-0 items-baseline gap-2">
@@ -42,6 +37,6 @@ export function SkillActivityRow({ item, onSkillClick }: SkillActivityRowProps) 
       <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
         {formatLastSeen(item.lastInvocationTs)}
       </span>
-    </button>
+    </div>
   );
 }
