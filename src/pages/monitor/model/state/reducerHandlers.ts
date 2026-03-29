@@ -19,14 +19,16 @@ import {
   toggleGapState,
 } from "./datasetState";
 import {
+  applyRecentLiveUpdate,
+  refreshRecentSnapshot,
+} from "./recentLiveUpdateState";
+import {
   beginRecentIndexRequest,
   beginRecentSnapshotBuild,
   beginRecentSnapshotRequest,
   cancelRecentSnapshotRequest,
   finishRecentIndexRequest,
   finishRecentSnapshotRequest,
-  applyRecentLiveUpdate,
-  refreshRecentSnapshot,
   resolveRecentIndexRequest,
   resolveRecentSnapshotRequest,
 } from "./recentRequestState";
@@ -91,12 +93,12 @@ export const monitorActionHandlers: MonitorActionHandlerMap = {
   "refresh-recent-snapshot": (state, action) =>
     refreshRecentSnapshot(state, action.filePath, action.dataset),
   "apply-recent-live-update": (state, action) =>
-    applyRecentLiveUpdate(
+    applyRecentLiveUpdate({
       state,
-      action.filePath,
-      action.connection,
-      action.dataset,
-    ),
+      filePath: action.filePath,
+      connection: action.connection,
+      dataset: action.dataset,
+    }),
   "cancel-recent-snapshot-request": (state, action) =>
     cancelRecentSnapshotRequest(state, action.requestId),
   "finish-recent-snapshot-request": (state, action) =>

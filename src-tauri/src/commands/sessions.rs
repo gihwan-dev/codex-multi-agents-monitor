@@ -32,12 +32,12 @@ pub(crate) async fn load_recent_session_snapshot(file_path: String) -> Option<Se
 
 #[tauri::command]
 pub(crate) fn start_recent_session_live_subscription(
-    app: tauri::AppHandle,
+    window: tauri::Window,
     file_path: String,
     registry: tauri::State<'_, LiveSessionSubscriptionRegistry>,
 ) -> Result<RecentSessionLiveSubscription, String> {
     application::live_sessions::start_recent_session_live_subscription(
-        app,
+        window,
         registry.inner().clone(),
         &file_path,
     )

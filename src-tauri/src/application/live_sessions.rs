@@ -14,7 +14,7 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime},
 };
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{Emitter, Runtime, Window};
 
 pub(crate) const RECENT_SESSION_LIVE_UPDATE_EVENT: &str = "recent-session-live-update";
 
@@ -36,6 +36,12 @@ struct RecentSessionWatch {
     last_version: Option<FileVersion>,
     last_change_at: Instant,
     connection: RecentSessionLiveConnection,
+}
+
+struct RecentSessionWatchLoop<'a> {
+    cancel: Arc<AtomicBool>,
+    watch: &'a mut RecentSessionWatch,
+    poll_interval: Duration,
 }
 
 impl RecentSessionWatch {
@@ -146,7 +152,7 @@ impl RecentSessionWatch {
 }
 
 pub(crate) fn start_recent_session_live_subscription<R: Runtime>(
-    app: AppHandle<R>,
+    window: Window<R>,
     registry: LiveSessionSubscriptionRegistry,
     file_path: &str,
 ) -> Result<RecentSessionLiveSubscription, String> {
@@ -158,8 +164,13 @@ pub(crate) fn start_recent_session_live_subscription<R: Runtime>(
     let thread_subscription_id = subscription_id.clone();
 
     thread::spawn(move || {
-        run_recent_session_live_watch_loop(cancel, &mut watch, POLL_INTERVAL, |update| {
-            app.emit(RECENT_SESSION_LIVE_UPDATE_EVENT, update).is_ok()
+        let watch_loop = RecentSessionWatchLoop {
+            cancel,
+            watch: &mut watch,
+            poll_interval: POLL_INTERVAL,
+        };
+        run_recent_session_live_watch_loop(watch_loop, |update| {
+            window.emit(RECENT_SESSION_LIVE_UPDATE_EVENT, update).is_ok()
         });
         registry_for_thread.finish(&thread_subscription_id);
     });
@@ -181,13 +192,17 @@ fn prepare_recent_session_live_watch(file_path: &str) -> Result<RecentSnapshotSe
 }
 
 fn run_recent_session_live_watch_loop<F>(
-    cancel: Arc<AtomicBool>,
-    watch: &mut RecentSessionWatch,
-    poll_interval: Duration,
+    watch_loop: RecentSessionWatchLoop<'_>,
     mut emit: F,
 ) where
     F: FnMut(RecentSessionLiveUpdate) -> bool,
 {
+    let RecentSessionWatchLoop {
+        cancel,
+        watch,
+        poll_interval,
+    } = watch_loop;
+
     while !cancel.load(std::sync::atomic::Ordering::Relaxed) {
         if let Some(update) = watch.poll() {
             if !emit(update) {
@@ -210,15 +225,15 @@ fn read_file_version(path: &Path) -> io::Result<FileVersion> {
 #[cfg(test)]
 mod tests {
     use super::{
-        prepare_recent_session_live_watch, run_recent_session_live_watch_loop, RecentSessionWatch,
-        DISCONNECTED_AFTER, STALE_AFTER,
+        prepare_recent_session_live_watch, run_recent_session_live_watch_loop,
+        RecentSessionWatch, RecentSessionWatchLoop, DISCONNECTED_AFTER, STALE_AFTER,
     };
     use crate::test_support::{
         create_git_workspace, create_state_database, insert_thread_row, session_meta_line,
         write_session_lines, RecentSessionTestContext,
     };
     use std::{
-        fs::OpenOptions,
+        fs::{self, OpenOptions},
         io::Write,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -319,6 +334,47 @@ mod tests {
     }
 
     #[test]
+    fn recovers_after_temporary_session_file_read_failure() {
+        let (context, session_file) = create_live_watch_fixture("watch-read-recovery");
+        let workspace_path = context.projects_root.join("live-watch-project");
+        let selection = prepare_recent_session_live_watch(session_file.to_string_lossy().as_ref())
+            .expect("watch should prepare");
+        let start = Instant::now();
+        let mut watch = RecentSessionWatch::new_at(selection, "sub-1".to_owned(), start)
+            .expect("watch should start");
+
+        fs::remove_file(&session_file).expect("session file should be removed");
+
+        let disconnected = watch
+            .poll_at(start + Duration::from_secs(1))
+            .expect("disconnected update should emit");
+        assert_eq!(
+            disconnected.connection,
+            crate::domain::session::RecentSessionLiveConnection::Disconnected
+        );
+        assert!(disconnected.snapshot.is_none());
+
+        write_session_lines(
+            &session_file,
+            [
+                session_meta_line("session-live-watch", &workspace_path),
+                r#"{"timestamp":"2026-03-29T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-29T00:00:02.000Z","type":"turn_context","payload":{"model":"gpt-5","turn_id":"turn-1"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-29T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Recovered after temporary read failure"}]}}"#.to_owned(),
+            ],
+        );
+
+        let reconnected = watch
+            .poll_at(start + Duration::from_secs(2))
+            .expect("reconnected update should emit");
+        assert_eq!(
+            reconnected.connection,
+            crate::domain::session::RecentSessionLiveConnection::Reconnected
+        );
+        assert!(reconnected.snapshot.is_some());
+    }
+
+    #[test]
     fn stops_live_watch_loop_after_unsubscribe_signal() {
         let (_context, session_file) = create_live_watch_fixture("watch-stop");
         let selection = prepare_recent_session_live_watch(session_file.to_string_lossy().as_ref())
@@ -332,9 +388,11 @@ mod tests {
 
         let handle = thread::spawn(move || {
             run_recent_session_live_watch_loop(
-                cancel_for_thread,
-                &mut watch,
-                Duration::from_millis(10),
+                RecentSessionWatchLoop {
+                    cancel: cancel_for_thread,
+                    watch: &mut watch,
+                    poll_interval: Duration::from_millis(10),
+                },
                 |update| {
                     observed_connections_for_thread
                         .lock()

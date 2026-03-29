@@ -115,4 +115,22 @@ describe("subscribeRecentSessionLive", () => {
       connection: "stale",
     });
   });
+
+  it("surfaces a disconnected update when subscription startup fails", async () => {
+    const onUpdate = vi.fn();
+    const unlisten = vi.fn();
+
+    mockedListenTauri.mockResolvedValue(unlisten);
+    mockedInvokeTauri.mockRejectedValueOnce(new Error("subscription failed"));
+
+    subscribeRecentSessionLive("/tmp/live.jsonl", { onUpdate });
+    await flushMicrotasks();
+
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(onUpdate).toHaveBeenCalledWith({
+      subscriptionId: "recent-live-startup-failed",
+      filePath: "/tmp/live.jsonl",
+      connection: "disconnected",
+    });
+  });
 });

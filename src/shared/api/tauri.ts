@@ -1,7 +1,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import {
-  listen as tauriListen,
   type Event as TauriEvent,
+  listen as tauriListen,
   type UnlistenFn,
 } from "@tauri-apps/api/event";
 

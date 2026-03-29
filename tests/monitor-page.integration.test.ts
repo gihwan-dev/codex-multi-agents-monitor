@@ -760,11 +760,9 @@ describe("MonitorPage integration", () => {
       expect(latestScrollOptions.left ?? 0).toBeGreaterThan(0);
       expect(container.textContent).not.toContain("Following paused");
 
-      const currentScrollTop = (graphScroll as HTMLElement & { scrollTop: number }).scrollTop;
       await act(async () => {
         (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollLeft = 0;
-        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollTop =
-          currentScrollTop;
+        (graphScroll as HTMLElement & { scrollTop: number; scrollLeft: number }).scrollTop = 0;
         graphScroll.dispatchEvent(new Event("scroll"));
       });
 
@@ -831,6 +829,9 @@ describe("MonitorPage integration", () => {
     await renderMonitorPage();
 
     await vi.waitFor(() => {
+      expect(mockedLoadRecentSessionIndex).toHaveBeenCalledTimes(1);
+    });
+    await vi.waitFor(() => {
       expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
     });
     expect(mockedLoadRecentSessionSnapshot).toHaveBeenCalledTimes(1);
@@ -873,6 +874,120 @@ describe("MonitorPage integration", () => {
           promptAssembly: [],
         },
       });
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            '[data-slot="graph-event-card"][data-event-id="fix6-follow-up"]',
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
+    });
+  });
+
+  it("keeps the current selection while paused until resume after a transport update", async () => {
+    const recentItem = {
+      ...buildRecentSessionIndexItem("recent-live-001"),
+      status: "running" as const,
+    };
+    const initialDataset = buildLiveRecentDataset("recent-live-001");
+    const refreshedDataset = applyLiveFrame(
+      initialDataset,
+      LIVE_FIXTURE_FRAMES[0],
+    ).dataset;
+    let emitRecentLiveUpdate: ((update: RecentSessionLiveUpdate) => void) | null = null;
+
+    mockedLoadRecentSessionIndex.mockResolvedValue([recentItem]);
+    mockedLoadArchivedSessionIndex.mockResolvedValue({
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
+    mockedLoadRecentSessionSnapshot.mockResolvedValue(initialDataset);
+    mockedBuildDatasetFromSessionLogAsync.mockResolvedValueOnce(refreshedDataset);
+    mockedSubscribeRecentSessionLive.mockImplementation((_filePath, options) => {
+      emitRecentLiveUpdate = options.onUpdate;
+      return () => {};
+    });
+
+    await renderMonitorPage();
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
+    });
+
+    const pausedSelectionId = initialDataset.events.at(-1)?.eventId ?? null;
+    expect(pausedSelectionId).not.toBeNull();
+    if (!pausedSelectionId) {
+      throw new Error("initial recent live event missing");
+    }
+
+    const followButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Follow live",
+    );
+    expect(followButton).not.toBeNull();
+    if (!followButton) {
+      throw new Error("follow button missing");
+    }
+
+    await act(async () => {
+      followButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain("Following paused");
+      expect(container.textContent).toContain("Resume follow");
+    });
+
+    expect(emitRecentLiveUpdate).not.toBeNull();
+    if (!emitRecentLiveUpdate) {
+      throw new Error("recent live update handler missing");
+    }
+
+    await act(async () => {
+      emitRecentLiveUpdate({
+        subscriptionId: "recent-live-subscription",
+        filePath: recentItem.filePath,
+        connection: "reconnected",
+        snapshot: {
+          sessionId: "recent-live-001",
+          workspacePath: recentItem.workspacePath,
+          originPath: recentItem.originPath,
+          displayName: recentItem.displayName,
+          startedAt: "2026-03-20T00:00:00.000Z",
+          updatedAt: "2026-03-20T00:05:00.000Z",
+          model: "gpt-5",
+          entries: [],
+          isArchived: false,
+          subagents: [],
+          promptAssembly: [],
+        },
+      });
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        container
+          .querySelector<HTMLElement>(
+            `[data-slot="graph-event-card"][data-event-id="${pausedSelectionId}"]`,
+          )
+          ?.getAttribute("data-selected"),
+      ).toBe("true");
+    });
+    expect(container.textContent).toContain("Resume follow");
+
+    const resumeButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "Resume follow",
+    );
+    expect(resumeButton).not.toBeNull();
+    if (!resumeButton) {
+      throw new Error("resume button missing");
+    }
+
+    await act(async () => {
+      resumeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     await vi.waitFor(() => {

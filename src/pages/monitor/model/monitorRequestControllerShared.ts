@@ -10,6 +10,7 @@ import type { MonitorAction, MonitorState } from "./state";
 
 export interface MonitorRequestRefs {
   recentSnapshotRequestIdRef: MutableRefObject<number>;
+  recentLiveUpdateSequenceRef: MutableRefObject<number>;
   archiveIndexRequestIdRef: MutableRefObject<number>;
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
 }
@@ -48,6 +49,7 @@ interface ResolveSnapshotRequestOptions {
 export function useMonitorRequestRefs(): MonitorRequestRefs {
   return {
     recentSnapshotRequestIdRef: useRef(0),
+    recentLiveUpdateSequenceRef: useRef(0),
     archiveIndexRequestIdRef: useRef(0),
     archiveSnapshotRequestIdRef: useRef(0),
   };
@@ -100,18 +102,22 @@ export function useCancelPendingSelectionLoad(
     dispatch: Dispatch<MonitorAction>;
   } & Pick<
     MonitorRequestRefs,
-    "recentSnapshotRequestIdRef" | "archiveSnapshotRequestIdRef"
+    | "recentSnapshotRequestIdRef"
+    | "recentLiveUpdateSequenceRef"
+    | "archiveSnapshotRequestIdRef"
   >,
 ) {
   const {
     dispatch,
     recentSnapshotRequestIdRef,
+    recentLiveUpdateSequenceRef,
     archiveSnapshotRequestIdRef,
   } = options;
 
   return useEffectEvent(() => {
     const nextRecentRequestId = recentSnapshotRequestIdRef.current + 1;
     recentSnapshotRequestIdRef.current = nextRecentRequestId;
+    recentLiveUpdateSequenceRef.current += 1;
     dispatch({
       type: "cancel-recent-snapshot-request",
       requestId: nextRecentRequestId,

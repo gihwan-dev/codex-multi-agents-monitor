@@ -18,6 +18,7 @@ interface UseRecentMonitorRequestsOptions {
   dispatch: Dispatch<MonitorAction>;
   cancelPendingSelectionLoad: () => void;
   recentSnapshotRequestIdRef: MonitorRequestRefs["recentSnapshotRequestIdRef"];
+  recentLiveUpdateSequenceRef: MonitorRequestRefs["recentLiveUpdateSequenceRef"];
 }
 
 function requestRecentIndexFromSource(dispatch: Dispatch<MonitorAction>) {
@@ -73,8 +74,11 @@ function requestRecentSnapshotFromSource(args: {
 function applyRecentLiveUpdateFromSource(args: {
   dispatch: Dispatch<MonitorAction>;
   update: RecentSessionLiveUpdate;
+  recentLiveUpdateSequenceRef: MonitorRequestRefs["recentLiveUpdateSequenceRef"];
 }) {
-  const { dispatch, update } = args;
+  const { dispatch, update, recentLiveUpdateSequenceRef } = args;
+  const sequence = recentLiveUpdateSequenceRef.current + 1;
+  recentLiveUpdateSequenceRef.current = sequence;
 
   if (!update.snapshot) {
     startTransition(() => {
@@ -88,12 +92,28 @@ function applyRecentLiveUpdateFromSource(args: {
   }
 
   buildDatasetFromSessionLogAsync(update.snapshot).then((dataset) => {
+    if (recentLiveUpdateSequenceRef.current !== sequence) {
+      return;
+    }
+
     startTransition(() => {
       dispatch({
         type: "apply-recent-live-update",
         filePath: update.filePath,
         connection: update.connection,
         ...(dataset ? { dataset } : {}),
+      });
+    });
+  }).catch(() => {
+    if (recentLiveUpdateSequenceRef.current !== sequence) {
+      return;
+    }
+
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
       });
     });
   });
@@ -113,13 +133,14 @@ function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
 }
 
 export function useRecentMonitorRequests(options: UseRecentMonitorRequestsOptions) {
-  const { dispatch } = options;
+  const { dispatch, recentLiveUpdateSequenceRef } = options;
   const requestRecentIndex = useEffectEvent(() => requestRecentIndexFromSource(dispatch));
   const requestRecentSnapshot = useRecentSnapshotRequester(options);
   const handleRecentLiveUpdate = useEffectEvent((update: RecentSessionLiveUpdate) =>
     applyRecentLiveUpdateFromSource({
       dispatch,
       update,
+      recentLiveUpdateSequenceRef,
     }),
   );
 

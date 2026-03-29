@@ -1,7 +1,7 @@
 import { type MutableRefObject, useEffect, useEffectEvent, useRef } from "react";
 import {
-  subscribeRecentSessionLive,
   type RecentSessionLiveUpdate,
+  subscribeRecentSessionLive,
 } from "../../../entities/session-log";
 import { canInvokeTauriRuntime } from "../../../shared/api";
 import type {
@@ -149,7 +149,7 @@ function useRecentLiveSubscription(options: UseRecentLiveSubscriptionOptions) {
     return subscribeRecentSessionLive(activeSessionFilePath, {
       onUpdate: handleRecentLiveUpdate,
     });
-  }, [activeSessionFilePath, handleRecentLiveUpdate, shouldRefresh]);
+  }, [activeSessionFilePath, shouldRefresh]);
 }
 
 export function useMonitorBootstrap(options: UseMonitorBootstrapOptions) {
