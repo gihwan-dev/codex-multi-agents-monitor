@@ -26,18 +26,19 @@ use std::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct LiveSessionCandidate {
-    session_id: String,
-    file_path: PathBuf,
-    workspace_path: String,
-    workspace_identity: WorkspaceIdentity,
+pub(crate) struct LiveSessionCandidate {
+    pub(crate) session_id: String,
+    pub(crate) file_path: PathBuf,
+    pub(crate) workspace_path: String,
+    pub(crate) workspace_identity: WorkspaceIdentity,
 }
 
-struct RecentSnapshotSelection {
-    candidate: LiveSessionCandidate,
-    codex_home: PathBuf,
-    sessions_root: PathBuf,
-    projects_root: PathBuf,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RecentSnapshotSelection {
+    pub(crate) candidate: LiveSessionCandidate,
+    pub(crate) codex_home: PathBuf,
+    pub(crate) sessions_root: PathBuf,
+    pub(crate) projects_root: PathBuf,
 }
 
 pub(crate) fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexItem>> {
@@ -72,21 +73,7 @@ pub(crate) fn load_recent_session_snapshot_from_disk(
     file_path: &str,
 ) -> Option<SessionLogSnapshot> {
     let selection = resolve_recent_snapshot_selection(file_path)?;
-    let mut snapshot =
-        build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
-            .ok()??;
-    let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
-    snapshot.subagents = load_snapshot_subagents(
-        SnapshotSubagentSearch {
-            snapshot: &snapshot,
-            search_root: &selection.sessions_root,
-            selected_file: &selection.candidate.file_path,
-        },
-        &relationship_hints,
-    )
-    .ok()?;
-
-    Some(snapshot)
+    load_recent_session_snapshot(&selection)
 }
 
 fn load_live_session_candidates(
@@ -205,7 +192,27 @@ fn build_recent_session_snapshot(
     }))
 }
 
-fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSelection> {
+pub(crate) fn load_recent_session_snapshot(
+    selection: &RecentSnapshotSelection,
+) -> Option<SessionLogSnapshot> {
+    let mut snapshot =
+        build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
+            .ok()??;
+    let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
+    snapshot.subagents = load_snapshot_subagents(
+        SnapshotSubagentSearch {
+            snapshot: &snapshot,
+            search_root: &selection.sessions_root,
+            selected_file: &selection.candidate.file_path,
+        },
+        &relationship_hints,
+    )
+    .ok()?;
+
+    Some(snapshot)
+}
+
+pub(crate) fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSelection> {
     let codex_home = resolve_codex_home().ok()?;
     let projects_root = resolve_projects_root().ok()?;
     let sessions_root = codex_home.join("sessions");

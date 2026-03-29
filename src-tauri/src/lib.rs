@@ -11,9 +11,12 @@ mod test_support;
 pub fn run() {
     tauri::Builder::default()
         .manage(state::archive_cache::ArchivedIndexCache::new())
+        .manage(state::live_session_subscriptions::LiveSessionSubscriptionRegistry::new())
         .invoke_handler(tauri::generate_handler![
             commands::sessions::load_recent_session_index,
             commands::sessions::load_recent_session_snapshot,
+            commands::sessions::start_recent_session_live_subscription,
+            commands::sessions::stop_recent_session_live_subscription,
             commands::workspace::resolve_workspace_identities,
             commands::sessions::load_archived_session_index,
             commands::sessions::load_archived_session_snapshot,

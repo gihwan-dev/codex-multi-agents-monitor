@@ -1,4 +1,8 @@
 import { type MutableRefObject, useEffect, useEffectEvent, useRef } from "react";
+import {
+  subscribeRecentSessionLive,
+  type RecentSessionLiveUpdate,
+} from "../../../entities/session-log";
 import { canInvokeTauriRuntime } from "../../../shared/api";
 import type {
   InitialRecentSnapshotState,
@@ -7,10 +11,8 @@ import type {
   RecentRefreshState,
   UseInitialRecentSnapshotOptions,
   UseMonitorBootstrapOptions,
-  UseRecentLiveRefreshOptions,
+  UseRecentLiveSubscriptionOptions,
 } from "./monitorBootstrapTypes";
-
-const LIVE_RECENT_POLL_INTERVAL_MS = 2_000;
 
 function useLatestRef<T>(value: T) {
   const ref = useRef(value);
@@ -25,7 +27,7 @@ function useLatestRef<T>(value: T) {
 function useMonitorBootstrapRefs(
   options: Pick<
     UseMonitorBootstrapOptions,
-    | "refreshRecentSnapshot"
+    | "handleRecentLiveUpdate"
     | "requestArchiveIndex"
     | "requestRecentIndex"
     | "requestRecentSnapshot"
@@ -35,7 +37,7 @@ function useMonitorBootstrapRefs(
     requestRecentIndexRef: useLatestRef(options.requestRecentIndex),
     requestRecentSnapshotRef: useLatestRef(options.requestRecentSnapshot),
     requestArchiveIndexRef: useLatestRef(options.requestArchiveIndex),
-    refreshRecentSnapshotRef: useLatestRef(options.refreshRecentSnapshot),
+    handleRecentLiveUpdateRef: useLatestRef(options.handleRecentLiveUpdate),
   };
 }
 
@@ -111,12 +113,7 @@ function useInitialRecentSnapshot(options: UseInitialRecentSnapshotOptions) {
 }
 
 function shouldRefreshRecentSnapshot(options: RecentRefreshState) {
-  const {
-    activeDataset,
-    activeFollowLive,
-    activeSessionFilePath,
-    recentIndex,
-  } = options;
+  const { activeDataset, activeSessionFilePath, recentIndex } = options;
   if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath) {
     return false;
   }
@@ -124,24 +121,24 @@ function shouldRefreshRecentSnapshot(options: RecentRefreshState) {
   return Boolean(
     recentIndex.some((item) => item.filePath === activeSessionFilePath) &&
       !activeDataset.run.isArchived &&
-      activeDataset.run.liveMode === "live" &&
-      activeFollowLive,
+      activeDataset.run.liveMode === "live",
   );
 }
 
-function useRecentLiveRefresh(options: UseRecentLiveRefreshOptions) {
+function useRecentLiveSubscription(options: UseRecentLiveSubscriptionOptions) {
   const {
     activeDataset,
-    activeFollowLive,
     activeSessionFilePath,
     recentIndex,
-    refreshRecentSnapshotRef,
+    handleRecentLiveUpdateRef,
   } = options;
   const shouldRefresh = shouldRefreshRecentSnapshot({
     activeDataset,
-    activeFollowLive,
     activeSessionFilePath,
     recentIndex,
+  });
+  const handleRecentLiveUpdate = useEffectEvent((update: RecentSessionLiveUpdate) => {
+    handleRecentLiveUpdateRef.current(update);
   });
 
   useEffect(() => {
@@ -149,15 +146,10 @@ function useRecentLiveRefresh(options: UseRecentLiveRefreshOptions) {
       return undefined;
     }
 
-    refreshRecentSnapshotRef.current?.(activeSessionFilePath);
-    const intervalId = window.setInterval(() => {
-      refreshRecentSnapshotRef.current?.(activeSessionFilePath);
-    }, LIVE_RECENT_POLL_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [activeSessionFilePath, refreshRecentSnapshotRef, shouldRefresh]);
+    return subscribeRecentSessionLive(activeSessionFilePath, {
+      onUpdate: handleRecentLiveUpdate,
+    });
+  }, [activeSessionFilePath, handleRecentLiveUpdate, shouldRefresh]);
 }
 
 export function useMonitorBootstrap(options: UseMonitorBootstrapOptions) {
@@ -170,7 +162,6 @@ export function useMonitorBootstrap(options: UseMonitorBootstrapOptions) {
 function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
   const {
     activeDataset,
-    activeFollowLive,
     activeSessionFilePath,
     recentIndex,
     recentIndexReady,
@@ -178,7 +169,7 @@ function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
     requestRecentIndexRef,
     requestRecentSnapshotRef,
     requestArchiveIndexRef,
-    refreshRecentSnapshotRef,
+    handleRecentLiveUpdateRef,
   } = options;
   useRecentIndexBootstrapRequest(requestRecentIndexRef);
   useArchiveIndexBootstrapRequest(requestArchiveIndexRef);
@@ -189,11 +180,10 @@ function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
     recentSnapshotLoadingId,
     requestRecentSnapshotRef,
   });
-  useRecentLiveRefresh({
+  useRecentLiveSubscription({
     activeDataset,
-    activeFollowLive,
     activeSessionFilePath,
     recentIndex,
-    refreshRecentSnapshotRef,
+    handleRecentLiveUpdateRef,
   });
 }

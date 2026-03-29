@@ -12,7 +12,6 @@ export interface MonitorRequestRefs {
   recentSnapshotRequestIdRef: MutableRefObject<number>;
   archiveIndexRequestIdRef: MutableRefObject<number>;
   archiveSnapshotRequestIdRef: MutableRefObject<number>;
-  recentLiveRefreshInFlightRef: MutableRefObject<boolean>;
 }
 
 type SnapshotRequestActionType =
@@ -51,7 +50,6 @@ export function useMonitorRequestRefs(): MonitorRequestRefs {
     recentSnapshotRequestIdRef: useRef(0),
     archiveIndexRequestIdRef: useRef(0),
     archiveSnapshotRequestIdRef: useRef(0),
-    recentLiveRefreshInFlightRef: useRef(false),
   };
 }
 

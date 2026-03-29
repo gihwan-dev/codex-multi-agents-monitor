@@ -27,7 +27,6 @@ export function useMonitorRequestController({
     dispatch,
     cancelPendingSelectionLoad,
     recentSnapshotRequestIdRef: requestRefs.recentSnapshotRequestIdRef,
-    recentLiveRefreshInFlightRef: requestRefs.recentLiveRefreshInFlightRef,
   });
   const archiveRequests = useArchiveMonitorRequests({
     state,

@@ -15,6 +15,23 @@ import {
 import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
 
+function overlayLiveConnectionStatus(
+  dataset: MonitorState["datasets"][number],
+  connection: Exclude<import("../../../../entities/run").LiveConnection, "paused">,
+) {
+  if (connection !== "stale" && connection !== "disconnected") {
+    return dataset;
+  }
+
+  return {
+    ...dataset,
+    run: {
+      ...dataset.run,
+      status: connection,
+    },
+  };
+}
+
 export function beginRecentIndexRequest(state: MonitorState): MonitorState {
   const datasets = stripFixtureDatasets(state.datasets);
   const fixtureActive = isFixtureDatasetTraceId(state.activeRunId);
@@ -181,6 +198,58 @@ export function refreshRecentSnapshot(
         : remainingConnections,
     selection: resolveSelectionAfterRecentRefresh(state, dataset, nextFollowLive),
     ...resolveDatasetDrawerTab(state, dataset),
+  };
+}
+
+export function applyRecentLiveUpdate(
+  state: MonitorState,
+  filePath: string,
+  connection: Exclude<import("../../../../entities/run").LiveConnection, "paused">,
+  dataset?: MonitorState["datasets"][number],
+): MonitorState {
+  const existingDataset = state.hydratedDatasetsByFilePath[filePath];
+  const nextDataset = dataset
+    ? dataset
+    : existingDataset
+      ? overlayLiveConnectionStatus(existingDataset, connection)
+      : null;
+
+  if (!nextDataset) {
+    return state;
+  }
+
+  const nextFollowLive =
+    nextDataset.run.liveMode === "live"
+      ? (state.followLiveByRunId[nextDataset.run.traceId] ?? true)
+      : false;
+  const { [nextDataset.run.traceId]: _removedConnection, ...remainingConnections } =
+    state.liveConnectionByRunId;
+
+  return {
+    ...state,
+    hydratedDatasetsByFilePath: {
+      ...state.hydratedDatasetsByFilePath,
+      [filePath]: nextDataset,
+    },
+    datasets: upsertDataset(state, nextDataset),
+    followLiveByRunId: {
+      ...state.followLiveByRunId,
+      [nextDataset.run.traceId]: nextFollowLive,
+    },
+    liveConnectionByRunId:
+      nextDataset.run.liveMode === "live"
+        ? updateLiveConnectionMap({
+            liveConnectionByRunId: state.liveConnectionByRunId,
+            traceId: nextDataset.run.traceId,
+            dataset: nextDataset,
+            followLive: nextFollowLive,
+            nextConnection: connection,
+          })
+        : remainingConnections,
+    selection: dataset
+      ? resolveSelectionAfterRecentRefresh(state, nextDataset, nextFollowLive)
+      : state.selection,
+    ...(dataset ? resolveDatasetDrawerTab(state, nextDataset) : {}),
   };
 }
 

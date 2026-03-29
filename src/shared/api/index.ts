@@ -1,1 +1,5 @@
-export { canInvokeTauriRuntime, invokeTauri } from "./tauri";
+export { canInvokeTauriRuntime, invokeTauri, listenTauri } from "./tauri";
+export type {
+  ListenTauriEvent,
+  ListenTauriUnsubscribe,
+} from "./tauri";

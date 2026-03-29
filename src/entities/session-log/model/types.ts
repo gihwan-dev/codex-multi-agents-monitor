@@ -1,4 +1,4 @@
-import type { RunStatus } from "../../run";
+import type { LiveConnection, RunStatus } from "../../run";
 
 export interface SessionEntrySnapshot {
   timestamp: string;
@@ -82,6 +82,19 @@ export interface ArchivedSessionIndexResult {
   items: ArchivedSessionIndexItem[];
   total: number;
   hasMore: boolean;
+}
+
+export type RecentSessionLiveConnection = Exclude<LiveConnection, "paused">;
+
+export interface RecentSessionLiveSubscription {
+  subscriptionId: string;
+}
+
+export interface RecentSessionLiveUpdate {
+  subscriptionId: string;
+  filePath: string;
+  connection: RecentSessionLiveConnection;
+  snapshot?: SessionLogSnapshot;
 }
 
 export const NEW_THREAD_TITLE = "새 스레드";

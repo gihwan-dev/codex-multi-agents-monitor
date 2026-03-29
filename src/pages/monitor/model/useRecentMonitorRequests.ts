@@ -1,5 +1,10 @@
 import { type Dispatch, startTransition, useEffectEvent } from "react";
-import { loadRecentSessionIndex, loadRecentSessionSnapshot } from "../../../entities/session-log";
+import {
+  buildDatasetFromSessionLogAsync,
+  loadRecentSessionIndex,
+  loadRecentSessionSnapshot,
+  type RecentSessionLiveUpdate,
+} from "../../../entities/session-log";
 import {
   activateCachedDataset,
   beginSnapshotRequest,
@@ -13,7 +18,6 @@ interface UseRecentMonitorRequestsOptions {
   dispatch: Dispatch<MonitorAction>;
   cancelPendingSelectionLoad: () => void;
   recentSnapshotRequestIdRef: MonitorRequestRefs["recentSnapshotRequestIdRef"];
-  recentLiveRefreshInFlightRef: MonitorRequestRefs["recentLiveRefreshInFlightRef"];
 }
 
 function requestRecentIndexFromSource(dispatch: Dispatch<MonitorAction>) {
@@ -66,33 +70,33 @@ function requestRecentSnapshotFromSource(args: {
   });
 }
 
-function refreshRecentSnapshotFromSource(args: {
+function applyRecentLiveUpdateFromSource(args: {
   dispatch: Dispatch<MonitorAction>;
-  recentLiveRefreshInFlightRef: MonitorRequestRefs["recentLiveRefreshInFlightRef"];
-  filePath: string;
+  update: RecentSessionLiveUpdate;
 }) {
-  if (args.recentLiveRefreshInFlightRef.current) {
+  const { dispatch, update } = args;
+
+  if (!update.snapshot) {
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
+      });
+    });
     return;
   }
 
-  args.recentLiveRefreshInFlightRef.current = true;
-  loadRecentSessionSnapshot(args.filePath)
-    .then((dataset) => {
-      if (!dataset) {
-        return;
-      }
-
-      startTransition(() => {
-        args.dispatch({
-          type: "refresh-recent-snapshot",
-          filePath: args.filePath,
-          dataset,
-        });
+  buildDatasetFromSessionLogAsync(update.snapshot).then((dataset) => {
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
+        ...(dataset ? { dataset } : {}),
       });
-    })
-    .finally(() => {
-      args.recentLiveRefreshInFlightRef.current = false;
     });
+  });
 }
 
 function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
@@ -108,26 +112,20 @@ function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
   );
 }
 
-function useRecentSnapshotRefresher(options: UseRecentMonitorRequestsOptions) {
-  const { dispatch, recentLiveRefreshInFlightRef } = options;
-  return useEffectEvent((filePath: string) =>
-    refreshRecentSnapshotFromSource({
-      dispatch,
-      recentLiveRefreshInFlightRef,
-      filePath,
-    }),
-  );
-}
-
 export function useRecentMonitorRequests(options: UseRecentMonitorRequestsOptions) {
   const { dispatch } = options;
   const requestRecentIndex = useEffectEvent(() => requestRecentIndexFromSource(dispatch));
   const requestRecentSnapshot = useRecentSnapshotRequester(options);
-  const refreshRecentSnapshot = useRecentSnapshotRefresher(options);
+  const handleRecentLiveUpdate = useEffectEvent((update: RecentSessionLiveUpdate) =>
+    applyRecentLiveUpdateFromSource({
+      dispatch,
+      update,
+    }),
+  );
 
   return {
     requestRecentIndex,
     requestRecentSnapshot,
-    refreshRecentSnapshot,
+    handleRecentLiveUpdate,
   };
 }

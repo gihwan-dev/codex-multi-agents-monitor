@@ -25,6 +25,7 @@ import {
   cancelRecentSnapshotRequest,
   finishRecentIndexRequest,
   finishRecentSnapshotRequest,
+  applyRecentLiveUpdate,
   refreshRecentSnapshot,
   resolveRecentIndexRequest,
   resolveRecentSnapshotRequest,
@@ -89,6 +90,13 @@ export const monitorActionHandlers: MonitorActionHandlerMap = {
     ),
   "refresh-recent-snapshot": (state, action) =>
     refreshRecentSnapshot(state, action.filePath, action.dataset),
+  "apply-recent-live-update": (state, action) =>
+    applyRecentLiveUpdate(
+      state,
+      action.filePath,
+      action.connection,
+      action.dataset,
+    ),
   "cancel-recent-snapshot-request": (state, action) =>
     cancelRecentSnapshotRequest(state, action.requestId),
   "finish-recent-snapshot-request": (state, action) =>

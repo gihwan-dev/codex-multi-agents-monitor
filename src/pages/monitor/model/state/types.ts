@@ -84,6 +84,12 @@ export type MonitorAction =
       filePath: string;
       dataset: RunDataset;
     }
+  | {
+      type: "apply-recent-live-update";
+      filePath: string;
+      connection: Exclude<LiveConnection, "paused">;
+      dataset?: RunDataset;
+    }
   | { type: "cancel-recent-snapshot-request"; requestId: number }
   | { type: "finish-recent-snapshot-request"; requestId: number }
   | { type: "apply-live-frame" }

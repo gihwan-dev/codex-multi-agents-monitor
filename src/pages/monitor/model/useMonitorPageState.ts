@@ -14,12 +14,11 @@ function useMonitorPageRuntime() {
 
   useMonitorBootstrap({
     activeDataset: derivedState.activeDataset,
-    activeFollowLive: derivedState.activeFollowLive,
     activeSessionFilePath: derivedState.activeSessionFilePath,
     recentIndex: state.recentIndex,
     recentIndexReady: state.recentIndexReady,
     recentSnapshotLoadingId: state.recentSnapshotLoadingId,
-    refreshRecentSnapshot: controller.refreshRecentSnapshot,
+    handleRecentLiveUpdate: controller.handleRecentLiveUpdate,
     requestArchiveIndex: controller.requestArchiveIndex,
     requestRecentIndex: controller.requestRecentIndex,
     requestRecentSnapshot: controller.requestRecentSnapshot,

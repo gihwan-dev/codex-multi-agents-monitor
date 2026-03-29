@@ -1,4 +1,9 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import {
+  listen as tauriListen,
+  type Event as TauriEvent,
+  type UnlistenFn,
+} from "@tauri-apps/api/event";
 
 type TauriInvoke = typeof tauriInvoke;
 
@@ -31,4 +36,18 @@ export async function invokeTauri<T>(
   }
 
   return resolveInvoke()<T>(command, args);
+}
+
+export type ListenTauriEvent<T> = TauriEvent<T>;
+export type ListenTauriUnsubscribe = UnlistenFn;
+
+export async function listenTauri<T>(
+  eventName: string,
+  handler: (event: ListenTauriEvent<T>) => void,
+): Promise<ListenTauriUnsubscribe> {
+  if (typeof window === "undefined") {
+    throw new Error("Tauri runtime is unavailable.");
+  }
+
+  return tauriListen<T>(eventName, handler);
 }

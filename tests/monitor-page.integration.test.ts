@@ -5,10 +5,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_FIXTURE_FRAMES } from "../src/entities/run/index.js";
 import {
+  buildDatasetFromSessionLogAsync,
   loadArchivedSessionIndex,
   loadArchivedSessionSnapshot,
   loadRecentSessionIndex,
   loadRecentSessionSnapshot,
+  subscribeRecentSessionLive,
+  type RecentSessionLiveUpdate,
 } from "../src/entities/session-log/index.js";
 import { applyLiveFrame } from "../src/features/follow-live/index.js";
 import { MonitorPage } from "../src/pages/monitor/index.js";
@@ -24,13 +27,17 @@ vi.mock("../src/entities/session-log/index.js", async (importOriginal) => {
     loadArchivedSessionSnapshot: vi.fn(),
     loadRecentSessionIndex: vi.fn(),
     loadRecentSessionSnapshot: vi.fn(),
+    subscribeRecentSessionLive: vi.fn(),
+    buildDatasetFromSessionLogAsync: vi.fn(actual.buildDatasetFromSessionLogAsync),
   };
 });
 
+const mockedBuildDatasetFromSessionLogAsync = vi.mocked(buildDatasetFromSessionLogAsync);
 const mockedLoadArchivedSessionIndex = vi.mocked(loadArchivedSessionIndex);
 const mockedLoadArchivedSessionSnapshot = vi.mocked(loadArchivedSessionSnapshot);
 const mockedLoadRecentSessionIndex = vi.mocked(loadRecentSessionIndex);
 const mockedLoadRecentSessionSnapshot = vi.mocked(loadRecentSessionSnapshot);
+const mockedSubscribeRecentSessionLive = vi.mocked(subscribeRecentSessionLive);
 
 let container: HTMLDivElement;
 let root: Root;
@@ -247,6 +254,7 @@ beforeEach(() => {
   window.__TAURI_INTERNALS__ = {
     invoke: vi.fn(),
   };
+  mockedSubscribeRecentSessionLive.mockReturnValue(() => {});
   scrollToSpy = vi.fn(function scrollTo(
     this: HTMLElement,
     options?: ScrollToOptions | number,
@@ -304,6 +312,7 @@ afterEach(async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   vi.useRealTimers();
   vi.clearAllMocks();
+  mockedSubscribeRecentSessionLive.mockReset();
   delete window.__TAURI_INTERNALS__;
   delete (HTMLElement.prototype as { scrollTo?: () => void }).scrollTo;
   delete (HTMLElement.prototype as { scrollIntoView?: () => void }).scrollIntoView;
@@ -794,7 +803,7 @@ describe("MonitorPage integration", () => {
     }
   });
 
-  it("recent running session은 follow-live를 활성화하고 폴링된 최신 이벤트를 선택한다", async () => {
+  it("subscribes recent live sessions and selects the latest event from transport updates", async () => {
     const recentItem = {
       ...buildRecentSessionIndexItem("recent-live-001"),
       status: "running" as const,
@@ -804,6 +813,7 @@ describe("MonitorPage integration", () => {
       initialDataset,
       LIVE_FIXTURE_FRAMES[0],
     ).dataset;
+    let emitRecentLiveUpdate: ((update: RecentSessionLiveUpdate) => void) | null = null;
 
     mockedLoadRecentSessionIndex.mockResolvedValue([recentItem]);
     mockedLoadArchivedSessionIndex.mockResolvedValue({
@@ -811,19 +821,25 @@ describe("MonitorPage integration", () => {
       total: 0,
       hasMore: false,
     });
-    mockedLoadRecentSessionSnapshot
-      .mockResolvedValueOnce(initialDataset)
-      .mockResolvedValueOnce(refreshedDataset)
-      .mockResolvedValue(refreshedDataset);
+    mockedLoadRecentSessionSnapshot.mockResolvedValue(initialDataset);
+    mockedBuildDatasetFromSessionLogAsync.mockResolvedValueOnce(refreshedDataset);
+    mockedSubscribeRecentSessionLive.mockImplementation((_filePath, options) => {
+      emitRecentLiveUpdate = options.onUpdate;
+      return () => {};
+    });
 
     await renderMonitorPage();
 
     await vi.waitFor(() => {
       expect(container.querySelector("header h1")?.textContent).toBe("Run recent-live-001");
     });
-    await vi.waitFor(() => {
-      expect(mockedLoadRecentSessionSnapshot.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
+    expect(mockedLoadRecentSessionSnapshot).toHaveBeenCalledTimes(1);
+    expect(mockedSubscribeRecentSessionLive).toHaveBeenCalledWith(
+      recentItem.filePath,
+      expect.objectContaining({
+        onUpdate: expect.any(Function),
+      }),
+    );
 
     const followButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent?.trim() === "Follow live",
@@ -832,6 +848,32 @@ describe("MonitorPage integration", () => {
     expect(followButton?.disabled).toBe(false);
     expect(container.textContent).toContain("Live watch");
     expect(container.textContent).not.toContain("Resume follow");
+
+    expect(emitRecentLiveUpdate).not.toBeNull();
+    if (!emitRecentLiveUpdate) {
+      throw new Error("recent live update handler missing");
+    }
+
+    await act(async () => {
+      emitRecentLiveUpdate({
+        subscriptionId: "recent-live-subscription",
+        filePath: recentItem.filePath,
+        connection: "live",
+        snapshot: {
+          sessionId: "recent-live-001",
+          workspacePath: recentItem.workspacePath,
+          originPath: recentItem.originPath,
+          displayName: recentItem.displayName,
+          startedAt: "2026-03-20T00:00:00.000Z",
+          updatedAt: "2026-03-20T00:05:00.000Z",
+          model: "gpt-5",
+          entries: [],
+          isArchived: false,
+          subagents: [],
+          promptAssembly: [],
+        },
+      });
+    });
 
     await vi.waitFor(() => {
       expect(
@@ -860,8 +902,7 @@ describe("MonitorPage integration", () => {
     await act(async () => {
       themeTrigger.focus();
       themeTrigger.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "ArrowDown",
+        new MouseEvent("click", {
           bubbles: true,
           cancelable: true,
         }),
