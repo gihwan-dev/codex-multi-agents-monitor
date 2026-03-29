@@ -2,6 +2,7 @@ use crate::{
     infrastructure::filesystem::recent_file_modified_at, support::error::map_sqlite_error,
 };
 use rusqlite::{Connection, OpenFlags};
+use serde_json::Value;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::{
@@ -15,6 +16,13 @@ pub(crate) struct LiveThreadRow {
     pub(crate) rollout_path: String,
     pub(crate) source: String,
     pub(crate) workspace_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ThreadSubagentHint {
+    pub(crate) rollout_path: String,
+    pub(crate) edge_parent_thread_id: Option<String>,
+    pub(crate) source_parent_thread_id: Option<String>,
 }
 
 fn resolve_codex_state_database(codex_home: &Path) -> io::Result<PathBuf> {
@@ -53,6 +61,17 @@ pub(crate) fn load_live_thread_rows(codex_home: &Path) -> io::Result<Vec<LiveThr
     collect_live_thread_rows(rows)
 }
 
+pub(crate) fn load_thread_subagent_hints(codex_home: &Path) -> io::Result<Vec<ThreadSubagentHint>> {
+    let state_database = resolve_codex_state_database(codex_home)?;
+    let connection = open_state_connection(&state_database)?;
+    let mut statement = prepare_thread_subagent_hints_query(&connection)?;
+    let rows = statement
+        .query_map([], map_thread_subagent_hint)
+        .map_err(map_sqlite_error)?;
+
+    collect_thread_subagent_hints(rows)
+}
+
 fn open_state_connection(state_database: &Path) -> io::Result<Connection> {
     Connection::open_with_flags(
         state_database,
@@ -72,6 +91,26 @@ fn prepare_live_thread_rows_query(connection: &Connection) -> io::Result<rusqlit
         .map_err(map_sqlite_error)
 }
 
+fn prepare_thread_subagent_hints_query(
+    connection: &Connection,
+) -> io::Result<rusqlite::Statement<'_>> {
+    let has_thread_spawn_edges = table_exists(connection, "thread_spawn_edges")?;
+    let query = if has_thread_spawn_edges {
+        "SELECT t.id, t.rollout_path, t.source, e.parent_thread_id
+         FROM threads t
+         LEFT JOIN thread_spawn_edges e ON e.child_thread_id = t.id
+         WHERE t.rollout_path != ''
+         ORDER BY t.updated_at DESC, t.id DESC"
+    } else {
+        "SELECT id, rollout_path, source, NULL AS parent_thread_id
+         FROM threads
+         WHERE rollout_path != ''
+         ORDER BY updated_at DESC, id DESC"
+    };
+
+    connection.prepare(query).map_err(map_sqlite_error)
+}
+
 fn map_live_thread_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRow> {
     Ok(LiveThreadRow {
         session_id: row.get(0)?,
@@ -81,14 +120,66 @@ fn map_live_thread_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRo
     })
 }
 
+fn map_thread_subagent_hint(row: &rusqlite::Row<'_>) -> rusqlite::Result<ThreadSubagentHint> {
+    let source: String = row.get(2)?;
+
+    Ok(ThreadSubagentHint {
+        rollout_path: row.get(1)?,
+        edge_parent_thread_id: row.get(3)?,
+        source_parent_thread_id: source_parent_thread_id(&source),
+    })
+}
+
 fn collect_live_thread_rows(
-    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRow>>,
+    rows: rusqlite::MappedRows<
+        '_,
+        impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRow>,
+    >,
 ) -> io::Result<Vec<LiveThreadRow>> {
     let mut result = Vec::new();
     for row in rows {
         result.push(row.map_err(map_sqlite_error)?);
     }
     Ok(result)
+}
+
+fn collect_thread_subagent_hints(
+    rows: rusqlite::MappedRows<
+        '_,
+        impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<ThreadSubagentHint>,
+    >,
+) -> io::Result<Vec<ThreadSubagentHint>> {
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(map_sqlite_error)?);
+    }
+    Ok(result)
+}
+
+fn table_exists(connection: &Connection, table_name: &str) -> io::Result<bool> {
+    connection
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'table' AND name = ?1
+            )",
+            [table_name],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|exists| exists != 0)
+        .map_err(map_sqlite_error)
+}
+
+fn source_parent_thread_id(source: &str) -> Option<String> {
+    let parsed = serde_json::from_str::<Value>(source).ok()?;
+    parsed
+        .get("subagent")
+        .and_then(|subagent| subagent.get("thread_spawn"))
+        .and_then(|thread_spawn| thread_spawn.get("parent_thread_id"))
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
 }
 
 #[cfg(test)]

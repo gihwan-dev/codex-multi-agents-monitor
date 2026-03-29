@@ -101,23 +101,64 @@ struct SubagentCollector {
     model: Option<String>,
     entries: Vec<SessionEntrySnapshot>,
     error: Option<String>,
-    past_fork_boundary: bool,
+    capture_entries: bool,
     has_open_turn: bool,
+    embedded_context: bool,
 }
 
 pub(crate) fn read_subagent_snapshot(session_file: &Path) -> io::Result<Option<SubagentSnapshot>> {
-    let mut reader = BufReader::new(File::open(session_file)?);
-    let Some(meta) = read_session_meta(&mut reader)? else {
-        return Ok(None);
-    };
-    let Some(subagent_meta) = build_subagent_meta(session_file, &meta) else {
-        return Ok(None);
+    let reader = BufReader::new(File::open(session_file)?);
+    let mut subagent_meta = None;
+    let mut collector = None;
+    let mut saw_prelude_entries = false;
+
+    for line in reader.lines() {
+        let line = line?;
+
+        if subagent_meta.is_none() {
+            if let Some(found_subagent_meta) =
+                find_subagent_meta(session_file, &line, &mut saw_prelude_entries)
+            {
+                collector = Some(SubagentCollector::new(
+                    found_subagent_meta.started_at.clone(),
+                    saw_prelude_entries,
+                ));
+                subagent_meta = Some(found_subagent_meta);
+            }
+            continue;
+        }
+
+        consume_subagent_entry_line(&line, collector.as_mut());
+    }
+
+    match (subagent_meta, collector) {
+        (Some(subagent_meta), Some(collector)) => Ok(Some(collector.finish(subagent_meta))),
+        _ => Ok(None),
+    }
+}
+
+fn find_subagent_meta(
+    session_file: &Path,
+    line: &str,
+    saw_prelude_entries: &mut bool,
+) -> Option<SubagentMeta> {
+    let Some(meta) = parse_session_meta_line(line) else {
+        *saw_prelude_entries |= parse_entry_line(line).is_some();
+        return None;
     };
 
-    let mut collector = SubagentCollector::new(subagent_meta.started_at.clone());
-    visit_entries(reader, |entry| collector.consume(entry))?;
+    let found_subagent_meta = build_subagent_meta(session_file, &meta);
+    *saw_prelude_entries |= found_subagent_meta.is_none();
+    found_subagent_meta
+}
 
-    Ok(Some(collector.finish(subagent_meta)))
+fn consume_subagent_entry_line(line: &str, collector: Option<&mut SubagentCollector>) {
+    let Some(entry) = parse_entry_line(line) else {
+        return;
+    };
+    if let Some(collector) = collector {
+        collector.consume(entry);
+    }
 }
 
 pub(crate) fn parse_recent_index_entry(
@@ -255,7 +296,8 @@ where
     }
 
     let snapshot_meta = build_snapshot_meta(session_file, &meta);
-    let mut collector = SessionSnapshotCollector::new(&meta.payload, snapshot_meta.started_at.clone());
+    let mut collector =
+        SessionSnapshotCollector::new(&meta.payload, snapshot_meta.started_at.clone());
     visit_entries(reader, |entry| collector.consume(entry))?;
 
     Ok(Some(collector.finish(snapshot_meta)))
@@ -267,8 +309,7 @@ fn read_session_meta(reader: &mut impl BufRead) -> io::Result<Option<SessionMeta
         return Ok(None);
     }
 
-    let session_meta =
-        serde_json::from_str::<Value>(&first_line).map_err(invalid_data_error)?;
+    let session_meta = serde_json::from_str::<Value>(&first_line).map_err(invalid_data_error)?;
     let payload = session_meta
         .get("payload")
         .and_then(Value::as_object)
@@ -279,6 +320,23 @@ fn read_session_meta(reader: &mut impl BufRead) -> io::Result<Option<SessionMeta
         session_meta,
         payload,
     }))
+}
+
+fn parse_session_meta_line(line: &str) -> Option<SessionMetaRecord> {
+    let session_meta = parse_entry_line(line)?;
+    if session_meta.get("type").and_then(Value::as_str) != Some("session_meta") {
+        return None;
+    }
+
+    let payload = session_meta
+        .get("payload")
+        .and_then(Value::as_object)?
+        .clone();
+
+    Some(SessionMetaRecord {
+        session_meta,
+        payload,
+    })
 }
 
 fn invalid_data_error(error: serde_json::Error) -> io::Error {
@@ -544,14 +602,15 @@ impl SessionSnapshotCollector {
 }
 
 impl SubagentCollector {
-    fn new(started_at: String) -> Self {
+    fn new(started_at: String, embedded_context: bool) -> Self {
         Self {
             updated_at: started_at,
             model: None,
             entries: Vec::new(),
             error: None,
-            past_fork_boundary: true,
+            capture_entries: true,
             has_open_turn: false,
+            embedded_context,
         }
     }
 
@@ -560,12 +619,17 @@ impl SubagentCollector {
             return;
         }
 
-        self.update_fork_boundary(&entry);
         self.capture_model(&entry);
 
-        if self.past_fork_boundary {
+        if !self.capture_entries && !self.embedded_context {
+            self.update_fork_boundary(&entry);
+        }
+
+        if self.capture_entries {
             self.capture_snapshot_entry(&entry);
         }
+
+        self.update_embedded_boundary(&entry);
     }
 
     fn finish(self, meta: SubagentMeta) -> SubagentSnapshot {
@@ -585,7 +649,8 @@ impl SubagentCollector {
 
     fn consume_session_meta_entry(&mut self, entry: &Value) -> bool {
         if entry.get("type").and_then(Value::as_str) == Some("session_meta") {
-            self.past_fork_boundary = false;
+            self.capture_entries = false;
+            self.has_open_turn = false;
             return true;
         }
 
@@ -593,7 +658,7 @@ impl SubagentCollector {
     }
 
     fn update_fork_boundary(&mut self, entry: &Value) {
-        if self.past_fork_boundary {
+        if self.capture_entries || self.embedded_context {
             return;
         }
 
@@ -606,9 +671,24 @@ impl SubagentCollector {
 
     fn handle_task_started(&mut self) {
         if self.has_open_turn {
-            self.past_fork_boundary = true;
+            self.capture_entries = true;
         }
         self.has_open_turn = true;
+    }
+
+    fn update_embedded_boundary(&mut self, entry: &Value) {
+        if !self.embedded_context || !self.capture_entries {
+            return;
+        }
+
+        match entry_payload_type(entry) {
+            Some("task_started") => self.has_open_turn = true,
+            Some("task_complete") if self.has_open_turn => {
+                self.has_open_turn = false;
+                self.capture_entries = false;
+            }
+            _ => {}
+        }
     }
 
     fn capture_model(&mut self, entry: &Value) {
@@ -790,6 +870,70 @@ mod tests {
         assert_eq!(snapshot.entries[0].entry_type, "task_started");
         assert_eq!(snapshot.entries[1].entry_type, "message");
         assert_eq!(snapshot.entries[1].role.as_deref(), Some("assistant"));
+        assert_eq!(snapshot.entries[2].entry_type, "task_complete");
+    }
+
+    #[test]
+    fn reads_subagent_when_child_session_meta_appears_after_parent_prelude() {
+        let temp_dir = TempDir::new("late-subagent-meta");
+        let subagent_file = temp_dir.path.join("sub.jsonl");
+
+        let lines = [
+            r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
+            r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
+            r##"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /tmp/test"}]}}"##,
+            r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-late","forked_from_id":"parent-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-001","depth":1,"agent_nickname":"Ada","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:10.100Z","type":"turn_context","payload":{"model":"gpt-5.3-codex-spark","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Late child marker works."}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
+        ];
+
+        fs::write(&subagent_file, lines.join("\n")).unwrap();
+
+        let snapshot = read_subagent_snapshot(&subagent_file)
+            .expect("should parse subagent file")
+            .expect("should produce a snapshot");
+
+        assert_eq!(snapshot.session_id, "sub-late");
+        assert_eq!(snapshot.parent_thread_id, "parent-001");
+        assert_eq!(snapshot.agent_nickname, "Ada");
+        assert_eq!(snapshot.entries.len(), 3);
+        assert_eq!(snapshot.entries[0].entry_type, "task_started");
+        assert_eq!(snapshot.entries[1].entry_type, "message");
+        assert_eq!(
+            snapshot.entries[1].text.as_deref(),
+            Some("Late child marker works.")
+        );
+    }
+
+    #[test]
+    fn late_subagent_snapshot_stops_before_resumed_parent_turn() {
+        let temp_dir = TempDir::new("late-subagent-parent-resume");
+        let subagent_file = temp_dir.path.join("sub.jsonl");
+
+        let lines = [
+            r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
+            r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent prelude"}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-late","forked_from_id":"parent-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"parent-001","depth":1,"agent_nickname":"Ada","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child work"}]}}"#,
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
+            r#"{"timestamp":"2026-03-18T09:15:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p2"}}"#,
+            r#"{"timestamp":"2026-03-18T09:15:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent resumed"}]}}"#,
+        ];
+
+        fs::write(&subagent_file, lines.join("\n")).unwrap();
+
+        let snapshot = read_subagent_snapshot(&subagent_file)
+            .expect("should parse subagent file")
+            .expect("should produce a snapshot");
+
+        assert_eq!(snapshot.session_id, "sub-late");
+        assert_eq!(snapshot.entries.len(), 3);
+        assert_eq!(snapshot.entries[0].entry_type, "task_started");
+        assert_eq!(snapshot.entries[1].text.as_deref(), Some("Child work"));
         assert_eq!(snapshot.entries[2].entry_type, "task_complete");
     }
 

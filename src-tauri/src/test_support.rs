@@ -112,6 +112,11 @@ pub(crate) fn create_state_database(path: &Path, archived_ids: &[&str]) {
                 title TEXT NOT NULL DEFAULT '',
                 first_user_message TEXT NOT NULL DEFAULT '',
                 archived INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE thread_spawn_edges (
+                parent_thread_id TEXT NOT NULL,
+                child_thread_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'closed'
             );",
         )
         .expect("threads table should be created");
@@ -142,6 +147,44 @@ pub(crate) fn insert_thread_row(
         workspace_path,
         updated_at,
         false,
+    );
+}
+
+pub(crate) type LiveThreadFixtureArgs<'a> = (
+    &'a Path,
+    &'a str,
+    &'a Path,
+    &'a str,
+    &'a Path,
+    i64,
+    String,
+    &'a [&'a str],
+);
+
+pub(crate) fn persist_live_thread_fixture(fixture: LiveThreadFixtureArgs<'_>) {
+    let (
+        state_database,
+        session_id,
+        session_file,
+        source,
+        workspace_path,
+        updated_at,
+        header,
+        events,
+    ) = fixture;
+    write_session_lines(
+        session_file,
+        std::iter::once(header)
+            .chain(events.iter().map(|line| (*line).to_owned()))
+            .collect::<Vec<_>>(),
+    );
+    insert_thread_row(
+        state_database,
+        session_id,
+        session_file,
+        source,
+        workspace_path,
+        updated_at,
     );
 }
 
@@ -177,17 +220,85 @@ pub(crate) fn insert_thread_row_with_archive_flag(
         .expect("thread row should be inserted");
 }
 
+pub(crate) fn insert_thread_spawn_edge(path: &Path, parent_thread_id: &str, child_thread_id: &str) {
+    let connection = Connection::open(path).expect("state database should open");
+    connection
+        .execute(
+            "INSERT INTO thread_spawn_edges (
+                parent_thread_id,
+                child_thread_id,
+                status
+            ) VALUES (?1, ?2, 'closed')",
+            (parent_thread_id, child_thread_id),
+        )
+        .expect("thread spawn edge should be inserted");
+}
+
 pub(crate) fn write_session_lines<I, S>(path: &Path, lines: I)
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("session parent dir should exist");
+    }
     let contents = lines
         .into_iter()
         .map(|line| line.as_ref().to_owned())
         .collect::<Vec<_>>()
         .join("\n");
     fs::write(path, contents).expect("session file should be written");
+}
+
+pub(crate) fn write_worker_subagent_session(
+    path: &Path,
+    session_id: &str,
+    parent_thread_id: &str,
+    nickname: &str,
+    message: &str,
+) {
+    write_session_lines(
+        path,
+        [
+            format!(
+                r#"{{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{{"id":"{session_id}","source":{{"subagent":{{"thread_spawn":{{"parent_thread_id":"{parent_thread_id}","depth":1,"agent_nickname":"{nickname}","agent_role":"worker"}}}}}},"cwd":"/tmp/workspace","timestamp":"2026-03-20T00:01:00.000Z"}}}}"#
+            ),
+            r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub"}}"#.to_owned(),
+            r#"{"timestamp":"2026-03-20T00:01:01.100Z","type":"turn_context","payload":{"model":"gpt-5-mini","turn_id":"turn-sub"}}"#.to_owned(),
+            format!(
+                r#"{{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{{"type":"message","role":"assistant","content":[{{"type":"output_text","text":"{message}"}}]}}}}"#
+            ),
+            r#"{"timestamp":"2026-03-20T00:01:03.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub","last_agent_message":"done"}}"#.to_owned(),
+        ],
+    );
+}
+
+pub(crate) fn write_late_subagent_resume_session(
+    path: &Path,
+    session_id: &str,
+    forked_from_id: &str,
+    parent_thread_id: &str,
+    nickname: &str,
+    child_message: &str,
+) {
+    write_session_lines(
+        path,
+        [
+            r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#.to_owned(),
+            r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#.to_owned(),
+            r#"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent prelude"}]}}"#.to_owned(),
+            format!(
+                r#"{{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{{"id":"{session_id}","forked_from_id":"{forked_from_id}","source":{{"subagent":{{"thread_spawn":{{"parent_thread_id":"{parent_thread_id}","depth":1,"agent_nickname":"{nickname}","agent_role":"explorer"}}}}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}}}"#
+            ),
+            r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#.to_owned(),
+            format!(
+                r#"{{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{{"type":"message","role":"assistant","content":[{{"type":"output_text","text":"{child_message}"}}]}}}}"#
+            ),
+            r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#.to_owned(),
+            r#"{"timestamp":"2026-03-18T09:15:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p2"}}"#.to_owned(),
+            r#"{"timestamp":"2026-03-18T09:15:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent resumed"}]}}"#.to_owned(),
+        ],
+    );
 }
 
 pub(crate) fn create_git_workspace(path: &Path) {
