@@ -2254,6 +2254,31 @@ describe("token_count enrichment", () => {
     );
     expect(nonLifecycleEvents.every((e) => e.title !== "token_count")).toBe(true);
   });
+
+  it("derives maxContextWindowTokens from token_count entries when the snapshot omits it", () => {
+    const entries: SessionEntrySnapshot[] = [
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
+      makeMessageEntry("2026-03-19T10:00:02.000Z", "assistant", "Working on it"),
+      {
+        timestamp: "2026-03-19T10:00:03.000Z",
+        entryType: "token_count",
+        role: null,
+        text: '{"in":100,"cached":50,"out":20,"window":258400}',
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ];
+
+    const snapshot = buildSnapshot(entries);
+    snapshot.model = "gpt-5.4";
+    snapshot.maxContextWindowTokens = null;
+    const dataset = expectDataset(snapshot);
+    expect(dataset).not.toBeNull();
+    if (!dataset) return;
+
+    expect(dataset.run.maxContextWindowTokens).toBe(258_400);
+  });
 });
 
 describe("tool input preview extraction", () => {

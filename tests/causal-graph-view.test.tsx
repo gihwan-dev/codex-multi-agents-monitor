@@ -221,6 +221,62 @@ describe("CausalGraphView selection reveal", () => {
     );
   });
 
+  it("renders an in-graph context rail that follows the visible event while scrolling", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const overlay = container.querySelector('[data-slot="graph-context-card-overlay"]');
+    expect(overlay).not.toBeNull();
+    expect(container.querySelector('[data-slot="graph-context-card"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-slot="graph-context-card-value"]')?.textContent,
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-slot="graph-context-card-cause"]')?.textContent,
+    ).toBeTruthy();
+
+    const scrollElement = container.querySelector('[data-slot="graph-scroll"]');
+    expect(scrollElement).not.toBeNull();
+    if (!scrollElement) {
+      throw new Error("graph scroll area missing");
+    }
+
+    const initialEventLabel =
+      container.querySelector('[data-slot="graph-context-card-event"]')?.textContent ?? "";
+
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 1200,
+    });
+
+    await act(async () => {
+      scrollElement.dispatchEvent(new Event("scroll"));
+    });
+
+    expect(container.querySelector('[data-slot="graph-context-card-event"]')?.textContent).not.toBe(
+      initialEventLabel,
+    );
+  });
+
   it("scrolls when a navigation request targets an offscreen event", async () => {
     const dataset = requireDataset("trace-fix-002");
     const targetEventId = dataset.events[dataset.events.length - 1]?.eventId;

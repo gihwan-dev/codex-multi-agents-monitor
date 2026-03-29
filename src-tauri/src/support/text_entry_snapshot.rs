@@ -1,5 +1,5 @@
 use crate::domain::session::SessionEntrySnapshot;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use super::truncate_utf8_safe;
 
@@ -296,17 +296,23 @@ fn build_token_count_entry(context: &SnapshotContext<'_>) -> Option<SessionEntry
         .get("last_token_usage")
         .and_then(Value::as_object)?;
 
-    let text = format!(
-        r#"{{"in":{},"cached":{},"out":{},"reasoning":{}}}"#,
-        usage.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
-        usage.get("cached_input_tokens")
+    let text = json!({
+        "in": usage.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
+        "cached": usage
+            .get("cached_input_tokens")
             .and_then(Value::as_u64)
             .unwrap_or(0),
-        usage.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
-        usage.get("reasoning_output_tokens")
+        "out": usage.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
+        "reasoning": usage
+            .get("reasoning_output_tokens")
             .and_then(Value::as_u64)
-            .unwrap_or(0)
-    );
+            .unwrap_or(0),
+        "window": context
+            .payload
+            .get("model_context_window")
+            .and_then(Value::as_u64),
+    })
+    .to_string();
 
     Some(build_text_snapshot(context, "token_count", Some(text)))
 }
@@ -523,5 +529,39 @@ fn build_function_output_snapshot(
         function_name: None,
         function_call_id: call_id,
         function_arguments_preview: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_entry_snapshot;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn token_count_snapshot_keeps_model_context_window() {
+        let entry = json!({
+            "timestamp": "2026-03-29T09:00:00.000Z",
+            "payload": {
+                "type": "token_count",
+                "model_context_window": 258400,
+                "info": {
+                    "last_token_usage": {
+                        "input_tokens": 100,
+                        "cached_input_tokens": 40,
+                        "output_tokens": 20,
+                        "reasoning_output_tokens": 5
+                    }
+                }
+            }
+        });
+
+        let snapshot = extract_entry_snapshot(&entry).expect("token_count snapshot");
+        let payload = snapshot
+            .text
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Value>(text).ok())
+            .expect("token_count payload");
+
+        assert_eq!(payload.get("window").and_then(Value::as_u64), Some(258400));
     }
 }

@@ -1,5 +1,6 @@
 import type { EventRecord } from "../../run";
 import { buildEntryEventId } from "../lib/helpers";
+import { parseTokenCountPayload } from "../lib/tokenCount";
 import type { EntryContext, EntryEventOptions } from "./eventBuilderTypes";
 
 const DEFAULT_EVENT_METRICS = {
@@ -105,18 +106,5 @@ function resolveTokenCount(value: number | undefined) {
 }
 
 function parseTokenPayload(rawTokenCount: string | null) {
-  if (!rawTokenCount) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawTokenCount) as {
-      in?: number;
-      cached?: number;
-      out?: number;
-      reasoning?: number;
-    };
-  } catch {
-    return null;
-  }
+  return parseTokenCountPayload(rawTokenCount);
 }

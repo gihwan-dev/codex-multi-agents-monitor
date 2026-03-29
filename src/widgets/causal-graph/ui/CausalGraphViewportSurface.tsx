@@ -22,7 +22,7 @@ export function CausalGraphViewportSurface({
     <div
       ref={viewportState.viewportRef}
       data-slot="graph"
-      className="grid min-h-0 flex-1 gap-3"
+      className="grid min-h-0 min-w-0 flex-1 gap-3"
       style={buildGraphViewportStyle(graphSnapshot.layout.laneMetrics)}
     >
       <GraphViewportScrollArea

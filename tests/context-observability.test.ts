@@ -232,6 +232,16 @@ describe("context observability bundle", () => {
     expect(subLane.estimatedMainContextSaved).toBe(120);
     expect(subLane.isSelected).toBe(true);
     expect(mainLane.contextReturnedTokens).toBe(0);
+
+    const compactionRow = scene.rows.find(
+      (row) => row.kind === "event" && row.hasCompaction,
+    );
+    expect(compactionRow).toBeDefined();
+    if (!compactionRow || compactionRow.kind !== "event") {
+      throw new Error("expected compaction row");
+    }
+
+    expect(compactionRow.contextWindowTokens).toBe(0);
   });
 
   it("re-focuses observability on a viewport event without rebuilding the base model", () => {

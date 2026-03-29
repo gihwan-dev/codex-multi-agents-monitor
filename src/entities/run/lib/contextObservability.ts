@@ -157,6 +157,10 @@ function buildContextTimelinePoint(
   };
 }
 function resolveNextContextWindowTokens(currentContextWindowTokens: number, event: EventRecord) {
+  if (isCompactionEvent(event)) {
+    return 0;
+  }
+
   const measuredContextWindowTokens = resolveMeasuredContextWindowTokens(event);
   return measuredContextWindowTokens > 0 ? measuredContextWindowTokens : currentContextWindowTokens;
 }

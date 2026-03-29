@@ -16,12 +16,12 @@ export function MonitorContextLaneSummarySection({
   toggleLaneSummary,
 }: MonitorContextLaneSummarySectionProps) {
   return (
-    <div className="grid gap-2 rounded-[var(--radius-panel)] border border-white/8 bg-black/10 p-3">
+    <div className="grid gap-2 rounded-[var(--radius-panel)] border border-white/8 bg-black/10 p-2.5">
       <button
         type="button"
         data-slot="lane-summary-toggle"
         aria-expanded={laneSummaryOpen}
-        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-soft)] border border-transparent px-1 py-1 text-left transition-colors hover:border-white/8 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-active)]/45"
+        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-soft)] border border-transparent px-1 py-0.5 text-left transition-colors hover:border-white/8 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-active)]/45"
         onClick={toggleLaneSummary}
       >
         <span className="grid gap-0.5">

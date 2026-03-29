@@ -1,6 +1,5 @@
 import type { ContextObservabilityModel } from "../../../entities/run";
 import { MonitorContextLaneSummarySection } from "./MonitorContextLaneSummarySection";
-import { MonitorContextWindowCard } from "./MonitorContextWindowCard";
 import { useLaneSummaryDisclosure } from "./useLaneSummaryDisclosure";
 
 interface MonitorContextObservabilityPanelProps {
@@ -19,16 +18,17 @@ export function MonitorContextObservabilityPanel({
     return null;
   }
 
+  if (observability.laneSummaries.length === 0) {
+    return null;
+  }
+
   return (
-    <section className="grid gap-3 border border-x-0 border-white/8 bg-[color:color-mix(in_srgb,var(--color-panel)_88%,black)] px-4 py-4">
-      <MonitorContextWindowCard observability={observability} />
-      {observability.laneSummaries.length > 0 ? (
-        <MonitorContextLaneSummarySection
-          laneSummaries={observability.laneSummaries}
-          laneSummaryOpen={laneSummaryOpen}
-          toggleLaneSummary={toggleLaneSummary}
-        />
-      ) : null}
+    <section className="border border-x-0 border-white/8 bg-white/[0.02] px-4 py-2">
+      <MonitorContextLaneSummarySection
+        laneSummaries={observability.laneSummaries}
+        laneSummaryOpen={laneSummaryOpen}
+        toggleLaneSummary={toggleLaneSummary}
+      />
     </section>
   );
 }

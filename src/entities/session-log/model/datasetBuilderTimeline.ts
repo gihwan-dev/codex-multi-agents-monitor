@@ -5,6 +5,7 @@ import {
   type EventRecord,
   type RunDataset,
 } from "../../run";
+import { resolveSessionSnapshotMaxContextWindowTokens } from "../lib/tokenCount";
 import type { CombinedTimeline, ParentRunContext, SnapshotTiming } from "./datasetBuilderTypes";
 import { buildPromptAssembly } from "./promptAssembly";
 import {
@@ -60,13 +61,21 @@ function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
     environment: "Desktop",
     liveMode: !snapshot.isArchived && isRunning ? "live" : "imported",
     summaryMetrics: buildEmptySummaryMetrics(),
-    maxContextWindowTokens: snapshot.maxContextWindowTokens ?? null,
+    maxContextWindowTokens: resolveMaxContextWindowTokens(snapshot),
     finalArtifactId: null,
     selectedByDefaultId: combinedTimeline.selectedByDefaultId,
     rawIncluded: false,
     noRawStorage: true,
     isArchived: snapshot.isArchived ?? false,
   } satisfies RunDataset["run"];
+}
+
+function resolveMaxContextWindowTokens(snapshot: SessionLogSnapshot) {
+  return (
+    snapshot.maxContextWindowTokens ??
+    resolveSessionSnapshotMaxContextWindowTokens(snapshot) ??
+    null
+  );
 }
 
 export function buildCombinedTimeline(
