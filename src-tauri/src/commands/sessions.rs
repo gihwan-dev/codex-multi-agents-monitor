@@ -3,9 +3,10 @@ use crate::{
     domain::ingest_policy::ArchivedIndexQuery,
     domain::session::{
         ArchivedSessionIndex, ArchivedSessionIndexResult, RecentSessionIndexItem,
-        SessionLogSnapshot, SkillActivityScanResult,
+        RecentSessionLiveSubscription, SessionLogSnapshot, SkillActivityScanResult,
     },
     state::archive_cache::ArchivedIndexCache,
+    state::live_session_subscriptions::LiveSessionSubscriptionRegistry,
 };
 
 #[tauri::command]
@@ -27,6 +28,30 @@ pub(crate) async fn load_recent_session_snapshot(file_path: String) -> Option<Se
     .await
     .ok()
     .flatten()
+}
+
+#[tauri::command]
+pub(crate) fn start_recent_session_live_subscription(
+    window: tauri::Window,
+    file_path: String,
+    registry: tauri::State<'_, LiveSessionSubscriptionRegistry>,
+) -> Result<RecentSessionLiveSubscription, String> {
+    application::live_sessions::start_recent_session_live_subscription(
+        window,
+        registry.inner().clone(),
+        &file_path,
+    )
+}
+
+#[tauri::command]
+pub(crate) fn stop_recent_session_live_subscription(
+    subscription_id: String,
+    registry: tauri::State<'_, LiveSessionSubscriptionRegistry>,
+) {
+    application::live_sessions::stop_recent_session_live_subscription(
+        registry.inner(),
+        &subscription_id,
+    );
 }
 
 #[derive(Debug, serde::Deserialize)]

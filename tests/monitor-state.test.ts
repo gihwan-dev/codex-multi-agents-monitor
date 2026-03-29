@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { LIVE_FIXTURE_FRAMES } from "../src/entities/run/index.js";
+import { applyLiveFrame } from "../src/features/follow-live/index.js";
 import {
   createMonitorInitialState,
   monitorStateReducer,
@@ -702,6 +704,128 @@ describe("archive 요청 상태", () => {
       id: latestEvent.eventId,
     });
     expect(refreshedState.followLiveByRunId[dataset.run.traceId]).toBe(true);
+  });
+
+  it("keeps the current selection when a paused live transport update only changes status", () => {
+    const dataset = buildLiveRecentDataset("recent-live-transport-status");
+    const pausedSelection = {
+      kind: "event" as const,
+      id: dataset.events[0]?.eventId ?? "",
+    };
+    const initialState = {
+      ...createMonitorInitialState(),
+      datasets: [dataset],
+      hydratedDatasetsByFilePath: {
+        "/tmp/recent-live-transport-status.jsonl": dataset,
+      },
+      activeRunId: dataset.run.traceId,
+      selection: pausedSelection,
+      followLiveByRunId: {
+        [dataset.run.traceId]: false,
+      },
+      liveConnectionByRunId: {
+        [dataset.run.traceId]: "paused" as const,
+      },
+      collapsedGapIds: {
+        [dataset.run.traceId]: [],
+      },
+    };
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "apply-recent-live-update",
+      filePath: "/tmp/recent-live-transport-status.jsonl",
+      connection: "stale",
+    });
+
+    expect(nextState.selection).toEqual(pausedSelection);
+    expect(nextState.liveConnectionByRunId[dataset.run.traceId]).toBe("stale");
+    expect(nextState.datasets[0]?.run.status).toBe("stale");
+  });
+
+  it("selects the latest event when a follow-live transport snapshot arrives", () => {
+    const dataset = buildLiveRecentDataset("recent-live-transport-follow");
+    const refreshedDataset = applyLiveFrame(dataset, LIVE_FIXTURE_FRAMES[0]!).dataset;
+    const initialState = {
+      ...createMonitorInitialState(),
+      datasets: [dataset],
+      hydratedDatasetsByFilePath: {
+        "/tmp/recent-live-transport-follow.jsonl": dataset,
+      },
+      activeRunId: dataset.run.traceId,
+      selection: { kind: "event" as const, id: dataset.events[0]?.eventId ?? "" },
+      followLiveByRunId: {
+        [dataset.run.traceId]: true,
+      },
+      liveConnectionByRunId: {
+        [dataset.run.traceId]: "live" as const,
+      },
+      collapsedGapIds: {
+        [dataset.run.traceId]: [],
+      },
+    };
+
+    const nextState = monitorStateReducer(initialState, {
+      type: "apply-recent-live-update",
+      filePath: "/tmp/recent-live-transport-follow.jsonl",
+      connection: "live",
+      dataset: refreshedDataset,
+    });
+
+    expect(nextState.selection).toEqual({
+      kind: "event",
+      id: refreshedDataset.events.at(-1)?.eventId,
+    });
+    expect(nextState.liveConnectionByRunId[dataset.run.traceId]).toBe("live");
+  });
+
+  it("preserves paused selection across stale, disconnected, and reconnected transport updates", () => {
+    const dataset = buildLiveRecentDataset("recent-live-transport-reconnect");
+    const refreshedDataset = applyLiveFrame(dataset, LIVE_FIXTURE_FRAMES[0]!).dataset;
+    const pausedSelection = {
+      kind: "event" as const,
+      id: dataset.events[0]?.eventId ?? "",
+    };
+    const initialState = {
+      ...createMonitorInitialState(),
+      datasets: [dataset],
+      hydratedDatasetsByFilePath: {
+        "/tmp/recent-live-transport-reconnect.jsonl": dataset,
+      },
+      activeRunId: dataset.run.traceId,
+      selection: pausedSelection,
+      followLiveByRunId: {
+        [dataset.run.traceId]: false,
+      },
+      liveConnectionByRunId: {
+        [dataset.run.traceId]: "paused" as const,
+      },
+      collapsedGapIds: {
+        [dataset.run.traceId]: [],
+      },
+    };
+
+    const staleState = monitorStateReducer(initialState, {
+      type: "apply-recent-live-update",
+      filePath: "/tmp/recent-live-transport-reconnect.jsonl",
+      connection: "stale",
+    });
+    const disconnectedState = monitorStateReducer(staleState, {
+      type: "apply-recent-live-update",
+      filePath: "/tmp/recent-live-transport-reconnect.jsonl",
+      connection: "disconnected",
+    });
+    const reconnectedState = monitorStateReducer(disconnectedState, {
+      type: "apply-recent-live-update",
+      filePath: "/tmp/recent-live-transport-reconnect.jsonl",
+      connection: "reconnected",
+      dataset: refreshedDataset,
+    });
+
+    expect(staleState.selection).toEqual(pausedSelection);
+    expect(disconnectedState.selection).toEqual(pausedSelection);
+    expect(reconnectedState.selection).toEqual(pausedSelection);
+    expect(reconnectedState.liveConnectionByRunId[dataset.run.traceId]).toBe("reconnected");
+    expect(reconnectedState.datasets[0]?.run.status).toBe("running");
   });
 
   it("recent snapshot 취소는 loading 상태를 비우고 이전 resolve를 무효화한다", () => {

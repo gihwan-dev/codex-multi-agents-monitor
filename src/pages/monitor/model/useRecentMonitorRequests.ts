@@ -1,5 +1,10 @@
 import { type Dispatch, startTransition, useEffectEvent } from "react";
-import { loadRecentSessionIndex, loadRecentSessionSnapshot } from "../../../entities/session-log";
+import {
+  buildDatasetFromSessionLogAsync,
+  loadRecentSessionIndex,
+  loadRecentSessionSnapshot,
+  type RecentSessionLiveUpdate,
+} from "../../../entities/session-log";
 import {
   activateCachedDataset,
   beginSnapshotRequest,
@@ -13,7 +18,7 @@ interface UseRecentMonitorRequestsOptions {
   dispatch: Dispatch<MonitorAction>;
   cancelPendingSelectionLoad: () => void;
   recentSnapshotRequestIdRef: MonitorRequestRefs["recentSnapshotRequestIdRef"];
-  recentLiveRefreshInFlightRef: MonitorRequestRefs["recentLiveRefreshInFlightRef"];
+  recentLiveUpdateSequenceRef: MonitorRequestRefs["recentLiveUpdateSequenceRef"];
 }
 
 function requestRecentIndexFromSource(dispatch: Dispatch<MonitorAction>) {
@@ -66,33 +71,52 @@ function requestRecentSnapshotFromSource(args: {
   });
 }
 
-function refreshRecentSnapshotFromSource(args: {
+function applyRecentLiveUpdateFromSource(args: {
   dispatch: Dispatch<MonitorAction>;
-  recentLiveRefreshInFlightRef: MonitorRequestRefs["recentLiveRefreshInFlightRef"];
-  filePath: string;
+  update: RecentSessionLiveUpdate;
+  recentLiveUpdateSequenceRef: MonitorRequestRefs["recentLiveUpdateSequenceRef"];
 }) {
-  if (args.recentLiveRefreshInFlightRef.current) {
+  const { dispatch, update, recentLiveUpdateSequenceRef } = args;
+  const sequence = recentLiveUpdateSequenceRef.current + 1;
+  recentLiveUpdateSequenceRef.current = sequence;
+
+  if (!update.snapshot) {
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
+      });
+    });
     return;
   }
 
-  args.recentLiveRefreshInFlightRef.current = true;
-  loadRecentSessionSnapshot(args.filePath)
-    .then((dataset) => {
-      if (!dataset) {
-        return;
-      }
+  buildDatasetFromSessionLogAsync(update.snapshot).then((dataset) => {
+    if (recentLiveUpdateSequenceRef.current !== sequence) {
+      return;
+    }
 
-      startTransition(() => {
-        args.dispatch({
-          type: "refresh-recent-snapshot",
-          filePath: args.filePath,
-          dataset,
-        });
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
+        ...(dataset ? { dataset } : {}),
       });
-    })
-    .finally(() => {
-      args.recentLiveRefreshInFlightRef.current = false;
     });
+  }).catch(() => {
+    if (recentLiveUpdateSequenceRef.current !== sequence) {
+      return;
+    }
+
+    startTransition(() => {
+      dispatch({
+        type: "apply-recent-live-update",
+        filePath: update.filePath,
+        connection: update.connection,
+      });
+    });
+  });
 }
 
 function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
@@ -108,26 +132,21 @@ function useRecentSnapshotRequester(options: UseRecentMonitorRequestsOptions) {
   );
 }
 
-function useRecentSnapshotRefresher(options: UseRecentMonitorRequestsOptions) {
-  const { dispatch, recentLiveRefreshInFlightRef } = options;
-  return useEffectEvent((filePath: string) =>
-    refreshRecentSnapshotFromSource({
-      dispatch,
-      recentLiveRefreshInFlightRef,
-      filePath,
-    }),
-  );
-}
-
 export function useRecentMonitorRequests(options: UseRecentMonitorRequestsOptions) {
-  const { dispatch } = options;
+  const { dispatch, recentLiveUpdateSequenceRef } = options;
   const requestRecentIndex = useEffectEvent(() => requestRecentIndexFromSource(dispatch));
   const requestRecentSnapshot = useRecentSnapshotRequester(options);
-  const refreshRecentSnapshot = useRecentSnapshotRefresher(options);
+  const handleRecentLiveUpdate = useEffectEvent((update: RecentSessionLiveUpdate) =>
+    applyRecentLiveUpdateFromSource({
+      dispatch,
+      update,
+      recentLiveUpdateSequenceRef,
+    }),
+  );
 
   return {
     requestRecentIndex,
     requestRecentSnapshot,
-    refreshRecentSnapshot,
+    handleRecentLiveUpdate,
   };
 }

@@ -1,15 +1,15 @@
 import type { MutableRefObject } from "react";
 import type { RunDataset } from "../../../entities/run";
+import type { RecentSessionLiveUpdate } from "../../../entities/session-log";
 import type { MonitorState } from "./state";
 
 export interface UseMonitorBootstrapOptions {
   activeDataset: RunDataset | null;
-  activeFollowLive: boolean;
   activeSessionFilePath: string | null;
   recentIndex: MonitorState["recentIndex"];
   recentIndexReady: boolean;
   recentSnapshotLoadingId: string | null;
-  refreshRecentSnapshot: (filePath: string) => void;
+  handleRecentLiveUpdate: (update: RecentSessionLiveUpdate) => void;
   requestArchiveIndex: (offset: number, append: boolean, search?: string) => void;
   requestRecentIndex: () => void;
   requestRecentSnapshot: (filePath: string) => void;
@@ -22,15 +22,17 @@ export type InitialRecentSnapshotState = Pick<
 
 export type RecentRefreshState = Pick<
   UseMonitorBootstrapOptions,
-  "activeDataset" | "activeFollowLive" | "activeSessionFilePath" | "recentIndex"
+  "activeDataset" | "activeSessionFilePath" | "recentIndex"
 >;
 
 export interface UseInitialRecentSnapshotOptions extends InitialRecentSnapshotState {
   requestRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
 }
 
-export interface UseRecentLiveRefreshOptions extends RecentRefreshState {
-  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+export interface UseRecentLiveSubscriptionOptions extends RecentRefreshState {
+  handleRecentLiveUpdateRef: MutableRefObject<
+    (update: RecentSessionLiveUpdate) => void
+  >;
 }
 
 export interface MonitorBootstrapRefs {
@@ -39,7 +41,9 @@ export interface MonitorBootstrapRefs {
   requestArchiveIndexRef: MutableRefObject<
     UseMonitorBootstrapOptions["requestArchiveIndex"]
   >;
-  refreshRecentSnapshotRef: MutableRefObject<(filePath: string) => void>;
+  handleRecentLiveUpdateRef: MutableRefObject<
+    (update: RecentSessionLiveUpdate) => void
+  >;
 }
 
 export interface MonitorBootstrapEffectOptions

@@ -3,14 +3,12 @@ import {
   buildDatasetActivationPatch,
   buildFollowLiveMap,
   isFixtureDatasetTraceId,
-  resolveDatasetDrawerTab,
   stripFixtureDatasets,
   upsertDataset,
 } from "./helpers";
-import { buildConnectionMap, updateLiveConnectionMap } from "./liveConnection";
+import { buildConnectionMap } from "./liveConnection";
 import {
   buildRecentIndexSelectionPatch,
-  resolveSelectionAfterRecentRefresh,
 } from "./recentRequestSelection";
 import { createSelectionLoadState } from "./selectionLoadState";
 import type { MonitorState } from "./types";
@@ -144,43 +142,6 @@ export function resolveRecentSnapshotRequest(
   return {
     ...nextState,
     ...buildDatasetActivationPatch(nextState, dataset),
-  };
-}
-
-export function refreshRecentSnapshot(
-  state: MonitorState,
-  filePath: string,
-  dataset: MonitorState["datasets"][number],
-): MonitorState {
-  const nextFollowLive =
-    dataset.run.liveMode === "live"
-      ? (state.followLiveByRunId[dataset.run.traceId] ?? true)
-      : false;
-  const { [dataset.run.traceId]: _removedConnection, ...remainingConnections } =
-    state.liveConnectionByRunId;
-
-  return {
-    ...state,
-    hydratedDatasetsByFilePath: {
-      ...state.hydratedDatasetsByFilePath,
-      [filePath]: dataset,
-    },
-    datasets: upsertDataset(state, dataset),
-    followLiveByRunId: {
-      ...state.followLiveByRunId,
-      [dataset.run.traceId]: nextFollowLive,
-    },
-    liveConnectionByRunId:
-      dataset.run.liveMode === "live"
-        ? updateLiveConnectionMap({
-            liveConnectionByRunId: state.liveConnectionByRunId,
-            traceId: dataset.run.traceId,
-            dataset,
-            followLive: nextFollowLive,
-          })
-        : remainingConnections,
-    selection: resolveSelectionAfterRecentRefresh(state, dataset, nextFollowLive),
-    ...resolveDatasetDrawerTab(state, dataset),
   };
 }
 

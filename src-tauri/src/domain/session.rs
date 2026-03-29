@@ -107,3 +107,28 @@ pub(crate) struct SkillInvocationRecord {
 pub(crate) struct SkillActivityScanResult {
     pub(crate) invocations: Vec<SkillInvocationRecord>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum RecentSessionLiveConnection {
+    Live,
+    Stale,
+    Disconnected,
+    Reconnected,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecentSessionLiveSubscription {
+    pub(crate) subscription_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecentSessionLiveUpdate {
+    pub(crate) subscription_id: String,
+    pub(crate) file_path: String,
+    pub(crate) connection: RecentSessionLiveConnection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) snapshot: Option<SessionLogSnapshot>,
+}

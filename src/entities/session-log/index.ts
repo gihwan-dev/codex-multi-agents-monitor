@@ -1,3 +1,4 @@
+export { subscribeRecentSessionLive } from "./api/liveTransport";
 export * from "./api/loaders";
 export {
   deriveArchiveIndexTitle,
@@ -10,6 +11,9 @@ export type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
   RecentSessionIndexItem,
+  RecentSessionLiveConnection,
+  RecentSessionLiveSubscription,
+  RecentSessionLiveUpdate,
   SessionEntrySnapshot,
   SessionLogSnapshot,
   SubagentSnapshot,

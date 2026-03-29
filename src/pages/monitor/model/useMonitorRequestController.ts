@@ -20,6 +20,7 @@ export function useMonitorRequestController({
   const cancelPendingSelectionLoad = useCancelPendingSelectionLoad({
     dispatch,
     recentSnapshotRequestIdRef: requestRefs.recentSnapshotRequestIdRef,
+    recentLiveUpdateSequenceRef: requestRefs.recentLiveUpdateSequenceRef,
     archiveSnapshotRequestIdRef: requestRefs.archiveSnapshotRequestIdRef,
   });
   const recentRequests = useRecentMonitorRequests({
@@ -27,7 +28,7 @@ export function useMonitorRequestController({
     dispatch,
     cancelPendingSelectionLoad,
     recentSnapshotRequestIdRef: requestRefs.recentSnapshotRequestIdRef,
-    recentLiveRefreshInFlightRef: requestRefs.recentLiveRefreshInFlightRef,
+    recentLiveUpdateSequenceRef: requestRefs.recentLiveUpdateSequenceRef,
   });
   const archiveRequests = useArchiveMonitorRequests({
     state,
