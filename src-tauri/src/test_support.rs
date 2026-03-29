@@ -112,6 +112,11 @@ pub(crate) fn create_state_database(path: &Path, archived_ids: &[&str]) {
                 title TEXT NOT NULL DEFAULT '',
                 first_user_message TEXT NOT NULL DEFAULT '',
                 archived INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE thread_spawn_edges (
+                parent_thread_id TEXT NOT NULL,
+                child_thread_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'closed'
             );",
         )
         .expect("threads table should be created");
@@ -175,6 +180,20 @@ pub(crate) fn insert_thread_row_with_archive_flag(
             ),
         )
         .expect("thread row should be inserted");
+}
+
+pub(crate) fn insert_thread_spawn_edge(path: &Path, parent_thread_id: &str, child_thread_id: &str) {
+    let connection = Connection::open(path).expect("state database should open");
+    connection
+        .execute(
+            "INSERT INTO thread_spawn_edges (
+                parent_thread_id,
+                child_thread_id,
+                status
+            ) VALUES (?1, ?2, 'closed')",
+            (parent_thread_id, child_thread_id),
+        )
+        .expect("thread spawn edge should be inserted");
 }
 
 pub(crate) fn write_session_lines<I, S>(path: &Path, lines: I)

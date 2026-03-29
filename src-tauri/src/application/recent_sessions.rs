@@ -1,5 +1,8 @@
 use crate::{
-    application::workspace_identity::resolve_live_session_workspace_identity,
+    application::{
+        session_relationships::load_snapshot_subagents,
+        workspace_identity::resolve_live_session_workspace_identity,
+    },
     domain::{
         ingest_policy::{
             is_supported_live_session_source, should_hide_recent_boot_thread, LIVE_SESSION_SOURCES,
@@ -10,12 +13,11 @@ use crate::{
         workspace::WorkspaceIdentity,
     },
     infrastructure::{
-        filesystem::{collect_jsonl_files, resolve_codex_home, resolve_projects_root},
+        filesystem::{resolve_codex_home, resolve_projects_root},
         session_jsonl::{
-            parse_live_session_snapshot, parse_recent_index_entry, read_subagent_snapshot,
-            RecentIndexParseOptions,
+            parse_live_session_snapshot, parse_recent_index_entry, RecentIndexParseOptions,
         },
-        state_sqlite::{load_live_thread_rows, LiveThreadRow},
+        state_sqlite::{load_live_thread_rows, load_thread_subagent_hints, LiveThreadRow},
     },
 };
 use std::{
@@ -33,6 +35,7 @@ struct LiveSessionCandidate {
 
 struct RecentSnapshotSelection {
     candidate: LiveSessionCandidate,
+    codex_home: PathBuf,
     sessions_root: PathBuf,
     projects_root: PathBuf,
 }
@@ -72,11 +75,14 @@ pub(crate) fn load_recent_session_snapshot_from_disk(
     let mut snapshot =
         build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
             .ok()??;
-    append_recent_subagents(
-        &mut snapshot,
+    let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
+    snapshot.subagents = load_snapshot_subagents(
+        &snapshot,
         &selection.sessions_root,
         &selection.candidate.file_path,
-    )?;
+        &relationship_hints,
+    )
+    .ok()?;
 
     Some(snapshot)
 }
@@ -202,14 +208,15 @@ fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSe
     let projects_root = resolve_projects_root().ok()?;
     let sessions_root = codex_home.join("sessions");
     let canonical_path = resolve_recent_snapshot_path(file_path, &sessions_root)?;
-    let candidates = load_live_session_candidates(&codex_home, &sessions_root, &projects_root)
-        .ok()?;
+    let candidates =
+        load_live_session_candidates(&codex_home, &sessions_root, &projects_root).ok()?;
     let candidate = candidates
         .into_iter()
         .find(|item| item.file_path == canonical_path)?;
 
     Some(RecentSnapshotSelection {
         candidate,
+        codex_home,
         sessions_root,
         projects_root,
     })
@@ -226,55 +233,6 @@ fn resolve_recent_snapshot_path(file_path: &str, sessions_root: &Path) -> Option
     }
 }
 
-fn append_recent_subagents(
-    snapshot: &mut SessionLogSnapshot,
-    sessions_root: &Path,
-    selected_file: &Path,
-) -> Option<()> {
-    let mut session_files = Vec::new();
-    collect_jsonl_files(sessions_root, &mut session_files).ok()?;
-
-    for session_file in &session_files {
-        append_matching_subagent(snapshot, selected_file, session_file);
-    }
-
-    Some(())
-}
-
-fn append_matching_subagent(
-    snapshot: &mut SessionLogSnapshot,
-    selected_file: &Path,
-    session_file: &Path,
-) {
-    if fs::canonicalize(session_file).ok().as_deref() == Some(selected_file) {
-        return;
-    }
-
-    let Ok(Some(subagent)) = read_subagent_snapshot(session_file) else {
-        return;
-    };
-
-    if is_related_subagent(snapshot, &subagent.parent_thread_id) {
-        snapshot.subagents.push(subagent);
-    }
-}
-
-fn is_related_subagent(snapshot: &SessionLogSnapshot, parent_thread_id: &str) -> bool {
-    subagent_matches_session(snapshot, parent_thread_id)
-        || subagent_matches_fork_origin(snapshot, parent_thread_id)
-}
-
-fn subagent_matches_session(snapshot: &SessionLogSnapshot, parent_thread_id: &str) -> bool {
-    parent_thread_id == snapshot.session_id
-}
-
-fn subagent_matches_fork_origin(snapshot: &SessionLogSnapshot, parent_thread_id: &str) -> bool {
-    snapshot
-        .forked_from_id
-        .as_ref()
-        .is_some_and(|forked_from_id| parent_thread_id == forked_from_id)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{load_recent_session_index_from_disk, load_recent_session_snapshot_from_disk};
@@ -283,8 +241,9 @@ mod tests {
         domain::session::RecentSessionIndexItem,
         test_support::{
             create_git_workspace, create_linked_worktree, create_state_database, insert_thread_row,
-            insert_thread_row_with_archive_flag, session_meta_line, session_meta_line_with_fork,
-            session_meta_line_with_source, write_session_lines, RecentSessionTestContext,
+            insert_thread_row_with_archive_flag, insert_thread_spawn_edge, session_meta_line,
+            session_meta_line_with_fork, session_meta_line_with_source,
+            session_meta_line_with_source_and_fork, write_session_lines, RecentSessionTestContext,
         },
     };
     use std::{fs, path::Path};
@@ -301,8 +260,12 @@ mod tests {
         r##"{"timestamp":"2026-03-20T00:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"List the instruction sources you loaded."}]}}"##,
     ];
 
-    const ARCHIVED_THREAD_MESSAGE: &[&str] = &[r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived thread should stay hidden"}]}}"#];
-    const VISIBLE_THREAD_MESSAGE: &[&str] = &[r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Visible thread should remain"}]}}"#];
+    const ARCHIVED_THREAD_MESSAGE: &[&str] = &[
+        r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived thread should stay hidden"}]}}"#,
+    ];
+    const VISIBLE_THREAD_MESSAGE: &[&str] = &[
+        r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Visible thread should remain"}]}}"#,
+    ];
     const SELECTED_SESSION_EVENTS: &[&str] = &[
         r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#,
         r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Inspect only this session"}]}}"#,
@@ -390,7 +353,10 @@ mod tests {
         create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
-            session_lines(session_meta_line("session-001", &workspace_path), LIGHTWEIGHT_SCAN_EVENTS),
+            session_lines(
+                session_meta_line("session-001", &workspace_path),
+                LIGHTWEIGHT_SCAN_EVENTS,
+            ),
         );
         insert_thread_row(
             &state_database,
@@ -832,7 +798,10 @@ mod tests {
             ),
         );
         write_session_lines(&matched_subagent_file, owned_lines(MATCHED_SUBAGENT_EVENTS));
-        write_session_lines(&unrelated_subagent_file, owned_lines(UNRELATED_SUBAGENT_EVENTS));
+        write_session_lines(
+            &unrelated_subagent_file,
+            owned_lines(UNRELATED_SUBAGENT_EVENTS),
+        );
         insert_thread_row(
             &state_database,
             "session-001",
@@ -841,6 +810,7 @@ mod tests {
             &workspace_path,
             1_742_428_802,
         );
+        insert_thread_spawn_edge(&state_database, "session-001", "sub-001");
 
         let snapshot = load_recent_snapshot(&selected_file);
 
@@ -848,5 +818,101 @@ mod tests {
         assert_eq!(snapshot.subagents.len(), 1);
         assert_eq!(snapshot.subagents[0].session_id, "sub-001");
         assert_eq!(snapshot.subagents[0].agent_nickname, "Euler");
+    }
+
+    #[test]
+    fn attaches_subagent_when_parent_matches_fork_origin() {
+        let ctx = RecentSessionTestContext::new("recent-detail-fork-origin");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let selected_file = ctx.sessions_root.join("selected-fork-origin.jsonl");
+        let matched_subagent_file = ctx.sessions_root.join("matched-fork-origin-sub.jsonl");
+        let state_database = ctx.codex_home.join("state_13.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &selected_file,
+            session_lines(
+                session_meta_line_with_fork("session-001", &workspace_path, Some("fork-001")),
+                SELECTED_SESSION_EVENTS,
+            ),
+        );
+        write_session_lines(
+            &matched_subagent_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{"id":"sub-forked","source":{"subagent":{"thread_spawn":{"parent_thread_id":"fork-001","depth":1,"agent_nickname":"Curie","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:01:00.000Z"}}"#,
+                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#,
+                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Fork-origin child"}]}}"#,
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-001",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
+        );
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(snapshot.subagents[0].session_id, "sub-forked");
+        assert_eq!(snapshot.subagents[0].parent_thread_id, "fork-001");
+    }
+
+    #[test]
+    fn attaches_subagent_from_sqlite_source_provenance_when_edges_are_missing() {
+        let ctx = RecentSessionTestContext::new("recent-detail-sqlite-source");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let selected_file = ctx.sessions_root.join("selected-source-provenance.jsonl");
+        let matched_subagent_file = ctx.sessions_root.join("sqlite-source-sub.jsonl");
+        let state_database = ctx.codex_home.join("state_14.sqlite");
+        let serialized_source = r#"{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Gauss","agent_role":"worker"}}}"#;
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &selected_file,
+            session_lines(
+                session_meta_line_with_source_and_fork(
+                    "session-001",
+                    &workspace_path,
+                    "desktop",
+                    None,
+                ),
+                SELECTED_SESSION_EVENTS,
+            ),
+        );
+        write_session_lines(
+            &matched_subagent_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{"id":"sub-sqlite-source","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Gauss","agent_role":"worker"}}},"cwd":"/tmp/test","timestamp":"2026-03-20T00:01:00.000Z"}}"#,
+                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"turn_context","payload":{"model":"gpt-5-mini"}}"#,
+                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"SQLite provenance child"}]}}"#,
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-001",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
+        );
+        insert_thread_row(
+            &state_database,
+            "sub-sqlite-source",
+            &matched_subagent_file,
+            serialized_source,
+            &workspace_path,
+            1_742_428_804,
+        );
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(snapshot.subagents[0].session_id, "sub-sqlite-source");
+        assert_eq!(snapshot.subagents[0].agent_nickname, "Gauss");
     }
 }
