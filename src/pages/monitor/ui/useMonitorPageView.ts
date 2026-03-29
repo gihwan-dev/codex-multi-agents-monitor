@@ -3,7 +3,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import {
   type DrawerTab,
@@ -14,6 +13,10 @@ import { useCompactViewport } from "../lib/useCompactViewport";
 import { useSearchFocusShortcut } from "../lib/useSearchFocusShortcut";
 import { useMonitorPageState } from "../model/useMonitorPageState";
 import { usePreservedChromeState } from "./usePreservedChromeState";
+import {
+  resolveInitialViewportFocusEventId,
+  useViewportFocusState,
+} from "./useViewportFocusState";
 
 function resolveFocusTarget(target?: HTMLElement | null) {
   if (target) {
@@ -172,25 +175,13 @@ function useMonitorPageChromeBindings(
   };
 }
 
-function useViewportFocusState(activeTraceId: string | null) {
-  const [viewportFocusEventId, setViewportFocusEventId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeTraceId) {
-      setViewportFocusEventId(null);
-      return;
-    }
-
-    setViewportFocusEventId(null);
-  }, [activeTraceId]);
-
-  return { viewportFocusEventId, setViewportFocusEventId };
-}
-
 export function useMonitorPageView() {
   const pageState = useMonitorPageState();
   const searchRef = useRef<HTMLInputElement>(null);
-  const { viewportFocusEventId, setViewportFocusEventId } = useViewportFocusState(pageState.activeDataset?.run.traceId ?? null);
+  const { viewportFocusEventId, setViewportFocusEventId } = useViewportFocusState(
+    pageState.activeDataset?.run.traceId ?? null,
+    resolveInitialViewportFocusEventId(pageState.graphScene.rows),
+  );
   const { chromeView, controls } = useMonitorPageChromeBindings(
     pageState,
     viewportFocusEventId,
