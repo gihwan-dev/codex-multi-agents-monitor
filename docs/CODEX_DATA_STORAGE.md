@@ -481,10 +481,10 @@ live snapshot 하나를 열 때는 다음을 수행한다.
 2. 해당 JSONL 전체를 읽어 main session snapshot 구성
 3. SQLite `thread_spawn_edges`에서 child candidate를 먼저 읽는다.
 4. edge가 비어 있거나 sparse한 경우 `threads.source`에 직렬화된 subagent provenance를 추가 힌트로 읽는다.
-5. SQLite 힌트로 검증 가능한 child가 없을 때만 `~/.codex/sessions` 전체 JSONL을 마지막 fallback으로 재귀 스캔한다.
+5. 그 다음 `~/.codex/sessions` 전체 JSONL을 재귀 스캔해, SQLite에 없는 child도 보강한다.
 6. 실제 attach는 항상 JSONL `thread_spawn` 메타를 다시 읽어 `parent_thread_id`가 현재 session 또는 `forked_from_id`와 맞는지 검증한 뒤 수행한다.
 
-즉, live snapshot은 이제 "SQLite 힌트 우선 + JSONL 검증 + 필요 시만 전체 scan" 구조다.
+즉, live snapshot은 이제 "SQLite 힌트 우선 + 전체 JSONL 보강 + JSONL 최종 검증" 구조다.
 
 ### Archived Index
 
@@ -506,7 +506,8 @@ archived snapshot은 live보다 좁은 범위를 훑는다.
 2. 대상 archived JSONL 전체를 읽어 main snapshot 구성
 3. live snapshot과 같은 subagent resolver를 호출한다.
 4. SQLite `thread_spawn_edges`와 `threads.source`에서 archived root와 매칭되는 child 힌트를 먼저 시도한다.
-5. SQLite 힌트로 검증 가능한 child가 없을 때만 `~/.codex/archived_sessions` 전체를 재귀 스캔한다.
+5. 그 다음 `~/.codex/archived_sessions` 전체를 재귀 스캔해, SQLite에 없는 child도 보강한다.
+6. subagent 탐색 중 오류가 나도 main archived snapshot은 best-effort로 유지하고, child list만 비어 있을 수 있다.
 
 즉, archived snapshot도 sibling-only heuristic 대신 shared relationship policy를 사용한다. root discovery는 여전히 archived JSONL 스캔이 source of truth지만, subagent attachment는 live와 같은 규칙으로 정리됐다.
 

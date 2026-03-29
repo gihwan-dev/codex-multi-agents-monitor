@@ -31,7 +31,6 @@ pub(crate) fn load_snapshot_subagents(
         &canonical_root,
         HintSource::Source,
     );
-    let hinted_candidates_found = !edge_candidates.is_empty() || !source_candidates.is_empty();
     let mut attached_session_ids = HashSet::new();
     let mut visited_paths = HashSet::new();
     let mut subagents = Vec::new();
@@ -47,21 +46,19 @@ pub(crate) fn load_snapshot_subagents(
         );
     }
 
-    if !hinted_candidates_found || subagents.is_empty() {
-        let mut fallback_files = Vec::new();
-        collect_jsonl_files(&canonical_root, &mut fallback_files)?;
-        fallback_files.sort();
+    let mut fallback_files = Vec::new();
+    collect_jsonl_files(&canonical_root, &mut fallback_files)?;
+    fallback_files.sort();
 
-        for candidate_path in fallback_files {
-            append_subagent_if_related(
-                snapshot,
-                &canonical_selected,
-                candidate_path,
-                &mut visited_paths,
-                &mut attached_session_ids,
-                &mut subagents,
-            );
-        }
+    for candidate_path in fallback_files {
+        append_subagent_if_related(
+            snapshot,
+            &canonical_selected,
+            candidate_path,
+            &mut visited_paths,
+            &mut attached_session_ids,
+            &mut subagents,
+        );
     }
 
     Ok(subagents)
@@ -146,4 +143,101 @@ fn matches_parent_thread_id(snapshot: &SessionLogSnapshot, parent_thread_id: &st
             .forked_from_id
             .as_ref()
             .is_some_and(|forked_from_id| parent_thread_id == forked_from_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_snapshot_subagents;
+    use crate::{
+        domain::session::SessionLogSnapshot,
+        infrastructure::state_sqlite::ThreadSubagentHint,
+        test_support::{write_session_lines, TempDir},
+    };
+
+    fn test_snapshot(session_id: &str) -> SessionLogSnapshot {
+        SessionLogSnapshot {
+            session_id: session_id.to_owned(),
+            forked_from_id: None,
+            workspace_path: "/tmp/workspace".to_owned(),
+            origin_path: "/tmp/workspace".to_owned(),
+            display_name: "workspace".to_owned(),
+            started_at: "2026-03-20T00:00:00.000Z".to_owned(),
+            updated_at: "2026-03-20T00:00:00.000Z".to_owned(),
+            model: None,
+            entries: Vec::new(),
+            subagents: Vec::new(),
+            is_archived: false,
+            prompt_assembly: Vec::new(),
+        }
+    }
+
+    fn write_subagent_file(
+        path: &std::path::Path,
+        session_id: &str,
+        parent_thread_id: &str,
+        nickname: &str,
+    ) {
+        write_session_lines(
+            path,
+            [
+                format!(
+                    r#"{{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{{"id":"{session_id}","source":{{"subagent":{{"thread_spawn":{{"parent_thread_id":"{parent_thread_id}","depth":1,"agent_nickname":"{nickname}","agent_role":"worker"}}}}}},"cwd":"/tmp/workspace","timestamp":"2026-03-20T00:01:00.000Z"}}}}"#
+                ),
+                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub"}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child output"}]}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:01:03.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub","last_agent_message":"done"}}"#.to_owned(),
+            ],
+        );
+    }
+
+    #[test]
+    fn supplements_sparse_sqlite_hints_with_full_jsonl_scan() {
+        let temp_dir = TempDir::new("session-relationships-sparse");
+        let search_root = temp_dir.path.join("sessions");
+        let selected_file = search_root.join("parent.jsonl");
+        let hinted_child_file = search_root.join("child-hinted.jsonl");
+        let jsonl_only_child_file = search_root.join("nested/child-jsonl-only.jsonl");
+        let snapshot = test_snapshot("parent-001");
+
+        std::fs::create_dir_all(&search_root).expect("search root should be created");
+        std::fs::create_dir_all(
+            jsonl_only_child_file
+                .parent()
+                .expect("nested child dir should exist"),
+        )
+        .expect("nested child dir should be created");
+        write_session_lines(
+            &selected_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{"id":"parent-001","source":"desktop","cwd":"/tmp/workspace","timestamp":"2026-03-20T00:00:00.000Z"}}"#,
+            ],
+        );
+        write_subagent_file(&hinted_child_file, "child-hinted", "parent-001", "Euler");
+        write_subagent_file(
+            &jsonl_only_child_file,
+            "child-jsonl-only",
+            "parent-001",
+            "Noether",
+        );
+
+        let subagents = load_snapshot_subagents(
+            &snapshot,
+            &search_root,
+            &selected_file,
+            &[ThreadSubagentHint {
+                rollout_path: hinted_child_file.display().to_string(),
+                edge_parent_thread_id: Some("parent-001".to_owned()),
+                source_parent_thread_id: None,
+            }],
+        )
+        .expect("subagents should load");
+
+        assert_eq!(subagents.len(), 2);
+        assert!(subagents
+            .iter()
+            .any(|subagent| subagent.session_id == "child-hinted"));
+        assert!(subagents
+            .iter()
+            .any(|subagent| subagent.session_id == "child-jsonl-only"));
+    }
 }

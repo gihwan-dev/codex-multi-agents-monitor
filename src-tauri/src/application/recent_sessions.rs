@@ -915,4 +915,55 @@ mod tests {
         assert_eq!(snapshot.subagents[0].session_id, "sub-sqlite-source");
         assert_eq!(snapshot.subagents[0].agent_nickname, "Gauss");
     }
+
+    #[test]
+    fn attaches_late_subagent_without_absorbing_resumed_parent_entries() {
+        let ctx = RecentSessionTestContext::new("recent-detail-late-subagent");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let selected_file = ctx.sessions_root.join("selected-late-subagent.jsonl");
+        let late_subagent_file = ctx.sessions_root.join("late-subagent.jsonl");
+        let state_database = ctx.codex_home.join("state_15.sqlite");
+
+        create_git_workspace(&workspace_path);
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &selected_file,
+            session_lines(
+                session_meta_line("session-001", &workspace_path),
+                SELECTED_SESSION_EVENTS,
+            ),
+        );
+        write_session_lines(
+            &late_subagent_file,
+            [
+                r#"{"timestamp":"2026-03-18T09:12:02.000Z","type":"session_meta","payload":{"id":"parent-001","source":"vscode","cwd":"/tmp/test","timestamp":"2026-03-18T09:12:02.000Z"}}"#,
+                r#"{"timestamp":"2026-03-18T09:12:03.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p1"}}"#,
+                r#"{"timestamp":"2026-03-18T09:12:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent prelude"}]}}"#,
+                r#"{"timestamp":"2026-03-18T09:14:09.000Z","type":"session_meta","payload":{"id":"sub-late-live","forked_from_id":"session-001","source":{"subagent":{"thread_spawn":{"parent_thread_id":"session-001","depth":1,"agent_nickname":"Ada","agent_role":"explorer"}}},"cwd":"/tmp/test","timestamp":"2026-03-18T09:14:09.000Z"}}"#,
+                r#"{"timestamp":"2026-03-18T09:14:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub-1"}}"#,
+                r#"{"timestamp":"2026-03-18T09:14:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child work"}]}}"#,
+                r#"{"timestamp":"2026-03-18T09:14:30.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-sub-1","last_agent_message":"done"}}"#,
+                r#"{"timestamp":"2026-03-18T09:15:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-p2"}}"#,
+                r#"{"timestamp":"2026-03-18T09:15:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Parent resumed"}]}}"#,
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-001",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_805,
+        );
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(snapshot.subagents[0].session_id, "sub-late-live");
+        assert_eq!(snapshot.subagents[0].entries.len(), 3);
+        assert_eq!(
+            snapshot.subagents[0].entries[1].text.as_deref(),
+            Some("Child work")
+        );
+    }
 }

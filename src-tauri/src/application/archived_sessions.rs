@@ -52,16 +52,26 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     }
 
     let mut snapshot = build_archived_session_snapshot(path).ok()??;
-    let relationship_hints = load_thread_subagent_hints(&codex_home).unwrap_or_default();
-    snapshot.subagents = load_snapshot_subagents(
+    snapshot.subagents = load_archived_subagents_best_effort(
         &snapshot,
         &archived_root,
         &canonical_path,
-        &relationship_hints,
-    )
-    .ok()?;
+        &codex_home,
+    );
 
     Some(snapshot)
+}
+
+fn load_archived_subagents_best_effort(
+    snapshot: &SessionLogSnapshot,
+    archived_root: &Path,
+    canonical_path: &Path,
+    codex_home: &Path,
+) -> Vec<crate::domain::session::SubagentSnapshot> {
+    let relationship_hints = load_thread_subagent_hints(codex_home).unwrap_or_default();
+
+    load_snapshot_subagents(snapshot, archived_root, canonical_path, &relationship_hints)
+        .unwrap_or_default()
 }
 
 fn collect_archived_session_files(archived_root: &Path) -> io::Result<Vec<PathBuf>> {
@@ -124,10 +134,12 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
 
 #[cfg(test)]
 mod tests {
-    use super::load_archived_session_snapshot_from_disk;
+    use super::{load_archived_session_snapshot_from_disk, load_archived_subagents_best_effort};
+    use crate::domain::session::SessionLogSnapshot;
     use crate::test_support::{
         session_meta_line_with_fork, write_session_lines, RecentSessionTestContext,
     };
+    use std::path::Path;
 
     #[test]
     fn loads_archived_subagents_from_nested_paths_with_shared_relationship_resolution() {
@@ -170,5 +182,32 @@ mod tests {
         assert_eq!(snapshot.subagents.len(), 1);
         assert_eq!(snapshot.subagents[0].session_id, "archived-child");
         assert_eq!(snapshot.subagents[0].parent_thread_id, "fork-root");
+    }
+
+    #[test]
+    fn archived_subagent_loading_is_best_effort_on_resolver_errors() {
+        let snapshot = SessionLogSnapshot {
+            session_id: "archived-parent".to_owned(),
+            forked_from_id: None,
+            workspace_path: "/tmp/workspace".to_owned(),
+            origin_path: "/tmp/workspace".to_owned(),
+            display_name: "workspace".to_owned(),
+            started_at: "2026-03-20T00:00:00.000Z".to_owned(),
+            updated_at: "2026-03-20T00:00:00.000Z".to_owned(),
+            model: None,
+            entries: Vec::new(),
+            subagents: Vec::new(),
+            is_archived: true,
+            prompt_assembly: Vec::new(),
+        };
+
+        let subagents = load_archived_subagents_best_effort(
+            &snapshot,
+            Path::new("/definitely/missing/archived-root"),
+            Path::new("/definitely/missing/archived-root/parent.jsonl"),
+            Path::new("/definitely/missing/codex-home"),
+        );
+
+        assert!(subagents.is_empty());
     }
 }
