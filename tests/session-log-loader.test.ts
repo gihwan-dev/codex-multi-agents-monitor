@@ -2229,6 +2229,36 @@ describe("token_count enrichment", () => {
     expect(dataset.run.summaryMetrics.tokens).toBe(20090 + 1047);
   });
 
+  it("normalizes legacy flat token_count payloads as per-event usage without inventing totals", () => {
+    const entries: SessionEntrySnapshot[] = [
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
+      makeMessageEntry("2026-03-19T10:00:02.000Z", "assistant", "Working on it"),
+      {
+        timestamp: "2026-03-19T10:00:03.000Z",
+        entryType: "token_count",
+        role: null,
+        text: '{"in":100,"cached":40,"out":20,"reasoning":5,"total":120}',
+        functionName: null,
+        functionCallId: null,
+        functionArgumentsPreview: null,
+      },
+    ];
+
+    const dataset = expectDataset(buildSnapshot(entries));
+    const assistantNote = expectEvent(
+      dataset,
+      (event) => event.eventType === "note" && event.title === "Assistant",
+      "assistant note should exist",
+    );
+
+    expect(assistantNote.tokensIn).toBe(100);
+    expect(assistantNote.tokensOut).toBe(20);
+    expect(assistantNote.reasoningTokens).toBe(5);
+    expect(assistantNote.cacheReadTokens).toBe(40);
+    expect(assistantNote.measuredContextWindowTokens).toBeNull();
+    expect(assistantNote.measuredCumulativeTokens).toBeNull();
+  });
+
   it("does not create visible events for token_count entries", () => {
     const entries: SessionEntrySnapshot[] = [
       makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
@@ -2281,6 +2311,34 @@ describe("token_count enrichment", () => {
     if (!dataset) return;
 
     expect(dataset.run.maxContextWindowTokens).toBe(258_400);
+  });
+
+  it("does not promote a subagent maxContextWindowTokens value to the main run", () => {
+    const snapshot = buildSnapshot([
+      makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
+      makeMessageEntry("2026-03-19T10:00:02.000Z", "assistant", "Working on it"),
+    ]);
+    snapshot.subagents = [
+      {
+        sessionId: "subagent-1",
+        parentThreadId: snapshot.sessionId,
+        depth: 1,
+        agentNickname: "Turing",
+        agentRole: "worker",
+        model: "gpt-5-mini",
+        maxContextWindowTokens: 258_400,
+        startedAt: "2026-03-19T10:00:03.000Z",
+        updatedAt: "2026-03-19T10:00:04.000Z",
+        entries: [
+          makeMessageEntry("2026-03-19T10:00:03.000Z", "user", "Child prompt"),
+          makeMessageEntry("2026-03-19T10:00:04.000Z", "assistant", "Child reply"),
+        ],
+      },
+    ];
+
+    const dataset = expectDataset(snapshot);
+
+    expect(dataset.run.maxContextWindowTokens).toBeNull();
   });
 });
 

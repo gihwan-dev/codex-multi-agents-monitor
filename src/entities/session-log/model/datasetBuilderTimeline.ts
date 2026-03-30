@@ -70,12 +70,7 @@ function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
 }
 
 function resolveMaxContextWindowTokens(snapshot: SessionLogSnapshot) {
-  return (
-    snapshot.maxContextWindowTokens ??
-    snapshot.subagents?.find((subagent) => subagent.maxContextWindowTokens != null)
-      ?.maxContextWindowTokens ??
-    null
-  );
+  return snapshot.maxContextWindowTokens ?? null;
 }
 
 export function buildCombinedTimeline(

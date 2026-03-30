@@ -1,5 +1,6 @@
 use crate::{
     application::{
+        session_context_window::resolve_snapshot_max_context_window_tokens,
         session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
         workspace_identity::{is_conductor_workspace_path, resolve_archived_workspace_identity},
     },
@@ -8,7 +9,6 @@ use crate::{
         session::{ArchivedSessionIndex, ArchivedSessionIndexResult, SessionLogSnapshot},
     },
     infrastructure::{
-        codex_config::load_model_context_window,
         filesystem::{collect_jsonl_files, resolve_codex_home},
         session_jsonl::{parse_archived_index_entry, parse_archived_session_snapshot},
         state_sqlite::load_thread_subagent_hints,
@@ -149,21 +149,6 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
     }))
 }
 
-fn resolve_snapshot_max_context_window_tokens(
-    snapshot: &SessionLogSnapshot,
-    codex_home: &Path,
-) -> Option<u64> {
-    snapshot
-        .max_context_window_tokens
-        .or_else(|| {
-            snapshot
-                .subagents
-                .iter()
-                .find_map(|subagent| subagent.max_context_window_tokens)
-        })
-        .or_else(|| load_model_context_window(codex_home).ok().flatten())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -196,6 +181,21 @@ mod tests {
             "fork-root",
             "Turing",
             "Nested archived child",
+        );
+    }
+
+    fn write_archived_runtime_window_subagent_fixture(path: &Path, parent_thread_id: &str) {
+        write_session_lines(
+            path,
+            [
+                format!(
+                    r#"{{"timestamp":"2026-03-21T00:01:00.000Z","type":"session_meta","payload":{{"id":"archived-child","source":{{"subagent":{{"thread_spawn":{{"parent_thread_id":"{parent_thread_id}","depth":1,"agent_nickname":"Turing","agent_role":"worker"}}}}}},"cwd":"/tmp/workspace","timestamp":"2026-03-21T00:01:00.000Z"}}}}"#
+                ),
+                r#"{"timestamp":"2026-03-21T00:01:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub","model_context_window":258400}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-21T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Archived child has its own runtime window."}]}}"#
+                    .to_owned(),
+            ],
         );
     }
 
@@ -251,5 +251,37 @@ mod tests {
         );
 
         assert!(subagents.is_empty());
+    }
+
+    #[test]
+    fn archived_snapshot_does_not_promote_subagent_runtime_context_window_to_main_run() {
+        let ctx = RecentSessionTestContext::new("archived-snapshot-main-window");
+        let archived_root = ctx.codex_home.join("archived_sessions");
+        let workspace_path = ctx.temp_root.join("Archives/demo-app");
+        let selected_file = archived_root.join("2026/parent.jsonl");
+        let child_file = archived_root.join("2026/agents/child.jsonl");
+
+        write_session_lines(
+            &selected_file,
+            vec![
+                session_meta_line_with_fork("archived-parent", &workspace_path, Some("fork-root")),
+                r#"{"timestamp":"2026-03-21T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-main"}}"#
+                    .to_owned(),
+                r#"{"timestamp":"2026-03-21T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Archived parent has no runtime window."}]}}"#
+                    .to_owned(),
+            ],
+        );
+        write_archived_runtime_window_subagent_fixture(&child_file, "fork-root");
+
+        let snapshot =
+            load_archived_session_snapshot_from_disk(selected_file.to_string_lossy().as_ref())
+                .expect("archived snapshot should load");
+
+        assert_eq!(snapshot.max_context_window_tokens, None);
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(
+            snapshot.subagents[0].max_context_window_tokens,
+            Some(258_400)
+        );
     }
 }

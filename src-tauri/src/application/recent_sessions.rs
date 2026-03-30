@@ -1,5 +1,6 @@
 use crate::{
     application::{
+        session_context_window::resolve_snapshot_max_context_window_tokens,
         session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
         workspace_identity::resolve_live_session_workspace_identity,
     },
@@ -13,7 +14,6 @@ use crate::{
         workspace::WorkspaceIdentity,
     },
     infrastructure::{
-        codex_config::load_model_context_window,
         filesystem::{resolve_codex_home, resolve_projects_root},
         session_jsonl::{
             parse_live_session_snapshot, parse_recent_index_entry, RecentIndexParseOptions,
@@ -214,21 +214,6 @@ pub(crate) fn load_recent_session_snapshot(
         resolve_snapshot_max_context_window_tokens(&snapshot, &selection.codex_home);
 
     Some(snapshot)
-}
-
-fn resolve_snapshot_max_context_window_tokens(
-    snapshot: &SessionLogSnapshot,
-    codex_home: &Path,
-) -> Option<u64> {
-    snapshot
-        .max_context_window_tokens
-        .or_else(|| {
-            snapshot
-                .subagents
-                .iter()
-                .find_map(|subagent| subagent.max_context_window_tokens)
-        })
-        .or_else(|| load_model_context_window(codex_home).ok().flatten())
 }
 
 pub(crate) fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSelection> {
@@ -502,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    fn recent_snapshot_uses_subagent_runtime_context_window_when_main_is_missing() {
+    fn recent_snapshot_does_not_promote_subagent_runtime_context_window_to_main_run() {
         let (ctx, workspace_path, selected_file, state_database) =
             prepare_recent_snapshot_fixture(
                 "recent-detail-subagent-window",
@@ -525,7 +510,7 @@ mod tests {
 
         let snapshot = load_recent_snapshot(&selected_file);
 
-        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
+        assert_eq!(snapshot.max_context_window_tokens, None);
         assert_eq!(snapshot.subagents.len(), 1);
         assert_eq!(
             snapshot.subagents[0].max_context_window_tokens,
