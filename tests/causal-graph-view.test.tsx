@@ -4,6 +4,11 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGraphSceneModel, FIXTURE_DATASETS } from "../src/entities/run/index.js";
+import {
+  buildDatasetFromSessionLog,
+  type SessionEntrySnapshot,
+  type SessionLogSnapshot,
+} from "../src/entities/session-log/index.js";
 import { CausalGraphView } from "../src/widgets/causal-graph/index.js";
 
 const CLIENT_HEIGHT = 220;
@@ -25,6 +30,128 @@ function requireDataset(traceId: string) {
     throw new Error(`fixture dataset missing: ${traceId}`);
   }
   return dataset;
+}
+
+function makeMessageEntry(
+  timestamp: string,
+  role: "user" | "assistant",
+  text: string,
+): SessionEntrySnapshot {
+  return {
+    timestamp,
+    entryType: "message",
+    role,
+    text,
+    functionName: null,
+    functionCallId: null,
+    functionArgumentsPreview: null,
+  };
+}
+
+function makeTokenCountEntry(
+  timestamp: string,
+  payload: string,
+): SessionEntrySnapshot {
+  return {
+    timestamp,
+    entryType: "token_count",
+    role: null,
+    text: payload,
+    functionName: null,
+    functionCallId: null,
+    functionArgumentsPreview: null,
+  };
+}
+
+function buildMeasuredViewportDataset() {
+  const base = Date.parse("2026-03-22T09:00:00.000Z");
+  const entries: SessionEntrySnapshot[] = [];
+
+  for (let index = 0; index < 12; index += 1) {
+    const userTs = new Date(base + index * 6_000).toISOString();
+    const assistantTs = new Date(base + index * 6_000 + 2_000).toISOString();
+    const tokenTs = new Date(base + index * 6_000 + 2_100).toISOString();
+    const lastIn = 900 + index * 80;
+    const lastOut = 150 + index * 20;
+    const totalIn = 1_200 + index * 1_100;
+    const totalOut = 220 + index * 180;
+    const totalTotal = totalIn + totalOut;
+
+    entries.push(makeMessageEntry(userTs, "user", `Prompt ${index + 1}`));
+    entries.push(
+      makeMessageEntry(
+        assistantTs,
+        "assistant",
+        `Assistant response ${index + 1}`,
+      ),
+    );
+    entries.push(
+      makeTokenCountEntry(
+        tokenTs,
+        JSON.stringify({
+          last: {
+            in: lastIn,
+            cached: 0,
+            out: lastOut,
+            reasoning: 0,
+            total: lastIn + lastOut,
+          },
+          total: {
+            in: totalIn,
+            cached: 0,
+            out: totalOut,
+            reasoning: 0,
+            total: totalTotal,
+          },
+        }),
+      ),
+    );
+  }
+
+  const snapshot: SessionLogSnapshot = {
+    sessionId: "graph-context-runtime-usage",
+    workspacePath: "/projects/runtime-usage",
+    originPath: "/projects/runtime-usage",
+    displayName: "runtime-usage",
+    startedAt: new Date(base).toISOString(),
+    updatedAt: new Date(base + 12 * 6_000 + 5_000).toISOString(),
+    model: "gpt-5.4",
+    maxContextWindowTokens: null,
+    entries,
+    subagents: [],
+  };
+
+  const dataset = buildDatasetFromSessionLog(snapshot);
+  if (!dataset) {
+    throw new Error("expected measured viewport dataset");
+  }
+  return dataset;
+}
+
+function parseCompactTokenLabel(label: string | null | undefined) {
+  if (!label) {
+    return 0;
+  }
+
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "n/a" || normalized === "steady" || normalized === "reset") {
+    return 0;
+  }
+
+  const match = normalized.match(/^([0-9]+(?:\.[0-9]+)?)([km])?$/);
+  if (!match) {
+    return Number.NaN;
+  }
+
+  const value = Number(match[1]);
+  const suffix = match[2];
+  if (suffix === "m") {
+    return value * 1_000_000;
+  }
+  if (suffix === "k") {
+    return value * 1_000;
+  }
+  return value;
 }
 
 beforeEach(() => {
@@ -221,7 +348,7 @@ describe("CausalGraphView selection reveal", () => {
     );
   });
 
-  it("renders an in-graph context rail that follows the visible event while scrolling", async () => {
+  it("hides the in-graph context card when no measured runtime usage exists", async () => {
     const dataset = requireDataset("trace-fix-002");
     const scene = buildGraphSceneModel(dataset, null);
 
@@ -243,6 +370,47 @@ describe("CausalGraphView selection reveal", () => {
       );
     });
 
+    expect(container.querySelector('[data-slot="graph-context-card-overlay"]')).toBeNull();
+  });
+
+  it("renders a measured-only cumulative context card without progress or delta copy", async () => {
+    const dataset = buildMeasuredViewportDataset();
+    const scene = buildGraphSceneModel(dataset, null);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const scrollElement = container.querySelector('[data-slot="graph-scroll"]');
+    expect(scrollElement).not.toBeNull();
+    if (!scrollElement) {
+      throw new Error("graph scroll area missing");
+    }
+
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 420,
+    });
+
+    await act(async () => {
+      scrollElement.dispatchEvent(new Event("scroll"));
+    });
+
     const overlay = container.querySelector('[data-slot="graph-context-card-overlay"]');
     expect(overlay).not.toBeNull();
     expect(container.querySelector('[data-slot="graph-context-card"]')).not.toBeNull();
@@ -252,6 +420,37 @@ describe("CausalGraphView selection reveal", () => {
     expect(
       container.querySelector('[data-slot="graph-context-card-cause"]')?.textContent,
     ).toBeTruthy();
+    expect(
+      container.querySelector('[data-slot="graph-context-card-cumulative"]')?.textContent,
+    ).toBeTruthy();
+    expect(container.querySelector('[data-slot="graph-context-card-progress-fill"]')).toBeNull();
+    expect(container.querySelector('[data-slot="graph-context-card-progress-label"]')).toBeNull();
+    expect(container.querySelector('[data-slot="graph-context-card-limit"]')).toBeNull();
+    expect(container.querySelector('[data-slot="graph-context-card-change"]')).toBeNull();
+    expect(container.textContent).not.toContain("limit unavailable");
+  });
+
+  it("does not increase the displayed cumulative usage when scrolling back to an earlier viewport event", async () => {
+    const dataset = buildMeasuredViewportDataset();
+    const scene = buildGraphSceneModel(dataset, null);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
 
     const scrollElement = container.querySelector('[data-slot="graph-scroll"]');
     expect(scrollElement).not.toBeNull();
@@ -259,22 +458,37 @@ describe("CausalGraphView selection reveal", () => {
       throw new Error("graph scroll area missing");
     }
 
-    const initialEventLabel =
-      container.querySelector('[data-slot="graph-context-card-event"]')?.textContent ?? "";
-
     Object.defineProperty(scrollElement, "scrollTop", {
       configurable: true,
       writable: true,
-      value: 1200,
+      value: 1400,
     });
 
     await act(async () => {
       scrollElement.dispatchEvent(new Event("scroll"));
     });
 
-    expect(container.querySelector('[data-slot="graph-context-card-event"]')?.textContent).not.toBe(
-      initialEventLabel,
-    );
+    const laterCumulativeLabel =
+      container.querySelector('[data-slot="graph-context-card-cumulative"]')?.textContent;
+    const laterCumulativeValue = parseCompactTokenLabel(laterCumulativeLabel);
+
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    await act(async () => {
+      scrollElement.dispatchEvent(new Event("scroll"));
+    });
+
+    const earlierCumulativeLabel =
+      container.querySelector('[data-slot="graph-context-card-cumulative"]')?.textContent;
+    const earlierCumulativeValue = parseCompactTokenLabel(earlierCumulativeLabel);
+
+    expect(earlierCumulativeValue).not.toBeNaN();
+    expect(laterCumulativeValue).not.toBeNaN();
+    expect(earlierCumulativeValue).toBeLessThanOrEqual(laterCumulativeValue);
   });
 
   it("scrolls when a navigation request targets an offscreen event", async () => {

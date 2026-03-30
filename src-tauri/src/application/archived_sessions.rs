@@ -53,7 +53,6 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     }
 
     let mut snapshot = build_archived_session_snapshot(path).ok()??;
-    snapshot.max_context_window_tokens = load_model_context_window(&codex_home).ok().flatten();
     snapshot.subagents = load_archived_subagents_best_effort(
         &snapshot,
         &ArchivedSubagentScope {
@@ -62,6 +61,8 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
             codex_home: &codex_home,
         },
     );
+    snapshot.max_context_window_tokens =
+        resolve_snapshot_max_context_window_tokens(&snapshot, &codex_home);
 
     Some(snapshot)
 }
@@ -139,13 +140,28 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
-            max_context_window_tokens: None,
+            max_context_window_tokens: parsed.max_context_window_tokens,
             entries: parsed.entries,
             subagents: Vec::new(),
             is_archived: true,
             prompt_assembly: parsed.prompt_assembly,
         }
     }))
+}
+
+fn resolve_snapshot_max_context_window_tokens(
+    snapshot: &SessionLogSnapshot,
+    codex_home: &Path,
+) -> Option<u64> {
+    snapshot
+        .max_context_window_tokens
+        .or_else(|| {
+            snapshot
+                .subagents
+                .iter()
+                .find_map(|subagent| subagent.max_context_window_tokens)
+        })
+        .or_else(|| load_model_context_window(codex_home).ok().flatten())
 }
 
 #[cfg(test)]

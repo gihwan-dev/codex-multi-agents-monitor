@@ -10,6 +10,8 @@ export interface ContextTimelinePoint {
   totalTokens: number;
   cumulativeContextTokens: number;
   contextWindowTokens: number;
+  hasMeasuredContextState: boolean;
+  hasMeasuredRuntimeUsage: boolean;
   hasCompaction: boolean;
 }
 

@@ -17,6 +17,7 @@ export interface SubagentSnapshot {
   agentNickname: string;
   agentRole: string;
   model: string | null;
+  maxContextWindowTokens?: number | null;
   startedAt: string;
   updatedAt: string;
   entries: SessionEntrySnapshot[];

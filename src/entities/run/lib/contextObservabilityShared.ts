@@ -16,11 +16,15 @@ export interface LaneSummaryCandidate {
 export const CROSS_LANE_RETURN_EDGE_TYPES = new Set(["handoff", "merge", "transfer"]);
 
 export function resolveMeasuredContextWindowTokens(event: EventRecord) {
-  return event.tokensIn + event.cacheReadTokens;
+  return event.measuredContextWindowTokens ?? null;
+}
+
+export function resolveMeasuredCumulativeTokens(event: EventRecord) {
+  return event.measuredCumulativeTokens ?? null;
 }
 
 export function resolveTotalTokens(event: EventRecord) {
-  return event.tokensIn + event.tokensOut + event.reasoningTokens;
+  return event.tokensIn + event.tokensOut;
 }
 
 export function isCompactionEvent(event: EventRecord) {

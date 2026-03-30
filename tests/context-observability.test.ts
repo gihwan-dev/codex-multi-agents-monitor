@@ -108,7 +108,7 @@ function buildObservabilitySnapshot(): SessionLogSnapshot {
         ),
         makeTokenCountEntry(
           "2026-03-18T10:00:18.100Z",
-          '{"in":500,"out":120,"reasoning":20}',
+          '{"last":{"in":500,"cached":0,"out":120,"reasoning":20,"total":620},"total":{"in":500,"cached":0,"out":120,"reasoning":20,"total":620}}',
         ),
         makeCompactionEntry(
           "2026-03-18T10:00:25.000Z",
@@ -121,7 +121,7 @@ function buildObservabilitySnapshot(): SessionLogSnapshot {
         ),
         makeTokenCountEntry(
           "2026-03-18T10:00:34.100Z",
-          '{"in":300,"cached":40,"out":60}',
+          '{"last":{"in":300,"cached":40,"out":60,"reasoning":0,"total":360},"total":{"in":300,"cached":40,"out":180,"reasoning":20,"total":980}}',
         ),
       ],
     },
@@ -149,7 +149,7 @@ function buildObservabilitySnapshot(): SessionLogSnapshot {
       ),
       makeTokenCountEntry(
         "2026-03-18T10:00:05.100Z",
-        '{"in":1200,"cached":300,"out":180,"reasoning":40}',
+        '{"last":{"in":1200,"cached":300,"out":180,"reasoning":40,"total":1380},"total":{"in":1200,"cached":300,"out":180,"reasoning":40,"total":1380}}',
       ),
       makeFunctionCallEntry(
         "2026-03-18T10:00:08.000Z",
@@ -157,7 +157,10 @@ function buildObservabilitySnapshot(): SessionLogSnapshot {
         "spawn-hume",
         '{"id":"sub-hume","agent_type":"reviewer","nickname":"Hume"}',
       ),
-      makeTokenCountEntry("2026-03-18T10:00:08.100Z", '{"in":1400,"out":20}'),
+      makeTokenCountEntry(
+        "2026-03-18T10:00:08.100Z",
+        '{"last":{"in":1400,"cached":0,"out":20,"reasoning":0,"total":1420},"total":{"in":1400,"cached":0,"out":200,"reasoning":40,"total":2800}}',
+      ),
       makeFunctionCallEntry(
         "2026-03-18T10:00:42.000Z",
         "wait_agent",
@@ -200,13 +203,14 @@ describe("context observability bundle", () => {
     }
 
     expect(selectedRow.totalTokens).toBe(360);
-    expect(selectedRow.contextWindowTokens).toBe(340);
+    expect(selectedRow.contextWindowTokens).toBe(300);
     expect(selectedRow.hasCompaction).toBe(false);
-    expect(selectedRow.cumulativeContextTokens).toBeGreaterThan(selectedRow.totalTokens);
+    expect(selectedRow.cumulativeContextTokens).toBe(980);
 
     expect(scene.contextObservability.activeEventId).toBe(selectedEvent.eventId);
     expect(scene.contextObservability.activeSource).toBe("selection");
-    expect(scene.contextObservability.activeContextWindowTokens).toBe(340);
+    expect(scene.contextObservability.activeContextWindowTokens).toBe(300);
+    expect(scene.contextObservability.activeCumulativeContextTokens).toBe(980);
     expect(scene.contextObservability.maxContextWindowTokens).toBe(1_000_000);
     expect(scene.contextObservability.timelinePoints).toHaveLength(dataset.events.length);
 
@@ -270,5 +274,36 @@ describe("context observability bundle", () => {
       viewportPoint?.contextWindowTokens ?? 0,
     );
     expect(focused.laneSummaries.find((lane) => lane.isSelected)?.laneKind).toBe("main");
+  });
+
+  it("carries forward the latest measured state and does not invent state before measurement", () => {
+    const dataset = expectDataset(buildObservabilitySnapshot());
+    const scene = buildGraphSceneModel(dataset, null);
+    const startPoint = scene.contextObservability.timelinePoints.find(
+      (point) => point.eventTitle === "Session started",
+    );
+    const trailingWaitEvent = dataset.events.find((event) => event.toolName === "wait_agent");
+
+    expect(startPoint).toBeDefined();
+    expect(trailingWaitEvent).toBeDefined();
+    if (!startPoint || !trailingWaitEvent) {
+      throw new Error("expected timeline points");
+    }
+
+    const waitPoint = scene.contextObservability.pointsByEventId.get(trailingWaitEvent.eventId);
+    expect(waitPoint).toBeDefined();
+    if (!waitPoint) {
+      throw new Error("expected trailing wait point");
+    }
+
+    expect(startPoint.hasMeasuredContextState).toBe(false);
+    expect(startPoint.hasMeasuredRuntimeUsage).toBe(false);
+    expect(startPoint.contextWindowTokens).toBe(0);
+    expect(startPoint.cumulativeContextTokens).toBe(0);
+
+    expect(waitPoint.hasMeasuredContextState).toBe(true);
+    expect(waitPoint.hasMeasuredRuntimeUsage).toBe(false);
+    expect(waitPoint.contextWindowTokens).toBe(300);
+    expect(waitPoint.cumulativeContextTokens).toBe(980);
   });
 });

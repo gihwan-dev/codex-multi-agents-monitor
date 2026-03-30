@@ -40,6 +40,7 @@ pub(crate) struct ParsedSessionSnapshot {
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) model: Option<String>,
+    pub(crate) max_context_window_tokens: Option<u64>,
     pub(crate) entries: Vec<SessionEntrySnapshot>,
     pub(crate) prompt_assembly: Vec<PromptAssemblyLayer>,
 }
@@ -91,6 +92,7 @@ struct ArchivedIndexScan {
 struct SessionSnapshotCollector {
     updated_at: String,
     model: Option<String>,
+    max_context_window_tokens: Option<u64>,
     entries: Vec<SessionEntrySnapshot>,
     prompt_assembly: Vec<PromptAssemblyLayer>,
     prompt_assembly_done: bool,
@@ -99,6 +101,7 @@ struct SessionSnapshotCollector {
 struct SubagentCollector {
     updated_at: String,
     model: Option<String>,
+    max_context_window_tokens: Option<u64>,
     entries: Vec<SessionEntrySnapshot>,
     error: Option<String>,
     capture_entries: bool,
@@ -534,6 +537,7 @@ impl SessionSnapshotCollector {
         Self {
             updated_at: started_at,
             model: None,
+            max_context_window_tokens: resolve_model_context_window_from_payload(payload),
             entries: Vec::new(),
             prompt_assembly,
             prompt_assembly_done: false,
@@ -542,6 +546,7 @@ impl SessionSnapshotCollector {
 
     fn consume(&mut self, entry: Value) {
         self.capture_model(&entry);
+        self.capture_runtime_window(&entry);
         self.capture_prompt_layers(&entry);
         self.capture_snapshot_entry(&entry);
     }
@@ -554,6 +559,7 @@ impl SessionSnapshotCollector {
             started_at: meta.started_at,
             updated_at: self.updated_at,
             model: self.model,
+            max_context_window_tokens: self.max_context_window_tokens,
             entries: self.entries,
             prompt_assembly: self.prompt_assembly,
         }
@@ -563,6 +569,14 @@ impl SessionSnapshotCollector {
         if self.model.is_none() {
             self.model = extract_turn_context_model(entry);
         }
+    }
+
+    fn capture_runtime_window(&mut self, entry: &Value) {
+        if self.max_context_window_tokens.is_some() {
+            return;
+        }
+
+        self.max_context_window_tokens = extract_entry_model_context_window(entry);
     }
 
     fn capture_prompt_layers(&mut self, entry: &Value) {
@@ -606,6 +620,7 @@ impl SubagentCollector {
         Self {
             updated_at: started_at,
             model: None,
+            max_context_window_tokens: None,
             entries: Vec::new(),
             error: None,
             capture_entries: true,
@@ -620,6 +635,7 @@ impl SubagentCollector {
         }
 
         self.capture_model(&entry);
+        self.capture_runtime_window(&entry);
 
         if !self.capture_entries && !self.embedded_context {
             self.update_fork_boundary(&entry);
@@ -640,6 +656,7 @@ impl SubagentCollector {
             agent_nickname: meta.agent_nickname,
             agent_role: meta.agent_role,
             model: self.model,
+            max_context_window_tokens: self.max_context_window_tokens,
             started_at: meta.started_at,
             updated_at: self.updated_at,
             entries: self.entries,
@@ -697,6 +714,14 @@ impl SubagentCollector {
         }
     }
 
+    fn capture_runtime_window(&mut self, entry: &Value) {
+        if self.max_context_window_tokens.is_some() {
+            return;
+        }
+
+        self.max_context_window_tokens = extract_entry_model_context_window(entry);
+    }
+
     fn capture_snapshot_entry(&mut self, entry: &Value) {
         if let Some(snapshot_entry) = extract_entry_snapshot(entry) {
             self.updated_at = snapshot_entry.timestamp.clone();
@@ -716,6 +741,27 @@ fn entry_payload_type(entry: &Value) -> Option<&str> {
         .and_then(Value::as_object)
         .and_then(|payload| payload.get("type"))
         .and_then(Value::as_str)
+}
+
+fn extract_entry_model_context_window(entry: &Value) -> Option<u64> {
+    entry
+        .get("payload")
+        .and_then(Value::as_object)
+        .and_then(resolve_model_context_window_from_payload)
+}
+
+fn resolve_model_context_window_from_payload(payload: &Map<String, Value>) -> Option<u64> {
+    payload
+        .get("model_context_window")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            payload
+                .get("info")
+                .and_then(Value::as_object)
+                .and_then(|info| info.get("model_context_window"))
+                .and_then(Value::as_u64)
+        })
+        .filter(|window| *window > 0)
 }
 
 fn build_base_prompt_layers(payload: &Map<String, Value>) -> Vec<PromptAssemblyLayer> {
@@ -769,7 +815,8 @@ fn parse_tail_entries(buffer: &str, skip_first_line: bool) -> Vec<SessionEntrySn
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_archived_index_entry, parse_archived_session_snapshot, read_subagent_snapshot,
+        parse_archived_index_entry, parse_archived_session_snapshot, parse_live_session_snapshot,
+        read_subagent_snapshot,
     };
     use crate::test_support::TempDir;
     use std::fs;
@@ -973,5 +1020,50 @@ mod tests {
         .expect("archived snapshot read should succeed");
 
         assert!(snapshot.is_none());
+    }
+
+    #[test]
+    fn parses_runtime_context_window_from_task_started_entries() {
+        let temp_dir = TempDir::new("live-runtime-window-task-started");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        fs::write(
+            &session_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{"id":"runtime-window-main","source":"desktop","cwd":"/tmp/workspace","timestamp":"2026-03-20T00:00:00.000Z"}}"#,
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-main","model_context_window":258400}}"#,
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Runtime task window found."}]}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let snapshot = parse_live_session_snapshot(&session_file, &["desktop"])
+            .expect("live snapshot read should succeed")
+            .expect("snapshot should parse");
+
+        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
+    }
+
+    #[test]
+    fn parses_runtime_context_window_from_token_count_info() {
+        let temp_dir = TempDir::new("live-runtime-window-token-count");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        fs::write(
+            &session_file,
+            [
+                r#"{"timestamp":"2026-03-20T00:00:00.000Z","type":"session_meta","payload":{"id":"runtime-window-token","source":"desktop","cwd":"/tmp/workspace","timestamp":"2026-03-20T00:00:00.000Z"}}"#,
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"model_context_window":258400,"last_token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":120},"total_token_usage":{"input_tokens":200,"cached_input_tokens":80,"output_tokens":35,"reasoning_output_tokens":5,"total_tokens":235}}}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let snapshot = parse_live_session_snapshot(&session_file, &["desktop"])
+            .expect("live snapshot read should succeed")
+            .expect("snapshot should parse");
+
+        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
     }
 }

@@ -2197,7 +2197,8 @@ describe("token_count enrichment", () => {
         timestamp: "2026-03-19T10:00:06.000Z",
         entryType: "token_count",
         role: null,
-        text: '{"in":20090,"cached":3712,"out":1047}',
+        text:
+          '{"last":{"in":20090,"cached":3712,"out":1047,"reasoning":0,"total":21137},"total":{"in":20090,"cached":3712,"out":1047,"reasoning":0,"total":21137}}',
         functionName: null,
         functionCallId: null,
         functionArgumentsPreview: null,
@@ -2235,7 +2236,8 @@ describe("token_count enrichment", () => {
         timestamp: "2026-03-19T10:00:01.000Z",
         entryType: "token_count",
         role: null,
-        text: '{"in":100,"cached":0,"out":50}',
+        text:
+          '{"last":{"in":100,"cached":0,"out":50,"reasoning":0,"total":150},"total":{"in":100,"cached":0,"out":50,"reasoning":0,"total":150}}',
         functionName: null,
         functionCallId: null,
         functionArgumentsPreview: null,
@@ -2255,7 +2257,7 @@ describe("token_count enrichment", () => {
     expect(nonLifecycleEvents.every((e) => e.title !== "token_count")).toBe(true);
   });
 
-  it("derives maxContextWindowTokens from token_count entries when the snapshot omits it", () => {
+  it("uses the snapshot maxContextWindowTokens instead of re-deriving it from token_count entries", () => {
     const entries: SessionEntrySnapshot[] = [
       makeMessageEntry("2026-03-19T10:00:00.000Z", "user", "Test"),
       makeMessageEntry("2026-03-19T10:00:02.000Z", "assistant", "Working on it"),
@@ -2263,7 +2265,8 @@ describe("token_count enrichment", () => {
         timestamp: "2026-03-19T10:00:03.000Z",
         entryType: "token_count",
         role: null,
-        text: '{"in":100,"cached":50,"out":20,"window":258400}',
+        text:
+          '{"last":{"in":100,"cached":50,"out":20,"reasoning":0,"total":120},"total":{"in":100,"cached":50,"out":20,"reasoning":0,"total":120},"window":258400}',
         functionName: null,
         functionCallId: null,
         functionArgumentsPreview: null,
@@ -2272,7 +2275,7 @@ describe("token_count enrichment", () => {
 
     const snapshot = buildSnapshot(entries);
     snapshot.model = "gpt-5.4";
-    snapshot.maxContextWindowTokens = null;
+    snapshot.maxContextWindowTokens = 258_400;
     const dataset = expectDataset(snapshot);
     expect(dataset).not.toBeNull();
     if (!dataset) return;

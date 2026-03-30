@@ -9,14 +9,16 @@ export function GraphContextCardHeader({
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <span className="block text-[0.58rem] uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
-          Context window
+          Seen so far
         </span>
-        <strong
-          data-slot="graph-context-card-value"
-          className="mt-2 block text-[1.6rem] font-semibold leading-none text-foreground"
-        >
-          {presentation.activeValueLabel}
-        </strong>
+        <div data-slot="graph-context-card-cumulative" className="mt-2">
+          <strong
+            data-slot="graph-context-card-value"
+            className="block text-[1.6rem] font-semibold leading-none text-foreground"
+          >
+            {presentation.cumulativeValueLabel}
+          </strong>
+        </div>
       </div>
       <div className="min-w-0 text-right">
         <span className="block text-[0.58rem] uppercase tracking-[0.16em] text-[var(--color-text-muted)]">

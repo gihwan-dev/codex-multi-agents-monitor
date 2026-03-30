@@ -122,17 +122,28 @@ function accumulateLaneEvent({
   returnedEventIds,
 }: AccumulateLaneEventArgs): LaneEventMetrics {
   const point = pointsByEventId.get(event.eventId);
+  const totalTokens = point?.totalTokens ?? resolveTotalTokens(event);
 
   return {
     compactionCount: metrics.compactionCount + (isCompactionEvent(event) ? 1 : 0),
-    contextImportedTokens:
-      metrics.contextImportedTokens || resolveMeasuredContextWindowTokens(event),
-    contextReturnedTokens:
-      metrics.contextReturnedTokens + (returnedEventIds?.has(event.eventId) ? event.tokensOut : 0),
+    contextImportedTokens: resolveLaneImportedTokens(metrics, event),
+    contextReturnedTokens: resolveLaneReturnedTokens(metrics, event, returnedEventIds),
     inputTokens: metrics.inputTokens + event.tokensIn,
     outputTokens: metrics.outputTokens + event.tokensOut,
-    totalTokens: metrics.totalTokens + (point?.totalTokens ?? resolveTotalTokens(event)),
+    totalTokens: metrics.totalTokens + totalTokens,
   };
+}
+
+function resolveLaneImportedTokens(metrics: LaneEventMetrics, event: EventRecord) {
+  return metrics.contextImportedTokens || resolveMeasuredContextWindowTokens(event) || 0;
+}
+
+function resolveLaneReturnedTokens(
+  metrics: LaneEventMetrics,
+  event: EventRecord,
+  returnedEventIds: Set<string> | undefined,
+) {
+  return metrics.contextReturnedTokens + (returnedEventIds?.has(event.eventId) ? event.tokensOut : 0);
 }
 
 function finalizeLaneMetrics(

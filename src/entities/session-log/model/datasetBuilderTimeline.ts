@@ -5,7 +5,6 @@ import {
   type EventRecord,
   type RunDataset,
 } from "../../run";
-import { resolveSessionSnapshotMaxContextWindowTokens } from "../lib/tokenCount";
 import type { CombinedTimeline, ParentRunContext, SnapshotTiming } from "./datasetBuilderTypes";
 import { buildPromptAssembly } from "./promptAssembly";
 import {
@@ -73,7 +72,8 @@ function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
 function resolveMaxContextWindowTokens(snapshot: SessionLogSnapshot) {
   return (
     snapshot.maxContextWindowTokens ??
-    resolveSessionSnapshotMaxContextWindowTokens(snapshot) ??
+    snapshot.subagents?.find((subagent) => subagent.maxContextWindowTokens != null)
+      ?.maxContextWindowTokens ??
     null
   );
 }

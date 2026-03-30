@@ -40,7 +40,7 @@ function resolveTotalTokens(
   contextPoint: BuildEventRowArgs["contextPoint"],
   event: BuildEventRowArgs["event"],
 ) {
-  return contextPoint?.totalTokens ?? event.tokensIn + event.tokensOut + event.reasoningTokens;
+  return contextPoint?.totalTokens ?? event.tokensIn + event.tokensOut;
 }
 
 function resolveContextPointMetrics(contextPoint: BuildEventRowArgs["contextPoint"]) {

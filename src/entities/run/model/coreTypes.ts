@@ -94,6 +94,8 @@ export interface EventRecord {
   reasoningTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  measuredContextWindowTokens?: number | null;
+  measuredCumulativeTokens?: number | null;
   costUsd: number;
   finishReason: string | null;
   rawInput: string | null;

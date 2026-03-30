@@ -186,7 +186,7 @@ fn build_recent_session_snapshot(
         started_at: parsed.started_at,
         updated_at: parsed.updated_at,
         model: parsed.model,
-        max_context_window_tokens: None,
+        max_context_window_tokens: parsed.max_context_window_tokens,
         entries: parsed.entries,
         subagents: Vec::new(),
         is_archived: false,
@@ -200,8 +200,6 @@ pub(crate) fn load_recent_session_snapshot(
     let mut snapshot =
         build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
             .ok()??;
-    snapshot.max_context_window_tokens =
-        load_model_context_window(&selection.codex_home).ok().flatten();
     let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
     snapshot.subagents = load_snapshot_subagents(
         SnapshotSubagentSearch {
@@ -212,8 +210,25 @@ pub(crate) fn load_recent_session_snapshot(
         &relationship_hints,
     )
     .ok()?;
+    snapshot.max_context_window_tokens =
+        resolve_snapshot_max_context_window_tokens(&snapshot, &selection.codex_home);
 
     Some(snapshot)
+}
+
+fn resolve_snapshot_max_context_window_tokens(
+    snapshot: &SessionLogSnapshot,
+    codex_home: &Path,
+) -> Option<u64> {
+    snapshot
+        .max_context_window_tokens
+        .or_else(|| {
+            snapshot
+                .subagents
+                .iter()
+                .find_map(|subagent| subagent.max_context_window_tokens)
+        })
+        .or_else(|| load_model_context_window(codex_home).ok().flatten())
 }
 
 pub(crate) fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSelection> {
@@ -373,6 +388,149 @@ mod tests {
         create_git_workspace(&workspace_path);
         create_state_database(&state_database, &[]);
         (ctx, workspace_path, selected_file, state_database)
+    }
+
+    struct RecentSnapshotFixture<'a> {
+        state_database: &'a Path,
+        selected_file: &'a Path,
+        session_id: &'a str,
+        workspace_path: &'a Path,
+        events: &'a [&'a str],
+    }
+
+    fn persist_recent_snapshot_fixture(fixture: RecentSnapshotFixture<'_>) {
+        persist_thread_fixture(
+            fixture.state_database,
+            ThreadFixture {
+                header: session_meta_line(fixture.session_id, fixture.workspace_path),
+                session_id: fixture.session_id,
+                session_file: fixture.selected_file,
+                source: "desktop",
+                workspace_path: fixture.workspace_path,
+                updated_at: 1_742_428_803,
+                archived: false,
+                events: fixture.events,
+            },
+        );
+    }
+
+    fn write_subagent_runtime_window_fixture(path: &Path, parent_session_id: &str) {
+        write_session_lines(
+            path,
+            vec![
+                format!(
+                    r#"{{"timestamp":"2026-03-20T00:01:00.000Z","type":"session_meta","payload":{{"id":"sub-window-001","source":{{"subagent":{{"thread_spawn":{{"parent_thread_id":"{parent_session_id}","depth":1,"agent_nickname":"Euler","agent_role":"worker"}}}}}},"cwd":"/tmp/workspace","timestamp":"2026-03-20T00:01:00.000Z"}}}}"#
+                ),
+                r#"{"timestamp":"2026-03-20T00:01:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-sub","model_context_window":258400}}"#.to_owned(),
+                r#"{"timestamp":"2026-03-20T00:01:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Child session carries the runtime window."}]}}"#.to_owned(),
+            ],
+        );
+    }
+
+    #[test]
+    fn recent_snapshot_prefers_runtime_context_window_over_config() {
+        let (ctx, workspace_path, selected_file, state_database) =
+            prepare_recent_snapshot_fixture(
+                "recent-detail-runtime-window",
+                "runtime-window.jsonl",
+                "state_runtime_window.sqlite",
+            );
+        fs::write(
+            ctx.codex_home.join("config.toml"),
+            "model_context_window = 999999\n",
+        )
+        .expect("config should be written");
+        write_session_lines(
+            &selected_file,
+            session_lines(
+                session_meta_line("session-runtime-window", &workspace_path),
+                &[
+                    r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","model_context_window":258400}}"#,
+                    r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Runtime window should win."}]}}"#,
+                ],
+            ),
+        );
+        insert_thread_row(
+            &state_database,
+            "session-runtime-window",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
+        );
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
+    }
+
+    #[test]
+    fn recent_snapshot_uses_config_context_window_when_runtime_is_missing() {
+        let (ctx, workspace_path, selected_file, state_database) =
+            prepare_recent_snapshot_fixture(
+                "recent-detail-config-window",
+                "config-window.jsonl",
+                "state_config_window.sqlite",
+            );
+        fs::write(
+            ctx.codex_home.join("config.toml"),
+            "model_context_window = 258400\n",
+        )
+        .expect("config should be written");
+        write_session_lines(
+            &selected_file,
+            session_lines(
+                session_meta_line("session-config-window", &workspace_path),
+                &[
+                    r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                    r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Config window should be used."}]}}"#,
+                ],
+            ),
+        );
+        insert_thread_row(
+            &state_database,
+            "session-config-window",
+            &selected_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_803,
+        );
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
+    }
+
+    #[test]
+    fn recent_snapshot_uses_subagent_runtime_context_window_when_main_is_missing() {
+        let (ctx, workspace_path, selected_file, state_database) =
+            prepare_recent_snapshot_fixture(
+                "recent-detail-subagent-window",
+                "subagent-window.jsonl",
+                "state_subagent_window.sqlite",
+            );
+        let child_file = ctx.sessions_root.join("subagent-window-child.jsonl");
+
+        persist_recent_snapshot_fixture(RecentSnapshotFixture {
+            state_database: &state_database,
+            selected_file: &selected_file,
+            session_id: "session-subagent-window",
+            workspace_path: &workspace_path,
+            events: &[
+                r#"{"timestamp":"2026-03-20T00:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Main session has no runtime window."}]}}"#,
+            ],
+        });
+        write_subagent_runtime_window_fixture(&child_file, "session-subagent-window");
+
+        let snapshot = load_recent_snapshot(&selected_file);
+
+        assert_eq!(snapshot.max_context_window_tokens, Some(258_400));
+        assert_eq!(snapshot.subagents.len(), 1);
+        assert_eq!(
+            snapshot.subagents[0].max_context_window_tokens,
+            Some(258_400)
+        );
     }
 
     #[test]

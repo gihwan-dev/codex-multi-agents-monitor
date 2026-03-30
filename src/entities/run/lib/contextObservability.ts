@@ -2,7 +2,6 @@ import type {
   ContextObservabilityFocusSource,
   ContextObservabilityModel,
   ContextTimelinePoint,
-  EventRecord,
   LaneContextSummary,
   RunDataset,
   SelectionState,
@@ -12,11 +11,7 @@ import {
   resolveActiveEventId,
   resolveActiveEventTitle,
 } from "./contextObservabilitySelection.js";
-import {
-  isCompactionEvent,
-  resolveMeasuredContextWindowTokens,
-  resolveTotalTokens,
-} from "./contextObservabilityShared.js";
+import { buildContextTimelinePoints } from "./contextObservabilityTimeline.js";
 import { sortEvents } from "./selectorShared.js";
 
 export interface ContextObservabilityBase {
@@ -44,14 +39,9 @@ interface ActiveContextState {
   activeCumulativeContextTokens: number;
 }
 
-interface ContextTimelineState {
-  cumulativeContextTokens: number;
-  currentContextWindowTokens: number;
-  pointsByEventId: Map<string, ContextTimelinePoint>;
-}
 export function buildContextObservabilityBase(dataset: RunDataset): ContextObservabilityBase {
   const orderedEvents = sortEvents(dataset.events);
-  const pointsByEventId = buildPointsByEventId(orderedEvents);
+  const pointsByEventId = buildContextTimelinePoints(orderedEvents);
   const timelinePoints = [...pointsByEventId.values()];
 
   return {
@@ -112,58 +102,6 @@ export function focusContextObservability(args: {
     ),
   } satisfies ContextObservabilityModel;
 }
-function buildPointsByEventId(events: EventRecord[]) {
-  return events.reduce(advanceContextTimelineState, createContextTimelineState()).pointsByEventId;
-}
-
-function createContextTimelineState(): ContextTimelineState {
-  return {
-    cumulativeContextTokens: 0,
-    currentContextWindowTokens: 0,
-    pointsByEventId: new Map<string, ContextTimelinePoint>(),
-  };
-}
-function advanceContextTimelineState(state: ContextTimelineState, event: EventRecord) {
-  const totalTokens = resolveTotalTokens(event);
-  const contextWindowTokens = resolveNextContextWindowTokens(
-    state.currentContextWindowTokens,
-    event,
-  );
-
-  state.cumulativeContextTokens += totalTokens;
-  state.currentContextWindowTokens = contextWindowTokens;
-  state.pointsByEventId.set(
-    event.eventId,
-    buildContextTimelinePoint(event, totalTokens, state),
-  );
-
-  return state;
-}
-function buildContextTimelinePoint(
-  event: EventRecord,
-  totalTokens: number,
-  state: Pick<ContextTimelineState, "cumulativeContextTokens" | "currentContextWindowTokens">,
-): ContextTimelinePoint {
-  return {
-    eventId: event.eventId,
-    eventTitle: event.title,
-    laneId: event.laneId,
-    inputTokens: event.tokensIn,
-    outputTokens: event.tokensOut,
-    totalTokens,
-    cumulativeContextTokens: state.cumulativeContextTokens,
-    contextWindowTokens: state.currentContextWindowTokens,
-    hasCompaction: isCompactionEvent(event),
-  };
-}
-function resolveNextContextWindowTokens(currentContextWindowTokens: number, event: EventRecord) {
-  if (isCompactionEvent(event)) {
-    return 0;
-  }
-
-  const measuredContextWindowTokens = resolveMeasuredContextWindowTokens(event);
-  return measuredContextWindowTokens > 0 ? measuredContextWindowTokens : currentContextWindowTokens;
-}
 
 function resolveActiveContextState(args: ResolveContextObservabilityArgs): ActiveContextState {
   const activeEventId = resolveActiveEventId({
@@ -199,18 +137,12 @@ function resolveActiveLaneId(activePoint: ContextTimelinePoint | null) {
 }
 
 function resolveActivePointMetrics(activePoint: ContextTimelinePoint | null) {
-  return {
-    activeContextWindowTokens: activePoint?.contextWindowTokens ?? 0,
-    activeCumulativeContextTokens: activePoint?.cumulativeContextTokens ?? 0,
-  };
+  return { activeContextWindowTokens: activePoint?.contextWindowTokens ?? 0, activeCumulativeContextTokens: activePoint?.cumulativeContextTokens ?? 0 };
 }
 
 function buildSelectedLaneSummaries(
   laneSummaries: ContextObservabilityBase["laneSummaries"],
   activeLaneId: string | null,
 ) {
-  return laneSummaries.map((lane) => ({
-    ...lane,
-    isSelected: lane.laneId === activeLaneId,
-  }));
+  return laneSummaries.map((lane) => ({ ...lane, isSelected: lane.laneId === activeLaneId }));
 }

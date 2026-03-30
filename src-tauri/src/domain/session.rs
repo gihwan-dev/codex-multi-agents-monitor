@@ -21,6 +21,8 @@ pub(crate) struct SubagentSnapshot {
     pub(crate) agent_nickname: String,
     pub(crate) agent_role: String,
     pub(crate) model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_context_window_tokens: Option<u64>,
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) entries: Vec<SessionEntrySnapshot>,
