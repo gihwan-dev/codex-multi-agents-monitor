@@ -1,4 +1,5 @@
 export * from "./coreTypes.js";
 export * from "./importTypes.js";
+export * from "./observabilityTypes.js";
 export * from "./sceneTypes.js";
 export * from "./typeConstants.js";

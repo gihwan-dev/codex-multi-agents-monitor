@@ -1,5 +1,5 @@
 use crate::domain::session::SessionEntrySnapshot;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use super::truncate_utf8_safe;
 
@@ -289,26 +289,43 @@ fn build_item_completed_entry(context: &SnapshotContext<'_>) -> SessionEntrySnap
 }
 
 fn build_token_count_entry(context: &SnapshotContext<'_>) -> Option<SessionEntrySnapshot> {
-    let usage = context
+    let info = context
         .payload
         .get("info")
-        .and_then(Value::as_object)?
-        .get("last_token_usage")
         .and_then(Value::as_object)?;
+    let last_usage = info.get("last_token_usage").and_then(Value::as_object)?;
+    let total_usage = info
+        .get("total_token_usage")
+        .and_then(Value::as_object)
+        .unwrap_or(last_usage);
 
-    let text = format!(
-        r#"{{"in":{},"cached":{},"out":{},"reasoning":{}}}"#,
-        usage.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
-        usage.get("cached_input_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        usage.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
-        usage.get("reasoning_output_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0)
-    );
+    let text = json!({
+        "last": build_token_usage_snapshot(last_usage),
+        "total": build_token_usage_snapshot(total_usage),
+        "window": info
+            .get("model_context_window")
+            .or_else(|| context.payload.get("model_context_window"))
+            .and_then(Value::as_u64),
+    })
+    .to_string();
 
     Some(build_text_snapshot(context, "token_count", Some(text)))
+}
+
+fn build_token_usage_snapshot(usage: &serde_json::Map<String, Value>) -> Value {
+    json!({
+        "in": usage.get("input_tokens").and_then(Value::as_u64).unwrap_or(0),
+        "cached": usage
+            .get("cached_input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        "out": usage.get("output_tokens").and_then(Value::as_u64).unwrap_or(0),
+        "reasoning": usage
+            .get("reasoning_output_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        "total": usage.get("total_tokens").and_then(Value::as_u64).unwrap_or(0),
+    })
 }
 
 fn preview_function_call_arguments(
@@ -523,5 +540,67 @@ fn build_function_output_snapshot(
         function_name: None,
         function_call_id: call_id,
         function_arguments_preview: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_entry_snapshot;
+    use serde_json::{json, Value};
+
+    fn extract_snapshot_payload(entry: &Value) -> Value {
+        let snapshot = extract_entry_snapshot(entry).expect("entry snapshot");
+        snapshot
+            .text
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Value>(text).ok())
+            .expect("entry payload")
+    }
+
+    fn token_count_entry_fixture() -> Value {
+        json!({
+            "timestamp": "2026-03-29T09:00:00.000Z",
+            "payload": {
+                "type": "token_count",
+                "info": {
+                    "model_context_window": 258400,
+                    "total_token_usage": {
+                        "input_tokens": 250,
+                        "cached_input_tokens": 70,
+                        "output_tokens": 55,
+                        "reasoning_output_tokens": 8,
+                        "total_tokens": 305
+                    },
+                    "last_token_usage": {
+                        "input_tokens": 100,
+                        "cached_input_tokens": 40,
+                        "output_tokens": 20,
+                        "reasoning_output_tokens": 5,
+                        "total_tokens": 125
+                    }
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn token_count_snapshot_keeps_model_context_window() {
+        let payload = extract_snapshot_payload(&token_count_entry_fixture());
+
+        assert_eq!(payload.get("window").and_then(Value::as_u64), Some(258400));
+        assert_eq!(
+            payload
+                .get("last")
+                .and_then(|value| value.get("total"))
+                .and_then(Value::as_u64),
+            Some(125)
+        );
+        assert_eq!(
+            payload
+                .get("total")
+                .and_then(|value| value.get("in"))
+                .and_then(Value::as_u64),
+            Some(250)
+        );
     }
 }

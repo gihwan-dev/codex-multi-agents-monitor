@@ -1,6 +1,7 @@
 import type { GraphSceneModel, SelectionState } from "../../../entities/run";
-import { CausalGraphCanvas } from "./CausalGraphCanvas";
-import { CausalGraphLaneStrip } from "./CausalGraphLaneStrip";
+import { GraphContextRail } from "./GraphContextRail";
+import { GraphViewportScrollContent } from "./GraphViewportScrollContent";
+import { useViewportGraphContextObservability } from "./graphViewportContextObservability";
 import type { useCausalGraphViewModel } from "./useCausalGraphViewModel";
 
 interface GraphViewportScrollAreaProps {
@@ -13,34 +14,20 @@ interface GraphViewportScrollAreaProps {
   viewportState: ReturnType<typeof useCausalGraphViewModel>["viewportState"];
 }
 
-export function GraphViewportScrollArea({
-  graphSnapshot,
-  handleScroll,
-  onSelect,
-  onSelectEdge,
-  routeMarkerId,
-  scene,
-  viewportState,
-}: GraphViewportScrollAreaProps) {
+export function GraphViewportScrollArea(props: GraphViewportScrollAreaProps) {
+  const { graphSnapshot, scene, viewportState } = props;
+  const focusedObservability = useViewportGraphContextObservability({
+    availableCanvasHeight: viewportState.availableCanvasHeight,
+    scene,
+    scrollTop: viewportState.scrollTop,
+    visibleRowPositions: graphSnapshot.visibleRowPositions,
+    visibleRows: graphSnapshot.visibleRows,
+  });
+
   return (
-    <div ref={viewportState.scrollRef} data-slot="graph-scroll" className="h-full min-h-0 overflow-auto border-t border-[color:var(--color-chrome-border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={handleScroll}>
-      <CausalGraphLaneStrip gridTemplateColumns={graphSnapshot.gridTemplateColumns} laneStripRef={viewportState.laneStripRef} layout={graphSnapshot.layout} scene={scene} />
-      <CausalGraphCanvas
-        availableCanvasHeight={viewportState.availableCanvasHeight}
-        bundleById={graphSnapshot.bundleById}
-        continuationGuideYs={graphSnapshot.continuationGuideYs}
-        gridTemplateColumns={graphSnapshot.gridTemplateColumns}
-        layout={graphSnapshot.layout}
-        onSelect={onSelect}
-        onSelectEdge={onSelectEdge}
-        renderedContentHeight={graphSnapshot.renderedContentHeight}
-        routeMarkerId={routeMarkerId}
-        scene={scene}
-        scrollTop={viewportState.scrollTop}
-        visibleEdgeRoutes={graphSnapshot.visibleEdgeRoutes}
-        visibleRowPositions={graphSnapshot.visibleRowPositions}
-        visibleRows={graphSnapshot.visibleRows}
-      />
+    <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
+      <GraphViewportScrollContent {...props} />
+      <GraphContextRail observability={focusedObservability} />
     </div>
   );
 }

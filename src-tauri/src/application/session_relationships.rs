@@ -185,6 +185,7 @@ mod tests {
             started_at: "2026-03-20T00:00:00.000Z".to_owned(),
             updated_at: "2026-03-20T00:00:00.000Z".to_owned(),
             model: None,
+            max_context_window_tokens: None,
             entries: Vec::new(),
             subagents: Vec::new(),
             is_archived: false,

@@ -60,12 +60,17 @@ function buildSessionLogRun(options: BuildSessionLogDatasetOptions) {
     environment: "Desktop",
     liveMode: !snapshot.isArchived && isRunning ? "live" : "imported",
     summaryMetrics: buildEmptySummaryMetrics(),
+    maxContextWindowTokens: resolveMaxContextWindowTokens(snapshot),
     finalArtifactId: null,
     selectedByDefaultId: combinedTimeline.selectedByDefaultId,
     rawIncluded: false,
     noRawStorage: true,
     isArchived: snapshot.isArchived ?? false,
   } satisfies RunDataset["run"];
+}
+
+function resolveMaxContextWindowTokens(snapshot: SessionLogSnapshot) {
+  return snapshot.maxContextWindowTokens ?? null;
 }
 
 export function buildCombinedTimeline(

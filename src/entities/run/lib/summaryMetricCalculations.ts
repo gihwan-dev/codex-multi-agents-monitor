@@ -114,7 +114,7 @@ export function findLastHandoff(dataset: RunDataset, orderedEvents: EventRecord[
 export function calculateSummaryMetrics(dataset: RunDataset): SummaryMetrics {
   const events = dataset.events;
   const totalTokens = events.reduce(
-    (tokenCount, event) => tokenCount + event.tokensIn + event.tokensOut + event.reasoningTokens,
+    (tokenCount, event) => tokenCount + event.tokensIn + event.tokensOut,
     0,
   );
   const activeTimeMs = calculateActiveTime(events);

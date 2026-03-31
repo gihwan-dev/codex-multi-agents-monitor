@@ -1,4 +1,5 @@
 import {
+  MonitorContextObservabilityPanel,
   MonitorGraphToolbar,
   MonitorSummaryStrip,
 } from "../../../widgets/monitor-chrome";
@@ -17,6 +18,9 @@ export function MonitorGraphChrome(view: MonitorPageView) {
       <MonitorSummaryStrip
         facts={view.chromeState.summaryFacts}
         activeFocus={view.chromeState.inspectorTitle}
+      />
+      <MonitorContextObservabilityPanel
+        observability={view.chromeState.contextObservability}
       />
       <MonitorGraphToolbar
         anomalyJumps={view.chromeState.anomalyJumps}

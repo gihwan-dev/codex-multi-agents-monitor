@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type {
   AnomalyJump,
+  ContextObservabilityModel,
   LiveConnection,
   RunDataset,
   SummaryFact,
@@ -12,6 +13,7 @@ interface PreservedChromeState {
   followLive: boolean;
   inspectorTitle: string | null;
   liveConnection: LiveConnection;
+  contextObservability: ContextObservabilityModel | null;
   summaryFacts: SummaryFact[];
 }
 
@@ -20,6 +22,7 @@ interface UsePreservedChromeStateOptions {
   activeFollowLive: boolean;
   activeLiveConnection: LiveConnection;
   anomalyJumps: AnomalyJump[];
+  contextObservability: ContextObservabilityModel | null;
   inspectorTitle: string | null;
   rawTabAvailable: boolean;
   selectionLoadStateActive: boolean;
@@ -31,6 +34,7 @@ export function usePreservedChromeState({
   activeFollowLive,
   activeLiveConnection,
   anomalyJumps,
+  contextObservability,
   inspectorTitle,
   rawTabAvailable,
   selectionLoadStateActive,
@@ -48,6 +52,7 @@ export function usePreservedChromeState({
       followLive: activeFollowLive,
       inspectorTitle,
       liveConnection: activeLiveConnection,
+      contextObservability,
       summaryFacts,
     };
   }

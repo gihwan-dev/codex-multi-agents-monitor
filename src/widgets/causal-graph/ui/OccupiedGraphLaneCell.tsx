@@ -34,6 +34,7 @@ export function OccupiedGraphLaneCell({
         selected={row.selected}
         status={row.status}
         summary={row.summary}
+        totalTokens={row.totalTokens}
         title={row.title}
       />
     </>

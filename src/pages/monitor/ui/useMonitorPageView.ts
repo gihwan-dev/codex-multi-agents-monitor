@@ -1,10 +1,22 @@
-import { type MutableRefObject, useEffect, useRef } from "react";
-import type { DrawerTab } from "../../../entities/run";
+import {
+  type MutableRefObject,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
+import {
+  type DrawerTab,
+  focusContextObservability,
+} from "../../../entities/run";
 import { useWorkspaceIdentityOverrides } from "../../../features/workspace-identity";
 import { useCompactViewport } from "../lib/useCompactViewport";
 import { useSearchFocusShortcut } from "../lib/useSearchFocusShortcut";
 import { useMonitorPageState } from "../model/useMonitorPageState";
 import { usePreservedChromeState } from "./usePreservedChromeState";
+import {
+  resolveInitialViewportFocusEventId,
+  useViewportFocusState,
+} from "./useViewportFocusState";
 
 function resolveFocusTarget(target?: HTMLElement | null) {
   if (target) {
@@ -13,7 +25,6 @@ function resolveFocusTarget(target?: HTMLElement | null) {
 
   return document.activeElement instanceof HTMLElement ? document.activeElement : null;
 }
-
 function useDrawerAndShortcutControls(
   actions: ReturnType<typeof useMonitorPageState>["actions"],
   shortcutHelpOpen: boolean,
@@ -47,7 +58,6 @@ function useDrawerAndShortcutControls(
     toggleShortcuts,
   };
 }
-
 function restoreShortcutFocus(
   wasShortcutHelpOpen: boolean,
   shortcutHelpOpen: boolean,
@@ -94,14 +104,57 @@ function createToggleShortcuts(
   };
 }
 
-function useMonitorChromeView(pageState: ReturnType<typeof useMonitorPageState>) {
+function useFocusedContextObservability(
+  contextObservability: ReturnType<typeof useMonitorPageState>["contextObservability"],
+  hasSelection: boolean,
+  viewportFocusEventId: string | null,
+) {
+  return useMemo(() => {
+    if (!contextObservability) {
+      return null;
+    }
+
+    if (hasSelection) {
+      return focusContextObservability({
+        observability: contextObservability,
+        activeEventId: contextObservability.activeEventId,
+        activeSource: "selection",
+      });
+    }
+
+    if (viewportFocusEventId) {
+      return focusContextObservability({
+        observability: contextObservability,
+        activeEventId: viewportFocusEventId,
+        activeSource: "viewport",
+      });
+    }
+
+    return focusContextObservability({
+      observability: contextObservability,
+      activeEventId: contextObservability.activeEventId,
+      activeSource: "latest",
+    });
+  }, [contextObservability, hasSelection, viewportFocusEventId]);
+}
+
+function useMonitorChromeView(
+  pageState: ReturnType<typeof useMonitorPageState>,
+  viewportFocusEventId: string | null,
+) {
   const { activeDataset, activeFollowLive, activeLiveConnection, anomalyJumps } = pageState;
+  const contextObservability = useFocusedContextObservability(
+    pageState.contextObservability,
+    Boolean(pageState.state.selection),
+    viewportFocusEventId,
+  );
 
   return usePreservedChromeState({
     activeDataset,
     activeFollowLive,
     activeLiveConnection,
     anomalyJumps,
+    contextObservability,
     inspectorTitle: pageState.inspectorSummary?.title ?? null,
     rawTabAvailable: pageState.rawTabAvailable,
     selectionLoadStateActive: Boolean(pageState.selectionLoadState),
@@ -109,13 +162,29 @@ function useMonitorChromeView(pageState: ReturnType<typeof useMonitorPageState>)
   });
 }
 
+function useMonitorPageChromeBindings(
+  pageState: ReturnType<typeof useMonitorPageState>,
+  viewportFocusEventId: string | null,
+) {
+  return {
+    chromeView: useMonitorChromeView(pageState, viewportFocusEventId),
+    controls: useDrawerAndShortcutControls(
+      pageState.actions,
+      pageState.state.shortcutHelpOpen,
+    ),
+  };
+}
+
 export function useMonitorPageView() {
   const pageState = useMonitorPageState();
   const searchRef = useRef<HTMLInputElement>(null);
-  const chromeView = useMonitorChromeView(pageState);
-  const controls = useDrawerAndShortcutControls(
-    pageState.actions,
-    pageState.state.shortcutHelpOpen,
+  const { viewportFocusEventId, setViewportFocusEventId } = useViewportFocusState(
+    pageState.activeDataset?.run.traceId ?? null,
+    resolveInitialViewportFocusEventId(pageState.graphScene.rows),
+  );
+  const { chromeView, controls } = useMonitorPageChromeBindings(
+    pageState,
+    viewportFocusEventId,
   );
   const isCompactViewport = useCompactViewport();
   const workspaceIdentityOverrides = useWorkspaceIdentityOverrides(pageState.state.datasets);
@@ -129,6 +198,7 @@ export function useMonitorPageView() {
     isCompactViewport,
     workspaceIdentityOverrides,
     searchRef,
+    setViewportFocusEventId,
     drawerState: {
       drawerOpen: pageState.state.drawerOpen,
       drawerTab: pageState.state.drawerTab,

@@ -1,6 +1,5 @@
-import type {
-  EventRecord,
-} from "./coreTypes.js";
+import type { EventRecord } from "./coreTypes.js";
+import type { ContextObservabilityModel } from "./observabilityTypes.js";
 import type {
   EdgeType,
   EventType,
@@ -90,6 +89,12 @@ export interface GraphSceneRowEvent {
   selected: boolean;
   eventType: EventType;
   toolName: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cumulativeContextTokens: number;
+  contextWindowTokens: number;
+  hasCompaction: boolean;
 }
 
 export interface GraphSceneRowGap {
@@ -122,6 +127,7 @@ export interface GraphSceneModel {
   lanes: GraphSceneLane[];
   rows: GraphSceneRow[];
   edgeBundles: GraphSceneEdgeBundle[];
+  contextObservability: ContextObservabilityModel;
   selectionPath: SelectionPath;
   hiddenLaneCount: number;
   latestVisibleEventId: string | null;

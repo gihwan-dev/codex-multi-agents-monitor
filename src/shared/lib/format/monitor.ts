@@ -42,8 +42,12 @@ export function formatCurrency(costUsd: number): string {
 }
 
 export function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) {
+    return formatCompactValue(value / 1_000_000, "m");
+  }
+
   if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
+    return formatCompactValue(value / 1000, "k");
   }
 
   return `${value}`;
@@ -54,7 +58,12 @@ export function formatTokens(tokens: number): string {
     return "n/a";
   }
 
-  return `${formatCompactNumber(tokens)} tok`;
+  return formatCompactNumber(tokens);
+}
+
+function formatCompactValue(value: number, suffix: "k" | "m") {
+  const precision = value >= 100 ? 0 : 1;
+  return `${value.toFixed(precision).replace(/\.0$/, "")}${suffix}`;
 }
 
 export function formatTimestamp(timestamp: number): string {
