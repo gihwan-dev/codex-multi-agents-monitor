@@ -42,7 +42,7 @@ export function EvalCompareView({ comparison }: EvalCompareViewProps) {
         deltas={comparison.deltas}
       />
 
-      <div className="grid gap-4 2xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <EvalRunPanel title="Baseline" run={comparison.baselineRun} />
         <EvalRunPanel title="Candidate" run={comparison.candidateRun} />
       </div>

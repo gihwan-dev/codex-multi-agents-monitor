@@ -18,9 +18,8 @@ export function EvalPageHeader({
           <Badge variant="outline">baseline vs candidate</Badge>
         </div>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Canonical experiment evaluation for shared cases. This view keeps issue #23
-          session scoring separate and only compares candidate runs inside the same
-          experiment contract.
+          Compare different runs within the same experiment to spot improvements,
+          regressions, and tradeoffs on shared evaluation cases.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
