@@ -15,6 +15,7 @@ use crate::{
         load_all_experiment_details, load_experiment_detail, resolve_repository_head_sha,
         save_experiment_detail, EvalAuditEvent,
     },
+    infrastructure::filesystem::{normalize_path, resolve_codex_home, resolve_project_roots},
 };
 use std::{io, path::Path};
 
@@ -792,7 +793,26 @@ fn resolve_candidate_repo_sha(input: &CandidateFingerprintInput) -> io::Result<S
             )
         })?;
 
-    resolve_repository_head_sha(Path::new(repo_path))
+    let repo_path = normalize_path(Path::new(repo_path))?;
+    ensure_repo_path_is_within_project_roots(&repo_path)?;
+    resolve_repository_head_sha(&repo_path)
+}
+
+fn ensure_repo_path_is_within_project_roots(repo_path: &Path) -> io::Result<()> {
+    let codex_home = resolve_codex_home()?;
+    let project_roots = resolve_project_roots(&codex_home)?;
+    if project_roots.into_iter().any(|root| {
+        normalize_path(&root)
+            .map(|normalized_root| repo_path.starts_with(&normalized_root))
+            .unwrap_or(false)
+    }) {
+        return Ok(());
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "candidate fingerprint repo_path must stay within configured project roots",
+    ))
 }
 
 fn normalize_execution_stats(
@@ -1064,7 +1084,7 @@ mod tests {
         })
         .expect("create experiment");
         let case = create_case_for_test(&experiment.experiment.id);
-        let repo_path = context.temp_root.join("repo");
+        let repo_path = context.projects_root.join("repo");
         create_repo_fixture(&repo_path);
         let run = save_candidate_run(
             &experiment.experiment.id,
@@ -1152,7 +1172,7 @@ mod tests {
         .into_iter()
         .find(|case| case.id != first_case.id)
         .expect("second case");
-        let repo_path = context.temp_root.join("repo");
+        let repo_path = context.projects_root.join("repo");
         create_repo_fixture(&repo_path);
 
         save_candidate_run(
@@ -1200,7 +1220,7 @@ mod tests {
         .into_iter()
         .find(|case| case.id != first_case.id)
         .expect("second case");
-        let repo_path = context.temp_root.join("repo");
+        let repo_path = context.projects_root.join("repo");
         create_repo_fixture(&repo_path);
 
         save_candidate_run(
@@ -1220,5 +1240,30 @@ mod tests {
         .expect_err("cross-case compare should fail");
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_repo_paths_outside_configured_project_roots() {
+        let context = RecentSessionTestContext::new("eval-service-repo-path-roots");
+        let experiment = create_experiment(CreateExperimentInput {
+            name: "Scoped repo".to_owned(),
+            description: None,
+        })
+        .expect("create experiment");
+        let case = create_case_for_test(&experiment.experiment.id);
+        let repo_path = context.temp_root.join("external-repo");
+        create_repo_fixture(&repo_path);
+
+        let error = save_candidate_run(
+            &experiment.experiment.id,
+            &case.id,
+            sample_run_input(&repo_path),
+        )
+        .expect_err("repo path outside project roots should fail");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error
+            .to_string()
+            .contains("repo_path must stay within configured project roots"));
     }
 }
