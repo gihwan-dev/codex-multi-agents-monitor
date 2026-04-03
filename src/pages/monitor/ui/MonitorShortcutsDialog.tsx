@@ -45,9 +45,11 @@ export function MonitorShortcutsDialog({
           </DialogDescription>
         </DialogHeader>
         <ul className="grid gap-2 pl-5 text-sm text-muted-foreground">
-          <li>`/` search focus</li>
-          <li>`I` inspector toggle</li>
-          <li>`.` follow live</li>
+          <li>`/` or `F` search focus</li>
+          <li>`I` inspector toggle (not yet implemented)</li>
+          <li>`.` follow live toggle</li>
+          <li>`↑ ↓` event navigation</li>
+          <li>`C` context drawer</li>
           <li>`?` shortcuts help</li>
           <li>`Cmd/Ctrl + K` shortcuts help</li>
         </ul>
