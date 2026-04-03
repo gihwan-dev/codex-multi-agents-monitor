@@ -146,8 +146,8 @@ fn load_claude_recent_index_items(
         )?;
     Ok(session_files
         .into_iter()
-        .take(CLAUDE_RECENT_SESSION_SCAN_LIMIT)
         .filter_map(|session_file| build_claude_recent_index_item(&session_file, project_roots))
+        .take(CLAUDE_RECENT_SESSION_SCAN_LIMIT)
         .collect())
 }
 
@@ -485,7 +485,7 @@ fn resolve_live_workspace_identity(
 mod tests {
     use super::{load_recent_session_index_from_disk, load_recent_session_snapshot_from_disk};
     use crate::{
-        domain::ingest_policy::DEFAULT_THREAD_TITLE,
+        domain::ingest_policy::{CLAUDE_RECENT_SESSION_SCAN_LIMIT, DEFAULT_THREAD_TITLE},
         domain::session::RecentSessionIndexItem,
         test_support::{
             create_git_workspace, create_linked_worktree, create_state_database, insert_thread_row,
@@ -631,6 +631,27 @@ mod tests {
                 archived: false,
                 events: fixture.events,
             },
+        );
+    }
+
+    fn write_claude_recent_fixture(
+        session_file: &Path,
+        session_id: &str,
+        workspace_path: &Path,
+        title: &str,
+    ) {
+        write_session_lines(
+            session_file,
+            vec![
+                format!(
+                    r#"{{"type":"user","sessionId":"{session_id}","timestamp":"2026-04-01T00:00:00.000Z","cwd":"{workspace_path}","message":{{"role":"user","content":[{{"type":"text","text":"{title}"}}]}}}}"#,
+                    workspace_path = workspace_path.display()
+                ),
+                format!(
+                    r#"{{"type":"assistant","sessionId":"{session_id}","timestamp":"2026-04-01T00:00:01.000Z","cwd":"{workspace_path}","message":{{"role":"assistant","model":"claude-opus-4-6","content":[{{"type":"text","text":"done"}}]}}}}"#,
+                    workspace_path = workspace_path.display()
+                ),
+            ],
         );
     }
 
@@ -896,6 +917,47 @@ mod tests {
         assert_eq!(item.display_name, "automation-demo");
         assert_eq!(item.title, DEFAULT_THREAD_TITLE);
         assert!(item.first_user_message.is_none());
+    }
+
+    #[test]
+    fn continues_scanning_claude_sessions_until_it_fills_the_limit_with_valid_items() {
+        let ctx = RecentSessionTestContext::new("recent-index-claude-limit");
+        let claude_projects_root = ctx.temp_root.join(".claude/projects");
+        let valid_workspace = ctx.projects_root.join("claude-demo");
+        let valid_project_dir = claude_projects_root.join("valid-project");
+        let valid_session_file = valid_project_dir.join("session-valid.jsonl");
+
+        create_git_workspace(&valid_workspace);
+        fs::create_dir_all(&valid_project_dir).expect("valid project dir should exist");
+        write_claude_recent_fixture(
+            &valid_session_file,
+            "claude-valid",
+            &valid_workspace,
+            "Keep scanning until you find me.",
+        );
+
+        std::thread::sleep(std::time::Duration::from_millis(20));
+
+        let invalid_workspace = ctx.temp_root.join("outside-project-roots/claude");
+        for index in 0..CLAUDE_RECENT_SESSION_SCAN_LIMIT {
+            let project_dir = claude_projects_root.join(format!("invalid-project-{index}"));
+            fs::create_dir_all(&project_dir).expect("invalid project dir should exist");
+            write_claude_recent_fixture(
+                &project_dir.join(format!("session-{index}.jsonl")),
+                &format!("claude-invalid-{index}"),
+                &invalid_workspace,
+                "Ignore this workspace.",
+            );
+        }
+
+        let item = load_recent_session_index_from_disk()
+            .expect("recent index should load")
+            .into_iter()
+            .find(|item| item.provider == crate::domain::session::SessionProvider::Claude)
+            .expect("valid claude session should survive filtering");
+
+        assert_eq!(item.session_id, "claude-valid");
+        assert_eq!(item.display_name, "claude-demo");
     }
 
     #[test]
