@@ -5,7 +5,6 @@ import {
   resetSessionScoreLoader,
   type SaveSessionScoreValues,
   startSessionScoreSave,
-  throwSessionScoreSaveFailure,
   watchSessionScoreLoader,
 } from "./sessionScoreDetailsHelpers";
 
@@ -74,7 +73,7 @@ function useSessionScoreSave(
           values,
         });
       } catch {
-        throwSessionScoreSaveFailure(setError);
+        setError("Failed to save session score.");
       } finally {
         setPending(false);
       }

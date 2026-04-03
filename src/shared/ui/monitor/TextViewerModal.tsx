@@ -93,10 +93,13 @@ function CopyButton({ content }: { content: string | null }) {
 
   const handleCopy = useCallback(() => {
     if (!content) return;
-    navigator.clipboard.writeText(content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
   }, [content]);
 
   if (!content) return null;
