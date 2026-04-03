@@ -2,6 +2,7 @@ import type { CandidateRun } from "../../../entities/eval";
 import { formatRelativeTime } from "../../../shared/lib/format";
 
 interface EvalRunPickerProps {
+  excludeId?: string | null;
   label: string;
   onChange: (value: string | null) => void;
   runs: CandidateRun[];
@@ -9,6 +10,7 @@ interface EvalRunPickerProps {
 }
 
 export function EvalRunPicker({
+  excludeId = null,
   label,
   onChange,
   runs,
@@ -26,7 +28,7 @@ export function EvalRunPicker({
       >
         <option value="">Select run</option>
         {runs.map((run) => (
-          <option key={run.id} value={run.id}>
+          <option key={run.id} value={run.id} disabled={run.id === excludeId}>
             {run.candidateLabel} · {formatRelativeTime(run.startedAtMs)} ago
           </option>
         ))}
