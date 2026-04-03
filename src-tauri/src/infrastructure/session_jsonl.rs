@@ -94,6 +94,7 @@ struct RecentIndexPrefixScan {
 struct ArchivedIndexScan {
     model: Option<String>,
     first_user_message: Option<String>,
+    last_timestamp: Option<String>,
 }
 
 struct SessionSnapshotCollector {
@@ -240,6 +241,7 @@ where
         return Ok(None);
     }
 
+    let started_at = started_at_from_meta(&meta);
     let mut scan = ArchivedIndexScan::default();
     visit_entries_with_limit_until_error(reader, scan_limit, |entry| scan.consume(entry));
 
@@ -247,8 +249,8 @@ where
         provider: SessionProvider::Codex,
         session_id: session_id_from_meta(session_file, &meta),
         workspace_path,
-        started_at: started_at_from_meta(&meta),
-        updated_at: started_at_from_meta(&meta),
+        started_at: started_at.clone(),
+        updated_at: scan.last_timestamp.unwrap_or(started_at),
         model: scan.model,
         first_user_message: scan.first_user_message,
     }))
@@ -509,6 +511,7 @@ impl ArchivedIndexScan {
     fn consume(&mut self, entry: Value) {
         self.capture_model(&entry);
         self.capture_first_user_message(&entry);
+        self.capture_last_timestamp(&entry);
     }
 
     fn capture_model(&mut self, entry: &Value) {
@@ -538,6 +541,14 @@ impl ArchivedIndexScan {
         }
 
         self.first_user_message = Some(truncate_utf8_safe(&text, 200));
+    }
+
+    fn capture_last_timestamp(&mut self, entry: &Value) {
+        if let Some(timestamp) = entry.get("timestamp").and_then(Value::as_str) {
+            if !timestamp.trim().is_empty() {
+                self.last_timestamp = Some(timestamp.to_owned());
+            }
+        }
     }
 }
 
@@ -1014,6 +1025,36 @@ mod tests {
         .expect("archived index read should succeed");
 
         assert!(entry.is_none());
+    }
+
+    #[test]
+    fn archived_index_uses_last_entry_timestamp_for_updated_at() {
+        let temp_dir = TempDir::new("archived-index-last-timestamp");
+        let session_file = temp_dir.path.join("rollout.jsonl");
+
+        fs::write(
+            &session_file,
+            [
+                r#"{"timestamp":"2026-03-04T10:14:39.570Z","type":"session_meta","payload":{"id":"archived-001","timestamp":"2026-03-04T10:14:39.570Z","cwd":"/tmp/workspace","source":"desktop"}}"#,
+                r#"{"timestamp":"2026-03-04T10:14:40.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#,
+                r#"{"timestamp":"2026-03-04T10:15:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Investigate archived run"}]}}"#,
+                r#"{"timestamp":"2026-03-04T10:16:45.000Z","type":"event_msg","payload":{"type":"task_complete"}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let entry = parse_archived_index_entry(&session_file, 50, |_| false)
+            .expect("archived index read should succeed")
+            .expect("archived index should parse");
+
+        assert_eq!(entry.started_at, "2026-03-04T10:14:39.570Z");
+        assert_eq!(entry.updated_at, "2026-03-04T10:16:45.000Z");
+        assert_eq!(entry.model, Some("gpt-5".to_owned()));
+        assert_eq!(
+            entry.first_user_message.as_deref(),
+            Some("Investigate archived run")
+        );
     }
 
     #[test]
