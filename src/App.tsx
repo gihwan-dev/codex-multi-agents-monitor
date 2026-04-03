@@ -1,16 +1,18 @@
 import { useCallback, useRef, useState } from "react";
 import type { RunDataset } from "./entities/run";
+import { EvalPage } from "./pages/eval";
 import { MonitorPage } from "./pages/monitor";
 import { SkillActivityPage } from "./pages/skill-activity";
 import { ThemeProvider } from "./shared/theme";
 
-type AppView = "monitor" | "skill-activity";
+type AppView = "monitor" | "skill-activity" | "eval";
 
 function useViewState() {
   const [currentView, setCurrentView] = useState<AppView>("monitor");
   const goToSkills = useCallback(() => setCurrentView("skill-activity"), []);
   const goToMonitor = useCallback(() => setCurrentView("monitor"), []);
-  return { currentView, goToSkills, goToMonitor };
+  const goToEval = useCallback(() => setCurrentView("eval"), []);
+  return { currentView, goToSkills, goToMonitor, goToEval };
 }
 
 function useDatasetsRef() {
@@ -34,6 +36,7 @@ export function App() {
       <div style={{ display: view.currentView === "monitor" ? "contents" : "none" }}>
         <MonitorPage
           onNavigateToSkills={view.goToSkills}
+          onNavigateToEval={view.goToEval}
           onDatasetsSync={data.sync}
         />
       </div>
@@ -44,6 +47,9 @@ export function App() {
           activeRunId={data.activeRunIdRef.current}
           onNavigateToMonitor={view.goToMonitor}
         />
+      )}
+      {view.currentView === "eval" && (
+        <EvalPage onNavigateToMonitor={view.goToMonitor} />
       )}
     </ThemeProvider>
   );

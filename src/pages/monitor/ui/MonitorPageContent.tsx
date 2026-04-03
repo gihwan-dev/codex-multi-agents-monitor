@@ -25,15 +25,24 @@ function SelectionAnnouncement({
 
 interface MonitorPageContentProps extends MonitorPageView {
   onNavigateToSkills?: () => void;
+  onNavigateToEval?: () => void;
 }
 
-export function MonitorPageContent({ onNavigateToSkills, ...view }: MonitorPageContentProps) {
+export function MonitorPageContent({
+  onNavigateToSkills,
+  onNavigateToEval,
+  ...view
+}: MonitorPageContentProps) {
   return (
     <div className="monitor-shell">
       <SelectionAnnouncement
         announcement={view.selectionLoadState?.announcement ?? null}
       />
-      <MonitorPageHeader {...view} onNavigateToSkills={onNavigateToSkills} />
+      <MonitorPageHeader
+        {...view}
+        onNavigateToSkills={onNavigateToSkills}
+        onNavigateToEval={onNavigateToEval}
+      />
       <MonitorWorkspace {...view} />
       <MonitorShortcutsDialog
         open={view.state.shortcutHelpOpen}

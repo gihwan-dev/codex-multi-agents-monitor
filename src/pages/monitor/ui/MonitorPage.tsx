@@ -5,6 +5,7 @@ import { useMonitorPageView } from "./useMonitorPageView";
 
 interface MonitorPageProps {
   onNavigateToSkills?: () => void;
+  onNavigateToEval?: () => void;
   onDatasetsSync?: (ds: readonly RunDataset[], id: string) => void;
 }
 
@@ -21,5 +22,11 @@ export function MonitorPage(props: MonitorPageProps) {
 
   useSyncEffect(view.state.datasets, view.state.activeRunId, props.onDatasetsSync);
 
-  return <MonitorPageContent {...view} onNavigateToSkills={props.onNavigateToSkills} />;
+  return (
+    <MonitorPageContent
+      {...view}
+      onNavigateToSkills={props.onNavigateToSkills}
+      onNavigateToEval={props.onNavigateToEval}
+    />
+  );
 }

@@ -12,6 +12,7 @@ interface MonitorTopBarProps {
   onExport: (target: HTMLElement) => void;
   onToggleFollowLive: () => void;
   onToggleShortcuts: (target?: HTMLElement | null) => void;
+  onNavigateToEval?: () => void;
   onNavigateToSkills?: () => void;
 }
 
@@ -23,6 +24,7 @@ export function MonitorTopBar({
   onExport,
   onToggleFollowLive,
   onToggleShortcuts,
+  onNavigateToEval,
   onNavigateToSkills,
 }: MonitorTopBarProps) {
   return (
@@ -33,6 +35,7 @@ export function MonitorTopBar({
           dataset={dataset}
           followLive={followLive}
           onExport={onExport}
+          onNavigateToEval={onNavigateToEval}
           onToggleFollowLive={onToggleFollowLive}
           onToggleShortcuts={onToggleShortcuts}
           onNavigateToSkills={onNavigateToSkills}
