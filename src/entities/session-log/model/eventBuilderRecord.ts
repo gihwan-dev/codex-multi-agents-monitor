@@ -1,7 +1,7 @@
 import type { EventRecord } from "../../run";
 import { buildEntryEventId } from "../lib/helpers";
-import { parseTokenCountPayload } from "../lib/tokenCount";
 import type { EntryContext, EntryEventOptions } from "./eventBuilderTypes";
+import { normalizeEntryTokenMetrics } from "./eventTokenMetrics";
 
 const DEFAULT_EVENT_METRICS = {
   tokensIn: 0,
@@ -35,7 +35,7 @@ export function applyTokenCountToLastEvent(
   rawTokenCount: string | null,
 ) {
   const lastEvent = events[events.length - 1];
-  const tokens = normalizeTokenCounts(parseTokenPayload(rawTokenCount));
+  const tokens = normalizeEntryTokenMetrics(rawTokenCount);
   if (!lastEvent || !tokens) {
     return;
   }
@@ -65,9 +65,15 @@ export function createEntryEvent({
     ...buildEntryEventLifecycle(
       { eventType, startTs, safeEndTs, isLatest, status, waitReason },
     ),
-    ...buildEntryEventPresentation(
-      { title, inputPreview, outputPreview, errorMessage, model, toolName },
-    ),
+    ...buildEntryEventPresentation({
+      provider: lane.provider,
+      title,
+      inputPreview,
+      outputPreview,
+      errorMessage,
+      model,
+      toolName,
+    }),
     ...DEFAULT_EVENT_METRICS,
   };
 }
@@ -126,6 +132,7 @@ function buildEntryEventLifecycle({
 }
 
 interface EntryEventPresentationOptions {
+  provider: EventRecord["provider"];
   title: string;
   inputPreview: string | null;
   outputPreview: string | null;
@@ -135,8 +142,15 @@ interface EntryEventPresentationOptions {
 }
 
 function buildEntryEventPresentation(options: EntryEventPresentationOptions) {
-  const { title, inputPreview, outputPreview, errorMessage, model, toolName } =
-    options;
+  const {
+    provider,
+    title,
+    inputPreview,
+    outputPreview,
+    errorMessage,
+    model,
+    toolName,
+  } = options;
   return {
     title,
     inputPreview,
@@ -144,7 +158,7 @@ function buildEntryEventPresentation(options: EntryEventPresentationOptions) {
     artifactId: null,
     errorCode: null,
     errorMessage: errorMessage ?? null,
-    provider: "OpenAI",
+    provider,
     model,
     toolName: toolName ?? null,
   } satisfies Pick<
@@ -166,47 +180,4 @@ function resolveEventStatus(
   status: EventRecord["status"],
 ): EventRecord["status"] {
   return isLatest ? status : "done";
-}
-
-function normalizeTokenCounts(
-  tokens: ReturnType<typeof parseTokenPayload>,
-) {
-  if (!tokens) {
-    return null;
-  }
-
-  return buildNormalizedTokenMetrics(tokens);
-}
-
-function buildNormalizedTokenMetrics(
-  tokens: NonNullable<ReturnType<typeof parseTokenPayload>>,
-) {
-  return {
-    tokensIn: resolveTokenCount(tokens.last?.in),
-    tokensOut: resolveTokenCount(tokens.last?.out),
-    reasoningTokens: resolveTokenCount(tokens.last?.reasoning),
-    cacheReadTokens: resolveTokenCount(tokens.last?.cached),
-    measuredContextWindowTokens: resolveMeasuredTokenCount(tokens.total?.in),
-    measuredCumulativeTokens: resolveMeasuredTokenCount(tokens.total?.total),
-  } satisfies Pick<
-    EventRecord,
-    | "tokensIn"
-    | "tokensOut"
-    | "reasoningTokens"
-    | "cacheReadTokens"
-    | "measuredContextWindowTokens"
-    | "measuredCumulativeTokens"
-  >;
-}
-
-function resolveTokenCount(value: number | undefined) {
-  return typeof value === "number" ? value : 0;
-}
-
-function resolveMeasuredTokenCount(value: number | undefined) {
-  return typeof value === "number" ? value : null;
-}
-
-function parseTokenPayload(rawTokenCount: string | null) {
-  return parseTokenCountPayload(rawTokenCount);
 }

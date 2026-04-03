@@ -24,6 +24,7 @@ export type WorkspaceQuickFilterKey = "all" | "live" | "waiting" | "failed";
 export interface WorkspaceRunRow {
   id: string;
   title: string;
+  provider: string | null;
   status: RunStatus;
   lastEventSummary: string;
   lastActivityTs: number;

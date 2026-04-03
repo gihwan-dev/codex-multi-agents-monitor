@@ -12,6 +12,13 @@ use crate::{
         session::{ArchivedSessionIndex, ArchivedSessionIndexResult, SessionLogSnapshot},
     },
     infrastructure::{
+        claude_session_discovery::{
+            collect_claude_main_session_files, resolve_claude_projects_root,
+        },
+        claude_session_jsonl::{
+            parse_claude_archived_index_entry, parse_claude_archived_session_snapshot,
+            read_claude_subagent_snapshots,
+        },
         filesystem::{collect_jsonl_files, resolve_codex_home, resolve_project_roots},
         session_jsonl::{parse_archived_index_entry, parse_archived_session_snapshot},
         state_sqlite::load_thread_subagent_hints,
@@ -32,14 +39,16 @@ pub(crate) fn build_archived_index() -> io::Result<Vec<ArchivedSessionIndex>> {
     let codex_home = resolve_codex_home()?;
     let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let archived_root = codex_home.join("archived_sessions");
-    let archived_files = collect_archived_session_files(&archived_root)?;
-
-    let mut entries = Vec::new();
-    for file_path in &archived_files {
-        if let Ok(Some(entry)) = build_archived_index_entry(file_path, &project_roots) {
-            entries.push(entry);
-        }
-    }
+    let mut entries =
+        build_codex_archived_index_entries(&archived_root, &project_roots).unwrap_or_default();
+    entries.extend(build_claude_archived_index_entries(&project_roots).unwrap_or_default());
+    entries.sort_by(|left, right| {
+        right
+            .updated_at
+            .cmp(&left.updated_at)
+            .then_with(|| right.started_at.cmp(&left.started_at))
+            .then_with(|| left.file_path.cmp(&right.file_path))
+    });
     Ok(entries)
 }
 
@@ -50,31 +59,30 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let archived_root = codex_home.join("archived_sessions");
     let path = Path::new(file_path);
-
     let canonical_path = fs::canonicalize(path).ok()?;
-    let canonical_root = fs::canonicalize(&archived_root).ok()?;
-    if !canonical_path.starts_with(&canonical_root) {
-        return None;
-    }
 
-    let mut snapshot = build_archived_session_snapshot(path, &project_roots).ok()??;
-    snapshot.subagents = load_archived_subagents_best_effort(
-        &snapshot,
-        &ArchivedSubagentScope {
-            archived_root: &archived_root,
+    load_codex_archived_session_snapshot(
+        path,
+        &CodexArchivedSnapshotScope {
             canonical_path: &canonical_path,
+            project_roots: &project_roots,
+            archived_root: &archived_root,
             codex_home: &codex_home,
         },
-    );
-    snapshot.max_context_window_tokens =
-        resolve_snapshot_max_context_window_tokens(&snapshot, &codex_home);
-
-    Some(snapshot)
+    )
+    .or_else(|| load_claude_archived_session_snapshot(path, &canonical_path, &project_roots))
 }
 
 struct ArchivedSubagentScope<'a> {
     archived_root: &'a Path,
     canonical_path: &'a Path,
+    codex_home: &'a Path,
+}
+
+struct CodexArchivedSnapshotScope<'a> {
+    canonical_path: &'a Path,
+    project_roots: &'a [PathBuf],
+    archived_root: &'a Path,
     codex_home: &'a Path,
 }
 
@@ -95,11 +103,82 @@ fn load_archived_subagents_best_effort(
     .unwrap_or_default()
 }
 
+fn load_codex_archived_session_snapshot(
+    path: &Path,
+    scope: &CodexArchivedSnapshotScope<'_>,
+) -> Option<SessionLogSnapshot> {
+    let canonical_root = fs::canonicalize(scope.archived_root).ok()?;
+    if !scope.canonical_path.starts_with(&canonical_root) {
+        return None;
+    }
+
+    let mut snapshot = build_archived_session_snapshot(path, scope.project_roots).ok()??;
+    snapshot.subagents = load_archived_subagents_best_effort(
+        &snapshot,
+        &ArchivedSubagentScope {
+            archived_root: scope.archived_root,
+            canonical_path: scope.canonical_path,
+            codex_home: scope.codex_home,
+        },
+    );
+    snapshot.max_context_window_tokens =
+        resolve_snapshot_max_context_window_tokens(&snapshot, scope.codex_home);
+    Some(snapshot)
+}
+
+fn load_claude_archived_session_snapshot(
+    path: &Path,
+    canonical_path: &Path,
+    project_roots: &[PathBuf],
+) -> Option<SessionLogSnapshot> {
+    let claude_root = resolve_claude_projects_root().ok()?;
+    let canonical_claude_root = fs::canonicalize(&claude_root).ok()?;
+    if !canonical_path.starts_with(&canonical_claude_root) {
+        return None;
+    }
+
+    let mut snapshot = build_claude_archived_session_snapshot(path, project_roots).ok()??;
+    snapshot.subagents =
+        read_claude_subagent_snapshots(canonical_path, &snapshot.session_id).ok()?;
+    Some(snapshot)
+}
+
 fn collect_archived_session_files(archived_root: &Path) -> io::Result<Vec<PathBuf>> {
     let mut archived_files = Vec::new();
     collect_jsonl_files(archived_root, &mut archived_files)?;
     archived_files.sort_by(|left, right| right.cmp(left));
     Ok(archived_files)
+}
+
+fn build_codex_archived_index_entries(
+    archived_root: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Vec<ArchivedSessionIndex>> {
+    let archived_files = collect_archived_session_files(archived_root)?;
+    let mut entries = Vec::new();
+    for file_path in &archived_files {
+        if let Ok(Some(entry)) = build_archived_index_entry(file_path, project_roots) {
+            entries.push(entry);
+        }
+    }
+
+    Ok(entries)
+}
+
+fn build_claude_archived_index_entries(
+    project_roots: &[PathBuf],
+) -> io::Result<Vec<ArchivedSessionIndex>> {
+    let claude_root = resolve_claude_projects_root()?;
+    let session_files = collect_claude_main_session_files(&claude_root)?;
+    let mut entries = Vec::new();
+
+    for file_path in &session_files {
+        if let Ok(Some(entry)) = build_claude_archived_index_entry(file_path, project_roots) {
+            entries.push(entry);
+        }
+    }
+
+    Ok(entries)
 }
 
 fn build_archived_index_entry(
@@ -116,6 +195,35 @@ fn build_archived_index_entry(
             resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
         ArchivedSessionIndex {
+            provider: parsed.provider,
+            session_id: parsed.session_id,
+            workspace_path: parsed.workspace_path,
+            origin_path,
+            display_name,
+            started_at: parsed.started_at,
+            updated_at: parsed.updated_at,
+            model: parsed.model,
+            message_count: 0,
+            file_path: session_file.display().to_string(),
+            first_user_message: parsed.first_user_message,
+        }
+    }))
+}
+
+fn build_claude_archived_index_entry(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Option<ArchivedSessionIndex>> {
+    let parsed = parse_claude_archived_index_entry(session_file, |workspace_path| {
+        is_conductor_workspace_path(Path::new(workspace_path))
+    })?;
+
+    Ok(parsed.map(|parsed| {
+        let (origin_path, display_name) =
+            resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
+
+        ArchivedSessionIndex {
+            provider: parsed.provider,
             session_id: parsed.session_id,
             workspace_path: parsed.workspace_path,
             origin_path,
@@ -143,6 +251,38 @@ fn build_archived_session_snapshot(
             resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
         SessionLogSnapshot {
+            provider: parsed.provider,
+            session_id: parsed.session_id,
+            forked_from_id: parsed.forked_from_id,
+            workspace_path: parsed.workspace_path,
+            origin_path,
+            display_name,
+            started_at: parsed.started_at,
+            updated_at: parsed.updated_at,
+            model: parsed.model,
+            max_context_window_tokens: parsed.max_context_window_tokens,
+            entries: parsed.entries,
+            subagents: Vec::new(),
+            is_archived: true,
+            prompt_assembly: parsed.prompt_assembly,
+        }
+    }))
+}
+
+fn build_claude_archived_session_snapshot(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Option<SessionLogSnapshot>> {
+    let parsed = parse_claude_archived_session_snapshot(session_file, |workspace_path| {
+        is_conductor_workspace_path(Path::new(workspace_path))
+    })?;
+
+    Ok(parsed.map(|parsed| {
+        let (origin_path, display_name) =
+            resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
+
+        SessionLogSnapshot {
+            provider: parsed.provider,
             session_id: parsed.session_id,
             forked_from_id: parsed.forked_from_id,
             workspace_path: parsed.workspace_path,
@@ -181,7 +321,7 @@ mod tests {
         build_archived_index, load_archived_session_snapshot_from_disk,
         load_archived_subagents_best_effort, ArchivedSubagentScope,
     };
-    use crate::domain::session::SessionLogSnapshot;
+    use crate::domain::session::{SessionLogSnapshot, SessionProvider};
     use crate::test_support::{
         create_git_workspace, session_meta_line_with_fork, session_meta_line_with_source,
         write_session_lines, write_worker_subagent_session, RecentSessionTestContext,
@@ -252,6 +392,7 @@ mod tests {
     #[test]
     fn archived_subagent_loading_is_best_effort_on_resolver_errors() {
         let snapshot = SessionLogSnapshot {
+            provider: SessionProvider::Codex,
             session_id: "archived-parent".to_owned(),
             forked_from_id: None,
             workspace_path: "/tmp/workspace".to_owned(),

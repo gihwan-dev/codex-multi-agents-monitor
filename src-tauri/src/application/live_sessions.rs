@@ -54,9 +54,9 @@ impl RecentSessionWatch {
         subscription_id: String,
         now: Instant,
     ) -> io::Result<Self> {
-        let last_version = Some(read_file_version(&selection.candidate.file_path)?);
+        let last_version = Some(read_file_version(selection.file_path())?);
         Ok(Self {
-            file_path: selection.candidate.file_path.display().to_string(),
+            file_path: selection.file_path().display().to_string(),
             selection,
             subscription_id,
             last_version,
@@ -70,7 +70,7 @@ impl RecentSessionWatch {
     }
 
     fn poll_at(&mut self, now: Instant) -> Option<RecentSessionLiveUpdate> {
-        match read_file_version(&self.selection.candidate.file_path) {
+        match read_file_version(self.selection.file_path()) {
             Ok(version) => {
                 if self.last_version.as_ref() != Some(&version) {
                     return self.refresh_snapshot(version, now);

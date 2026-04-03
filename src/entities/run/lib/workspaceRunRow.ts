@@ -5,6 +5,7 @@ import type {
   WorkspaceRunRow,
 } from "../model/types.js";
 import { sortEvents } from "./selectorShared.js";
+import { resolveMainSessionProvider } from "./sessionProvider.js";
 
 function sanitizeSidebarRunTitle(value: string) {
   return value
@@ -57,6 +58,7 @@ function createWorkspaceRunRow(options: {
   return {
     id: dataset.run.traceId,
     title: deriveWorkspaceRunTitle(dataset, orderedEvents),
+    provider: resolveMainSessionProvider(dataset),
     status: dataset.run.status,
     lastEventSummary: buildLastEventSummary(latestEvent),
     lastActivityTs,
