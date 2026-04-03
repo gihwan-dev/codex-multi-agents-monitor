@@ -3,9 +3,14 @@ import type { MonitorPageView } from "./monitorPageViewTypes";
 
 interface MonitorPageHeaderProps extends MonitorPageView {
   onNavigateToSkills?: () => void;
+  onNavigateToEval?: () => void;
 }
 
-export function MonitorPageHeader({ onNavigateToSkills, ...view }: MonitorPageHeaderProps) {
+export function MonitorPageHeader({
+  onNavigateToSkills,
+  onNavigateToEval,
+  ...view
+}: MonitorPageHeaderProps) {
   return (
     <MonitorTopBar
       dataset={view.chromeState?.dataset ?? null}
@@ -16,6 +21,7 @@ export function MonitorPageHeader({ onNavigateToSkills, ...view }: MonitorPageHe
         view.drawerTriggerRef.current = target;
         view.actions.exportDataset(false);
       }}
+      onNavigateToEval={onNavigateToEval}
       onToggleFollowLive={view.actions.toggleFollowLive}
       onToggleShortcuts={view.toggleShortcuts}
       onNavigateToSkills={onNavigateToSkills}

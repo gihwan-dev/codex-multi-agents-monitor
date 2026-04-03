@@ -8,6 +8,7 @@ interface MonitorTopBarActionsProps {
   dataset: RunDataset | null;
   followLive: boolean;
   onExport: (target: HTMLElement) => void;
+  onNavigateToEval?: () => void;
   onToggleFollowLive: () => void;
   onToggleShortcuts: (target?: HTMLElement | null) => void;
   onNavigateToSkills?: () => void;
@@ -23,32 +24,97 @@ function resolveFollowLiveButtonClassName(followLive: boolean) {
     : chromeActionClassName;
 }
 
+function NavigationActions({
+  onNavigateToEval,
+  onNavigateToSkills,
+}: Pick<MonitorTopBarActionsProps, "onNavigateToEval" | "onNavigateToSkills">) {
+  return (
+    <>
+      {onNavigateToSkills && (
+        <Button
+          type="button"
+          variant="outline"
+          className={chromeActionClassName}
+          onClick={onNavigateToSkills}
+        >
+          Skills
+        </Button>
+      )}
+      {onNavigateToEval && (
+        <Button
+          type="button"
+          variant="outline"
+          className={chromeActionClassName}
+          onClick={onNavigateToEval}
+        >
+          Eval
+        </Button>
+      )}
+    </>
+  );
+}
+
+function FollowLiveAction({
+  actionsDisabled,
+  dataset,
+  followLive,
+  onToggleFollowLive,
+}: Pick<
+  MonitorTopBarActionsProps,
+  "actionsDisabled" | "dataset" | "followLive" | "onToggleFollowLive"
+>) {
+  const followLiveDisabled = actionsDisabled || dataset?.run.liveMode !== "live";
+
+  return (
+    <Button
+      type="button"
+      variant={followLive ? "default" : "outline"}
+      disabled={followLiveDisabled}
+      onClick={onToggleFollowLive}
+      className={resolveFollowLiveButtonClassName(followLive)}
+    >
+      {resolveFollowLiveLabel(dataset, followLive)}
+    </Button>
+  );
+}
+
 export function MonitorTopBarActions({
   actionsDisabled = false,
   dataset,
   followLive,
   onExport,
+  onNavigateToEval,
   onToggleFollowLive,
   onToggleShortcuts,
   onNavigateToSkills,
 }: MonitorTopBarActionsProps) {
-  const followLiveDisabled = actionsDisabled || dataset?.run.liveMode !== "live";
-
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      {onNavigateToSkills && (
-        <Button type="button" variant="outline" className={chromeActionClassName} onClick={onNavigateToSkills}>
-          Skills
-        </Button>
-      )}
-      <Button type="button" variant={followLive ? "default" : "outline"} disabled={followLiveDisabled} onClick={onToggleFollowLive} className={resolveFollowLiveButtonClassName(followLive)}>
-        {resolveFollowLiveLabel(dataset, followLive)}
-      </Button>
-      <Button type="button" disabled={actionsDisabled || !dataset} onClick={(event) => dataset && onExport(event.currentTarget)} className="bg-primary text-primary-foreground">
+      <NavigationActions
+        onNavigateToEval={onNavigateToEval}
+        onNavigateToSkills={onNavigateToSkills}
+      />
+      <FollowLiveAction
+        actionsDisabled={actionsDisabled}
+        dataset={dataset}
+        followLive={followLive}
+        onToggleFollowLive={onToggleFollowLive}
+      />
+      <Button
+        type="button"
+        disabled={actionsDisabled || !dataset}
+        onClick={(event) => dataset && onExport(event.currentTarget)}
+        className="bg-primary text-primary-foreground"
+      >
         Export
       </Button>
       <ThemePreferenceSelect />
-      <Button type="button" variant="outline" className={chromeActionClassName} onClick={(event) => onToggleShortcuts(event.currentTarget)}>
+      <Button
+        type="button"
+        variant="outline"
+        className={chromeActionClassName}
+        onClick={(event) => onToggleShortcuts(event.currentTarget)}
+      >
         Help
       </Button>
     </div>

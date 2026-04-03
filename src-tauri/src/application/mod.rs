@@ -1,4 +1,6 @@
 pub(crate) mod archived_sessions;
+pub(crate) mod eval_grader;
+pub(crate) mod eval_service;
 pub(crate) mod live_sessions;
 pub(crate) mod recent_sessions;
 pub(crate) mod session_context_window;

@@ -1,6 +1,7 @@
 pub(crate) mod claude_session_discovery;
 pub(crate) mod claude_session_jsonl;
 pub(crate) mod codex_config;
+pub(crate) mod eval_storage;
 pub(crate) mod filesystem;
 pub(crate) mod git;
 pub(crate) mod session_jsonl;
