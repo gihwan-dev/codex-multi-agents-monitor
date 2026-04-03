@@ -182,6 +182,8 @@
     animation: none;
   }
 
+  body,
+  body *,
   .monitor-shell,
   .monitor-shell * {
     scroll-behavior: auto;

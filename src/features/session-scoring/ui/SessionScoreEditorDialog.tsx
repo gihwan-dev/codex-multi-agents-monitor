@@ -12,6 +12,7 @@ import {
 import { useSessionScoreEditorState } from "./sessionScoreEditorState";
 
 export interface SessionScoreEditorDialogProps {
+  error?: string;
   initialNote: string | null;
   initialReviewer: string | null;
   initialScore: number | null;
@@ -23,6 +24,7 @@ export interface SessionScoreEditorDialogProps {
 }
 
 export function SessionScoreEditorDialog({
+  error,
   initialNote,
   initialReviewer,
   initialScore,
@@ -59,6 +61,11 @@ export function SessionScoreEditorDialog({
           setReviewer={form.setReviewer}
           setScore={form.setScore}
         />
+        {error ? (
+          <p role="alert" aria-live="assertive" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
         <SessionScoreDialogFooter
           disabled={form.saveDisabled || pending}
           onClose={() => onOpenChange(false)}
