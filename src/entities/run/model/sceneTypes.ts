@@ -20,11 +20,15 @@ export interface AnomalyJump {
 }
 
 export type WorkspaceQuickFilterKey = "all" | "live" | "waiting" | "failed";
+export type WorkspaceScoreSortKey = "recent" | "score";
+export type WorkspaceScoreFilterKey = "all" | "scored" | "high";
 
 export interface WorkspaceRunRow {
   id: string;
   title: string;
   provider: string | null;
+  score: number | null;
+  profileLabel?: string | null;
   status: RunStatus;
   lastEventSummary: string;
   lastActivityTs: number;

@@ -1,11 +1,17 @@
 import type {
   WorkspaceRunRow,
+  WorkspaceScoreFilterKey,
+  WorkspaceScoreSortKey,
   WorkspaceThreadGroup,
   WorkspaceTreeItem,
   WorkspaceTreeModel,
 } from "../../../entities/run";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { formatRelativeTime } from "../../../shared/lib/format";
+import {
+  matchesSidebarRunFilters,
+  sortWorkspaceTreeItems,
+} from "./sidebarTreeScoring";
 
 export interface SidebarRunSource {
   workspaceId: string;
@@ -43,20 +49,6 @@ function buildThreadGroup(source: SidebarRunSource): WorkspaceThreadGroup {
   } satisfies WorkspaceThreadGroup;
 }
 
-function buildSearchTarget(source: SidebarRunSource, runRow: WorkspaceRunRow) {
-  return [
-    source.workspaceName,
-    source.repoPath,
-    source.badge ?? "",
-    runRow.provider ?? "",
-    runRow.title,
-    source.sessionTitle,
-    runRow.lastEventSummary,
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
 function upsertThread(workspace: WorkspaceTreeItem, source: SidebarRunSource) {
   const existingThread = workspace.threads.find((item) => item.id === source.sessionId);
   if (existingThread) {
@@ -73,10 +65,24 @@ function appendSidebarRunSource(options: {
   source: SidebarRunSource;
   normalizedSearch: string;
   referenceTimestamp: number;
+  scoreFilter: WorkspaceScoreFilterKey;
 }) {
-  const { workspaceMap, source, normalizedSearch, referenceTimestamp } = options;
+  const {
+    workspaceMap,
+    source,
+    normalizedSearch,
+    referenceTimestamp,
+    scoreFilter,
+  } = options;
   const runRow = buildSidebarRunRow(source, referenceTimestamp);
-  if (shouldSkipSidebarRunSource(source, runRow, normalizedSearch)) {
+  if (
+    !matchesSidebarRunFilters({
+      source,
+      runRow,
+      normalizedSearch,
+      scoreFilter,
+    })
+  ) {
     return;
   }
 
@@ -93,16 +99,6 @@ function buildSidebarRunRow(
   };
 }
 
-function shouldSkipSidebarRunSource(
-  source: SidebarRunSource,
-  runRow: WorkspaceRunRow,
-  normalizedSearch: string,
-) {
-  return normalizedSearch
-    ? !buildSearchTarget(source, runRow).includes(normalizedSearch)
-    : false;
-}
-
 function appendSidebarRun(
   workspaceMap: Map<string, WorkspaceTreeItem>,
   source: SidebarRunSource,
@@ -115,26 +111,6 @@ function appendSidebarRun(
   workspaceMap.set(source.workspaceId, workspace);
 }
 
-function sortWorkspaceTreeItems(workspaces: WorkspaceTreeItem[]) {
-  return workspaces
-    .map((workspace) => ({
-      ...workspace,
-      threads: workspace.threads
-        .map((thread) => ({
-          ...thread,
-          runs: [...thread.runs].sort(
-            (left, right) => right.lastActivityTs - left.lastActivityTs,
-          ),
-        }))
-        .sort((left, right) => {
-          const rightLatest = right.runs[0]?.lastActivityTs ?? 0;
-          const leftLatest = left.runs[0]?.lastActivityTs ?? 0;
-          return rightLatest - leftLatest;
-        }),
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
 export function resolveWorkspaceIdentity(options: ResolveWorkspaceIdentityOptions) {
   const { projectId, repoPath, displayName, workspaceIdentityOverrides } = options;
   const workspaceIdentity = workspaceIdentityOverrides[repoPath];
@@ -145,10 +121,13 @@ export function resolveWorkspaceIdentity(options: ResolveWorkspaceIdentityOption
   };
 }
 
-export function buildWorkspaceTreeFromSources(
-  sources: SidebarRunSource[],
-  search: string,
-): WorkspaceTreeModel {
+export function buildWorkspaceTreeFromSources(options: {
+  sources: SidebarRunSource[];
+  search: string;
+  scoreSort: WorkspaceScoreSortKey;
+  scoreFilter: WorkspaceScoreFilterKey;
+}): WorkspaceTreeModel {
+  const { sources, search, scoreSort, scoreFilter } = options;
   const referenceTimestamp =
     sources.length > 0
       ? Math.max(...sources.map((source) => source.row.lastActivityTs))
@@ -162,10 +141,11 @@ export function buildWorkspaceTreeFromSources(
       source,
       normalizedSearch,
       referenceTimestamp,
+      scoreFilter,
     });
   });
 
   return {
-    workspaces: sortWorkspaceTreeItems([...workspaceMap.values()]),
+    workspaces: sortWorkspaceTreeItems([...workspaceMap.values()], scoreSort),
   };
 }

@@ -59,6 +59,8 @@ function createWorkspaceRunRow(options: {
     id: dataset.run.traceId,
     title: deriveWorkspaceRunTitle(dataset, orderedEvents),
     provider: resolveMainSessionProvider(dataset),
+    score: null,
+    profileLabel: null,
     status: dataset.run.status,
     lastEventSummary: buildLastEventSummary(latestEvent),
     lastActivityTs,

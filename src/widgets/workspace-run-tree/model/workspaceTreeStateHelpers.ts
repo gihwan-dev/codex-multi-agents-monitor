@@ -3,16 +3,10 @@ import {
   type KeyboardEvent,
   type RefObject,
   type SetStateAction,
-  useDeferredValue,
   useEffect,
-  useMemo,
   useRef,
-  useState,
 } from "react";
-import type { RunDataset, WorkspaceTreeModel } from "../../../entities/run";
-import type { RecentSessionIndexItem } from "../../../entities/session-log";
-import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
-import { buildSidebarTreeModel } from "../lib/sidebarTreeModel";
+import type { WorkspaceTreeModel } from "../../../entities/run";
 import type { flattenTree } from "../lib/workspaceTreeUtils";
 import {
   areWorkspaceIdsEqual,
@@ -22,40 +16,6 @@ import {
   resolveExpandedWorkspaceIds,
   resolveTreeKeyAction,
 } from "../lib/workspaceTreeUtils";
-
-export function useWorkspaceTreeModel(options: {
-  datasets: RunDataset[];
-  recentIndex: RecentSessionIndexItem[];
-  recentIndexReady: boolean;
-  workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
-}) {
-  const {
-    datasets,
-    recentIndex,
-    recentIndexReady,
-    workspaceIdentityOverrides,
-  } = options;
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search);
-  const model = useMemo(
-    () =>
-      buildSidebarTreeModel({
-        datasets,
-        recentIndex,
-        recentIndexReady,
-        search: deferredSearch,
-        workspaceIdentityOverrides,
-      }),
-    [
-      datasets,
-      recentIndex,
-      recentIndexReady,
-      deferredSearch,
-      workspaceIdentityOverrides,
-    ],
-  );
-  return { search, setSearch, model };
-}
 
 export function useWorkspaceTreeSelectionSync(options: {
   activeRunId: string;

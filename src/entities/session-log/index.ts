@@ -8,6 +8,15 @@ export {
 export { buildDatasetFromSessionLog } from "./model/datasetBuilder";
 export { buildDatasetFromSessionLogAsync } from "./model/datasetBuilderAsync";
 export type {
+  LoadSessionScoresQuery,
+  ProfileAgentSnapshot,
+  ProfileRevision,
+  ProfileSnapshot,
+  SaveSessionScoreInput,
+  SessionScore,
+  SessionScoreRecord,
+} from "./model/scoreTypes";
+export type {
   ArchivedSessionIndexItem,
   ArchivedSessionIndexResult,
   RecentSessionIndexItem,

@@ -3,7 +3,11 @@ import {
   type RefObject,
   useEffect,
 } from "react";
-import type { WorkspaceTreeModel } from "../../../entities/run";
+import type {
+  WorkspaceScoreFilterKey,
+  WorkspaceScoreSortKey,
+  WorkspaceTreeModel,
+} from "../../../entities/run";
 import { ScrollArea } from "../../../shared/ui/primitives";
 import { WorkspaceGroup } from "./WorkspaceGroup";
 import { scrollTreeItemIntoView } from "./workspaceTreeMotion";
@@ -14,6 +18,8 @@ interface WorkspaceTreeListProps {
   handleTreeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   model: WorkspaceTreeModel;
   optimisticActiveRunId: string;
+  scoreFilter: WorkspaceScoreFilterKey;
+  scoreSort: WorkspaceScoreSortKey;
   selectRecentRun: (workspaceId: string, runId: string, filePath: string) => void;
   selectRun: (workspaceId: string, runId: string) => void;
   toggleWorkspace: (workspaceId: string) => void;
@@ -26,6 +32,8 @@ export function WorkspaceTreeList({
   handleTreeKeyDown,
   model,
   optimisticActiveRunId,
+  scoreFilter,
+  scoreSort,
   selectRecentRun,
   selectRun,
   toggleWorkspace,
@@ -43,6 +51,8 @@ export function WorkspaceTreeList({
       <div
         ref={treeRef}
         data-slot="run-tree"
+        data-score-filter={scoreFilter}
+        data-score-sort={scoreSort}
         className="grid content-start items-start gap-2 pr-3 pt-2"
         role="tree"
         aria-label="Workspace tree"

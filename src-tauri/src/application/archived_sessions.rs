@@ -2,6 +2,7 @@ use crate::{
     application::{
         session_context_window::resolve_snapshot_max_context_window_tokens,
         session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
+        session_scoring::{hydrate_archived_index_item, hydrate_session_snapshot},
         workspace_identity::{
             is_conductor_workspace_path, resolve_archived_workspace_identity,
             resolve_session_workspace_identity,
@@ -53,6 +54,14 @@ pub(crate) fn build_archived_index() -> io::Result<Vec<ArchivedSessionIndex>> {
 }
 
 pub(crate) fn load_archived_session_snapshot_from_disk(
+    file_path: &str,
+) -> Option<SessionLogSnapshot> {
+    let mut snapshot = load_archived_session_snapshot_unscored(file_path)?;
+    let _ = hydrate_session_snapshot(&mut snapshot);
+    Some(snapshot)
+}
+
+pub(crate) fn load_archived_session_snapshot_unscored(
     file_path: &str,
 ) -> Option<SessionLogSnapshot> {
     let codex_home = resolve_codex_home().ok()?;
@@ -194,7 +203,7 @@ fn build_archived_index_entry(
         let (origin_path, display_name) =
             resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
-        ArchivedSessionIndex {
+        let mut item = ArchivedSessionIndex {
             provider: parsed.provider,
             session_id: parsed.session_id,
             workspace_path: parsed.workspace_path,
@@ -203,10 +212,17 @@ fn build_archived_index_entry(
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
+            score: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
             message_count: 0,
             file_path: session_file.display().to_string(),
             first_user_message: parsed.first_user_message,
-        }
+        };
+        let _ = hydrate_archived_index_item(&mut item);
+        item
     }))
 }
 
@@ -222,7 +238,7 @@ fn build_claude_archived_index_entry(
         let (origin_path, display_name) =
             resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
-        ArchivedSessionIndex {
+        let mut item = ArchivedSessionIndex {
             provider: parsed.provider,
             session_id: parsed.session_id,
             workspace_path: parsed.workspace_path,
@@ -231,10 +247,17 @@ fn build_claude_archived_index_entry(
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
+            score: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
             message_count: 0,
             file_path: session_file.display().to_string(),
             first_user_message: parsed.first_user_message,
-        }
+        };
+        let _ = hydrate_archived_index_item(&mut item);
+        item
     }))
 }
 
@@ -260,6 +283,13 @@ fn build_archived_session_snapshot(
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
+            score: None,
+            score_note: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
+            profile_snapshot: None,
             max_context_window_tokens: parsed.max_context_window_tokens,
             entries: parsed.entries,
             subagents: Vec::new(),
@@ -291,6 +321,13 @@ fn build_claude_archived_session_snapshot(
             started_at: parsed.started_at,
             updated_at: parsed.updated_at,
             model: parsed.model,
+            score: None,
+            score_note: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
+            profile_snapshot: None,
             max_context_window_tokens: parsed.max_context_window_tokens,
             entries: parsed.entries,
             subagents: Vec::new(),
@@ -401,6 +438,13 @@ mod tests {
             started_at: "2026-03-20T00:00:00.000Z".to_owned(),
             updated_at: "2026-03-20T00:00:00.000Z".to_owned(),
             model: None,
+            score: None,
+            score_note: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
+            profile_snapshot: None,
             max_context_window_tokens: None,
             entries: Vec::new(),
             subagents: Vec::new(),

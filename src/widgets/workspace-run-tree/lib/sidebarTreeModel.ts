@@ -2,6 +2,8 @@ import {
   type EventRecord,
   type RunDataset,
   resolveMainSessionProvider,
+  type WorkspaceScoreFilterKey,
+  type WorkspaceScoreSortKey,
 } from "../../../entities/run";
 import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
@@ -54,6 +56,26 @@ function buildDatasetLastEventSummary(latestEvent: EventRecord | null) {
   ].find(isNonEmptySummary) ?? "No event summary yet.";
 }
 
+function buildDatasetSourceRow(
+  dataset: RunDataset,
+  orderedEvents: EventRecord[],
+) {
+  return {
+    id: dataset.run.traceId,
+    title: deriveWorkspaceRunTitle(dataset, orderedEvents),
+    provider: resolveMainSessionProvider(dataset),
+    score: null,
+    profileLabel: null,
+    status: dataset.run.status,
+    lastEventSummary: buildDatasetLastEventSummary(
+      orderedEvents[orderedEvents.length - 1] ?? null,
+    ),
+    lastActivityTs: latestActivityTimestamp(dataset),
+    relativeTime: "",
+    liveMode: dataset.run.liveMode,
+  } satisfies SidebarRunSource["row"];
+}
+
 function buildDatasetSource(
   dataset: RunDataset,
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap,
@@ -73,18 +95,7 @@ function buildDatasetSource(
     badge: dataset.project.badge ?? null,
     sessionId: dataset.session.sessionId,
     sessionTitle: dataset.session.title,
-    row: {
-      id: dataset.run.traceId,
-      title: deriveWorkspaceRunTitle(dataset, orderedEvents),
-      provider: resolveMainSessionProvider(dataset),
-      status: dataset.run.status,
-      lastEventSummary: buildDatasetLastEventSummary(
-        orderedEvents[orderedEvents.length - 1] ?? null,
-      ),
-      lastActivityTs: latestActivityTimestamp(dataset),
-      relativeTime: "",
-      liveMode: dataset.run.liveMode,
-    },
+    row: buildDatasetSourceRow(dataset, orderedEvents),
   };
 }
 
@@ -117,6 +128,8 @@ function buildRecentSource(
       id: item.sessionId,
       title: item.title,
       provider: item.provider,
+      score: item.score,
+      profileLabel: item.profileLabel,
       status: item.status,
       lastEventSummary: item.lastEventSummary,
       lastActivityTs: Number.isNaN(lastActivityTs) ? 0 : lastActivityTs,
@@ -132,6 +145,8 @@ interface BuildSidebarTreeModelOptions {
   recentIndex: RecentSessionIndexItem[];
   recentIndexReady: boolean;
   search: string;
+  scoreFilter: WorkspaceScoreFilterKey;
+  scoreSort: WorkspaceScoreSortKey;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }
 
@@ -148,12 +163,18 @@ export function buildSidebarTreeModel(options: BuildSidebarTreeModelOptions) {
     recentIndex,
     recentIndexReady,
     search,
+    scoreFilter,
+    scoreSort,
     workspaceIdentityOverrides,
   } = options;
   if (!recentIndexReady) {
     return buildWorkspaceTreeFromSources(
-      buildDatasetSources(datasets, workspaceIdentityOverrides),
-      search,
+      {
+        sources: buildDatasetSources(datasets, workspaceIdentityOverrides),
+        search,
+        scoreFilter,
+        scoreSort,
+      },
     );
   }
 
@@ -166,7 +187,11 @@ export function buildSidebarTreeModel(options: BuildSidebarTreeModelOptions) {
     .map((dataset) => buildDatasetSource(dataset, workspaceIdentityOverrides));
 
   return buildWorkspaceTreeFromSources(
-    [...recentSources, ...datasetSources],
-    search,
+    {
+      sources: [...recentSources, ...datasetSources],
+      search,
+      scoreFilter,
+      scoreSort,
+    },
   );
 }
