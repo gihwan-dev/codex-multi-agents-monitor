@@ -1,13 +1,8 @@
 import type { DrawerTab, RunDataset } from "../../../entities/run";
-import { InspectorTabs, Panel } from "../../../shared/ui";
-import { Button } from "../../../shared/ui/primitives";
-import {
-  DrawerMetrics,
-  MonitorDrawerContent,
-  type MonitorDrawerState,
-  NoDatasetPlaceholder,
-} from "./MonitorDrawerSections";
-import { buildDrawerTabOptions } from "./monitorDrawerTabOptions";
+import { cn } from "../../../shared/lib";
+import { MonitorDrawerPanel } from "./MonitorDrawerPanel";
+import type { MonitorDrawerState } from "./MonitorDrawerSections";
+import { useMonitorDrawerPresence } from "./useMonitorDrawerPresence";
 
 interface MonitorDrawerProps {
   drawerState: MonitorDrawerState;
@@ -32,43 +27,12 @@ export function MonitorDrawer({
   onNoRawChange,
   onCloseDrawer,
 }: MonitorDrawerProps) {
-  if (!drawerState.drawerOpen) {
-    return <div aria-hidden="true" />;
-  }
+  const { mounted, phase } = useMonitorDrawerPresence(drawerState.drawerOpen);
+  if (!mounted) return <div aria-hidden="true" />;
 
   return (
-    <Panel
-      panelSlot="monitor-drawer"
-      title="Bottom drawer"
-      className="absolute inset-0 z-10 max-h-full overflow-hidden rounded-none border-x-0 max-[720px]:rounded-[var(--radius-panel)] max-[720px]:border"
-      actions={
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="border-white/10 bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
-          aria-label="Close drawer"
-          onClick={onCloseDrawer}
-        >
-          Close
-        </Button>
-      }
-    >
-      <InspectorTabs
-        value={drawerState.drawerTab}
-        options={buildDrawerTabOptions(rawTabAvailable)}
-        onValueChange={(value) => onSetDrawerTab(value as DrawerTab)}
-      />
-      <MonitorDrawerContent
-        drawerState={drawerState}
-        activeDataset={activeDataset}
-        onImport={onImport}
-        onImportTextChange={onImportTextChange}
-        onAllowRawChange={onAllowRawChange}
-        onNoRawChange={onNoRawChange}
-        placeholder={<NoDatasetPlaceholder />}
-      />
-      <DrawerMetrics dataset={activeDataset} />
-    </Panel>
+    <div data-slot="monitor-drawer-shell" data-state={phase} aria-hidden={phase !== "open"} className={cn(phase !== "open" && "pointer-events-none")}>
+      <MonitorDrawerPanel drawerState={drawerState} activeDataset={activeDataset} rawTabAvailable={rawTabAvailable} onSetDrawerTab={onSetDrawerTab} onImport={onImport} onImportTextChange={onImportTextChange} onAllowRawChange={onAllowRawChange} onNoRawChange={onNoRawChange} onCloseDrawer={onCloseDrawer} />
+    </div>
   );
 }

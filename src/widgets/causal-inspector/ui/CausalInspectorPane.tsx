@@ -19,6 +19,9 @@ export function CausalInspectorPane({
   onOpenDrawer,
   compact = false,
 }: CausalInspectorPaneProps) {
+  const motionKey = summary
+    ? `${summary.title}:${summary.rawStatusLabel}:${summary.preview}`
+    : "inspector-empty";
   const sections = buildInspectorSections({
     summary,
     onSelectJump,
@@ -36,7 +39,7 @@ export function CausalInspectorPane({
           : "rounded-none border-l-0 max-[1180px]:rounded-[var(--radius-panel)] max-[1180px]:border",
       )}
     >
-      <InspectorSections sections={sections} />
+      <InspectorSections motionKey={motionKey} sections={sections} />
     </Panel>
   );
 }
