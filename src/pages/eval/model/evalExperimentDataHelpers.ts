@@ -46,11 +46,14 @@ export function loadExperimentListResult(
     onFinally: () => void;
     onSuccess: (items: ExperimentSummary[]) => void;
   },
+  isActive: () => boolean,
 ) {
   listExperiments()
     .then((items) => {
       handlers.onSuccess(items);
-      selectExperiment(syncExperimentSelection(items, selectedExperimentId));
+      if (isActive()) {
+        selectExperiment(syncExperimentSelection(items, selectedExperimentId));
+      }
     })
     .catch((reason) => {
       handlers.onError(reason instanceof Error ? reason.message : "Failed to load experiments.");
@@ -64,6 +67,7 @@ export function loadExperimentDetailResult(options: {
     onFinally: () => void;
     onSuccess: (detail: ExperimentDetail | null) => void;
   };
+  isActive: () => boolean;
   selectedCaseId: string | null;
   selectedExperimentId: string;
   selectCase: (value: string | null) => void;
@@ -71,7 +75,9 @@ export function loadExperimentDetailResult(options: {
   getExperimentDetail(options.selectedExperimentId)
     .then((detail) => {
       options.handlers.onSuccess(detail);
-      options.selectCase(syncCaseSelection(detail, options.selectedCaseId));
+      if (options.isActive()) {
+        options.selectCase(syncCaseSelection(detail, options.selectedCaseId));
+      }
     })
     .catch((reason) => {
       options.handlers.onError(
