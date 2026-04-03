@@ -634,12 +634,18 @@ mod tests {
         );
     }
 
-    fn write_claude_recent_fixture(
-        session_file: &Path,
-        session_id: &str,
-        workspace_path: &Path,
-        title: &str,
-    ) {
+    struct ClaudeFixture<'a> {
+        file: &'a Path,
+        session_id: &'a str,
+        workspace: &'a Path,
+        title: &'a str,
+    }
+
+    fn write_claude_recent_fixture(f: ClaudeFixture<'_>) {
+        let session_file = f.file;
+        let session_id = f.session_id;
+        let workspace_path = f.workspace;
+        let title = f.title;
         write_session_lines(
             session_file,
             vec![
@@ -929,12 +935,12 @@ mod tests {
 
         create_git_workspace(&valid_workspace);
         fs::create_dir_all(&valid_project_dir).expect("valid project dir should exist");
-        write_claude_recent_fixture(
-            &valid_session_file,
-            "claude-valid",
-            &valid_workspace,
-            "Keep scanning until you find me.",
-        );
+        write_claude_recent_fixture(ClaudeFixture {
+            file: &valid_session_file,
+            session_id: "claude-valid",
+            workspace: &valid_workspace,
+            title: "Keep scanning until you find me.",
+        });
 
         std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -942,12 +948,12 @@ mod tests {
         for index in 0..CLAUDE_RECENT_SESSION_SCAN_LIMIT {
             let project_dir = claude_projects_root.join(format!("invalid-project-{index}"));
             fs::create_dir_all(&project_dir).expect("invalid project dir should exist");
-            write_claude_recent_fixture(
-                &project_dir.join(format!("session-{index}.jsonl")),
-                &format!("claude-invalid-{index}"),
-                &invalid_workspace,
-                "Ignore this workspace.",
-            );
+            write_claude_recent_fixture(ClaudeFixture {
+                file: &project_dir.join(format!("session-{index}.jsonl")),
+                session_id: &format!("claude-invalid-{index}"),
+                workspace: &invalid_workspace,
+                title: "Ignore this workspace.",
+            });
         }
 
         let item = load_recent_session_index_from_disk()
