@@ -317,7 +317,7 @@ pub(crate) fn save_candidate_run(
             },
             input,
         )?;
-        upsert_candidate_run(&mut detail.runs, run.clone());
+        upsert_candidate_run(&mut detail.runs, run.clone())?;
         detail.experiment.updated_at_ms = now;
 
         save_experiment_detail(&detail)?;
@@ -344,10 +344,7 @@ pub(crate) fn run_grader(
         let Some(case) = detail.cases.iter().find(|case| case.id == case_id).cloned() else {
             return Ok(None);
         };
-        let Some(run) = detail
-            .runs
-            .iter_mut()
-            .find(|run| run.id == run_id && run.case_id == case_id)
+        let Some(run) = find_run_mut(detail.runs.as_mut_slice(), experiment_id, case_id, run_id)?
         else {
             return Ok(None);
         };
@@ -378,10 +375,22 @@ pub(crate) fn compare_candidates(
     let Some(case) = find_case(detail.cases.as_slice(), &query.case_id) else {
         return Ok(None);
     };
-    let Some(baseline_run) = find_run(detail.runs.as_slice(), &query.baseline_run_id) else {
+    let Some(baseline_run) = find_run(
+        detail.runs.as_slice(),
+        &query.experiment_id,
+        &query.case_id,
+        &query.baseline_run_id,
+    )?
+    else {
         return Ok(None);
     };
-    let Some(candidate_run) = find_run(detail.runs.as_slice(), &query.candidate_run_id) else {
+    let Some(candidate_run) = find_run(
+        detail.runs.as_slice(),
+        &query.experiment_id,
+        &query.case_id,
+        &query.candidate_run_id,
+    )?
+    else {
         return Ok(None);
     };
 
@@ -530,8 +539,29 @@ fn find_case(cases: &[Case], case_id: &str) -> Option<Case> {
     cases.iter().find(|case| case.id == case_id).cloned()
 }
 
-fn find_run(runs: &[CandidateRun], run_id: &str) -> Option<CandidateRun> {
-    runs.iter().find(|run| run.id == run_id).cloned()
+fn find_run(
+    runs: &[CandidateRun],
+    experiment_id: &str,
+    case_id: &str,
+    run_id: &str,
+) -> io::Result<Option<CandidateRun>> {
+    ensure_run_scope(runs, experiment_id, case_id, run_id)?;
+    Ok(runs
+        .iter()
+        .find(|run| run_matches_scope(run, experiment_id, case_id, run_id))
+        .cloned())
+}
+
+fn find_run_mut<'a>(
+    runs: &'a mut [CandidateRun],
+    experiment_id: &str,
+    case_id: &str,
+    run_id: &str,
+) -> io::Result<Option<&'a mut CandidateRun>> {
+    ensure_run_scope(runs, experiment_id, case_id, run_id)?;
+    Ok(runs
+        .iter_mut()
+        .find(|run| run_matches_scope(run, experiment_id, case_id, run_id)))
 }
 
 fn build_candidate_run(
@@ -659,13 +689,19 @@ fn sanitize_run_payload(input: RunPayloadInput) -> SanitizedRunPayload {
     }
 }
 
-fn upsert_candidate_run(runs: &mut Vec<CandidateRun>, run: CandidateRun) {
-    if let Some(existing_run) = runs.iter_mut().find(|existing| existing.id == run.id) {
+fn upsert_candidate_run(runs: &mut Vec<CandidateRun>, run: CandidateRun) -> io::Result<()> {
+    ensure_run_scope(runs, &run.experiment_id, &run.case_id, &run.id)?;
+
+    if let Some(existing_run) = runs
+        .iter_mut()
+        .find(|existing| run_matches_scope(existing, &run.experiment_id, &run.case_id, &run.id))
+    {
         *existing_run = merge_existing_run(existing_run, run);
-        return;
+        return Ok(());
     }
 
     runs.push(run);
+    Ok(())
 }
 
 fn merge_existing_run(existing_run: &CandidateRun, run: CandidateRun) -> CandidateRun {
@@ -676,6 +712,29 @@ fn merge_existing_run(existing_run: &CandidateRun, run: CandidateRun) -> Candida
     };
 
     CandidateRun { grades, ..run }
+}
+
+fn ensure_run_scope(
+    runs: &[CandidateRun],
+    experiment_id: &str,
+    case_id: &str,
+    run_id: &str,
+) -> io::Result<()> {
+    if runs
+        .iter()
+        .any(|run| run.id == run_id && !run_matches_scope(run, experiment_id, case_id, run_id))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("run {run_id} does not belong to experiment {experiment_id} case {case_id}"),
+        ));
+    }
+
+    Ok(())
+}
+
+fn run_matches_scope(run: &CandidateRun, experiment_id: &str, case_id: &str, run_id: &str) -> bool {
+    run.experiment_id == experiment_id && run.case_id == case_id && run.id == run_id
 }
 
 fn build_scorecard_deltas(
@@ -894,7 +953,8 @@ fn record_event(input: RecordEventInput<'_>) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_scorecard, calculate_delta, create_experiment, run_grader, save_candidate_run,
+        build_scorecard, calculate_delta, compare_candidates, create_experiment, run_grader,
+        save_candidate_run,
     };
     use crate::domain::{
         eval::{
@@ -906,7 +966,7 @@ mod tests {
         eval_scorecard::ScorecardAxis,
     };
     use crate::test_support::RecentSessionTestContext;
-    use std::{fs, path::Path};
+    use std::{fs, io, path::Path};
 
     fn create_case_for_test(experiment_id: &str) -> crate::domain::eval::Case {
         let detail = super::add_case(
@@ -984,6 +1044,17 @@ mod tests {
         }
     }
 
+    fn sample_run_input_with_id(
+        repo_path: &Path,
+        run_id: &str,
+        candidate_label: &str,
+    ) -> SaveCandidateRunInput {
+        let mut input = sample_run_input(repo_path);
+        input.id = Some(run_id.to_owned());
+        input.candidate_label = candidate_label.to_owned();
+        input
+    }
+
     #[test]
     fn creates_and_grades_candidate_runs() {
         let context = RecentSessionTestContext::new("eval-service");
@@ -1053,5 +1124,101 @@ mod tests {
         };
 
         assert_eq!(query.case_id, "case");
+    }
+
+    #[test]
+    fn rejects_upserting_run_id_into_a_different_case() {
+        let context = RecentSessionTestContext::new("eval-service-run-scope-upsert");
+        let experiment = create_experiment(CreateExperimentInput {
+            name: "Scoped runs".to_owned(),
+            description: None,
+        })
+        .expect("create experiment");
+        let first_case = create_case_for_test(&experiment.experiment.id);
+        let second_case = super::add_case(
+            &experiment.experiment.id,
+            CreateCaseInput {
+                title: "Regression".to_owned(),
+                prompt: "Re-run".to_owned(),
+                expected_result: "Still passes".to_owned(),
+                tags: vec![],
+                required_artifact_kinds: vec![],
+                allowed_path_prefixes: vec![],
+            },
+        )
+        .expect("add second case")
+        .expect("detail after second case")
+        .cases
+        .into_iter()
+        .find(|case| case.id != first_case.id)
+        .expect("second case");
+        let repo_path = context.temp_root.join("repo");
+        create_repo_fixture(&repo_path);
+
+        save_candidate_run(
+            &experiment.experiment.id,
+            &first_case.id,
+            sample_run_input_with_id(&repo_path, "run-shared", "baseline"),
+        )
+        .expect("save first run")
+        .expect("saved run");
+
+        let error = save_candidate_run(
+            &experiment.experiment.id,
+            &second_case.id,
+            sample_run_input_with_id(&repo_path, "run-shared", "candidate"),
+        )
+        .expect_err("mismatched case run should fail");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("does not belong to experiment"));
+    }
+
+    #[test]
+    fn rejects_comparing_run_id_from_a_different_case() {
+        let context = RecentSessionTestContext::new("eval-service-run-scope-compare");
+        let experiment = create_experiment(CreateExperimentInput {
+            name: "Scoped comparisons".to_owned(),
+            description: None,
+        })
+        .expect("create experiment");
+        let first_case = create_case_for_test(&experiment.experiment.id);
+        let second_case = super::add_case(
+            &experiment.experiment.id,
+            CreateCaseInput {
+                title: "Edge".to_owned(),
+                prompt: "Compare".to_owned(),
+                expected_result: "Scoped".to_owned(),
+                tags: vec![],
+                required_artifact_kinds: vec![],
+                allowed_path_prefixes: vec![],
+            },
+        )
+        .expect("add second case")
+        .expect("detail after second case")
+        .cases
+        .into_iter()
+        .find(|case| case.id != first_case.id)
+        .expect("second case");
+        let repo_path = context.temp_root.join("repo");
+        create_repo_fixture(&repo_path);
+
+        save_candidate_run(
+            &experiment.experiment.id,
+            &first_case.id,
+            sample_run_input_with_id(&repo_path, "run-shared", "baseline"),
+        )
+        .expect("save first run")
+        .expect("saved run");
+
+        let error = compare_candidates(CompareCandidatesQuery {
+            experiment_id: experiment.experiment.id,
+            case_id: second_case.id,
+            baseline_run_id: "run-shared".to_owned(),
+            candidate_run_id: "missing".to_owned(),
+        })
+        .expect_err("cross-case compare should fail");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 }
