@@ -32,9 +32,9 @@
   - 파일: `src-tauri/src/infrastructure/score_storage.rs:129`, `src-tauri/src/application/session_scoring.rs:304`
   - 수정: support/ 모듈로 추출
 
-- [ ] **N9**: `path.exists()` TOCTOU — load/delete에서 exists() 후 파일 연산
-  - 파일: `src-tauri/src/infrastructure/eval_storage.rs:63,91`, `score_storage.rs:53`
-  - 수정: 직접 open 후 NotFound 매칭으로 변경
+- [ ] **N9**: `path.exists()` TOCTOU — load/delete/list에서 exists() 후 파일 연산
+  - 파일: `src-tauri/src/infrastructure/eval_storage.rs:45,63,91`, `score_storage.rs:53`
+  - 수정: 직접 open/read_dir 후 NotFound 매칭으로 변경
 
 - [ ] **N10**: 테스트에서 `set_var`가 TEST_ENV_MUTEX 밖에서 호출됨
   - 파일: `src-tauri/src/application/archived_sessions.rs:515`, `infrastructure/filesystem.rs:288`
@@ -131,3 +131,11 @@
 - [x] **P3-perf**: buildEdgeMaps O(n²)→O(n) push, buildLaneEventMaps O(L×E)→O(E), Math.max spread→reduce (이번 세션)
 - [x] **N1-be**: eval_grader/eval_service `as u8` → `.min(100) as u8` 안전 캐스트 (이번 세션)
 - [x] **N4-be**: session_scoring records[0] → .first().expect() 안전 인덱싱 (이번 세션)
+- [x] **N4-ui**: Dialog close 버튼 hit target 16px→32px 확대 (이번 세션)
+- [x] **N5-ui**: SelectItem focus: → focus-visible: 일관성 수정 (이번 세션)
+- [x] **FE-7**: throwSessionScoreSaveFailure re-throw 제거 → setError만 호출 (이번 세션)
+- [x] **N6-ui**: PromptLayerToggle ChevronRight motion-reduce:transition-none 추가 (이번 세션)
+- [x] **N7-ui**: MonitorShortcutsDialog 구현된 단축키 전체 표시 (이번 세션)
+- [x] **N8-ui**: TextViewerModal clipboard.writeText .catch 추가 (이번 세션)
+- [x] **N9-ui**: EvalRunArtifactSection, EvalRunStepSection "Showing X of Y" 절단 표시 (이번 세션)
+- [x] **N10-ui**: DatasetMonitorTopBarHeading 절단 텍스트에 title 속성 추가 (이번 세션)
