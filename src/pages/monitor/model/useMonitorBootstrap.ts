@@ -113,8 +113,8 @@ function useInitialRecentSnapshot(options: UseInitialRecentSnapshotOptions) {
 }
 
 function shouldRefreshRecentSnapshot(options: RecentRefreshState) {
-  const { activeDataset, activeSessionFilePath, recentIndex } = options;
-  if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath) {
+  const { activeDataset, activeSessionFilePath, isActive, recentIndex } = options;
+  if (!canInvokeTauriRuntime() || !activeDataset || !activeSessionFilePath || !isActive) {
     return false;
   }
 
@@ -129,12 +129,14 @@ function useRecentLiveSubscription(options: UseRecentLiveSubscriptionOptions) {
   const {
     activeDataset,
     activeSessionFilePath,
+    isActive,
     recentIndex,
     handleRecentLiveUpdateRef,
   } = options;
   const shouldRefresh = shouldRefreshRecentSnapshot({
     activeDataset,
     activeSessionFilePath,
+    isActive,
     recentIndex,
   });
   const handleRecentLiveUpdate = useEffectEvent((update: RecentSessionLiveUpdate) => {
@@ -163,6 +165,7 @@ function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
   const {
     activeDataset,
     activeSessionFilePath,
+    isActive,
     recentIndex,
     recentIndexReady,
     recentSnapshotLoadingId,
@@ -183,6 +186,7 @@ function useMonitorBootstrapEffects(options: MonitorBootstrapEffectOptions) {
   useRecentLiveSubscription({
     activeDataset,
     activeSessionFilePath,
+    isActive,
     recentIndex,
     handleRecentLiveUpdateRef,
   });

@@ -12,6 +12,7 @@ export { dispatchMonitorKeyboardShortcut } from "./monitorKeyboardShortcutDispat
 interface UseMonitorKeyboardShortcutsOptions {
   dispatch: Dispatch<MonitorAction>;
   activeDataset: RunDataset | null;
+  isActive: boolean;
   selection: SelectionState | null;
   graphRows: GraphSceneRow[];
 }
@@ -19,7 +20,7 @@ interface UseMonitorKeyboardShortcutsOptions {
 export function useMonitorKeyboardShortcuts(
   options: UseMonitorKeyboardShortcutsOptions,
 ) {
-  const { dispatch, activeDataset, selection, graphRows } = options;
+  const { dispatch, activeDataset, isActive, selection, graphRows } = options;
   const keyHandler = useEffectEvent((event: KeyboardEvent) => {
     dispatchMonitorKeyboardShortcut({
       event,
@@ -33,8 +34,12 @@ export function useMonitorKeyboardShortcuts(
   });
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     const listener = (event: KeyboardEvent) => keyHandler(event);
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, []);
+  }, [isActive]);
 }

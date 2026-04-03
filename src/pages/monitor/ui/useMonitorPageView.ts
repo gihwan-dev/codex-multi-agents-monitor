@@ -175,8 +175,8 @@ function useMonitorPageChromeBindings(
   };
 }
 
-export function useMonitorPageView() {
-  const pageState = useMonitorPageState();
+export function useMonitorPageView(options?: { isActive?: boolean }) {
+  const pageState = useMonitorPageState({ isActive: options?.isActive ?? true });
   const searchRef = useRef<HTMLInputElement>(null);
   const { viewportFocusEventId, setViewportFocusEventId } = useViewportFocusState(
     pageState.activeDataset?.run.traceId ?? null,

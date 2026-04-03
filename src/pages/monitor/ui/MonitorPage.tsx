@@ -4,6 +4,7 @@ import { MonitorPageContent } from "./MonitorPageContent";
 import { useMonitorPageView } from "./useMonitorPageView";
 
 interface MonitorPageProps {
+  isActive?: boolean;
   onNavigateToSkills?: () => void;
   onNavigateToEval?: () => void;
   onDatasetsSync?: (ds: readonly RunDataset[], id: string) => void;
@@ -18,7 +19,7 @@ function useSyncEffect(
 }
 
 export function MonitorPage(props: MonitorPageProps) {
-  const view = useMonitorPageView();
+  const view = useMonitorPageView({ isActive: props.isActive ?? true });
 
   useSyncEffect(view.state.datasets, view.state.activeRunId, props.onDatasetsSync);
 

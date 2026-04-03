@@ -35,6 +35,7 @@ export function App() {
     <ThemeProvider>
       <div style={{ display: view.currentView === "monitor" ? "contents" : "none" }}>
         <MonitorPage
+          isActive={view.currentView === "monitor"}
           onNavigateToSkills={view.goToSkills}
           onNavigateToEval={view.goToEval}
           onDatasetsSync={data.sync}

@@ -6,6 +6,7 @@ import type { MonitorState } from "./state";
 export interface UseMonitorBootstrapOptions {
   activeDataset: RunDataset | null;
   activeSessionFilePath: string | null;
+  isActive: boolean;
   recentIndex: MonitorState["recentIndex"];
   recentIndexReady: boolean;
   recentSnapshotLoadingId: string | null;
@@ -22,7 +23,7 @@ export type InitialRecentSnapshotState = Pick<
 
 export type RecentRefreshState = Pick<
   UseMonitorBootstrapOptions,
-  "activeDataset" | "activeSessionFilePath" | "recentIndex"
+  "activeDataset" | "activeSessionFilePath" | "isActive" | "recentIndex"
 >;
 
 export interface UseInitialRecentSnapshotOptions extends InitialRecentSnapshotState {
