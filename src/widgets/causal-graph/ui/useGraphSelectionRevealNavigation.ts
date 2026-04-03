@@ -37,15 +37,7 @@ export function useGraphSelectionRevealNavigation(
 ) {
   useEffect(() => {
     navigateSelectionReveal(options);
-  }, [
-    options.availableCanvasHeight,
-    options.renderedContentHeight,
-    options.runTraceId,
-    options.selectionNavigationRunId,
-    options.selectionNavigationRequestId,
-    options.selectionRevealTarget,
-    options.layout,
-  ]);
+  }, [options]);
 }
 
 function navigateSelectionReveal(options: UseGraphSelectionRevealNavigationOptions) {

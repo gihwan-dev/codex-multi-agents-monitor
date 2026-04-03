@@ -37,10 +37,10 @@ function useExperimentListState({
     setLoading(true);
     setError(null);
 
-    loadExperimentListResult(
+    loadExperimentListResult({
       selectedExperimentId,
       selectExperiment,
-      {
+      handlers: {
         onError: (message) => {
           if (!cancelled) {
             setError(message);
@@ -58,8 +58,8 @@ function useExperimentListState({
           }
         },
       },
-      () => !cancelled,
-    );
+      isActive: () => !cancelled,
+    });
 
     return () => {
       cancelled = true;

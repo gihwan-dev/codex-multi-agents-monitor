@@ -38,27 +38,27 @@ export function resolveCaseRuns(
   return detail.runs.filter((run) => run.caseId === caseId);
 }
 
-export function loadExperimentListResult(
-  selectedExperimentId: string | null,
-  selectExperiment: (value: string | null) => void,
+export function loadExperimentListResult(options: {
+  selectedExperimentId: string | null;
+  selectExperiment: (value: string | null) => void;
   handlers: {
     onError: (message: string) => void;
     onFinally: () => void;
     onSuccess: (items: ExperimentSummary[]) => void;
-  },
-  isActive: () => boolean,
-) {
+  };
+  isActive: () => boolean;
+}) {
   listExperiments()
     .then((items) => {
-      handlers.onSuccess(items);
-      if (isActive()) {
-        selectExperiment(syncExperimentSelection(items, selectedExperimentId));
+      options.handlers.onSuccess(items);
+      if (options.isActive()) {
+        options.selectExperiment(syncExperimentSelection(items, options.selectedExperimentId));
       }
     })
     .catch((reason) => {
-      handlers.onError(reason instanceof Error ? reason.message : "Failed to load experiments.");
+      options.handlers.onError(reason instanceof Error ? reason.message : "Failed to load experiments.");
     })
-    .finally(handlers.onFinally);
+    .finally(options.handlers.onFinally);
 }
 
 export function loadExperimentDetailResult(options: {

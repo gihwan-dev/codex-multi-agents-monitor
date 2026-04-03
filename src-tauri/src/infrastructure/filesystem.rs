@@ -63,6 +63,29 @@ pub(crate) fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) ->
     collect_jsonl_files_recursive(directory, files, 0)
 }
 
+fn is_scannable_directory(path: &Path) -> bool {
+    path.is_dir() && !path.is_symlink()
+}
+
+fn visit_directory_entries(
+    entries: fs::ReadDir,
+    files: &mut Vec<PathBuf>,
+    depth: usize,
+) -> io::Result<()> {
+    for entry in entries {
+        let Some(path) = read_entry_path_if_available(entry)? else {
+            continue;
+        };
+
+        if is_scannable_directory(&path) {
+            collect_jsonl_files_recursive(&path, files, depth + 1)?;
+        } else if is_jsonl_path(&path) {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
 fn collect_jsonl_files_recursive(
     directory: &Path,
     files: &mut Vec<PathBuf>,
@@ -72,28 +95,9 @@ fn collect_jsonl_files_recursive(
         return Ok(());
     }
 
-    let Some(entries) = read_dir_if_available(directory)? else {
-        return Ok(());
-    };
-
-    for entry in entries {
-        let Some(path) = read_entry_path_if_available(entry)? else {
-            continue;
-        };
-
-        if path.is_dir() {
-            if path.is_symlink() {
-                continue;
-            }
-            collect_jsonl_files_recursive(&path, files, depth + 1)?;
-            continue;
-        }
-
-        if is_jsonl_path(&path) {
-            files.push(path);
-        }
+    if let Some(entries) = read_dir_if_available(directory)? {
+        visit_directory_entries(entries, files, depth)?;
     }
-
     Ok(())
 }
 
@@ -253,6 +257,7 @@ mod tests {
     };
     use crate::test_support::TempDir;
     use crate::test_support::{create_git_workspace, RecentSessionTestContext};
+    use std::path::{Path, PathBuf};
     use std::{fs, thread, time::Duration};
 
     #[cfg(unix)]
@@ -332,52 +337,30 @@ mod tests {
         assert!(files.iter().any(|path| path == &accessible_file));
     }
 
+    fn build_nested_path(root: &Path, depth: usize, filename: &str) -> PathBuf {
+        let mut path = root.to_path_buf();
+        for level in 0..depth {
+            path = path.join(format!("level-{level}"));
+        }
+        path.join(filename)
+    }
+
     #[test]
     fn collect_jsonl_files_limits_recursive_depth() {
         let temp_dir = TempDir::new("collect-jsonl-max-depth");
         let mut current = temp_dir.path.clone();
-
         for depth in 0..=11 {
             current = current.join(format!("level-{depth}"));
             fs::create_dir_all(&current).expect("nested directory should exist");
         }
 
-        let within_limit = temp_dir
-            .path
-            .join("level-0")
-            .join("level-1")
-            .join("level-2")
-            .join("level-3")
-            .join("level-4")
-            .join("level-5")
-            .join("level-6")
-            .join("level-7")
-            .join("level-8")
-            .join("level-9")
-            .join("level-10")
-            .join("visible.jsonl");
-        let beyond_limit = temp_dir
-            .path
-            .join("level-0")
-            .join("level-1")
-            .join("level-2")
-            .join("level-3")
-            .join("level-4")
-            .join("level-5")
-            .join("level-6")
-            .join("level-7")
-            .join("level-8")
-            .join("level-9")
-            .join("level-10")
-            .join("level-11")
-            .join("hidden.jsonl");
-
+        let within_limit = build_nested_path(&temp_dir.path, 10, "visible.jsonl");
+        let beyond_limit = build_nested_path(&temp_dir.path, 12, "hidden.jsonl");
         fs::write(&within_limit, "visible").expect("within-limit file should exist");
         fs::write(&beyond_limit, "hidden").expect("beyond-limit file should exist");
 
         let mut files = Vec::new();
         collect_jsonl_files(&temp_dir.path, &mut files).expect("jsonl collection should succeed");
-
         assert!(files.iter().any(|path| path == &within_limit));
         assert!(files.iter().all(|path| path != &beyond_limit));
     }
