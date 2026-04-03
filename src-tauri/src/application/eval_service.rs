@@ -11,9 +11,9 @@ use crate::{
         eval_scorecard::ALL_SCORECARD_AXES,
     },
     infrastructure::eval_storage::{
-        append_audit_event, delete_experiment_detail, load_all_experiment_details,
-        load_experiment_detail, resolve_repository_head_sha, save_experiment_detail,
-        EvalAuditEvent,
+        append_audit_event, delete_experiment_detail, experiment_mutation_lock,
+        load_all_experiment_details, load_experiment_detail, resolve_repository_head_sha,
+        save_experiment_detail, EvalAuditEvent,
     },
 };
 use std::{io, path::Path};
@@ -153,79 +153,86 @@ pub(crate) fn update_experiment(
     experiment_id: &str,
     patch: UpdateExperimentInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
 
-    if let Some(name) = patch.name.as_deref() {
-        detail.experiment.name = require_trimmed(name, EXPERIMENT_NAME_LIMIT, "experiment name")?;
-    }
-    if let Some(description) = patch.description {
-        detail.experiment.description = optional_trimmed(Some(&description), CASE_TEXT_LIMIT);
-    }
-    detail.experiment.updated_at_ms = current_time_ms();
+        if let Some(name) = patch.name.as_deref() {
+            detail.experiment.name =
+                require_trimmed(name, EXPERIMENT_NAME_LIMIT, "experiment name")?;
+        }
+        if let Some(description) = patch.description {
+            detail.experiment.description = optional_trimmed(Some(&description), CASE_TEXT_LIMIT);
+        }
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "experimentUpdated",
-        experiment_id: &detail.experiment.id,
-        case_id: None,
-        run_id: None,
-        preview: &detail.experiment.name,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "experimentUpdated",
+            experiment_id: &detail.experiment.id,
+            case_id: None,
+            run_id: None,
+            preview: &detail.experiment.name,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn delete_experiment(experiment_id: &str) -> io::Result<bool> {
-    let deleted = delete_experiment_detail(experiment_id)?;
-    if deleted {
-        record_event(RecordEventInput {
-            event_kind: "experimentDeleted",
-            experiment_id,
-            case_id: None,
-            run_id: None,
-            preview: experiment_id,
-        })?;
-    }
-    Ok(deleted)
+    with_experiment_mutation(experiment_id, || {
+        let deleted = delete_experiment_detail(experiment_id)?;
+        if deleted {
+            record_event(RecordEventInput {
+                event_kind: "experimentDeleted",
+                experiment_id,
+                case_id: None,
+                run_id: None,
+                preview: experiment_id,
+            })?;
+        }
+        Ok(deleted)
+    })
 }
 
 pub(crate) fn add_case(
     experiment_id: &str,
     input: CreateCaseInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let now = current_time_ms();
-    let case = Case {
-        id: generate_id("case", &input.title, now),
-        experiment_id: experiment_id.to_owned(),
-        title: require_trimmed(&input.title, CASE_TITLE_LIMIT, "case title")?,
-        prompt: require_trimmed(&input.prompt, CASE_TEXT_LIMIT, "case prompt")?,
-        expected_result: require_trimmed(
-            &input.expected_result,
-            CASE_TEXT_LIMIT,
-            "case expected result",
-        )?,
-        tags: sanitize_strings(&input.tags, 32, 40),
-        required_artifact_kinds: input.required_artifact_kinds,
-        allowed_path_prefixes: sanitize_strings(&input.allowed_path_prefixes, 24, 180),
-        created_at_ms: now,
-        updated_at_ms: now,
-    };
-    detail.cases.push(case.clone());
-    detail.experiment.updated_at_ms = now;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let now = current_time_ms();
+        let case = Case {
+            id: generate_id("case", &input.title, now),
+            experiment_id: experiment_id.to_owned(),
+            title: require_trimmed(&input.title, CASE_TITLE_LIMIT, "case title")?,
+            prompt: require_trimmed(&input.prompt, CASE_TEXT_LIMIT, "case prompt")?,
+            expected_result: require_trimmed(
+                &input.expected_result,
+                CASE_TEXT_LIMIT,
+                "case expected result",
+            )?,
+            tags: sanitize_strings(&input.tags, 32, 40),
+            required_artifact_kinds: input.required_artifact_kinds,
+            allowed_path_prefixes: sanitize_strings(&input.allowed_path_prefixes, 24, 180),
+            created_at_ms: now,
+            updated_at_ms: now,
+        };
+        detail.cases.push(case.clone());
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseAdded",
-        experiment_id,
-        case_id: Some(&case.id),
-        run_id: None,
-        preview: &case.title,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseAdded",
+            experiment_id,
+            case_id: Some(&case.id),
+            run_id: None,
+            preview: &case.title,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn update_case(
@@ -233,55 +240,59 @@ pub(crate) fn update_case(
     case_id: &str,
     patch: UpdateCaseInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = detail.cases.iter_mut().find(|case| case.id == case_id) else {
-        return Ok(None);
-    };
-    apply_case_patch(case, patch)?;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = detail.cases.iter_mut().find(|case| case.id == case_id) else {
+            return Ok(None);
+        };
+        apply_case_patch(case, patch)?;
 
-    let now = current_time_ms();
-    case.updated_at_ms = now;
-    let case_title = case.title.clone();
-    detail.experiment.updated_at_ms = now;
+        let now = current_time_ms();
+        case.updated_at_ms = now;
+        let case_title = case.title.clone();
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseUpdated",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: None,
-        preview: &case_title,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseUpdated",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: None,
+            preview: &case_title,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn delete_case(
     experiment_id: &str,
     case_id: &str,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let previous_case_count = detail.cases.len();
-    detail.cases.retain(|case| case.id != case_id);
-    if detail.cases.len() == previous_case_count {
-        return Ok(None);
-    }
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let previous_case_count = detail.cases.len();
+        detail.cases.retain(|case| case.id != case_id);
+        if detail.cases.len() == previous_case_count {
+            return Ok(None);
+        }
 
-    detail.runs.retain(|run| run.case_id != case_id);
-    detail.experiment.updated_at_ms = current_time_ms();
+        detail.runs.retain(|run| run.case_id != case_id);
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseDeleted",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: None,
-        preview: case_id,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseDeleted",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: None,
+            preview: case_id,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn save_candidate_run(
@@ -289,34 +300,36 @@ pub(crate) fn save_candidate_run(
     case_id: &str,
     input: SaveCandidateRunInput,
 ) -> io::Result<Option<CandidateRun>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = find_case(detail.cases.as_slice(), case_id) else {
-        return Ok(None);
-    };
-    let now = current_time_ms();
-    let run = build_candidate_run(
-        CandidateRunBuildContext {
-            experiment_id,
-            case_id,
-            privacy_policy: detail.experiment.privacy_policy.clone(),
-            now,
-        },
-        input,
-    )?;
-    upsert_candidate_run(&mut detail.runs, run.clone());
-    detail.experiment.updated_at_ms = now;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = find_case(detail.cases.as_slice(), case_id) else {
+            return Ok(None);
+        };
+        let now = current_time_ms();
+        let run = build_candidate_run(
+            CandidateRunBuildContext {
+                experiment_id,
+                case_id,
+                privacy_policy: detail.experiment.privacy_policy.clone(),
+                now,
+            },
+            input,
+        )?;
+        upsert_candidate_run(&mut detail.runs, run.clone());
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "candidateRunSaved",
-        experiment_id,
-        case_id: Some(&case.id),
-        run_id: Some(&run.id),
-        preview: &run.candidate_label,
-    })?;
-    Ok(Some(run))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "candidateRunSaved",
+            experiment_id,
+            case_id: Some(&case.id),
+            run_id: Some(&run.id),
+            preview: &run.candidate_label,
+        })?;
+        Ok(Some(run))
+    })
 }
 
 pub(crate) fn run_grader(
@@ -324,34 +337,36 @@ pub(crate) fn run_grader(
     case_id: &str,
     run_id: &str,
 ) -> io::Result<Option<CandidateRun>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = detail.cases.iter().find(|case| case.id == case_id).cloned() else {
-        return Ok(None);
-    };
-    let Some(run) = detail
-        .runs
-        .iter_mut()
-        .find(|run| run.id == run_id && run.case_id == case_id)
-    else {
-        return Ok(None);
-    };
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = detail.cases.iter().find(|case| case.id == case_id).cloned() else {
+            return Ok(None);
+        };
+        let Some(run) = detail
+            .runs
+            .iter_mut()
+            .find(|run| run.id == run_id && run.case_id == case_id)
+        else {
+            return Ok(None);
+        };
 
-    let code_grades = run_code_grader_pipeline(&case, run, None);
-    run.grades = merge_grades(&run.grades, code_grades);
-    detail.experiment.updated_at_ms = current_time_ms();
+        let code_grades = run_code_grader_pipeline(&case, run, None);
+        run.grades = merge_grades(&run.grades, code_grades);
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    let updated_run = run.clone();
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "graderRan",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: Some(run_id),
-        preview: &updated_run.candidate_label,
-    })?;
-    Ok(Some(updated_run))
+        let updated_run = run.clone();
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "graderRan",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: Some(run_id),
+            preview: &updated_run.candidate_label,
+        })?;
+        Ok(Some(updated_run))
+    })
 }
 
 pub(crate) fn compare_candidates(
@@ -854,6 +869,15 @@ fn current_time_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_millis() as u64)
+}
+
+fn with_experiment_mutation<T>(
+    experiment_id: &str,
+    mutate: impl FnOnce() -> io::Result<T>,
+) -> io::Result<T> {
+    let lock = experiment_mutation_lock(experiment_id);
+    let _guard = lock.lock().unwrap_or_else(|error| error.into_inner());
+    mutate()
 }
 
 fn record_event(input: RecordEventInput<'_>) -> io::Result<()> {
