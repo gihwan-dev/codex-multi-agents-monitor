@@ -24,19 +24,21 @@ interface UseRecentMonitorRequestsOptions {
 function requestRecentIndexFromSource(dispatch: Dispatch<MonitorAction>) {
   dispatch({ type: "begin-recent-index-request" });
 
-  loadRecentSessionIndex().then((items) => {
-    if (items === null) {
-      dispatch({
-        type: "finish-recent-index-request",
-        error: "Recent sessions are unavailable right now.",
-      });
-      return;
-    }
+  loadRecentSessionIndex()
+    .then((items) => {
+      if (items === null) {
+        dispatch({
+          type: "finish-recent-index-request",
+          error: "Recent sessions are unavailable right now.",
+        });
+        return;
+      }
 
-    startTransition(() => {
-      dispatch({ type: "resolve-recent-index-request", items });
-    });
-  });
+      startTransition(() => {
+        dispatch({ type: "resolve-recent-index-request", items });
+      });
+    })
+    .catch(() => {});
 }
 
 function requestRecentSnapshotFromSource(args: {
@@ -58,17 +60,19 @@ function requestRecentSnapshotFromSource(args: {
     type: "begin-recent-snapshot-request",
   });
 
-  loadRecentSessionSnapshot(args.filePath).then((dataset) => {
-    resolveSnapshotRequest({
-      dispatch: args.dispatch,
-      requestId,
-      filePath: args.filePath,
-      dataset,
-      beginType: "begin-recent-snapshot-build",
-      resolveType: "resolve-recent-snapshot-request",
-      finishType: "finish-recent-snapshot-request",
-    });
-  });
+  loadRecentSessionSnapshot(args.filePath)
+    .then((dataset) => {
+      resolveSnapshotRequest({
+        dispatch: args.dispatch,
+        requestId,
+        filePath: args.filePath,
+        dataset,
+        beginType: "begin-recent-snapshot-build",
+        resolveType: "resolve-recent-snapshot-request",
+        finishType: "finish-recent-snapshot-request",
+      });
+    })
+    .catch(() => {});
 }
 
 function applyRecentLiveUpdateFromSource(args: {

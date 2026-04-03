@@ -56,22 +56,20 @@ export function SessionScoreFields({
   return (
     <div className="grid gap-3">
       <SessionScoreField htmlFor={scoreId} label="Score">
-        <>
-          <Input
-            id={scoreId}
-            type="number"
-            min={0}
-            max={100}
-            value={score}
-            onChange={(event) => setScore(event.target.value)}
-            aria-describedby={scoreDescriptionId}
-            aria-invalid={scoreInvalid}
-            className="border-white/10 bg-white/[0.03]"
-          />
-          <p id={scoreDescriptionId} className="text-[0.72rem] text-muted-foreground">
-            Score from 0 to 100
-          </p>
-        </>
+        <Input
+          id={scoreId}
+          type="number"
+          min={0}
+          max={100}
+          value={score}
+          onChange={(event) => setScore(event.target.value)}
+          aria-describedby={scoreDescriptionId}
+          aria-invalid={scoreInvalid}
+          className="border-white/10 bg-white/[0.03]"
+        />
+        <p id={scoreDescriptionId} className="text-[0.72rem] text-muted-foreground">
+          Score from 0 to 100
+        </p>
       </SessionScoreField>
       <SessionScoreField htmlFor={reviewerId} label="Reviewer">
         <Input

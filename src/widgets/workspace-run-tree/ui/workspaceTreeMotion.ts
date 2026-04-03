@@ -66,8 +66,10 @@ export function scrollTreeItemIntoView(
   activeTreeId: string,
 ) {
   const target = treeRef.current?.querySelector<HTMLElement>(`[data-tree-id="${activeTreeId}"]`);
-  target?.scrollIntoView({
-    block: "nearest",
-    behavior: prefersReducedMotion() ? "auto" : "smooth",
-  });
+  if (typeof target?.scrollIntoView === "function") {
+    target.scrollIntoView({
+      block: "nearest",
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
+  }
 }

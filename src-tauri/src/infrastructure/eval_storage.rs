@@ -10,7 +10,7 @@ use std::{
     collections::HashMap,
     fs,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
 };
 
@@ -145,7 +145,33 @@ fn resolve_experiments_dir() -> io::Result<PathBuf> {
 }
 
 fn experiment_file_path(experiment_id: &str) -> io::Result<PathBuf> {
+    validate_experiment_id(experiment_id)?;
     Ok(resolve_experiments_dir()?.join(format!("{experiment_id}.json")))
+}
+
+fn validate_experiment_id(experiment_id: &str) -> io::Result<()> {
+    if experiment_id.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "experiment id is required",
+        ));
+    }
+
+    if experiment_id.contains('/') || experiment_id.contains('\\') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "experiment id must not contain path separators",
+        ));
+    }
+
+    let mut components = Path::new(experiment_id).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "experiment id must be a single path segment",
+        )),
+    }
 }
 
 fn read_experiment_entry_path(entry: io::Result<fs::DirEntry>) -> io::Result<Option<PathBuf>> {
@@ -203,9 +229,10 @@ fn resolve_packed_reference(refs_root: &Path, reference: &str) -> io::Result<Str
 
 #[cfg(test)]
 mod tests {
-    use super::{experiment_mutation_lock, resolve_repository_head_sha};
+    use super::{experiment_file_path, experiment_mutation_lock, resolve_repository_head_sha};
     use std::{
         fs,
+        io,
         path::PathBuf,
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
@@ -252,5 +279,14 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first, &second));
         assert!(!Arc::ptr_eq(&first, &other));
+    }
+
+    #[test]
+    fn rejects_experiment_ids_with_path_traversal_content() {
+        let error = experiment_file_path("../escape").expect_err("reject parent segment");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+
+        let error = experiment_file_path("nested/id").expect_err("reject nested path");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 }

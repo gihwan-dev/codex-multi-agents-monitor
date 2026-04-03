@@ -67,6 +67,7 @@ export function useSessionScoreEditorState(options: {
     reviewer,
     reviewerId: `${idBase}-reviewer`,
     saveDisabled:
+      score.trim().length === 0 ||
       !Number.isFinite(parsedScore) ||
       parsedScore < 0 ||
       parsedScore > 100 ||

@@ -41,10 +41,6 @@ export function WorkspaceTreeList({
 }: WorkspaceTreeListProps) {
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
-      const target = treeRef.current?.querySelector<HTMLElement>(`[data-tree-id="${activeTreeId}"]`);
-      if (!target || typeof target.scrollIntoView !== "function") {
-        return;
-      }
       scrollTreeItemIntoView(treeRef, activeTreeId);
     });
     return () => window.cancelAnimationFrame(frameId);

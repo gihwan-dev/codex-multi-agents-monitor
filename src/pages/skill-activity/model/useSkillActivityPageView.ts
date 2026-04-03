@@ -28,12 +28,18 @@ function useScanInvocations(scanRange: number) {
   useEffect(() => {
     let cancelled = false;
     setScanLoading(true);
-    loadSkillActivityScan(scanRange).then((result) => {
-      if (!cancelled) {
-        setScanResult(result);
-        setScanLoading(false);
-      }
-    });
+    loadSkillActivityScan(scanRange)
+      .then((result) => {
+        if (!cancelled) {
+          setScanResult(result);
+          setScanLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setScanLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [scanRange]);
 

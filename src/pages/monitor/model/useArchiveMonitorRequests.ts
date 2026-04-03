@@ -37,25 +37,27 @@ function requestArchiveIndexFromSource(args: RequestArchiveIndexFromSourceArgs) 
   args.archiveIndexRequestIdRef.current = requestId;
   args.dispatch({ type: "begin-archived-index-request", requestId });
 
-  loadArchivedSessionIndex(args.offset, ARCHIVE_PAGE_SIZE, args.search).then((result) => {
-    if (!result) {
-      args.dispatch({
-        type: "finish-archived-index-request",
-        requestId,
-        error: "Archive sessions are unavailable right now.",
-      });
-      return;
-    }
+  loadArchivedSessionIndex(args.offset, ARCHIVE_PAGE_SIZE, args.search)
+    .then((result) => {
+      if (!result) {
+        args.dispatch({
+          type: "finish-archived-index-request",
+          requestId,
+          error: "Archive sessions are unavailable right now.",
+        });
+        return;
+      }
 
-    startTransition(() => {
-      args.dispatch({
-        type: "resolve-archived-index-request",
-        requestId,
-        result,
-        append: args.append,
+      startTransition(() => {
+        args.dispatch({
+          type: "resolve-archived-index-request",
+          requestId,
+          result,
+          append: args.append,
+        });
       });
-    });
-  });
+    })
+    .catch(() => {});
 }
 
 function useRequestArchiveIndexEvent(args: Pick<UseArchiveMonitorRequestsOptions, "archiveIndexRequestIdRef" | "dispatch">) {

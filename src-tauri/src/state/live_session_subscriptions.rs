@@ -30,7 +30,7 @@ impl LiveSessionSubscriptionRegistry {
         self.inner
             .handles
             .lock()
-            .expect("live subscription registry should lock")
+            .unwrap_or_else(|error| error.into_inner())
             .insert(subscription_id.clone(), cancel.clone());
 
         (subscription_id, cancel)
@@ -41,7 +41,7 @@ impl LiveSessionSubscriptionRegistry {
             .inner
             .handles
             .lock()
-            .expect("live subscription registry should lock")
+            .unwrap_or_else(|error| error.into_inner())
             .remove(subscription_id);
 
         if let Some(cancel) = cancel {
@@ -56,7 +56,7 @@ impl LiveSessionSubscriptionRegistry {
         self.inner
             .handles
             .lock()
-            .expect("live subscription registry should lock")
+            .unwrap_or_else(|error| error.into_inner())
             .remove(subscription_id);
     }
 }
