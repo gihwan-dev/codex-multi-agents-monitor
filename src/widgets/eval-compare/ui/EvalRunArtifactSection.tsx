@@ -6,13 +6,19 @@ interface EvalRunArtifactSectionProps {
 }
 
 export function EvalRunArtifactSection({ run }: EvalRunArtifactSectionProps) {
+  const totalArtifacts = run.artifacts.length;
   const recentArtifacts = run.artifacts.slice(0, 5);
 
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-foreground">Artifacts</span>
-        <Badge variant="outline">{run.artifacts.length}</Badge>
+        <div className="flex items-center gap-2">
+          {totalArtifacts > 5 ? (
+            <span className="text-xs text-muted-foreground">Showing 5 of {totalArtifacts}</span>
+          ) : null}
+          <Badge variant="outline">{totalArtifacts}</Badge>
+        </div>
       </div>
       {recentArtifacts.length > 0 ? (
         recentArtifacts.map((artifact) => (

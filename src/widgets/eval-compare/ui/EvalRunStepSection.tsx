@@ -7,13 +7,19 @@ interface EvalRunStepSectionProps {
 }
 
 export function EvalRunStepSection({ run }: EvalRunStepSectionProps) {
+  const totalSteps = run.steps.length;
   const recentSteps = run.steps.slice(0, 5);
 
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-foreground">Canonical steps</span>
-        <Badge variant="outline">{run.steps.length}</Badge>
+        <div className="flex items-center gap-2">
+          {totalSteps > 5 ? (
+            <span className="text-xs text-muted-foreground">Showing 5 of {totalSteps}</span>
+          ) : null}
+          <Badge variant="outline">{totalSteps}</Badge>
+        </div>
       </div>
       {recentSteps.length > 0 ? (
         recentSteps.map((step) => (

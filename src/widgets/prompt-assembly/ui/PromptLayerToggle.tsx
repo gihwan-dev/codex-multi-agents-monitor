@@ -26,7 +26,7 @@ export function PromptLayerToggle({
     >
       <ChevronRight
         className={cn(
-          "size-3 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
+          "size-3 shrink-0 text-[var(--color-text-tertiary)] transition-transform motion-reduce:transition-none",
           expanded && "rotate-90",
         )}
         aria-hidden="true"
