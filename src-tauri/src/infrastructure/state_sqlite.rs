@@ -16,6 +16,7 @@ pub(crate) struct LiveThreadRow {
     pub(crate) rollout_path: String,
     pub(crate) source: String,
     pub(crate) workspace_path: String,
+    pub(crate) archived: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,14 +82,22 @@ fn open_state_connection(state_database: &Path) -> io::Result<Connection> {
 }
 
 fn prepare_live_thread_rows_query(connection: &Connection) -> io::Result<rusqlite::Statement<'_>> {
-    connection
-        .prepare(
-            "SELECT id, rollout_path, source, cwd
-             FROM threads
-             WHERE archived = 0
-             ORDER BY updated_at DESC, id DESC",
-        )
-        .map_err(map_sqlite_error)
+    let archived_projection = if column_exists(connection, "threads", "archived")? {
+        "COALESCE(archived, 0)"
+    } else {
+        "0"
+    };
+
+    let query = format!(
+        "SELECT id, rollout_path, source, cwd, {archived_projection} AS archived
+         FROM threads
+         WHERE COALESCE(rollout_path, '') != ''
+           AND COALESCE(cwd, '') != ''
+           AND COALESCE(source, '') != ''
+         ORDER BY COALESCE(updated_at, 0) DESC, id DESC"
+    );
+
+    connection.prepare(&query).map_err(map_sqlite_error)
 }
 
 fn prepare_thread_subagent_hints_query(
@@ -99,13 +108,15 @@ fn prepare_thread_subagent_hints_query(
         "SELECT t.id, t.rollout_path, t.source, e.parent_thread_id
          FROM threads t
          LEFT JOIN thread_spawn_edges e ON e.child_thread_id = t.id
-         WHERE t.rollout_path != ''
-         ORDER BY t.updated_at DESC, t.id DESC"
+         WHERE COALESCE(t.rollout_path, '') != ''
+           AND COALESCE(t.source, '') != ''
+         ORDER BY COALESCE(t.updated_at, 0) DESC, t.id DESC"
     } else {
         "SELECT id, rollout_path, source, NULL AS parent_thread_id
          FROM threads
-         WHERE rollout_path != ''
-         ORDER BY updated_at DESC, id DESC"
+         WHERE COALESCE(rollout_path, '') != ''
+           AND COALESCE(source, '') != ''
+         ORDER BY COALESCE(updated_at, 0) DESC, id DESC"
     };
 
     connection.prepare(query).map_err(map_sqlite_error)
@@ -117,6 +128,7 @@ fn map_live_thread_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LiveThreadRo
         rollout_path: row.get(1)?,
         source: row.get(2)?,
         workspace_path: row.get(3)?,
+        archived: row.get::<_, i64>(4)? != 0,
     })
 }
 
@@ -171,6 +183,25 @@ fn table_exists(connection: &Connection, table_name: &str) -> io::Result<bool> {
         .map_err(map_sqlite_error)
 }
 
+fn column_exists(connection: &Connection, table_name: &str, column_name: &str) -> io::Result<bool> {
+    connection
+        .prepare(&format!("PRAGMA table_info({table_name})"))
+        .map_err(map_sqlite_error)
+        .and_then(|mut statement| {
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(map_sqlite_error)?;
+
+            for row in rows {
+                if row.map_err(map_sqlite_error)? == column_name {
+                    return Ok(true);
+                }
+            }
+
+            Ok(false)
+        })
+}
+
 fn source_parent_thread_id(source: &str) -> Option<String> {
     let parsed = serde_json::from_str::<Value>(source).ok()?;
     parsed
@@ -190,8 +221,11 @@ pub(crate) fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(map_sqlite_error)?;
+    if !column_exists(&connection, "threads", "archived")? {
+        return Ok(HashSet::new());
+    }
     let mut statement = connection
-        .prepare("SELECT id FROM threads WHERE archived = 1")
+        .prepare("SELECT id FROM threads WHERE COALESCE(archived, 0) != 0")
         .map_err(map_sqlite_error)?;
     let rows = statement
         .query_map([], |row| row.get::<_, String>(0))
@@ -207,9 +241,12 @@ pub(crate) fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<
 
 #[cfg(test)]
 mod tests {
-    use super::load_archived_thread_ids;
-    use crate::test_support::{create_state_database, TempDir};
-    use std::{thread, time::Duration};
+    use super::{load_archived_thread_ids, load_live_thread_rows};
+    use crate::test_support::{
+        create_state_database, insert_thread_row_with_archive_flag, TempDir,
+    };
+    use rusqlite::Connection;
+    use std::{path::Path, thread, time::Duration};
 
     #[test]
     fn loads_archived_thread_ids_from_latest_state_database() {
@@ -227,5 +264,104 @@ mod tests {
         assert!(archived_thread_ids.contains("new-archived"));
         assert!(archived_thread_ids.contains("newer-archived"));
         assert!(!archived_thread_ids.contains("old-archived"));
+    }
+
+    #[test]
+    fn loads_thread_rows_with_archived_flag() {
+        let temp_dir = TempDir::new("state-thread-rows");
+        let database = temp_dir.path.join("state.sqlite");
+        let archived_rollout = temp_dir.path.join("archived.jsonl");
+        let visible_rollout = temp_dir.path.join("visible.jsonl");
+        let workspace_path = temp_dir.path.join("workspace");
+
+        create_state_database(&database, &[]);
+        insert_thread_row_with_archive_flag(
+            &database,
+            "session-archived",
+            &archived_rollout,
+            "exec",
+            &workspace_path,
+            2,
+            true,
+        );
+        insert_thread_row_with_archive_flag(
+            &database,
+            "session-visible",
+            &visible_rollout,
+            "desktop",
+            &workspace_path,
+            1,
+            false,
+        );
+
+        let rows = load_live_thread_rows(&temp_dir.path).expect("thread rows should load");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].session_id, "session-archived");
+        assert!(rows[0].archived);
+        assert_eq!(rows[1].session_id, "session-visible");
+        assert!(!rows[1].archived);
+    }
+
+    #[test]
+    fn treats_missing_archived_column_as_unarchived() {
+        let temp_dir = TempDir::new("state-no-archived-column");
+        let database = temp_dir.path.join("state.sqlite");
+        let rollout_path = temp_dir.path.join("visible.jsonl");
+        let workspace_path = temp_dir.path.join("workspace");
+
+        create_threads_database_without_archived_column(
+            &database,
+            "session-visible",
+            &rollout_path,
+            "desktop",
+            &workspace_path,
+        );
+
+        let rows = load_live_thread_rows(&temp_dir.path).expect("thread rows should load");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].session_id, "session-visible");
+        assert!(!rows[0].archived);
+    }
+
+    fn create_threads_database_without_archived_column(
+        database: &Path,
+        session_id: &str,
+        rollout_path: &Path,
+        source: &str,
+        workspace_path: &Path,
+    ) {
+        let connection = Connection::open(database).expect("state database should open");
+        connection
+            .execute_batch(
+                "CREATE TABLE threads (
+                    id TEXT PRIMARY KEY,
+                    rollout_path TEXT NOT NULL DEFAULT '',
+                    updated_at INTEGER NOT NULL DEFAULT 0,
+                    source TEXT NOT NULL DEFAULT '',
+                    cwd TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    first_user_message TEXT NOT NULL DEFAULT ''
+                );",
+            )
+            .expect("threads table should be created");
+        connection
+            .execute(
+                "INSERT INTO threads (
+                    id,
+                    rollout_path,
+                    updated_at,
+                    source,
+                    cwd
+                ) VALUES (?1, ?2, 1, ?3, ?4)",
+                (
+                    session_id,
+                    rollout_path.display().to_string(),
+                    source,
+                    workspace_path.display().to_string(),
+                ),
+            )
+            .expect("thread row should be inserted");
     }
 }

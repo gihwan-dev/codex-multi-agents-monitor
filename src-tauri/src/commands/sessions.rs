@@ -103,10 +103,14 @@ pub(crate) async fn scan_skill_activity(limit: usize) -> SkillActivityScanResult
     .await
     .ok()
     .and_then(Result::ok)
-    .unwrap_or(SkillActivityScanResult { invocations: vec![] })
+    .unwrap_or(SkillActivityScanResult {
+        invocations: vec![],
+    })
 }
 
-async fn load_or_build_archived_index(cache: tauri::State<'_, ArchivedIndexCache>) -> Vec<ArchivedSessionIndex> {
+async fn load_or_build_archived_index(
+    cache: tauri::State<'_, ArchivedIndexCache>,
+) -> Vec<ArchivedSessionIndex> {
     match cache.clone_entries() {
         Some(index) => index,
         None => {

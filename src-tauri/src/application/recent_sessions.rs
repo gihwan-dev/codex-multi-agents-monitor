@@ -14,7 +14,7 @@ use crate::{
         workspace::WorkspaceIdentity,
     },
     infrastructure::{
-        filesystem::{resolve_codex_home, resolve_projects_root},
+        filesystem::{resolve_codex_home, resolve_project_roots},
         session_jsonl::{
             parse_live_session_snapshot, parse_recent_index_entry, RecentIndexParseOptions,
         },
@@ -39,14 +39,14 @@ pub(crate) struct RecentSnapshotSelection {
     pub(crate) candidate: LiveSessionCandidate,
     pub(crate) codex_home: PathBuf,
     pub(crate) sessions_root: PathBuf,
-    pub(crate) projects_root: PathBuf,
+    pub(crate) project_roots: Vec<PathBuf>,
 }
 
 pub(crate) fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexItem>> {
     let codex_home = resolve_codex_home()?;
-    let projects_root = resolve_projects_root()?;
+    let project_roots = resolve_project_roots(&codex_home)?;
     let sessions_root = codex_home.join("sessions");
-    let candidates = load_live_session_candidates(&codex_home, &sessions_root, &projects_root)?;
+    let candidates = load_live_session_candidates(&codex_home, &sessions_root, &project_roots)?;
 
     let mut items = Vec::new();
 
@@ -80,14 +80,14 @@ pub(crate) fn load_recent_session_snapshot_from_disk(
 fn load_live_session_candidates(
     codex_home: &Path,
     sessions_root: &Path,
-    projects_root: &Path,
+    project_roots: &[PathBuf],
 ) -> io::Result<Vec<LiveSessionCandidate>> {
     let rows = load_live_thread_rows(codex_home)?;
     let canonical_sessions_root = fs::canonicalize(sessions_root)?;
     let mut candidates = Vec::new();
     for row in rows {
         let Some(candidate) =
-            build_live_session_candidate(row, &canonical_sessions_root, projects_root)?
+            build_live_session_candidate(row, &canonical_sessions_root, project_roots)?
         else {
             continue;
         };
@@ -100,8 +100,11 @@ fn load_live_session_candidates(
 fn build_live_session_candidate(
     row: LiveThreadRow,
     canonical_sessions_root: &Path,
-    projects_root: &Path,
+    project_roots: &[PathBuf],
 ) -> io::Result<Option<LiveSessionCandidate>> {
+    if row.archived {
+        return Ok(None);
+    }
     if !is_supported_live_session_source(&row.source) {
         return Ok(None);
     }
@@ -117,13 +120,11 @@ fn build_live_session_candidate(
         return Ok(None);
     }
 
-    let workspace_identity = match resolve_live_session_workspace_identity(
-        Path::new(&row.workspace_path),
-        projects_root,
-    ) {
-        Ok(identity) => identity,
-        Err(_) => return Ok(None),
-    };
+    let workspace_identity =
+        match resolve_live_workspace_identity(Path::new(&row.workspace_path), project_roots) {
+            Ok(identity) => identity,
+            Err(_) => return Ok(None),
+        };
 
     Ok(Some(LiveSessionCandidate {
         session_id: row.session_id,
@@ -163,7 +164,7 @@ fn build_recent_index_item(
 
 fn build_recent_session_snapshot(
     session_file: &Path,
-    projects_root: &Path,
+    project_roots: &[PathBuf],
 ) -> io::Result<Option<SessionLogSnapshot>> {
     let parsed = parse_live_session_snapshot(session_file, LIVE_SESSION_SOURCES)?;
     let Some(parsed) = parsed else {
@@ -171,8 +172,7 @@ fn build_recent_session_snapshot(
     };
 
     let workspace_identity =
-        resolve_live_session_workspace_identity(Path::new(&parsed.workspace_path), projects_root)
-            .ok();
+        resolve_live_workspace_identity(Path::new(&parsed.workspace_path), project_roots).ok();
     let Some(workspace_identity) = workspace_identity else {
         return Ok(None);
     };
@@ -198,7 +198,7 @@ pub(crate) fn load_recent_session_snapshot(
     selection: &RecentSnapshotSelection,
 ) -> Option<SessionLogSnapshot> {
     let mut snapshot =
-        build_recent_session_snapshot(&selection.candidate.file_path, &selection.projects_root)
+        build_recent_session_snapshot(&selection.candidate.file_path, &selection.project_roots)
             .ok()??;
     let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
     snapshot.subagents = load_snapshot_subagents(
@@ -216,13 +216,15 @@ pub(crate) fn load_recent_session_snapshot(
     Some(snapshot)
 }
 
-pub(crate) fn resolve_recent_snapshot_selection(file_path: &str) -> Option<RecentSnapshotSelection> {
+pub(crate) fn resolve_recent_snapshot_selection(
+    file_path: &str,
+) -> Option<RecentSnapshotSelection> {
     let codex_home = resolve_codex_home().ok()?;
-    let projects_root = resolve_projects_root().ok()?;
+    let project_roots = resolve_project_roots(&codex_home).ok()?;
     let sessions_root = codex_home.join("sessions");
     let canonical_path = resolve_recent_snapshot_path(file_path, &sessions_root)?;
     let candidates =
-        load_live_session_candidates(&codex_home, &sessions_root, &projects_root).ok()?;
+        load_live_session_candidates(&codex_home, &sessions_root, &project_roots).ok()?;
     let candidate = candidates
         .into_iter()
         .find(|item| item.file_path == canonical_path)?;
@@ -231,7 +233,7 @@ pub(crate) fn resolve_recent_snapshot_selection(file_path: &str) -> Option<Recen
         candidate,
         codex_home,
         sessions_root,
-        projects_root,
+        project_roots,
     })
 }
 
@@ -246,6 +248,27 @@ fn resolve_recent_snapshot_path(file_path: &str, sessions_root: &Path) -> Option
     }
 }
 
+fn resolve_live_workspace_identity(
+    workspace_path: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<WorkspaceIdentity> {
+    let mut last_error = None;
+
+    for project_root in project_roots {
+        match resolve_live_session_workspace_identity(workspace_path, project_root) {
+            Ok(identity) => return Ok(identity),
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "live session workspace does not resolve into configured project roots",
+        )
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{load_recent_session_index_from_disk, load_recent_session_snapshot_from_disk};
@@ -256,9 +279,9 @@ mod tests {
             create_git_workspace, create_linked_worktree, create_state_database, insert_thread_row,
             insert_thread_row_with_archive_flag, insert_thread_spawn_edge,
             persist_live_thread_fixture, session_meta_line, session_meta_line_with_fork,
-            session_meta_line_with_source,
-            session_meta_line_with_source_and_fork, write_late_subagent_resume_session,
-            write_session_lines, write_worker_subagent_session, RecentSessionTestContext,
+            session_meta_line_with_source, session_meta_line_with_source_and_fork,
+            write_late_subagent_resume_session, write_session_lines, write_worker_subagent_session,
+            RecentSessionTestContext,
         },
     };
     use std::{
@@ -414,12 +437,11 @@ mod tests {
 
     #[test]
     fn recent_snapshot_prefers_runtime_context_window_over_config() {
-        let (ctx, workspace_path, selected_file, state_database) =
-            prepare_recent_snapshot_fixture(
-                "recent-detail-runtime-window",
-                "runtime-window.jsonl",
-                "state_runtime_window.sqlite",
-            );
+        let (ctx, workspace_path, selected_file, state_database) = prepare_recent_snapshot_fixture(
+            "recent-detail-runtime-window",
+            "runtime-window.jsonl",
+            "state_runtime_window.sqlite",
+        );
         fs::write(
             ctx.codex_home.join("config.toml"),
             "model_context_window = 999999\n",
@@ -451,12 +473,11 @@ mod tests {
 
     #[test]
     fn recent_snapshot_uses_config_context_window_when_runtime_is_missing() {
-        let (ctx, workspace_path, selected_file, state_database) =
-            prepare_recent_snapshot_fixture(
-                "recent-detail-config-window",
-                "config-window.jsonl",
-                "state_config_window.sqlite",
-            );
+        let (ctx, workspace_path, selected_file, state_database) = prepare_recent_snapshot_fixture(
+            "recent-detail-config-window",
+            "config-window.jsonl",
+            "state_config_window.sqlite",
+        );
         fs::write(
             ctx.codex_home.join("config.toml"),
             "model_context_window = 258400\n",
@@ -488,12 +509,11 @@ mod tests {
 
     #[test]
     fn recent_snapshot_does_not_promote_subagent_runtime_context_window_to_main_run() {
-        let (ctx, workspace_path, selected_file, state_database) =
-            prepare_recent_snapshot_fixture(
-                "recent-detail-subagent-window",
-                "subagent-window.jsonl",
-                "state_subagent_window.sqlite",
-            );
+        let (ctx, workspace_path, selected_file, state_database) = prepare_recent_snapshot_fixture(
+            "recent-detail-subagent-window",
+            "subagent-window.jsonl",
+            "state_subagent_window.sqlite",
+        );
         let child_file = ctx.sessions_root.join("subagent-window-child.jsonl");
 
         persist_recent_snapshot_fixture(RecentSnapshotFixture {
@@ -667,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_exec_recent_index_entries() {
+    fn includes_exec_recent_index_entries() {
         let ctx = RecentSessionTestContext::new("recent-index-exec");
         let workspace_path = ctx.projects_root.join("demo-app");
         let session_file = ctx.sessions_root.join("exec-session.jsonl");
@@ -692,9 +712,14 @@ mod tests {
             1_742_428_802,
         );
 
-        let items = load_recent_session_index_from_disk().expect("recent index should load");
+        let item = load_recent_session_index_from_disk()
+            .expect("recent index should load")
+            .into_iter()
+            .next()
+            .expect("exec session should remain visible");
 
-        assert!(items.is_empty());
+        assert_eq!(item.session_id, "session-exec");
+        assert_eq!(item.display_name, "demo-app");
     }
 
     #[test]
@@ -809,6 +834,52 @@ mod tests {
             item.first_user_message.as_deref(),
             Some("List the instruction sources you loaded.")
         );
+    }
+
+    #[test]
+    fn resolves_recent_sessions_from_codex_configured_project_roots() {
+        let ctx = RecentSessionTestContext::new("recent-index-config-project-root");
+        let custom_projects_root = ctx.temp_root.join("Workspaces");
+        let workspace_path = custom_projects_root.join("demo-app");
+        let session_file = ctx.sessions_root.join("config-project-root.jsonl");
+        let state_database = ctx.codex_home.join("state_config_project_root.sqlite");
+
+        create_git_workspace(&workspace_path);
+        fs::write(
+            ctx.codex_home.join("config.toml"),
+            format!(
+                "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
+                workspace_path.display()
+            ),
+        )
+        .expect("config should be written");
+        create_state_database(&state_database, &[]);
+        write_session_lines(
+            &session_file,
+            vec![
+                session_meta_line("session-config-root", &workspace_path),
+                r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Configured project roots should resolve recent sessions."}]}}"#
+                    .to_owned(),
+            ],
+        );
+        insert_thread_row(
+            &state_database,
+            "session-config-root",
+            &session_file,
+            "desktop",
+            &workspace_path,
+            1_742_428_804,
+        );
+
+        let item = load_recent_session_index_from_disk()
+            .expect("recent index should load")
+            .into_iter()
+            .next()
+            .expect("configured project root session should be visible");
+
+        assert_eq!(item.session_id, "session-config-root");
+        assert_eq!(item.display_name, "demo-app");
+        assert_eq!(item.origin_path, workspace_path.display().to_string());
     }
 
     #[test]

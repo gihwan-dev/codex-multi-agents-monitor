@@ -2,14 +2,17 @@ use crate::{
     application::{
         session_context_window::resolve_snapshot_max_context_window_tokens,
         session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
-        workspace_identity::{is_conductor_workspace_path, resolve_archived_workspace_identity},
+        workspace_identity::{
+            is_conductor_workspace_path, resolve_archived_workspace_identity,
+            resolve_session_workspace_identity,
+        },
     },
     domain::{
         ingest_policy::{filter_archived_index, ArchivedIndexQuery, ARCHIVED_INDEX_SCAN_LIMIT},
         session::{ArchivedSessionIndex, ArchivedSessionIndexResult, SessionLogSnapshot},
     },
     infrastructure::{
-        filesystem::{collect_jsonl_files, resolve_codex_home},
+        filesystem::{collect_jsonl_files, resolve_codex_home, resolve_project_roots},
         session_jsonl::{parse_archived_index_entry, parse_archived_session_snapshot},
         state_sqlite::load_thread_subagent_hints,
     },
@@ -27,12 +30,13 @@ pub(crate) fn load_archived_session_index(
 
 pub(crate) fn build_archived_index() -> io::Result<Vec<ArchivedSessionIndex>> {
     let codex_home = resolve_codex_home()?;
+    let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let archived_root = codex_home.join("archived_sessions");
     let archived_files = collect_archived_session_files(&archived_root)?;
 
     let mut entries = Vec::new();
     for file_path in &archived_files {
-        if let Ok(Some(entry)) = build_archived_index_entry(file_path) {
+        if let Ok(Some(entry)) = build_archived_index_entry(file_path, &project_roots) {
             entries.push(entry);
         }
     }
@@ -43,6 +47,7 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
     file_path: &str,
 ) -> Option<SessionLogSnapshot> {
     let codex_home = resolve_codex_home().ok()?;
+    let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let archived_root = codex_home.join("archived_sessions");
     let path = Path::new(file_path);
 
@@ -52,7 +57,7 @@ pub(crate) fn load_archived_session_snapshot_from_disk(
         return None;
     }
 
-    let mut snapshot = build_archived_session_snapshot(path).ok()??;
+    let mut snapshot = build_archived_session_snapshot(path, &project_roots).ok()??;
     snapshot.subagents = load_archived_subagents_best_effort(
         &snapshot,
         &ArchivedSubagentScope {
@@ -97,7 +102,10 @@ fn collect_archived_session_files(archived_root: &Path) -> io::Result<Vec<PathBu
     Ok(archived_files)
 }
 
-fn build_archived_index_entry(session_file: &Path) -> io::Result<Option<ArchivedSessionIndex>> {
+fn build_archived_index_entry(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Option<ArchivedSessionIndex>> {
     let parsed =
         parse_archived_index_entry(session_file, ARCHIVED_INDEX_SCAN_LIMIT, |workspace_path| {
             is_conductor_workspace_path(Path::new(workspace_path))
@@ -105,7 +113,7 @@ fn build_archived_index_entry(session_file: &Path) -> io::Result<Option<Archived
 
     Ok(parsed.map(|parsed| {
         let (origin_path, display_name) =
-            resolve_archived_workspace_identity(&parsed.workspace_path);
+            resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
         ArchivedSessionIndex {
             session_id: parsed.session_id,
@@ -122,14 +130,17 @@ fn build_archived_index_entry(session_file: &Path) -> io::Result<Option<Archived
     }))
 }
 
-fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<SessionLogSnapshot>> {
+fn build_archived_session_snapshot(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Option<SessionLogSnapshot>> {
     let parsed = parse_archived_session_snapshot(session_file, |workspace_path| {
         is_conductor_workspace_path(Path::new(workspace_path))
     })?;
 
     Ok(parsed.map(|parsed| {
         let (origin_path, display_name) =
-            resolve_archived_workspace_identity(&parsed.workspace_path);
+            resolve_archived_workspace_identity_with_roots(&parsed.workspace_path, project_roots);
 
         SessionLogSnapshot {
             session_id: parsed.session_id,
@@ -149,18 +160,33 @@ fn build_archived_session_snapshot(session_file: &Path) -> io::Result<Option<Ses
     }))
 }
 
+fn resolve_archived_workspace_identity_with_roots(
+    workspace_path: &str,
+    project_roots: &[PathBuf],
+) -> (String, String) {
+    let path = Path::new(workspace_path);
+
+    for project_root in project_roots {
+        if let Ok(identity) = resolve_session_workspace_identity(path, project_root) {
+            return (identity.origin_path, identity.display_name);
+        }
+    }
+
+    resolve_archived_workspace_identity(workspace_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        load_archived_session_snapshot_from_disk, load_archived_subagents_best_effort,
-        ArchivedSubagentScope,
+        build_archived_index, load_archived_session_snapshot_from_disk,
+        load_archived_subagents_best_effort, ArchivedSubagentScope,
     };
     use crate::domain::session::SessionLogSnapshot;
     use crate::test_support::{
-        session_meta_line_with_fork, write_session_lines, write_worker_subagent_session,
-        RecentSessionTestContext,
+        create_git_workspace, session_meta_line_with_fork, session_meta_line_with_source,
+        write_session_lines, write_worker_subagent_session, RecentSessionTestContext,
     };
-    use std::path::Path;
+    use std::{fs, path::Path};
 
     fn write_archived_nested_subagent_fixture(
         selected_file: &Path,
@@ -283,5 +309,62 @@ mod tests {
             snapshot.subagents[0].max_context_window_tokens,
             Some(258_400)
         );
+    }
+
+    #[test]
+    fn builds_archived_index_when_codex_home_uses_tilde_expansion() {
+        let ctx = RecentSessionTestContext::new("archived-index-tilde");
+        let archived_root = ctx.codex_home.join("archived_sessions");
+        let workspace_path = ctx.projects_root.join("demo-app");
+        let archived_file = archived_root.join("2026/archived.jsonl");
+
+        create_git_workspace(&workspace_path);
+        write_session_lines(
+            &archived_file,
+            vec![
+                session_meta_line_with_source("archived-tilde", &workspace_path, "exec"),
+                r#"{"timestamp":"2026-03-21T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Archived sessions should load when CODEX_HOME uses tilde."}]}}"#
+                    .to_owned(),
+            ],
+        );
+        std::env::set_var("CODEX_HOME", "~/.codex");
+
+        let entries = build_archived_index().expect("archived index should build");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].session_id, "archived-tilde");
+    }
+
+    #[test]
+    fn resolves_archived_identity_from_codex_configured_project_roots() {
+        let ctx = RecentSessionTestContext::new("archived-index-config-project-root");
+        let archived_root = ctx.codex_home.join("archived_sessions");
+        let custom_projects_root = ctx.temp_root.join("Workspaces");
+        let workspace_path = custom_projects_root.join("demo-app");
+        let archived_file = archived_root.join("2026/config-root.jsonl");
+
+        create_git_workspace(&workspace_path);
+        fs::write(
+            ctx.codex_home.join("config.toml"),
+            format!(
+                "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
+                workspace_path.display()
+            ),
+        )
+        .expect("config should be written");
+        write_session_lines(
+            &archived_file,
+            vec![
+                session_meta_line_with_source("archived-config-root", &workspace_path, "exec"),
+                r#"{"timestamp":"2026-03-21T00:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Configured project roots should resolve archived workspaces."}]}}"#
+                    .to_owned(),
+            ],
+        );
+
+        let entries = build_archived_index().expect("archived index should build");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].display_name, "demo-app");
+        assert_eq!(entries[0].origin_path, workspace_path.display().to_string());
     }
 }

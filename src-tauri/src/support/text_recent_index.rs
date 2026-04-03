@@ -1,7 +1,4 @@
-use crate::domain::{
-    ingest_policy::DEFAULT_THREAD_TITLE,
-    session::SessionEntrySnapshot,
-};
+use crate::domain::{ingest_policy::DEFAULT_THREAD_TITLE, session::SessionEntrySnapshot};
 
 use super::{is_system_boilerplate_text, truncate_utf8_safe};
 
@@ -92,7 +89,8 @@ fn fallback_status(has_abort: bool) -> String {
 }
 
 fn message_marks_interrupted(entry: &SessionEntrySnapshot) -> bool {
-    entry.text
+    entry
+        .text
         .as_deref()
         .is_some_and(|text| text.contains("<turn_aborted>"))
 }
@@ -176,7 +174,8 @@ fn summarize_function_call(entry: &SessionEntrySnapshot) -> Option<String> {
         }
     }
 
-    entry.function_name
+    entry
+        .function_name
         .as_deref()
         .map(|name| truncate_utf8_safe(name, 160))
 }

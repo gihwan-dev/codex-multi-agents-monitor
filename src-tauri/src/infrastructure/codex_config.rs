@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fs, io,
-    path::Path,
-};
+use std::{collections::HashMap, fs, io, path::Path};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 const PROFILE_KEY: &str = "profile";
@@ -40,9 +36,7 @@ fn parse_model_context_window(raw: &str) -> Option<u64> {
             active_profile = parse_string_assignment(stripped, PROFILE_KEY);
         }
 
-        let Some(context_window) =
-            parse_u64_assignment(stripped, MODEL_CONTEXT_WINDOW_KEY)
-        else {
+        let Some(context_window) = parse_u64_assignment(stripped, MODEL_CONTEXT_WINDOW_KEY) else {
             continue;
         };
 
@@ -56,7 +50,11 @@ fn parse_model_context_window(raw: &str) -> Option<u64> {
     }
 
     active_profile
-        .and_then(|profile| profile_context_windows.get(&format!("profiles.{profile}")).copied())
+        .and_then(|profile| {
+            profile_context_windows
+                .get(&format!("profiles.{profile}"))
+                .copied()
+        })
         .or(root_context_window)
 }
 
@@ -74,7 +72,10 @@ fn parse_string_assignment(line: &str, key: &str) -> Option<String> {
 }
 
 fn parse_u64_assignment(line: &str, key: &str) -> Option<u64> {
-    parse_assignment_value(line, key)?.trim().parse::<u64>().ok()
+    parse_assignment_value(line, key)?
+        .trim()
+        .parse::<u64>()
+        .ok()
 }
 
 fn parse_assignment_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {

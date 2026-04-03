@@ -2,13 +2,13 @@ use crate::domain::session::{
     ArchivedSessionIndex, ArchivedSessionIndexResult, RecentSessionIndexItem,
 };
 
-pub(crate) const MAX_RECENT_SESSIONS: usize = 24;
+pub(crate) const MAX_RECENT_SESSIONS: usize = 50;
 pub(crate) const RECENT_INDEX_PREFIX_SCAN_LIMIT: usize = 80;
 pub(crate) const RECENT_INDEX_TAIL_ENTRY_LIMIT: usize = 120;
 pub(crate) const RECENT_INDEX_TAIL_BYTES: u64 = 131_072;
 pub(crate) const ARCHIVED_INDEX_SCAN_LIMIT: usize = 50;
 pub(crate) const DEFAULT_THREAD_TITLE: &str = "새 스레드";
-pub(crate) const LIVE_SESSION_SOURCES: &[&str] = &["desktop", "cli", "vscode"];
+pub(crate) const LIVE_SESSION_SOURCES: &[&str] = &["desktop", "cli", "vscode", "exec"];
 
 pub(crate) struct ArchivedIndexQuery<'a> {
     pub(crate) offset: usize,
@@ -18,7 +18,7 @@ pub(crate) struct ArchivedIndexQuery<'a> {
 }
 
 pub(crate) fn is_supported_live_session_source(source: &str) -> bool {
-    LIVE_SESSION_SOURCES.contains(&source)
+    LIVE_SESSION_SOURCES.contains(&source.trim())
 }
 
 pub(crate) fn should_hide_recent_boot_thread(item: &RecentSessionIndexItem) -> bool {

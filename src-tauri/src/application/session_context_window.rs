@@ -45,8 +45,10 @@ mod tests {
         )
         .expect("config should be written");
 
-        let resolved =
-            resolve_snapshot_max_context_window_tokens(&build_snapshot(Some(258_400)), &ctx.codex_home);
+        let resolved = resolve_snapshot_max_context_window_tokens(
+            &build_snapshot(Some(258_400)),
+            &ctx.codex_home,
+        );
 
         assert_eq!(resolved, Some(258_400));
     }
