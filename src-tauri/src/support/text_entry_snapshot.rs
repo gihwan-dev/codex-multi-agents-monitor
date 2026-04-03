@@ -98,7 +98,10 @@ fn extract_message_part(item: &Value) -> Option<String> {
 }
 
 fn extract_object_message_part(value: &Map<String, Value>) -> Option<String> {
-    let content_type = value.get("type").and_then(Value::as_str).unwrap_or_default();
+    let content_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if content_type == "input_image" {
         return Some("[Image]".to_owned());
     }
@@ -289,10 +292,7 @@ fn build_item_completed_entry(context: &SnapshotContext<'_>) -> SessionEntrySnap
 }
 
 fn build_token_count_entry(context: &SnapshotContext<'_>) -> Option<SessionEntrySnapshot> {
-    let info = context
-        .payload
-        .get("info")
-        .and_then(Value::as_object)?;
+    let info = context.payload.get("info").and_then(Value::as_object)?;
     let last_usage = info.get("last_token_usage").and_then(Value::as_object)?;
     let total_usage = info
         .get("total_token_usage")
@@ -328,15 +328,13 @@ fn build_token_usage_snapshot(usage: &serde_json::Map<String, Value>) -> Value {
     })
 }
 
-fn preview_function_call_arguments(
-    context: &SnapshotContext<'_>,
-    name: &str,
-) -> Option<String> {
+fn preview_function_call_arguments(context: &SnapshotContext<'_>, name: &str) -> Option<String> {
     let arguments = context.string("arguments")?;
     match name {
         "exec_command" => preview_exec_command_arguments(arguments),
-        "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
-        | "send_input" => Some(truncate_utf8_safe(arguments, 2000)),
+        "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent" | "send_input" => {
+            Some(truncate_utf8_safe(arguments, 2000))
+        }
         _ => Some(truncate_utf8_safe(arguments, 200)),
     }
 }
@@ -353,15 +351,13 @@ fn preview_exec_command_arguments(arguments: &str) -> Option<String> {
         .or_else(|| Some(truncate_utf8_safe(arguments, 500)))
 }
 
-fn preview_custom_tool_arguments(
-    context: &SnapshotContext<'_>,
-    name: &str,
-) -> Option<String> {
+fn preview_custom_tool_arguments(context: &SnapshotContext<'_>, name: &str) -> Option<String> {
     let arguments = raw_custom_tool_arguments(context)?;
     match name {
         "apply_patch" => Some(preview_apply_patch_arguments(arguments)),
-        "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent"
-        | "send_input" => Some(truncate_utf8_safe(arguments, 2000)),
+        "spawn_agent" | "close_agent" | "wait" | "wait_agent" | "resume_agent" | "send_input" => {
+            Some(truncate_utf8_safe(arguments, 2000))
+        }
         _ => Some(truncate_utf8_safe(arguments, 200)),
     }
 }
@@ -424,7 +420,9 @@ fn build_compacted_summary_snapshot(context: &SnapshotContext<'_>) -> SessionEnt
 }
 
 fn summarize_replacement_history(payload: &Map<String, Value>) -> Option<String> {
-    let items = payload.get("replacement_history").and_then(Value::as_array)?;
+    let items = payload
+        .get("replacement_history")
+        .and_then(Value::as_array)?;
     if items.is_empty() {
         return None;
     }

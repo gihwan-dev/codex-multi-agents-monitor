@@ -233,8 +233,8 @@ fn resolve_existing_live_session_origin(
     workspace_path: &Path,
     normalized_projects_root: &Path,
 ) -> io::Result<PathBuf> {
-    let inferred_origin =
-        infer_live_projects_origin(workspace_path, normalized_projects_root).ok_or_else(|| {
+    let inferred_origin = infer_live_projects_origin(workspace_path, normalized_projects_root)
+        .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "live session workspace does not resolve into Documents/Projects",

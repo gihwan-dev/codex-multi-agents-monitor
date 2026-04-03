@@ -1,6 +1,8 @@
 use crate::{
     domain::session::{SkillActivityScanResult, SkillInvocationRecord},
-    infrastructure::filesystem::{collect_jsonl_files, recent_file_modified_at, resolve_codex_home},
+    infrastructure::filesystem::{
+        collect_jsonl_files, recent_file_modified_at, resolve_codex_home,
+    },
     support::text::extract_skill_name_public,
 };
 use serde_json::Value;
@@ -23,7 +25,8 @@ fn collect_session_files(limit: usize) -> io::Result<Vec<PathBuf>> {
 }
 
 fn extract_session_id(entry: &Value) -> Option<String> {
-    entry.get("payload")
+    entry
+        .get("payload")
         .and_then(|p| p.get("id"))
         .and_then(Value::as_str)
         .map(String::from)

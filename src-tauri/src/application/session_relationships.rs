@@ -93,7 +93,10 @@ impl<'a> SnapshotSubagentCollector<'a> {
         if !matches_parent_thread_id(self.snapshot, &subagent.parent_thread_id) {
             return;
         }
-        if !self.attached_session_ids.insert(subagent.session_id.clone()) {
+        if !self
+            .attached_session_ids
+            .insert(subagent.session_id.clone())
+        {
             return;
         }
 
@@ -195,11 +198,7 @@ mod tests {
 
     fn write_sparse_snapshot_fixture(
         search_root: &std::path::Path,
-    ) -> (
-        std::path::PathBuf,
-        std::path::PathBuf,
-        std::path::PathBuf,
-    ) {
+    ) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
         let selected_file = search_root.join("parent.jsonl");
         let hinted_child_file = search_root.join("child-hinted.jsonl");
         let jsonl_only_child_file = search_root.join("nested/child-jsonl-only.jsonl");

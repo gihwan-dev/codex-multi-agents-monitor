@@ -170,7 +170,9 @@ pub(crate) fn start_recent_session_live_subscription<R: Runtime>(
             poll_interval: POLL_INTERVAL,
         };
         run_recent_session_live_watch_loop(watch_loop, |update| {
-            window.emit(RECENT_SESSION_LIVE_UPDATE_EVENT, update).is_ok()
+            window
+                .emit(RECENT_SESSION_LIVE_UPDATE_EVENT, update)
+                .is_ok()
         });
         registry_for_thread.finish(&thread_subscription_id);
     });
@@ -191,10 +193,8 @@ fn prepare_recent_session_live_watch(file_path: &str) -> Result<RecentSnapshotSe
     })
 }
 
-fn run_recent_session_live_watch_loop<F>(
-    watch_loop: RecentSessionWatchLoop<'_>,
-    mut emit: F,
-) where
+fn run_recent_session_live_watch_loop<F>(watch_loop: RecentSessionWatchLoop<'_>, mut emit: F)
+where
     F: FnMut(RecentSessionLiveUpdate) -> bool,
 {
     let RecentSessionWatchLoop {
@@ -225,8 +225,8 @@ fn read_file_version(path: &Path) -> io::Result<FileVersion> {
 #[cfg(test)]
 mod tests {
     use super::{
-        prepare_recent_session_live_watch, run_recent_session_live_watch_loop,
-        RecentSessionWatch, RecentSessionWatchLoop, DISCONNECTED_AFTER, STALE_AFTER,
+        prepare_recent_session_live_watch, run_recent_session_live_watch_loop, RecentSessionWatch,
+        RecentSessionWatchLoop, DISCONNECTED_AFTER, STALE_AFTER,
     };
     use crate::test_support::{
         create_git_workspace, create_state_database, insert_thread_row, session_meta_line,
@@ -259,7 +259,9 @@ mod tests {
         let state_database = context.codex_home.join("state.sqlite");
         create_state_database(&state_database, &[]);
 
-        let session_file = context.sessions_root.join("2026/03/29/rollout-live-watch.jsonl");
+        let session_file = context
+            .sessions_root
+            .join("2026/03/29/rollout-live-watch.jsonl");
         write_session_lines(
             &session_file,
             [
@@ -306,7 +308,10 @@ mod tests {
         let stale = watch
             .poll_at(start + STALE_AFTER + Duration::from_millis(1))
             .expect("stale update should emit");
-        assert_eq!(stale.connection, crate::domain::session::RecentSessionLiveConnection::Stale);
+        assert_eq!(
+            stale.connection,
+            crate::domain::session::RecentSessionLiveConnection::Stale
+        );
         assert!(stale.snapshot.is_none());
 
         let disconnected = watch
