@@ -41,10 +41,24 @@ export function WorkspaceTreeList({
 }: WorkspaceTreeListProps) {
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
+      const target = treeRef.current?.querySelector<HTMLElement>(`[data-tree-id="${activeTreeId}"]`);
+      if (!target || typeof target.scrollIntoView !== "function") {
+        return;
+      }
       scrollTreeItemIntoView(treeRef, activeTreeId);
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [activeTreeId, treeRef]);
+
+  if (model.workspaces.length === 0) {
+    return (
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="px-3 pt-2 text-sm text-muted-foreground" aria-live="polite">
+          No runs found
+        </div>
+      </ScrollArea>
+    );
+  }
 
   return (
     <ScrollArea className="min-h-0 flex-1">

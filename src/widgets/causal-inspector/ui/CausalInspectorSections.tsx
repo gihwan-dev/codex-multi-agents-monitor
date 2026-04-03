@@ -29,6 +29,8 @@ export function buildInspectorSections({
   sessionReview,
 }: BuildInspectorSectionsOptions) {
   const sections = [];
+  sections.push(buildSummarySection(summary));
+
   if (sessionReview) {
     sections.push({
       key: "session-review",
@@ -36,7 +38,6 @@ export function buildInspectorSections({
       content: sessionReview,
     } satisfies InspectorSectionConfig);
   }
-  sections.push(buildSummarySection(summary));
 
   if (!summary) {
     sections.push(buildPayloadSection(summary, onOpenDrawer));
