@@ -16,6 +16,7 @@ export function SkillActivityTopBar({ onNavigateToMonitor }: SkillActivityTopBar
             variant="outline"
             onClick={onNavigateToMonitor}
             className="text-sm"
+            aria-label="Back to monitor"
           >
             ← Monitor
           </Button>

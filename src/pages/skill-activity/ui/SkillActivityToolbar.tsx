@@ -54,7 +54,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
       />
 
       <Select value={String(props.scanRange)} onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}>
-        <SelectTrigger className="h-8 w-32 text-sm">
+        <SelectTrigger className="h-8 w-32 text-sm" aria-label="Scan range">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -65,7 +65,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
       </Select>
 
       <Select value={props.freshnessFilter} onValueChange={(v) => props.onFreshnessFilterChange(v as SkillFreshnessFilter)}>
-        <SelectTrigger className="h-8 w-28 text-sm">
+        <SelectTrigger className="h-8 w-28 text-sm" aria-label="Freshness filter">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -77,7 +77,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
       </Select>
 
       <Select value={props.sourceFilter} onValueChange={(v) => props.onSourceFilterChange(v as SkillSourceFilter)}>
-        <SelectTrigger className="h-8 w-28 text-sm">
+        <SelectTrigger className="h-8 w-28 text-sm" aria-label="Source filter">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -89,7 +89,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
       </Select>
 
       <Select value={props.sortField} onValueChange={(v) => props.onSortChange(v as SkillSortField)}>
-        <SelectTrigger className="h-8 w-28 text-sm">
+        <SelectTrigger className="h-8 w-28 text-sm" aria-label="Sort by">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
