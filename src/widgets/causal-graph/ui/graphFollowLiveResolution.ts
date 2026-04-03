@@ -5,6 +5,7 @@ import {
   TIME_GUTTER,
 } from "../model/graphLayout";
 import { readFollowLiveContext } from "./graphFollowLiveContext";
+import { prefersReducedMotion } from "./graphSelectionReveal";
 
 export type FollowLiveResolution =
   | { kind: "clear" }
@@ -70,7 +71,7 @@ export function applyFollowLiveResolution(
   scrollInstruction.element.scrollTo({
     top: scrollInstruction.followTarget.top,
     left: scrollInstruction.followTarget.left,
-    behavior: "auto",
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
   });
 }
 

@@ -14,12 +14,18 @@ const PAYLOAD_ACTIONS: Array<{ tab: DrawerTab; label: string }> = [
   { tab: "raw", label: "Raw" },
 ];
 
-export function InspectorSections({ sections }: { sections: InspectorSectionConfig[] }) {
+export function InspectorSections({
+  motionKey,
+  sections,
+}: {
+  motionKey: string;
+  sections: InspectorSectionConfig[];
+}) {
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="grid min-w-0 gap-3 pr-3">
-        {sections.map((section) => (
-          <CausalInspectorSection key={section.key} title={section.title}>
+      <div key={motionKey} data-slot="inspector-sections" className="grid min-w-0 gap-3 pr-3">
+        {sections.map((section, index) => (
+          <CausalInspectorSection key={section.key} index={index} title={section.title}>
             {section.content}
           </CausalInspectorSection>
         ))}
