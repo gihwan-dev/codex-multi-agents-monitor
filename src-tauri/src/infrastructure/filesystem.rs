@@ -7,6 +7,7 @@ use std::{
 
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
 const PROJECTS_SECTION_PREFIX: &str = "[projects.\"";
+const MAX_SCAN_DEPTH: usize = 10;
 
 pub(crate) fn resolve_codex_home() -> io::Result<PathBuf> {
     if let Some(codex_home) = env::var_os("CODEX_HOME") {
@@ -59,7 +60,15 @@ pub(crate) fn sort_paths_by_recent_activity(files: &mut [PathBuf]) {
 }
 
 pub(crate) fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    if !directory.exists() {
+    collect_jsonl_files_recursive(directory, files, 0)
+}
+
+fn collect_jsonl_files_recursive(
+    directory: &Path,
+    files: &mut Vec<PathBuf>,
+    depth: usize,
+) -> io::Result<()> {
+    if depth > MAX_SCAN_DEPTH || !directory.exists() {
         return Ok(());
     }
 
@@ -73,7 +82,10 @@ pub(crate) fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) ->
         };
 
         if path.is_dir() {
-            collect_jsonl_files(&path, files)?;
+            if path.is_symlink() {
+                continue;
+            }
+            collect_jsonl_files_recursive(&path, files, depth + 1)?;
             continue;
         }
 
@@ -244,7 +256,7 @@ mod tests {
     use std::{fs, thread, time::Duration};
 
     #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{symlink, PermissionsExt};
 
     #[test]
     fn sorts_recent_session_files_by_modified_time_before_filename() {
@@ -318,5 +330,74 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(files.iter().any(|path| path == &accessible_file));
+    }
+
+    #[test]
+    fn collect_jsonl_files_limits_recursive_depth() {
+        let temp_dir = TempDir::new("collect-jsonl-max-depth");
+        let mut current = temp_dir.path.clone();
+
+        for depth in 0..=11 {
+            current = current.join(format!("level-{depth}"));
+            fs::create_dir_all(&current).expect("nested directory should exist");
+        }
+
+        let within_limit = temp_dir
+            .path
+            .join("level-0")
+            .join("level-1")
+            .join("level-2")
+            .join("level-3")
+            .join("level-4")
+            .join("level-5")
+            .join("level-6")
+            .join("level-7")
+            .join("level-8")
+            .join("level-9")
+            .join("level-10")
+            .join("visible.jsonl");
+        let beyond_limit = temp_dir
+            .path
+            .join("level-0")
+            .join("level-1")
+            .join("level-2")
+            .join("level-3")
+            .join("level-4")
+            .join("level-5")
+            .join("level-6")
+            .join("level-7")
+            .join("level-8")
+            .join("level-9")
+            .join("level-10")
+            .join("level-11")
+            .join("hidden.jsonl");
+
+        fs::write(&within_limit, "visible").expect("within-limit file should exist");
+        fs::write(&beyond_limit, "hidden").expect("beyond-limit file should exist");
+
+        let mut files = Vec::new();
+        collect_jsonl_files(&temp_dir.path, &mut files).expect("jsonl collection should succeed");
+
+        assert!(files.iter().any(|path| path == &within_limit));
+        assert!(files.iter().all(|path| path != &beyond_limit));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collect_jsonl_files_skips_symlink_directories() {
+        let temp_dir = TempDir::new("collect-jsonl-symlink-dir");
+        let real_dir = temp_dir.path.join("real");
+        let real_file = real_dir.join("inside.jsonl");
+        let linked_dir = temp_dir.path.join("linked");
+
+        fs::create_dir_all(&real_dir).expect("real directory should exist");
+        fs::write(&real_file, "inside").expect("real file should exist");
+        symlink(&real_dir, &linked_dir).expect("symlink should be created");
+
+        let mut files = Vec::new();
+        collect_jsonl_files(&temp_dir.path, &mut files).expect("jsonl collection should succeed");
+
+        assert!(files.iter().any(|path| path == &real_file));
+        assert!(files.iter().all(|path| !path.starts_with(&linked_dir)));
     }
 }
