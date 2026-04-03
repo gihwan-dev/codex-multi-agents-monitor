@@ -845,14 +845,7 @@ mod tests {
         let state_database = ctx.codex_home.join("state_config_project_root.sqlite");
 
         create_git_workspace(&workspace_path);
-        fs::write(
-            ctx.codex_home.join("config.toml"),
-            format!(
-                "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
-                workspace_path.display()
-            ),
-        )
-        .expect("config should be written");
+        write_projects_config_entry(&ctx.codex_home, &workspace_path);
         create_state_database(&state_database, &[]);
         write_session_lines(
             &session_file,
@@ -880,6 +873,17 @@ mod tests {
         assert_eq!(item.session_id, "session-config-root");
         assert_eq!(item.display_name, "demo-app");
         assert_eq!(item.origin_path, workspace_path.display().to_string());
+    }
+
+    fn write_projects_config_entry(codex_home: &Path, workspace_path: &Path) {
+        fs::write(
+            codex_home.join("config.toml"),
+            format!(
+                "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
+                workspace_path.display()
+            ),
+        )
+        .expect("config should be written");
     }
 
     #[test]

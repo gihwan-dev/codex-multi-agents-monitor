@@ -63,38 +63,53 @@ pub(crate) fn collect_jsonl_files(directory: &Path, files: &mut Vec<PathBuf>) ->
         return Ok(());
     }
 
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error)
-            if matches!(
-                error.kind(),
-                io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
-            ) =>
-        {
-            return Ok(());
-        }
-        Err(error) => return Err(error),
+    let Some(entries) = read_dir_if_available(directory)? else {
+        return Ok(());
     };
 
     for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => continue,
-            Err(error) => return Err(error),
+        let Some(path) = read_entry_path_if_available(entry)? else {
+            continue;
         };
-        let path = entry.path();
 
         if path.is_dir() {
             collect_jsonl_files(&path, files)?;
             continue;
         }
 
-        if path.extension().and_then(|value| value.to_str()) == Some("jsonl") {
+        if is_jsonl_path(&path) {
             files.push(path);
         }
     }
 
     Ok(())
+}
+
+fn read_dir_if_available(directory: &Path) -> io::Result<Option<fs::ReadDir>> {
+    match fs::read_dir(directory) {
+        Ok(entries) => Ok(Some(entries)),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn read_entry_path_if_available(entry: io::Result<fs::DirEntry>) -> io::Result<Option<PathBuf>> {
+    match entry {
+        Ok(entry) => Ok(Some(entry.path())),
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn is_jsonl_path(path: &Path) -> bool {
+    path.extension().and_then(|value| value.to_str()) == Some("jsonl")
 }
 
 fn resolve_home_directory() -> io::Result<PathBuf> {

@@ -32,30 +32,49 @@ fn parse_model_context_window(raw: &str) -> Option<u64> {
             continue;
         }
 
-        if current_section.is_none() && active_profile.is_none() {
-            active_profile = parse_string_assignment(stripped, PROFILE_KEY);
-        }
+        capture_active_profile(stripped, current_section.as_deref(), &mut active_profile);
 
         let Some(context_window) = parse_u64_assignment(stripped, MODEL_CONTEXT_WINDOW_KEY) else {
             continue;
         };
 
-        match current_section.as_deref() {
-            None => root_context_window = Some(context_window),
-            Some(section) if section.starts_with("profiles.") => {
-                profile_context_windows.insert(section.to_owned(), context_window);
-            }
-            Some(_) => {}
+        if current_section.is_none() {
+            root_context_window = Some(context_window);
+            continue;
+        }
+
+        if let Some(section) = current_section.as_deref().and_then(profile_section_key) {
+            profile_context_windows.insert(section, context_window);
         }
     }
 
-    active_profile
-        .and_then(|profile| {
-            profile_context_windows
-                .get(&format!("profiles.{profile}"))
-                .copied()
-        })
+    selected_profile_context_window(active_profile.as_deref(), &profile_context_windows)
         .or(root_context_window)
+}
+
+fn capture_active_profile(
+    line: &str,
+    current_section: Option<&str>,
+    active_profile: &mut Option<String>,
+) {
+    if current_section.is_none() && active_profile.is_none() {
+        *active_profile = parse_string_assignment(line, PROFILE_KEY);
+    }
+}
+
+fn profile_section_key(section: &str) -> Option<String> {
+    section.starts_with("profiles.").then(|| section.to_owned())
+}
+
+fn selected_profile_context_window(
+    active_profile: Option<&str>,
+    profile_context_windows: &HashMap<String, u64>,
+) -> Option<u64> {
+    active_profile.and_then(|profile| {
+        profile_context_windows
+            .get(&format!("profiles.{profile}"))
+            .copied()
+    })
 }
 
 fn strip_comment(line: &str) -> &str {

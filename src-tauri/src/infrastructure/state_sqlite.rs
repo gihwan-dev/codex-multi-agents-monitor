@@ -216,14 +216,16 @@ fn source_parent_thread_id(source: &str) -> Option<String> {
 #[cfg(test)]
 pub(crate) fn load_archived_thread_ids(codex_home: &Path) -> io::Result<HashSet<String>> {
     let state_database = resolve_codex_state_database(codex_home)?;
-    let connection = Connection::open_with_flags(
-        state_database,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(map_sqlite_error)?;
+    let connection = open_state_connection(&state_database)?;
     if !column_exists(&connection, "threads", "archived")? {
         return Ok(HashSet::new());
     }
+
+    collect_archived_thread_ids(&connection)
+}
+
+#[cfg(test)]
+fn collect_archived_thread_ids(connection: &Connection) -> io::Result<HashSet<String>> {
     let mut statement = connection
         .prepare("SELECT id FROM threads WHERE COALESCE(archived, 0) != 0")
         .map_err(map_sqlite_error)?;
@@ -247,6 +249,13 @@ mod tests {
     };
     use rusqlite::Connection;
     use std::{path::Path, thread, time::Duration};
+
+    struct LegacyThreadRow<'a> {
+        session_id: &'a str,
+        rollout_path: &'a Path,
+        source: &'a str,
+        workspace_path: &'a Path,
+    }
 
     #[test]
     fn loads_archived_thread_ids_from_latest_state_database() {
@@ -310,13 +319,14 @@ mod tests {
         let rollout_path = temp_dir.path.join("visible.jsonl");
         let workspace_path = temp_dir.path.join("workspace");
 
-        create_threads_database_without_archived_column(
-            &database,
-            "session-visible",
-            &rollout_path,
-            "desktop",
-            &workspace_path,
-        );
+        let row = LegacyThreadRow {
+            session_id: "session-visible",
+            rollout_path: &rollout_path,
+            source: "desktop",
+            workspace_path: &workspace_path,
+        };
+
+        create_threads_database_without_archived_column(&database, row);
 
         let rows = load_live_thread_rows(&temp_dir.path).expect("thread rows should load");
 
@@ -325,13 +335,7 @@ mod tests {
         assert!(!rows[0].archived);
     }
 
-    fn create_threads_database_without_archived_column(
-        database: &Path,
-        session_id: &str,
-        rollout_path: &Path,
-        source: &str,
-        workspace_path: &Path,
-    ) {
+    fn create_threads_database_without_archived_column(database: &Path, row: LegacyThreadRow<'_>) {
         let connection = Connection::open(database).expect("state database should open");
         connection
             .execute_batch(
@@ -356,10 +360,10 @@ mod tests {
                     cwd
                 ) VALUES (?1, ?2, 1, ?3, ?4)",
                 (
-                    session_id,
-                    rollout_path.display().to_string(),
-                    source,
-                    workspace_path.display().to_string(),
+                    row.session_id,
+                    row.rollout_path.display().to_string(),
+                    row.source,
+                    row.workspace_path.display().to_string(),
                 ),
             )
             .expect("thread row should be inserted");
