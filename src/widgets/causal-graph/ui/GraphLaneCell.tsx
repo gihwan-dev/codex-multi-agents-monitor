@@ -26,7 +26,7 @@ export function GraphLaneCell({
       data-slot="graph-lane-cell"
       data-lane-id={laneId}
       data-occupied={occupied ? "true" : "false"}
-      className="relative min-h-[var(--graph-event-row-height)]"
+      className="min-h-[var(--graph-event-row-height)]"
     >
       {occupied ? <OccupiedGraphLaneCell eventLayout={eventLayout} onSelect={onSelect} row={row} /> : null}
     </div>

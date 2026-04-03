@@ -54,11 +54,12 @@ export function GraphEventCard({
       data-selected={resolveBooleanDataFlag(selected)}
       data-in-path={resolveBooleanDataFlag(inPath)}
       className={cn(
-        "absolute left-1/2 z-[1] grid h-20 min-h-20 -translate-x-1/2 content-center gap-1 rounded-[14px] px-3 py-2.5 text-left text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "absolute z-[1] grid h-20 min-h-20 content-center gap-1 rounded-[14px] px-3 py-2.5 text-left text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         cardClasses,
       )}
       style={{
         ...buildCardStyle({ eventType, selected, inPath }),
+        left: `${eventLayout.cardRect.x}px`,
         top: `${eventLayout.cardRect.y - rowAnchorTop}px`,
         width: `${eventLayout.cardRect.width}px`,
       }}

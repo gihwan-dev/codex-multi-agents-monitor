@@ -9,6 +9,7 @@ import {
   type SessionEntrySnapshot,
   type SessionLogSnapshot,
 } from "../src/entities/session-log/index.js";
+import { buildGraphLayoutSnapshot } from "../src/widgets/causal-graph/model/graphLayout.js";
 import { CausalGraphView } from "../src/widgets/causal-graph/index.js";
 
 const CLIENT_HEIGHT = 220;
@@ -293,6 +294,65 @@ describe("CausalGraphView edge rendering", () => {
 
     const routeElements = container.querySelectorAll('[data-slot="graph-route"]');
     expect(hitboxes.length).toBe(routeElements.length);
+  });
+
+  it("positions event cards and lane guides from the layout x coordinates", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+    const firstVisibleEventId =
+      scene.rows.find((row) => row.kind === "event")?.eventId ?? null;
+
+    expect(firstVisibleEventId).not.toBeNull();
+    if (!firstVisibleEventId) {
+      throw new Error("expected at least one event row");
+    }
+
+    const layout = buildGraphLayoutSnapshot(scene, 1280);
+    const eventLayout = layout.eventById.get(firstVisibleEventId);
+    expect(eventLayout).toBeDefined();
+    if (!eventLayout) {
+      throw new Error(`expected layout for ${firstVisibleEventId}`);
+    }
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const eventCard = container.querySelector(
+      `[data-slot="graph-event-card"][data-event-id="${firstVisibleEventId}"]`,
+    );
+    expect(eventCard).not.toBeNull();
+    if (!eventCard) {
+      throw new Error(`expected rendered card for ${firstVisibleEventId}`);
+    }
+
+    expect((eventCard as HTMLElement).style.left).toBe(`${eventLayout.cardRect.x}px`);
+
+    const laneGuide = eventCard
+      .closest('[data-slot="graph-lane-cell"][data-occupied="true"]')
+      ?.querySelector('span[aria-hidden="true"]');
+    expect(laneGuide).not.toBeNull();
+    if (!laneGuide) {
+      throw new Error(`expected lane guide for ${firstVisibleEventId}`);
+    }
+
+    expect((laneGuide as HTMLElement).style.left).toBe(
+      `${eventLayout.cardRect.x + eventLayout.cardRect.width / 2}px`,
+    );
   });
 });
 

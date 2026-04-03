@@ -15,12 +15,17 @@ export function OccupiedGraphLaneCell({
   onSelect,
   row,
 }: OccupiedGraphLaneCellProps) {
+  const laneCenterX = eventLayout.cardRect.x + eventLayout.cardRect.width / 2;
+
   return (
     <>
       <span
         aria-hidden="true"
-        className="absolute inset-y-0 left-1/2 z-0 w-0.5 -translate-x-1/2"
-        style={{ background: "linear-gradient(180deg, var(--color-graph-connector), transparent)" }}
+        className="absolute inset-y-0 z-0 w-0.5 -translate-x-1/2"
+        style={{
+          left: `${laneCenterX}px`,
+          background: "linear-gradient(180deg, var(--color-graph-connector), transparent)",
+        }}
       />
       <GraphEventCard
         eventId={row.eventId}
