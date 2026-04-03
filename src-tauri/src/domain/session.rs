@@ -1,5 +1,12 @@
 use serde::Serialize;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum SessionProvider {
+    Codex,
+    Claude,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionEntrySnapshot {
@@ -15,6 +22,7 @@ pub(crate) struct SessionEntrySnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SubagentSnapshot {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) parent_thread_id: String,
     pub(crate) depth: u32,
@@ -32,6 +40,7 @@ pub(crate) struct SubagentSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionLogSnapshot {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) forked_from_id: Option<String>,
     pub(crate) workspace_path: String,
@@ -61,6 +70,7 @@ pub(crate) struct PromptAssemblyLayer {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RecentSessionIndexItem {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) workspace_path: String,
     pub(crate) origin_path: String,
@@ -78,6 +88,7 @@ pub(crate) struct RecentSessionIndexItem {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ArchivedSessionIndex {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) workspace_path: String,
     pub(crate) origin_path: String,

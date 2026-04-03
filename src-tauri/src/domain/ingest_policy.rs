@@ -7,6 +7,8 @@ pub(crate) const RECENT_INDEX_PREFIX_SCAN_LIMIT: usize = 80;
 pub(crate) const RECENT_INDEX_TAIL_ENTRY_LIMIT: usize = 120;
 pub(crate) const RECENT_INDEX_TAIL_BYTES: u64 = 131_072;
 pub(crate) const ARCHIVED_INDEX_SCAN_LIMIT: usize = 50;
+pub(crate) const CLAUDE_RECENT_SESSION_SCAN_LIMIT: usize = MAX_RECENT_SESSIONS * 4;
+pub(crate) const CLAUDE_DEFAULT_SUBAGENT_DEPTH: u32 = 1;
 pub(crate) const DEFAULT_THREAD_TITLE: &str = "새 스레드";
 pub(crate) const LIVE_SESSION_SOURCES: &[&str] = &["desktop", "cli", "vscode", "exec"];
 

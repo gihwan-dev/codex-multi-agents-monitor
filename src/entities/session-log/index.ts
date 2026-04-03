@@ -16,6 +16,7 @@ export type {
   RecentSessionLiveUpdate,
   SessionEntrySnapshot,
   SessionLogSnapshot,
+  SessionProvider,
   SubagentSnapshot,
 } from "./model/types";
 export { NEW_THREAD_TITLE } from "./model/types";

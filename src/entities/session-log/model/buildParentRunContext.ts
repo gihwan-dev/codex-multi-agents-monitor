@@ -52,7 +52,7 @@ function buildParentLanes(options: {
       name: "Main thread",
       role: "session",
       model: options.resolvedModel,
-      provider: "OpenAI",
+      provider: options.snapshot.provider,
       badge: "Desktop",
       laneStatus: options.status,
     } satisfies AgentLane,

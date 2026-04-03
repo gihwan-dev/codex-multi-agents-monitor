@@ -1,5 +1,6 @@
 export interface TokenUsageSnapshot {
   cached?: number;
+  cacheWrite?: number;
   in?: number;
   out?: number;
   reasoning?: number;
@@ -12,7 +13,14 @@ export interface TokenCountPayload {
   window?: number | null;
 }
 
-const TOKEN_USAGE_KEYS = ["cached", "in", "out", "reasoning", "total"] as const;
+const TOKEN_USAGE_KEYS = [
+  "cached",
+  "cacheWrite",
+  "in",
+  "out",
+  "reasoning",
+  "total",
+] as const;
 
 export function parseTokenCountPayload(rawTokenCount: string | null) {
   if (!rawTokenCount) {
@@ -60,13 +68,10 @@ function normalizeTokenUsageSnapshot(value: unknown): TokenUsageSnapshot | undef
     return undefined;
   }
 
-  const snapshot: TokenUsageSnapshot = {};
-  for (const key of TOKEN_USAGE_KEYS) {
-    const tokenValue = value[key];
-    if (typeof tokenValue === "number") {
-      snapshot[key] = tokenValue;
-    }
-  }
+  const snapshot: TokenUsageSnapshot = {
+    ...readCacheWriteSnapshot(value),
+  };
+  assignNumericTokenUsage(snapshot, value);
 
   return hasTokenUsageSnapshot(snapshot) ? snapshot : undefined;
 }
@@ -81,6 +86,24 @@ function resolveWindowValue(value: unknown): number | null | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readCacheWriteSnapshot(value: Record<string, unknown>) {
+  return typeof value.cache_write === "number"
+    ? { cacheWrite: value.cache_write }
+    : {};
+}
+
+function assignNumericTokenUsage(
+  snapshot: TokenUsageSnapshot,
+  value: Record<string, unknown>,
+) {
+  for (const key of TOKEN_USAGE_KEYS) {
+    const tokenValue = value[key];
+    if (typeof tokenValue === "number") {
+      snapshot[key] = tokenValue;
+    }
+  }
 }
 
 function buildTokenCountPayload(

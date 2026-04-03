@@ -1,16 +1,11 @@
-import {
-  formatCompactNumber,
-  formatDuration,
-  formatTimestamp,
-} from "../../../shared/lib/format";
 import type {
   EdgeRecord,
   EventRecord,
   InspectorCausalSummary,
   InspectorJump,
   RunDataset,
-  SummaryFact,
 } from "../model/types.js";
+import { buildEventFacts } from "./inspectorFactBuilders.js";
 
 const WAITING_STATUSES = ["blocked", "waiting", "interrupted"] as const;
 
@@ -25,58 +20,6 @@ export interface InspectorContext {
     label: string,
     description: string,
   ) => InspectorJump;
-}
-
-function buildTokenFact(event: EventRecord): SummaryFact | null {
-  const totalTokens = event.tokensIn + event.tokensOut;
-  if (totalTokens <= 0) {
-    return null;
-  }
-
-  const cacheSuffix =
-    event.cacheReadTokens > 0
-      ? ` (${formatCompactNumber(event.cacheReadTokens)} cached)`
-      : "";
-  const reasoningSuffix =
-    event.reasoningTokens > 0
-      ? ` + ${formatCompactNumber(event.reasoningTokens)} reasoning`
-      : "";
-
-  return {
-    label: "Tokens",
-    value: `${formatCompactNumber(event.tokensIn)} in${cacheSuffix} / ${formatCompactNumber(event.tokensOut)} out${reasoningSuffix}`,
-  };
-}
-
-export function buildEventFacts(event: EventRecord): SummaryFact[] {
-  const facts: Array<SummaryFact | null> = [
-    ...buildCoreEventFacts(event),
-    ...buildOptionalEventFacts(event),
-  ];
-
-  return facts.filter(Boolean) as SummaryFact[];
-}
-
-function buildCoreEventFacts(event: EventRecord) {
-  return [
-    { label: "Status", value: event.status },
-    { label: "Started", value: formatTimestamp(event.startTs) },
-    { label: "Duration", value: formatDuration(event.durationMs) },
-  ] satisfies Array<SummaryFact | null>;
-}
-
-function buildOptionalEventFacts(event: EventRecord) {
-  return [
-    event.toolName ? { label: "Tool", value: event.toolName } : null,
-    event.model && event.model !== "human" ? { label: "Model", value: event.model } : null,
-    buildTokenFact(event),
-    event.errorMessage
-      ? { label: "Error", value: event.errorMessage, emphasis: "danger" }
-      : null,
-    event.finishReason && event.finishReason !== "stop"
-      ? { label: "Finish", value: event.finishReason, emphasis: "warning" }
-      : null,
-  ] satisfies Array<SummaryFact | null>;
 }
 
 function buildUpstreamJumps(event: EventRecord, context: InspectorContext) {

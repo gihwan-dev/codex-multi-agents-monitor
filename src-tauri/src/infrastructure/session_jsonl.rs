@@ -1,5 +1,7 @@
 use crate::{
-    domain::session::{PromptAssemblyLayer, SessionEntrySnapshot, SubagentSnapshot},
+    domain::session::{
+        PromptAssemblyLayer, SessionEntrySnapshot, SessionProvider, SubagentSnapshot,
+    },
     support::text::{
         derive_recent_index_last_summary, derive_recent_index_status, derive_recent_index_title,
         extract_entry_snapshot, extract_error_hint, extract_first_user_message,
@@ -23,6 +25,9 @@ pub(crate) struct RecentIndexParseOptions {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedRecentIndexEntry {
+    pub(crate) provider: SessionProvider,
+    pub(crate) session_id: String,
+    pub(crate) workspace_path: String,
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) model: Option<String>,
@@ -34,6 +39,7 @@ pub(crate) struct ParsedRecentIndexEntry {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedSessionSnapshot {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) forked_from_id: Option<String>,
     pub(crate) workspace_path: String,
@@ -47,6 +53,7 @@ pub(crate) struct ParsedSessionSnapshot {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ParsedArchivedIndexEntry {
+    pub(crate) provider: SessionProvider,
     pub(crate) session_id: String,
     pub(crate) workspace_path: String,
     pub(crate) started_at: String,
@@ -187,6 +194,9 @@ pub(crate) fn parse_recent_index_entry(
         .unwrap_or_else(|| started_at.clone());
 
     Ok(Some(ParsedRecentIndexEntry {
+        provider: SessionProvider::Codex,
+        session_id: session_id_from_meta(session_file, &meta),
+        workspace_path: workspace_path_from_meta(&meta),
         started_at,
         updated_at,
         model: scan.model,
@@ -234,6 +244,7 @@ where
     visit_entries_with_limit_until_error(reader, scan_limit, |entry| scan.consume(entry));
 
     Ok(Some(ParsedArchivedIndexEntry {
+        provider: SessionProvider::Codex,
         session_id: session_id_from_meta(session_file, &meta),
         workspace_path,
         started_at: started_at_from_meta(&meta),
@@ -553,6 +564,7 @@ impl SessionSnapshotCollector {
 
     fn finish(self, meta: SnapshotMeta) -> ParsedSessionSnapshot {
         ParsedSessionSnapshot {
+            provider: SessionProvider::Codex,
             session_id: meta.session_id,
             forked_from_id: meta.forked_from_id,
             workspace_path: meta.workspace_path,
@@ -650,6 +662,7 @@ impl SubagentCollector {
 
     fn finish(self, meta: SubagentMeta) -> SubagentSnapshot {
         SubagentSnapshot {
+            provider: SessionProvider::Codex,
             session_id: meta.session_id,
             parent_thread_id: meta.parent_thread_id,
             depth: meta.depth,

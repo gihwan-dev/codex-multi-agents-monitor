@@ -37,7 +37,9 @@ function buildReasoningEvent(context: EntryContext) {
     eventType: "llm.started",
     title: "Reasoning",
     inputPreview: null,
-    outputPreview: null,
+    outputPreview: context.entry.text
+      ? sanitizeMessagePreview(context.entry.text)
+      : null,
   });
 }
 

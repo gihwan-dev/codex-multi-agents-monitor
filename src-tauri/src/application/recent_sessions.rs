@@ -6,14 +6,19 @@ use crate::{
     },
     domain::{
         ingest_policy::{
-            is_supported_live_session_source, should_hide_recent_boot_thread, LIVE_SESSION_SOURCES,
-            MAX_RECENT_SESSIONS, RECENT_INDEX_PREFIX_SCAN_LIMIT, RECENT_INDEX_TAIL_BYTES,
-            RECENT_INDEX_TAIL_ENTRY_LIMIT,
+            is_supported_live_session_source, should_hide_recent_boot_thread,
+            CLAUDE_RECENT_SESSION_SCAN_LIMIT, LIVE_SESSION_SOURCES, MAX_RECENT_SESSIONS,
+            RECENT_INDEX_PREFIX_SCAN_LIMIT, RECENT_INDEX_TAIL_BYTES, RECENT_INDEX_TAIL_ENTRY_LIMIT,
         },
         session::{RecentSessionIndexItem, SessionLogSnapshot},
         workspace::WorkspaceIdentity,
     },
     infrastructure::{
+        claude_session_discovery::resolve_claude_projects_root,
+        claude_session_jsonl::{
+            parse_claude_recent_index_entry, parse_claude_session_snapshot,
+            read_claude_subagent_snapshots,
+        },
         filesystem::{resolve_codex_home, resolve_project_roots},
         session_jsonl::{
             parse_live_session_snapshot, parse_recent_index_entry, RecentIndexParseOptions,
@@ -35,37 +40,50 @@ pub(crate) struct LiveSessionCandidate {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RecentSnapshotSelection {
-    pub(crate) candidate: LiveSessionCandidate,
-    pub(crate) codex_home: PathBuf,
-    pub(crate) sessions_root: PathBuf,
-    pub(crate) project_roots: Vec<PathBuf>,
+pub(crate) enum RecentSnapshotSelection {
+    Codex {
+        candidate: LiveSessionCandidate,
+        codex_home: PathBuf,
+        sessions_root: PathBuf,
+        project_roots: Vec<PathBuf>,
+    },
+    Claude {
+        file_path: PathBuf,
+        project_roots: Vec<PathBuf>,
+    },
+}
+
+impl RecentSnapshotSelection {
+    pub(crate) fn file_path(&self) -> &Path {
+        match self {
+            Self::Codex { candidate, .. } => &candidate.file_path,
+            Self::Claude { file_path, .. } => file_path,
+        }
+    }
+}
+
+struct CodexRecentSelectionScope<'a> {
+    codex_home: &'a Path,
+    sessions_root: &'a Path,
+    project_roots: &'a [PathBuf],
 }
 
 pub(crate) fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSessionIndexItem>> {
     let codex_home = resolve_codex_home()?;
-    let project_roots = resolve_project_roots(&codex_home)?;
+    let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let sessions_root = codex_home.join("sessions");
-    let candidates = load_live_session_candidates(&codex_home, &sessions_root, &project_roots)?;
-
-    let mut items = Vec::new();
-
-    for candidate in candidates {
-        if items.len() >= MAX_RECENT_SESSIONS {
-            break;
-        }
-
-        let item = match build_recent_index_item(&candidate) {
-            Ok(Some(item)) => item,
-            Ok(None) => continue,
-            Err(_) => continue,
-        };
-        if should_hide_recent_boot_thread(&item) {
-            continue;
-        }
-
-        items.push(item);
-    }
+    let mut items = load_codex_recent_index_items(&codex_home, &sessions_root, &project_roots)
+        .unwrap_or_default();
+    items.extend(load_claude_recent_index_items(&project_roots).unwrap_or_default());
+    items.retain(|item| !should_hide_recent_boot_thread(item));
+    items.sort_by(|left, right| {
+        right
+            .updated_at
+            .cmp(&left.updated_at)
+            .then_with(|| right.started_at.cmp(&left.started_at))
+            .then_with(|| left.file_path.cmp(&right.file_path))
+    });
+    items.truncate(MAX_RECENT_SESSIONS);
 
     Ok(items)
 }
@@ -95,6 +113,66 @@ fn load_live_session_candidates(
     }
 
     Ok(candidates)
+}
+
+fn load_codex_recent_index_items(
+    codex_home: &Path,
+    sessions_root: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Vec<RecentSessionIndexItem>> {
+    let candidates = load_live_session_candidates(codex_home, sessions_root, project_roots)?;
+    let mut items = Vec::new();
+
+    for candidate in candidates {
+        let item = match build_recent_index_item(&candidate) {
+            Ok(Some(item)) => item,
+            Ok(None) => continue,
+            Err(_) => continue,
+        };
+        items.push(item);
+    }
+
+    Ok(items)
+}
+
+fn load_claude_recent_index_items(
+    project_roots: &[PathBuf],
+) -> io::Result<Vec<RecentSessionIndexItem>> {
+    let claude_projects_root = resolve_claude_projects_root()?;
+    let session_files =
+        crate::infrastructure::claude_session_discovery::collect_claude_main_session_files(
+            &claude_projects_root,
+        )?;
+    Ok(session_files
+        .into_iter()
+        .take(CLAUDE_RECENT_SESSION_SCAN_LIMIT)
+        .filter_map(|session_file| build_claude_recent_index_item(&session_file, project_roots))
+        .collect())
+}
+
+fn build_claude_recent_index_item(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> Option<RecentSessionIndexItem> {
+    let parsed = parse_claude_recent_index_entry(session_file).ok()??;
+    let workspace_identity =
+        resolve_live_workspace_identity(Path::new(&parsed.workspace_path), project_roots).ok()?;
+
+    Some(RecentSessionIndexItem {
+        provider: parsed.provider,
+        session_id: parsed.session_id,
+        workspace_path: parsed.workspace_path,
+        origin_path: workspace_identity.origin_path,
+        display_name: workspace_identity.display_name,
+        started_at: parsed.started_at,
+        updated_at: parsed.updated_at,
+        model: parsed.model,
+        file_path: session_file.display().to_string(),
+        first_user_message: parsed.first_user_message,
+        title: parsed.title,
+        status: parsed.status,
+        last_event_summary: parsed.last_event_summary,
+    })
 }
 
 fn build_live_session_candidate(
@@ -147,6 +225,7 @@ fn build_recent_index_item(
     )?;
 
     Ok(parsed.map(|parsed| RecentSessionIndexItem {
+        provider: parsed.provider,
         session_id: candidate.session_id.clone(),
         workspace_path: candidate.workspace_path.clone(),
         origin_path: candidate.workspace_identity.origin_path.clone(),
@@ -178,6 +257,40 @@ fn build_recent_session_snapshot(
     };
 
     Ok(Some(SessionLogSnapshot {
+        provider: parsed.provider,
+        session_id: parsed.session_id,
+        forked_from_id: parsed.forked_from_id,
+        workspace_path: parsed.workspace_path,
+        origin_path: workspace_identity.origin_path,
+        display_name: workspace_identity.display_name,
+        started_at: parsed.started_at,
+        updated_at: parsed.updated_at,
+        model: parsed.model,
+        max_context_window_tokens: parsed.max_context_window_tokens,
+        entries: parsed.entries,
+        subagents: Vec::new(),
+        is_archived: false,
+        prompt_assembly: parsed.prompt_assembly,
+    }))
+}
+
+fn build_claude_recent_session_snapshot(
+    session_file: &Path,
+    project_roots: &[PathBuf],
+) -> io::Result<Option<SessionLogSnapshot>> {
+    let parsed = parse_claude_session_snapshot(session_file)?;
+    let Some(parsed) = parsed else {
+        return Ok(None);
+    };
+
+    let workspace_identity =
+        resolve_live_workspace_identity(Path::new(&parsed.workspace_path), project_roots).ok();
+    let Some(workspace_identity) = workspace_identity else {
+        return Ok(None);
+    };
+
+    Ok(Some(SessionLogSnapshot {
+        provider: parsed.provider,
         session_id: parsed.session_id,
         forked_from_id: parsed.forked_from_id,
         workspace_path: parsed.workspace_path,
@@ -197,44 +310,59 @@ fn build_recent_session_snapshot(
 pub(crate) fn load_recent_session_snapshot(
     selection: &RecentSnapshotSelection,
 ) -> Option<SessionLogSnapshot> {
-    let mut snapshot =
-        build_recent_session_snapshot(&selection.candidate.file_path, &selection.project_roots)
-            .ok()??;
-    let relationship_hints = load_thread_subagent_hints(&selection.codex_home).unwrap_or_default();
-    snapshot.subagents = load_snapshot_subagents(
-        SnapshotSubagentSearch {
-            snapshot: &snapshot,
-            search_root: &selection.sessions_root,
-            selected_file: &selection.candidate.file_path,
-        },
-        &relationship_hints,
-    )
-    .ok()?;
-    snapshot.max_context_window_tokens =
-        resolve_snapshot_max_context_window_tokens(&snapshot, &selection.codex_home);
-
-    Some(snapshot)
+    match selection {
+        RecentSnapshotSelection::Codex {
+            candidate,
+            codex_home,
+            sessions_root,
+            project_roots,
+        } => {
+            let mut snapshot =
+                build_recent_session_snapshot(&candidate.file_path, project_roots).ok()??;
+            let relationship_hints = load_thread_subagent_hints(codex_home).unwrap_or_default();
+            snapshot.subagents = load_snapshot_subagents(
+                SnapshotSubagentSearch {
+                    snapshot: &snapshot,
+                    search_root: sessions_root,
+                    selected_file: &candidate.file_path,
+                },
+                &relationship_hints,
+            )
+            .ok()?;
+            snapshot.max_context_window_tokens =
+                resolve_snapshot_max_context_window_tokens(&snapshot, codex_home);
+            Some(snapshot)
+        }
+        RecentSnapshotSelection::Claude {
+            file_path,
+            project_roots,
+        } => {
+            let mut snapshot =
+                build_claude_recent_session_snapshot(file_path, project_roots).ok()??;
+            snapshot.subagents =
+                read_claude_subagent_snapshots(file_path, &snapshot.session_id).ok()?;
+            Some(snapshot)
+        }
+    }
 }
 
 pub(crate) fn resolve_recent_snapshot_selection(
     file_path: &str,
 ) -> Option<RecentSnapshotSelection> {
     let codex_home = resolve_codex_home().ok()?;
-    let project_roots = resolve_project_roots(&codex_home).ok()?;
+    let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let sessions_root = codex_home.join("sessions");
-    let canonical_path = resolve_recent_snapshot_path(file_path, &sessions_root)?;
-    let candidates =
-        load_live_session_candidates(&codex_home, &sessions_root, &project_roots).ok()?;
-    let candidate = candidates
-        .into_iter()
-        .find(|item| item.file_path == canonical_path)?;
+    let scope = CodexRecentSelectionScope {
+        codex_home: &codex_home,
+        sessions_root: &sessions_root,
+        project_roots: &project_roots,
+    };
 
-    Some(RecentSnapshotSelection {
-        candidate,
-        codex_home,
-        sessions_root,
-        project_roots,
-    })
+    if let Some(selection) = resolve_codex_recent_snapshot_selection(file_path, &scope) {
+        return Some(selection);
+    }
+
+    resolve_claude_recent_snapshot_selection(file_path, &project_roots)
 }
 
 fn resolve_recent_snapshot_path(file_path: &str, sessions_root: &Path) -> Option<PathBuf> {
@@ -246,6 +374,46 @@ fn resolve_recent_snapshot_path(file_path: &str, sessions_root: &Path) -> Option
     } else {
         None
     }
+}
+
+fn resolve_codex_recent_snapshot_selection(
+    file_path: &str,
+    scope: &CodexRecentSelectionScope<'_>,
+) -> Option<RecentSnapshotSelection> {
+    let canonical_path = resolve_recent_snapshot_path(file_path, scope.sessions_root)?;
+    let candidates =
+        load_live_session_candidates(scope.codex_home, scope.sessions_root, scope.project_roots)
+            .ok()?;
+    let candidate = candidates
+        .into_iter()
+        .find(|item| item.file_path == canonical_path)?;
+
+    Some(RecentSnapshotSelection::Codex {
+        candidate,
+        codex_home: scope.codex_home.to_path_buf(),
+        sessions_root: scope.sessions_root.to_path_buf(),
+        project_roots: scope.project_roots.to_vec(),
+    })
+}
+
+fn resolve_claude_recent_snapshot_selection(
+    file_path: &str,
+    project_roots: &[PathBuf],
+) -> Option<RecentSnapshotSelection> {
+    let claude_projects_root = resolve_claude_projects_root().ok()?;
+    let canonical_file_path = fs::canonicalize(Path::new(file_path)).ok()?;
+    let canonical_projects_root = fs::canonicalize(&claude_projects_root).ok()?;
+    if !canonical_file_path.starts_with(&canonical_projects_root) {
+        return None;
+    }
+
+    let parsed = parse_claude_session_snapshot(&canonical_file_path).ok()??;
+    resolve_live_workspace_identity(Path::new(&parsed.workspace_path), project_roots).ok()?;
+
+    Some(RecentSnapshotSelection::Claude {
+        file_path: canonical_file_path,
+        project_roots: project_roots.to_vec(),
+    })
 }
 
 fn resolve_live_workspace_identity(

@@ -1,5 +1,7 @@
 import type { LiveConnection, RunStatus } from "../../run";
 
+export type SessionProvider = "codex" | "claude";
+
 export interface SessionEntrySnapshot {
   timestamp: string;
   entryType: string;
@@ -11,6 +13,7 @@ export interface SessionEntrySnapshot {
 }
 
 export interface SubagentSnapshot {
+  provider: SessionProvider;
   sessionId: string;
   parentThreadId: string;
   depth: number;
@@ -33,6 +36,7 @@ export interface PromptAssemblyLayerSnapshot {
 }
 
 export interface SessionLogSnapshot {
+  provider: SessionProvider;
   sessionId: string;
   workspacePath: string;
   originPath: string;
@@ -48,6 +52,7 @@ export interface SessionLogSnapshot {
 }
 
 export interface RecentSessionIndexItem {
+  provider: SessionProvider;
   sessionId: string;
   workspacePath: string;
   originPath: string;
@@ -68,6 +73,7 @@ export interface TimedSubagentSnapshot extends SubagentSnapshot {
 }
 
 export interface ArchivedSessionIndexItem {
+  provider: SessionProvider;
   sessionId: string;
   workspacePath: string;
   originPath: string;

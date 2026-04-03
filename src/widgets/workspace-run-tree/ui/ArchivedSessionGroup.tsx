@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 import { cn } from "../../../shared/lib";
+import { resolveProviderBadge } from "../lib/providerBadge";
 import {
   deriveArchiveItemTitle,
   formatArchiveDate,
@@ -15,6 +16,7 @@ function ArchiveSessionItem({
   onSelect: (filePath: string) => void;
   session: ArchivedSessionIndexItem;
 }) {
+  const providerBadge = resolveProviderBadge(session.provider);
   return (
     <button
       type="button"
@@ -31,11 +33,24 @@ function ArchiveSessionItem({
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 flex-1 truncate">{deriveArchiveItemTitle(session)}</span>
-        {session.model ? (
-          <span className="shrink-0 text-[0.72rem] text-[var(--color-text-tertiary)]">
-            {session.model}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {providerBadge ? (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.12em]",
+                providerBadge.className,
+              )}
+              title={providerBadge.label}
+            >
+              {providerBadge.short}
+            </span>
+          ) : null}
+          {session.model ? (
+            <span className="text-[0.72rem] text-[var(--color-text-tertiary)]">
+              {session.model}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="flex items-center gap-2 text-[0.72rem] text-[var(--color-text-tertiary)]">
         <span>{formatArchiveDate(session.startedAt)}</span>

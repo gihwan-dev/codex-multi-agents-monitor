@@ -1,4 +1,8 @@
-import type { EventRecord, RunDataset } from "../../../entities/run";
+import {
+  type EventRecord,
+  type RunDataset,
+  resolveMainSessionProvider,
+} from "../../../entities/run";
 import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import {
@@ -72,6 +76,7 @@ function buildDatasetSource(
     row: {
       id: dataset.run.traceId,
       title: deriveWorkspaceRunTitle(dataset, orderedEvents),
+      provider: resolveMainSessionProvider(dataset),
       status: dataset.run.status,
       lastEventSummary: buildDatasetLastEventSummary(
         orderedEvents[orderedEvents.length - 1] ?? null,
@@ -111,6 +116,7 @@ function buildRecentSource(
     row: {
       id: item.sessionId,
       title: item.title,
+      provider: item.provider,
       status: item.status,
       lastEventSummary: item.lastEventSummary,
       lastActivityTs: Number.isNaN(lastActivityTs) ? 0 : lastActivityTs,

@@ -48,6 +48,7 @@ function buildSearchTarget(source: SidebarRunSource, runRow: WorkspaceRunRow) {
     source.workspaceName,
     source.repoPath,
     source.badge ?? "",
+    runRow.provider ?? "",
     runRow.title,
     source.sessionTitle,
     runRow.lastEventSummary,

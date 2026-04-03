@@ -173,13 +173,14 @@ fn matches_parent_thread_id(snapshot: &SessionLogSnapshot, parent_thread_id: &st
 mod tests {
     use super::{load_snapshot_subagents, SnapshotSubagentSearch};
     use crate::{
-        domain::session::SessionLogSnapshot,
+        domain::session::{SessionLogSnapshot, SessionProvider},
         infrastructure::state_sqlite::ThreadSubagentHint,
         test_support::{write_session_lines, write_worker_subagent_session, TempDir},
     };
 
     fn test_snapshot(session_id: &str) -> SessionLogSnapshot {
         SessionLogSnapshot {
+            provider: SessionProvider::Codex,
             session_id: session_id.to_owned(),
             forked_from_id: None,
             workspace_path: "/tmp/workspace".to_owned(),

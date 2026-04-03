@@ -15,11 +15,15 @@ pub(crate) fn resolve_snapshot_max_context_window_tokens(
 #[cfg(test)]
 mod tests {
     use super::resolve_snapshot_max_context_window_tokens;
-    use crate::{domain::session::SessionLogSnapshot, test_support::RecentSessionTestContext};
+    use crate::{
+        domain::session::{SessionLogSnapshot, SessionProvider},
+        test_support::RecentSessionTestContext,
+    };
     use std::fs;
 
     fn build_snapshot(max_context_window_tokens: Option<u64>) -> SessionLogSnapshot {
         SessionLogSnapshot {
+            provider: SessionProvider::Codex,
             session_id: "session-1".to_owned(),
             forked_from_id: None,
             workspace_path: "/tmp/workspace".to_owned(),

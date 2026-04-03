@@ -35,7 +35,7 @@ export function buildSubagentLane(
     name: options.subagent.agentNickname,
     role: options.subagent.agentRole,
     model: options.subModel,
-    provider: "OpenAI",
+    provider: options.subagent.provider,
     badge: "Subagent",
     laneStatus: options.subStatus,
   };
@@ -64,7 +64,7 @@ export function buildSubagentSpawnEvent(
     artifactId: null,
     errorCode: null,
     errorMessage: options.subError,
-    provider: "OpenAI",
+    provider: options.subagent.provider,
     model: options.subModel,
     toolName: null,
     tokensIn: 0,

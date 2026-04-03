@@ -45,7 +45,7 @@ export function buildRunStartEvent(options: BuildRunStartEventOptions): EventRec
     artifactId: null,
     errorCode: null,
     errorMessage: null,
-    provider: "OpenAI",
+    provider: lane.provider,
     model,
     toolName: null,
     tokensIn: 0,
@@ -71,7 +71,7 @@ export function buildRunEndEvent(options: BuildRunEndEventOptions): EventRecord 
     eventType, status, waitReason: null, retryCount: 0, startTs: updatedTs,
     endTs: updatedTs + 1_000, durationMs: 1_000, title, inputPreview: null,
     outputPreview: null, artifactId: null, errorCode: null, errorMessage: null,
-    provider: "OpenAI", model, toolName: null, tokensIn: 0, tokensOut: 0,
+    provider: lane.provider, model, toolName: null, tokensIn: 0, tokensOut: 0,
     reasoningTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0,
     finishReason: null, rawInput: null, rawOutput: null,
   } satisfies EventRecord;
