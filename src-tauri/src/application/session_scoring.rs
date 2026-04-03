@@ -492,8 +492,12 @@ fn build_profile_revisions(records: Vec<SessionScoreRecord>) -> Vec<ProfileRevis
 }
 
 fn build_profile_revision_summary(records: &[SessionScoreRecord]) -> ProfileRevision {
-    let label = records[0].profile_snapshot.label.clone();
-    let revision = records[0].profile_snapshot.revision.clone();
+    let first =
+        records.first().expect(
+            "build_profile_revision_summary requires at least one record",
+        );
+    let label = first.profile_snapshot.label.clone();
+    let revision = first.profile_snapshot.revision.clone();
     let score_sum = records
         .iter()
         .filter_map(|record| {

@@ -90,7 +90,7 @@ fn build_structured_check_grade(run: &CandidateRun) -> Grade {
             .iter()
             .filter(|result| result.status == ArtifactCheckStatus::Passed)
             .count();
-        let score = ((passing * 100) / check_results.len()) as u8;
+        let score = ((passing * 100) / check_results.len()).min(100) as u8;
         (
             score,
             format!(
@@ -188,7 +188,7 @@ fn score_required_artifacts(case: &Case, run: &CandidateRun) -> (u8, String) {
         .iter()
         .filter(|kind| actual_kinds.contains(kind))
         .count();
-    let score = ((matched * 100) / case.required_artifact_kinds.len()) as u8;
+    let score = ((matched * 100) / case.required_artifact_kinds.len()).min(100) as u8;
     (
         score,
         format!(

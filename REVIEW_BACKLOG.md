@@ -20,6 +20,26 @@
   - 파일: `src-tauri/src/application/archived_sessions.rs:193`
   - 수정: workspace_path별 identity resolve 결과를 HashMap으로 캐시
 
+- [ ] **N2**: `column_exists` PRAGMA table_name 문자열 보간 — 현재 리터럴만 사용하지만 미래 안전성 부족
+  - 파일: `src-tauri/src/infrastructure/state_sqlite.rs:188`
+  - 수정: debug_assert로 ASCII 식별자 검증 추가
+
+- [ ] **N3**: `EXPERIMENT_MUTATION_LOCKS` HashMap 영구 증가, 삭제된 experiment의 lock이 pruning 안 됨
+  - 파일: `src-tauri/src/infrastructure/eval_storage.rs:21-77`
+  - 수정: delete_experiment_detail 후 registry에서 entry 제거
+
+- [ ] **N8**: `stable_hash` 함수가 score_storage.rs와 session_scoring.rs에 중복
+  - 파일: `src-tauri/src/infrastructure/score_storage.rs:129`, `src-tauri/src/application/session_scoring.rs:304`
+  - 수정: support/ 모듈로 추출
+
+- [ ] **N9**: `path.exists()` TOCTOU — load/delete에서 exists() 후 파일 연산
+  - 파일: `src-tauri/src/infrastructure/eval_storage.rs:63,91`, `score_storage.rs:53`
+  - 수정: 직접 open 후 NotFound 매칭으로 변경
+
+- [ ] **N10**: 테스트에서 `set_var`가 TEST_ENV_MUTEX 밖에서 호출됨
+  - 파일: `src-tauri/src/application/archived_sessions.rs:515`, `infrastructure/filesystem.rs:288`
+  - 수정: RecentSessionTestContext 사용 또는 mutex 선점
+
 ## Code Quality (Frontend)
 
 - [ ] **RC-4**: `useGraphSelectionRevealNavigation` options 객체를 dependency로 사용 — Biome exhaustive deps 규칙과 충돌하여 decomposition 불가; shouldSkipSelectionReveal 가드로 실질 성능 영향 최소화
@@ -30,15 +50,27 @@
   - 파일: `src/entities/session-log/api/loaders.ts:57`
   - 수정: 런타임 스키마 검증 또는 safe parser 적용
 
+- [ ] **FE-4**: `castValidatedValue<T>` 이름이 실제 동작과 불일치 — bare `as T` 캐스트
+  - 파일: `src/features/import-run/completedRunPayloadShapeValidation.ts:213`
+  - 수정: unsafeCast 등으로 이름 변경 또는 tagged type 적용
+
+- [ ] **FE-6**: `useWorkspaceIdentityOverrides` unhandled promise rejection
+  - 파일: `src/features/workspace-identity/model/useWorkspaceIdentityOverrides.ts:13`
+  - 수정: .catch 추가 (best-effort이므로 무시)
+
+- [ ] **FE-11**: `subscribeRecentSessionLive` listenTauri↔invokeTauri 사이 dispose 체크 누락
+  - 파일: `src/entities/session-log/api/liveTransport.ts:98-112`
+  - 수정: 두 await 사이에 disposed 체크 추가
+
 ## New UI/UX Issues
 
 - [ ] **N1**: Resize handle hit target 14px — UX_SPEC 최소 32px 위반
   - 파일: `src/app/styles/layout.css:1`, `src/widgets/monitor-chrome/ui/ResizeHandle.tsx:26`
 
-- [ ] **N2**: Button size `xs`/`icon-xs` hit target 24px — 최소 32px 미달
+- [ ] **N2-ui**: Button size `xs`/`icon-xs` hit target 24px — 최소 32px 미달
   - 파일: `src/shared/ui/primitives/button.tsx:25,29`
 
-- [ ] **N3**: Checkbox hit target 16px — 최소 32px 미달
+- [ ] **N3-ui**: Checkbox hit target 16px — 최소 32px 미달
   - 파일: `src/shared/ui/primitives/checkbox.tsx:15`
 
 ## Test Gaps
@@ -87,3 +119,15 @@
 - [x] **RC-2**: useSkillActivityPageView unhandled rejection + 영구 loading (이전 세션)
 - [x] **C-6**: sessionScoreEditorState 빈 문자열 score=0 처리 (이전 세션)
 - [x] Phase 1: scrollIntoView jsdom guard + live follow scroll behavior fix (이전 세션)
+- [x] **P2-a11y**: workspace-run-tree 6개 파일 motion-reduce + focus-visible 추가 (이번 세션)
+- [x] **P2-dialog**: dialog close 버튼 focus → focus-visible 변경 (이번 세션)
+- [x] **P2-edge**: InteractiveGraphRouteAnchor Enter 키 지원 추가 (이번 세션)
+- [x] **P2-chevron**: MonitorContextLaneSummarySection ChevronDown motion-reduce 추가 (이번 세션)
+- [x] **P2-eval-loading**: EvalExperimentListPanel, EvalCaseListPanel 로딩 skeleton 추가 (이번 세션)
+- [x] **P2-score**: EvalScoreBar role="img" → native meter + aria attributes (이번 세션)
+- [x] **P3-catch**: useRecentMonitorRequests, useArchiveMonitorRequests catch에서 loading 해제 dispatch (이번 세션)
+- [x] **P3-kbnav**: monitorKeyboardSelectionNavigation selection.kind === "event" 가드 추가 (이번 세션)
+- [x] **P3-runid**: recentRequestState nextActiveRunId를 빈 문자열로 고정 (이번 세션)
+- [x] **P3-perf**: buildEdgeMaps O(n²)→O(n) push, buildLaneEventMaps O(L×E)→O(E), Math.max spread→reduce (이번 세션)
+- [x] **N1-be**: eval_grader/eval_service `as u8` → `.min(100) as u8` 안전 캐스트 (이번 세션)
+- [x] **N4-be**: session_scoring records[0] → .first().expect() 안전 인덱싱 (이번 세션)

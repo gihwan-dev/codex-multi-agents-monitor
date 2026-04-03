@@ -36,7 +36,7 @@ export function MonitorContextLaneSummarySection({
           <span>{laneSummaries.length} total</span>
           <ChevronDown
             className={cn(
-              "size-4 transition-transform duration-200",
+              "size-4 transition-transform duration-200 motion-reduce:transition-none",
               laneSummaryOpen ? "rotate-180" : undefined,
             )}
           />

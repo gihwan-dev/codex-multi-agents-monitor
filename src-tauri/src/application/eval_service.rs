@@ -456,7 +456,7 @@ fn build_scorecard(grades: &[Grade]) -> Vec<ScorecardAxisSummary> {
             let score = if max_score == 0 {
                 None
             } else {
-                Some(((achieved * 100) / max_score) as u8)
+                Some(((achieved as u64 * 100) / max_score as u64).min(100) as u8)
             };
 
             ScorecardAxisSummary {

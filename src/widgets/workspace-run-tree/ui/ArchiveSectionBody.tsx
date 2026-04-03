@@ -33,7 +33,7 @@ export function ArchiveSectionBody({
   state,
 }: ArchiveSectionBodyProps) {
   return (
-    <div data-slot="archive-section-body" data-state={state} aria-hidden={!archiveSectionOpen} inert={!archiveSectionOpen ? true : undefined} className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[var(--duration-normal)] ease-[var(--easing-emphasized)] data-[state=open]:grid-rows-[1fr] data-[state=open]:opacity-100">
+    <div data-slot="archive-section-body" data-state={state} aria-hidden={!archiveSectionOpen} inert={!archiveSectionOpen ? true : undefined} className="grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-[var(--duration-normal)] ease-[var(--easing-emphasized)] motion-reduce:transition-none data-[state=open]:grid-rows-[1fr] data-[state=open]:opacity-100">
       {mounted ? (
         <div data-slot="archive-section-body-inner" className="min-h-0 overflow-hidden">
           <ArchivedSessionList items={archivedIndex} total={archivedTotal} hasMore={archivedHasMore} indexLoading={archivedIndexLoading} errorMessage={archivedIndexError} activeFilePath={activeArchivedFilePath} search={archivedSearch} onSearch={onArchiveSearch} onLoadMore={onArchiveLoadMore} onSelect={onArchiveSelect} />

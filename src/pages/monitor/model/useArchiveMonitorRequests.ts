@@ -57,7 +57,13 @@ function requestArchiveIndexFromSource(args: RequestArchiveIndexFromSourceArgs) 
         });
       });
     })
-    .catch(() => {});
+    .catch(() => {
+      args.dispatch({
+        type: "finish-archived-index-request",
+        requestId,
+        error: "Archive sessions are unavailable right now.",
+      });
+    });
 }
 
 function useRequestArchiveIndexEvent(args: Pick<UseArchiveMonitorRequestsOptions, "archiveIndexRequestIdRef" | "dispatch">) {

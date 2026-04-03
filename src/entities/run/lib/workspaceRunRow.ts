@@ -31,9 +31,12 @@ function deriveWorkspaceRunTitle(
 }
 
 export function latestActivityTimestamp(dataset: RunDataset) {
-  return Math.max(
+  return dataset.events.reduce(
+    (latestTimestamp, event) => {
+      const eventTimestamp = event.endTs ?? event.startTs;
+      return eventTimestamp > latestTimestamp ? eventTimestamp : latestTimestamp;
+    },
     dataset.run.endTs ?? dataset.run.startTs,
-    ...dataset.events.map((event) => event.endTs ?? event.startTs),
   );
 }
 
@@ -82,6 +85,9 @@ export function buildWorkspaceRunRow(
 
 export function buildReferenceTimestamp(datasets: RunDataset[]) {
   return datasets.length > 0
-    ? Math.max(...datasets.map((dataset) => latestActivityTimestamp(dataset)))
+    ? datasets.reduce((latestTimestamp, dataset) => {
+        const datasetTimestamp = latestActivityTimestamp(dataset);
+        return datasetTimestamp > latestTimestamp ? datasetTimestamp : latestTimestamp;
+      }, -Infinity)
     : 0;
 }

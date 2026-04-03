@@ -16,7 +16,7 @@ function getNextVisibleEventId(
     return null;
   }
 
-  const currentIndex = selection ? visibleEventIds.indexOf(selection.id) : -1;
+  const currentIndex = selection?.kind === "event" ? visibleEventIds.indexOf(selection.id) : -1;
   const nextIndex = direction === "next" ? Math.min(currentIndex + 1, visibleEventIds.length - 1) : Math.max(currentIndex - 1, 0);
   return visibleEventIds[nextIndex] ?? null;
 }

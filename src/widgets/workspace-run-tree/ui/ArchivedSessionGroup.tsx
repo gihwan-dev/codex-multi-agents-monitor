@@ -25,7 +25,7 @@ function ArchiveSessionItem({
       data-file-path={session.filePath}
       data-active={activeFilePath === session.filePath ? "true" : "false"}
       className={cn(
-        "grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.8rem] text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground",
+        "grid min-w-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.8rem] text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-white/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45",
         activeFilePath === session.filePath &&
           "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground",
       )}
@@ -90,12 +90,12 @@ export function ArchivedWorkspaceGroupSection({
       <button
         type="button"
         data-slot="archive-workspace-toggle"
-        className="flex min-h-7 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-[0.78rem] text-muted-foreground transition-colors hover:bg-white/[0.03]"
+        className="flex min-h-7 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-[0.78rem] text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45"
         onClick={onToggle}
         aria-expanded={expanded}
       >
         <ChevronRight
-          className={cn("size-3 transition-transform", expanded && "rotate-90")}
+          className={cn("size-3 transition-transform motion-reduce:transition-none", expanded && "rotate-90")}
           aria-hidden="true"
         />
         <span data-slot="archive-workspace-name" className="min-w-0 flex-1 truncate" title={title}>

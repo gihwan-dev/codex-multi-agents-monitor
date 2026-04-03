@@ -18,14 +18,19 @@ export function buildEdgeMaps(dataset: RunDataset) {
   const outgoingByEventId = new Map<string, RunDataset["edges"]>();
 
   dataset.edges.forEach((edge) => {
-    incomingByEventId.set(edge.targetEventId, [
-      ...(incomingByEventId.get(edge.targetEventId) ?? []),
-      edge,
-    ]);
-    outgoingByEventId.set(edge.sourceEventId, [
-      ...(outgoingByEventId.get(edge.sourceEventId) ?? []),
-      edge,
-    ]);
+    const incoming = incomingByEventId.get(edge.targetEventId);
+    if (incoming) {
+      incoming.push(edge);
+    } else {
+      incomingByEventId.set(edge.targetEventId, [edge]);
+    }
+
+    const outgoing = outgoingByEventId.get(edge.sourceEventId);
+    if (outgoing) {
+      outgoing.push(edge);
+    } else {
+      outgoingByEventId.set(edge.sourceEventId, [edge]);
+    }
   });
 
   return {
@@ -36,12 +41,19 @@ export function buildEdgeMaps(dataset: RunDataset) {
 
 export function buildLaneEventMaps(dataset: RunDataset) {
   const orderedByLaneId = new Map<string, EventRecord[]>();
+  const buckets = new Map<string, EventRecord[]>();
+
+  dataset.events.forEach((event) => {
+    const bucket = buckets.get(event.laneId);
+    if (bucket) {
+      bucket.push(event);
+    } else {
+      buckets.set(event.laneId, [event]);
+    }
+  });
 
   dataset.lanes.forEach((lane) => {
-    orderedByLaneId.set(
-      lane.laneId,
-      sortEvents(dataset.events.filter((event) => event.laneId === lane.laneId)),
-    );
+    orderedByLaneId.set(lane.laneId, sortEvents(buckets.get(lane.laneId) ?? []));
   });
 
   const previousByEventId = new Map<string, EventRecord>();

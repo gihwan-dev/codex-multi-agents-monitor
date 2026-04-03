@@ -38,7 +38,12 @@ function requestRecentIndexFromSource(dispatch: Dispatch<MonitorAction>) {
         dispatch({ type: "resolve-recent-index-request", items });
       });
     })
-    .catch(() => {});
+    .catch(() => {
+      dispatch({
+        type: "finish-recent-index-request",
+        error: "Recent sessions are unavailable right now.",
+      });
+    });
 }
 
 function requestRecentSnapshotFromSource(args: {
@@ -72,7 +77,9 @@ function requestRecentSnapshotFromSource(args: {
         finishType: "finish-recent-snapshot-request",
       });
     })
-    .catch(() => {});
+    .catch(() => {
+      args.dispatch({ type: "finish-recent-snapshot-request", requestId });
+    });
 }
 
 function applyRecentLiveUpdateFromSource(args: {

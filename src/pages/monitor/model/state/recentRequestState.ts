@@ -39,7 +39,7 @@ export function resolveRecentIndexRequest(
 ): MonitorState {
   const datasets = stripFixtureDatasets(state.datasets);
   const fixtureActive = isFixtureDatasetTraceId(state.activeRunId);
-  const nextActiveRunId = items[0]?.sessionId ?? "";
+  const nextActiveRunId = "";
 
   return {
     ...state,

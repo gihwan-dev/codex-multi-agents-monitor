@@ -94,7 +94,9 @@ function calculateActiveTime(events: EventRecord[]) {
 
 function calculateDerivedDuration(events: EventRecord[]) {
   const timePoints = events.flatMap((event) => [event.startTs, event.endTs ?? event.startTs]);
-  return timePoints.length > 0 ? Math.max(...timePoints) - Math.min(...timePoints) : 0;
+  const maxTs = timePoints.reduce((max, value) => (value > max ? value : max), -Infinity);
+  const minTs = timePoints.reduce((min, value) => (value < min ? value : min), Infinity);
+  return timePoints.length > 0 ? maxTs - minTs : 0;
 }
 
 export function findLastHandoff(dataset: RunDataset, orderedEvents: EventRecord[]) {

@@ -49,6 +49,15 @@ function CaseListContent({
   onSelect,
   selectedCaseId,
 }: EvalCaseListPanelProps) {
+  if (detailLoading) {
+    return (
+      <div className="grid gap-2">
+        <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
+        <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
+      </div>
+    );
+  }
+
   if (!detailLoading && (detail?.cases.length ?? 0) === 0) {
     return (
       <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">

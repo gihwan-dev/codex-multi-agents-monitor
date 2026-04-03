@@ -14,7 +14,7 @@ function handleEdgeKeyDown(
   edgeId: string,
   onSelectEdge: (edgeId: string) => void,
 ) {
-  if (event.key !== " ") {
+  if (event.key !== " " && event.key !== "Enter") {
     return;
   }
 

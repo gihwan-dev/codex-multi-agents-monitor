@@ -16,9 +16,9 @@ export function renderArchivedSessionFeedback(options: RenderArchivedSessionFeed
     case "loading":
       return (
         <>
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
-          <div className="h-9 animate-pulse rounded-md bg-white/[0.03]" aria-hidden="true" />
+          <div className="h-9 animate-pulse motion-reduce:animate-none rounded-md bg-white/[0.03]" aria-hidden="true" />
+          <div className="h-9 animate-pulse motion-reduce:animate-none rounded-md bg-white/[0.03]" aria-hidden="true" />
+          <div className="h-9 animate-pulse motion-reduce:animate-none rounded-md bg-white/[0.03]" aria-hidden="true" />
         </>
       );
     case "error":
