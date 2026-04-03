@@ -40,7 +40,17 @@ function useMonitorPageRuntime() {
 
 export function useMonitorPageState() {
   const { state, dispatch, derivedState, controller } = useMonitorPageRuntime();
-  const actions = createMonitorActions({ state, dispatch, activeDataset: derivedState.activeDataset, activeFollowLive: derivedState.activeFollowLive, loadArchiveIndex: controller.loadArchiveIndex, searchArchive: controller.searchArchive, selectArchivedSession: controller.selectArchivedSession, requestRecentSnapshot: controller.requestRecentSnapshot });
+  const actions = createMonitorActions({
+    state,
+    dispatch,
+    activeDataset: derivedState.activeDataset,
+    activeFollowLive: derivedState.activeFollowLive,
+    loadArchiveIndex: controller.loadArchiveIndex,
+    refreshRecentIndex: controller.requestRecentIndex,
+    searchArchive: controller.searchArchive,
+    selectArchivedSession: controller.selectArchivedSession,
+    requestRecentSnapshot: controller.requestRecentSnapshot,
+  });
 
   return {
     state,

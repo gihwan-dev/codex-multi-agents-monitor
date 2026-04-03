@@ -2,6 +2,7 @@ import type { WorkspaceRunRow } from "../../../entities/run";
 import { cn } from "../../../shared/lib";
 import { StatusChip } from "../../../shared/ui";
 import { resolveProviderBadge } from "../lib/providerBadge";
+import { ScoreBadge } from "./ScoreBadge";
 
 interface WorkspaceRunItemProps {
   activeTreeId: string;
@@ -40,12 +41,15 @@ export function WorkspaceRunItem({
             {providerBadge.short}
           </span>
         ) : null}
+        <ScoreBadge score={run.score} compact showEmptyLabel={false} />
         <StatusChip status={run.status} subtle />
       </div>
       <div className="flex min-w-0 items-center gap-1 text-[0.72rem] text-[var(--color-text-tertiary)]">
         <span className="shrink-0">{run.relativeTime}</span>
         <span className="shrink-0">·</span>
-        <span className="truncate">{run.lastEventSummary}</span>
+        <span className="truncate">
+          {run.profileLabel ? `${run.profileLabel} · ${run.lastEventSummary}` : run.lastEventSummary}
+        </span>
       </div>
     </button>
   );

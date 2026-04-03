@@ -4,9 +4,7 @@ import type { RecentSessionIndexItem } from "../../../entities/session-log";
 import type { WorkspaceIdentityOverrideMap } from "../../../entities/workspace";
 import { flattenTree } from "../lib/workspaceTreeUtils";
 import { useWorkspaceTreeSelectionController } from "./useWorkspaceTreeSelectionController";
-import {
-  useWorkspaceTreeModel,
-} from "./workspaceTreeStateHelpers";
+import { useWorkspaceTreeModel } from "./workspaceTreeModelState";
 import { buildWorkspaceTreeStateResult } from "./workspaceTreeStateResult";
 
 interface UseWorkspaceTreeStateArgs {
@@ -35,46 +33,48 @@ function useWorkspaceTreeIds(activeRunId: string) {
 }
 
 export function useWorkspaceTreeState(options: UseWorkspaceTreeStateArgs) {
-  return useWorkspaceTreeStateFromOptions(options);
+  const treeIds = useWorkspaceTreeIds(options.activeRunId);
+  const state = useWorkspaceTreeViewState(options, treeIds);
+
+  return buildWorkspaceTreeStateResult({
+    treeIds,
+    model: state.model,
+    scoreFilter: state.scoreFilter,
+    scoreSort: state.scoreSort,
+    search: state.search,
+    setScoreFilter: state.setScoreFilter,
+    setScoreSort: state.setScoreSort,
+    setSearch: state.setSearch,
+    actions: state.actions,
+  });
 }
 
-function useWorkspaceTreeStateFromOptions(options: UseWorkspaceTreeStateArgs) {
-  const {
-    datasets,
-    recentIndex,
-    recentIndexReady,
-    activeRunId,
-    onSelectRun,
-    onSelectRecentRun,
-    workspaceIdentityOverrides,
-  } = options;
-  const treeIds = useWorkspaceTreeIds(activeRunId);
-  const { search, setSearch, model } = useWorkspaceTreeModelState({
-    datasets,
-    recentIndex,
-    recentIndexReady,
-    workspaceIdentityOverrides,
-  });
-  const flatItems = useWorkspaceFlatItems(model.workspaces, treeIds.expandedWorkspaceIds);
+function useWorkspaceTreeViewState(
+  options: UseWorkspaceTreeStateArgs,
+  treeIds: ReturnType<typeof useWorkspaceTreeIds>,
+) {
+  const modelState = useWorkspaceTreeModelState(options);
+  const flatItems = useWorkspaceFlatItems(
+    modelState.model.workspaces,
+    treeIds.expandedWorkspaceIds,
+  );
   const actions = useWorkspaceTreeSelectionController({
-    activeRunId,
+    activeRunId: options.activeRunId,
     activeTreeId: treeIds.activeTreeId,
     expandedWorkspaceIds: treeIds.expandedWorkspaceIds,
     flatItems,
-    model,
-    onSelectRecentRun,
-    onSelectRun,
+    model: modelState.model,
+    onSelectRecentRun: options.onSelectRecentRun,
+    onSelectRun: options.onSelectRun,
     setActiveTreeId: treeIds.setActiveTreeId,
     setExpandedWorkspaceIds: treeIds.setExpandedWorkspaceIds,
     setOptimisticActiveRunId: treeIds.setOptimisticActiveRunId,
   });
-  return buildWorkspaceTreeStateResult({
-    treeIds,
-    model,
-    search,
-    setSearch,
+
+  return {
+    ...modelState,
     actions,
-  });
+  };
 }
 
 function useWorkspaceTreeModelState(options: {
@@ -83,7 +83,12 @@ function useWorkspaceTreeModelState(options: {
   recentIndexReady: boolean;
   workspaceIdentityOverrides: WorkspaceIdentityOverrideMap;
 }) {
-  return useWorkspaceTreeModel(options);
+  return useWorkspaceTreeModel({
+    datasets: options.datasets,
+    recentIndex: options.recentIndex,
+    recentIndexReady: options.recentIndexReady,
+    workspaceIdentityOverrides: options.workspaceIdentityOverrides,
+  });
 }
 
 function useWorkspaceFlatItems(

@@ -19,19 +19,32 @@ interface BuildInspectorSectionsOptions {
   summary: InspectorCausalSummary | null;
   onSelectJump: (selection: SelectionState) => void;
   onOpenDrawer: (tab: DrawerTab) => void;
+  sessionReview?: ReactNode;
 }
 
 export function buildInspectorSections({
   summary,
   onSelectJump,
   onOpenDrawer,
+  sessionReview,
 }: BuildInspectorSectionsOptions) {
+  const sections = [];
+  if (sessionReview) {
+    sections.push({
+      key: "session-review",
+      title: "Session review",
+      content: sessionReview,
+    } satisfies InspectorSectionConfig);
+  }
+  sections.push(buildSummarySection(summary));
+
   if (!summary) {
-    return [buildSummarySection(summary), buildPayloadSection(summary, onOpenDrawer)];
+    sections.push(buildPayloadSection(summary, onOpenDrawer));
+    return sections;
   }
 
   return [
-    buildSummarySection(summary),
+    ...sections,
     buildDirectCauseSection(summary, onSelectJump),
     buildJumpSection({
       key: "upstream-chain",

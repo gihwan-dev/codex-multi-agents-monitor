@@ -1,6 +1,7 @@
-use serde::Serialize;
+use crate::domain::session_score::ProfileSnapshot;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SessionProvider {
     Codex,
@@ -49,6 +50,13 @@ pub(crate) struct SessionLogSnapshot {
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) model: Option<String>,
+    pub(crate) score: Option<u8>,
+    pub(crate) score_note: Option<String>,
+    pub(crate) scored_at: Option<String>,
+    pub(crate) scored_by: Option<String>,
+    pub(crate) profile_revision: Option<String>,
+    pub(crate) profile_label: Option<String>,
+    pub(crate) profile_snapshot: Option<ProfileSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_context_window_tokens: Option<u64>,
     pub(crate) entries: Vec<SessionEntrySnapshot>,
@@ -78,6 +86,11 @@ pub(crate) struct RecentSessionIndexItem {
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) model: Option<String>,
+    pub(crate) score: Option<u8>,
+    pub(crate) scored_at: Option<String>,
+    pub(crate) scored_by: Option<String>,
+    pub(crate) profile_revision: Option<String>,
+    pub(crate) profile_label: Option<String>,
     pub(crate) file_path: String,
     pub(crate) first_user_message: Option<String>,
     pub(crate) title: String,
@@ -96,6 +109,11 @@ pub(crate) struct ArchivedSessionIndex {
     pub(crate) started_at: String,
     pub(crate) updated_at: String,
     pub(crate) model: Option<String>,
+    pub(crate) score: Option<u8>,
+    pub(crate) scored_at: Option<String>,
+    pub(crate) scored_by: Option<String>,
+    pub(crate) profile_revision: Option<String>,
+    pub(crate) profile_label: Option<String>,
     pub(crate) message_count: u32,
     pub(crate) file_path: String,
     pub(crate) first_user_message: Option<String>,

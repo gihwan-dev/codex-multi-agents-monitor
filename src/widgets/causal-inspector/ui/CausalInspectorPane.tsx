@@ -1,4 +1,9 @@
-import type { DrawerTab, InspectorCausalSummary, SelectionState } from "../../../entities/run";
+import type { ReactNode } from "react";
+import type {
+  DrawerTab,
+  InspectorCausalSummary,
+  SelectionState,
+} from "../../../entities/run";
 import { cn } from "../../../shared/lib";
 import { Panel } from "../../../shared/ui";
 import {
@@ -11,6 +16,7 @@ interface CausalInspectorPaneProps {
   onSelectJump: (selection: SelectionState) => void;
   onOpenDrawer: (tab: DrawerTab) => void;
   compact?: boolean;
+  sessionReview?: ReactNode;
 }
 
 export function CausalInspectorPane({
@@ -18,6 +24,7 @@ export function CausalInspectorPane({
   onSelectJump,
   onOpenDrawer,
   compact = false,
+  sessionReview,
 }: CausalInspectorPaneProps) {
   const motionKey = summary
     ? `${summary.title}:${summary.rawStatusLabel}:${summary.preview}`
@@ -26,6 +33,7 @@ export function CausalInspectorPane({
     summary,
     onSelectJump,
     onOpenDrawer,
+    sessionReview,
   });
 
   return (

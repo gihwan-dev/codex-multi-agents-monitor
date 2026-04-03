@@ -2,6 +2,7 @@ use crate::{
     application::{
         session_context_window::resolve_snapshot_max_context_window_tokens,
         session_relationships::{load_snapshot_subagents, SnapshotSubagentSearch},
+        session_scoring::{hydrate_recent_index_item, hydrate_session_snapshot},
         workspace_identity::resolve_live_session_workspace_identity,
     },
     domain::{
@@ -158,7 +159,7 @@ fn build_claude_recent_index_item(
     let workspace_identity =
         resolve_live_workspace_identity(Path::new(&parsed.workspace_path), project_roots).ok()?;
 
-    Some(RecentSessionIndexItem {
+    let mut item = RecentSessionIndexItem {
         provider: parsed.provider,
         session_id: parsed.session_id,
         workspace_path: parsed.workspace_path,
@@ -167,12 +168,19 @@ fn build_claude_recent_index_item(
         started_at: parsed.started_at,
         updated_at: parsed.updated_at,
         model: parsed.model,
+        score: None,
+        scored_at: None,
+        scored_by: None,
+        profile_revision: None,
+        profile_label: None,
         file_path: session_file.display().to_string(),
         first_user_message: parsed.first_user_message,
         title: parsed.title,
         status: parsed.status,
         last_event_summary: parsed.last_event_summary,
-    })
+    };
+    let _ = hydrate_recent_index_item(&mut item);
+    Some(item)
 }
 
 fn build_live_session_candidate(
@@ -224,20 +232,29 @@ fn build_recent_index_item(
         },
     )?;
 
-    Ok(parsed.map(|parsed| RecentSessionIndexItem {
-        provider: parsed.provider,
-        session_id: candidate.session_id.clone(),
-        workspace_path: candidate.workspace_path.clone(),
-        origin_path: candidate.workspace_identity.origin_path.clone(),
-        display_name: candidate.workspace_identity.display_name.clone(),
-        started_at: parsed.started_at,
-        updated_at: parsed.updated_at,
-        model: parsed.model,
-        file_path: candidate.file_path.display().to_string(),
-        first_user_message: parsed.first_user_message,
-        title: parsed.title,
-        status: parsed.status,
-        last_event_summary: parsed.last_event_summary,
+    Ok(parsed.map(|parsed| {
+        let mut item = RecentSessionIndexItem {
+            provider: parsed.provider,
+            session_id: candidate.session_id.clone(),
+            workspace_path: candidate.workspace_path.clone(),
+            origin_path: candidate.workspace_identity.origin_path.clone(),
+            display_name: candidate.workspace_identity.display_name.clone(),
+            started_at: parsed.started_at,
+            updated_at: parsed.updated_at,
+            model: parsed.model,
+            score: None,
+            scored_at: None,
+            scored_by: None,
+            profile_revision: None,
+            profile_label: None,
+            file_path: candidate.file_path.display().to_string(),
+            first_user_message: parsed.first_user_message,
+            title: parsed.title,
+            status: parsed.status,
+            last_event_summary: parsed.last_event_summary,
+        };
+        let _ = hydrate_recent_index_item(&mut item);
+        item
     }))
 }
 
@@ -266,6 +283,13 @@ fn build_recent_session_snapshot(
         started_at: parsed.started_at,
         updated_at: parsed.updated_at,
         model: parsed.model,
+        score: None,
+        score_note: None,
+        scored_at: None,
+        scored_by: None,
+        profile_revision: None,
+        profile_label: None,
+        profile_snapshot: None,
         max_context_window_tokens: parsed.max_context_window_tokens,
         entries: parsed.entries,
         subagents: Vec::new(),
@@ -299,6 +323,13 @@ fn build_claude_recent_session_snapshot(
         started_at: parsed.started_at,
         updated_at: parsed.updated_at,
         model: parsed.model,
+        score: None,
+        score_note: None,
+        scored_at: None,
+        scored_by: None,
+        profile_revision: None,
+        profile_label: None,
+        profile_snapshot: None,
         max_context_window_tokens: parsed.max_context_window_tokens,
         entries: parsed.entries,
         subagents: Vec::new(),
@@ -307,7 +338,7 @@ fn build_claude_recent_session_snapshot(
     }))
 }
 
-pub(crate) fn load_recent_session_snapshot(
+fn load_recent_session_snapshot_base(
     selection: &RecentSnapshotSelection,
 ) -> Option<SessionLogSnapshot> {
     match selection {
@@ -344,6 +375,19 @@ pub(crate) fn load_recent_session_snapshot(
             Some(snapshot)
         }
     }
+}
+
+pub(crate) fn load_recent_session_snapshot(
+    selection: &RecentSnapshotSelection,
+) -> Option<SessionLogSnapshot> {
+    let mut snapshot = load_recent_session_snapshot_base(selection)?;
+    let _ = hydrate_session_snapshot(&mut snapshot);
+    Some(snapshot)
+}
+
+pub(crate) fn load_recent_session_snapshot_unscored(file_path: &str) -> Option<SessionLogSnapshot> {
+    let selection = resolve_recent_snapshot_selection(file_path)?;
+    load_recent_session_snapshot_base(&selection)
 }
 
 pub(crate) fn resolve_recent_snapshot_selection(

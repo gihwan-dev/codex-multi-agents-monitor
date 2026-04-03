@@ -6,6 +6,7 @@ import {
   deriveArchiveItemTitle,
   formatArchiveDate,
 } from "./ArchivedSessionPresentation";
+import { ScoreBadge } from "./ScoreBadge";
 
 function ArchiveSessionItem({
   activeFilePath,
@@ -50,6 +51,7 @@ function ArchiveSessionItem({
               {session.model}
             </span>
           ) : null}
+          <ScoreBadge score={session.score} compact showEmptyLabel={false} />
         </div>
       </div>
       <div className="flex items-center gap-2 text-[0.72rem] text-[var(--color-text-tertiary)]">

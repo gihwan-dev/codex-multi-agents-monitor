@@ -130,9 +130,11 @@ function ArchivedSessionGroups({
 }
 
 function ArchivedSessionCount({
+  scoredItems,
   total,
   visibleItems,
 }: {
+  scoredItems: number;
   total: number;
   visibleItems: number;
 }) {
@@ -142,7 +144,7 @@ function ArchivedSessionCount({
 
   return (
     <p className="px-1 text-right text-[0.7rem] text-[var(--color-text-tertiary)]">
-      {visibleItems} / {total}
+      {visibleItems} / {total} · {scoredItems} scored
     </p>
   );
 }
@@ -193,7 +195,11 @@ export function ArchivedSessionList({
           />
         </div>
       </ScrollArea>
-      <ArchivedSessionCount total={total} visibleItems={items.length} />
+      <ArchivedSessionCount
+        scoredItems={items.filter((item) => item.score !== null).length}
+        total={total}
+        visibleItems={items.length}
+      />
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import type { KeyboardEvent, RefObject } from "react";
-import type { WorkspaceTreeModel } from "../../../entities/run";
+import type {
+  WorkspaceScoreFilterKey,
+  WorkspaceScoreSortKey,
+  WorkspaceTreeModel,
+} from "../../../entities/run";
 import type { ArchivedSessionIndexItem } from "../../../entities/session-log";
 import { WorkspaceArchiveSection } from "./WorkspaceArchiveSection";
 import { WorkspaceRunTreeHeader } from "./WorkspaceRunTreeHeader";
@@ -8,6 +12,10 @@ import { WorkspaceTreeList } from "./WorkspaceTreeList";
 interface WorkspaceRunTreeSectionsProps {
   searchRef: RefObject<HTMLInputElement | null>;
   search: string;
+  scoreFilter: WorkspaceScoreFilterKey;
+  scoreSort: WorkspaceScoreSortKey;
+  setScoreFilter: (value: WorkspaceScoreFilterKey) => void;
+  setScoreSort: (value: WorkspaceScoreSortKey) => void;
   setSearch: (value: string) => void;
   onOpenImport: () => void;
   activeTreeId: string;
@@ -33,12 +41,16 @@ interface WorkspaceRunTreeSectionsProps {
   onArchiveSelect: (filePath: string) => void;
 }
 
-export function WorkspaceRunTreeSections(props: WorkspaceRunTreeSectionsProps) {
+function WorkspaceRunTreePrimarySection(props: WorkspaceRunTreeSectionsProps) {
   return (
     <>
       <WorkspaceRunTreeHeader
         searchRef={props.searchRef}
         search={props.search}
+        scoreFilter={props.scoreFilter}
+        scoreSort={props.scoreSort}
+        setScoreFilter={props.setScoreFilter}
+        setScoreSort={props.setScoreSort}
         setSearch={props.setSearch}
         onOpenImport={props.onOpenImport}
       />
@@ -48,11 +60,21 @@ export function WorkspaceRunTreeSections(props: WorkspaceRunTreeSectionsProps) {
         handleTreeKeyDown={props.handleTreeKeyDown}
         model={props.model}
         optimisticActiveRunId={props.optimisticActiveRunId}
+        scoreFilter={props.scoreFilter}
+        scoreSort={props.scoreSort}
         selectRecentRun={props.selectRecentRun}
         selectRun={props.selectRun}
         toggleWorkspace={props.toggleWorkspace}
         treeRef={props.treeRef}
       />
+    </>
+  );
+}
+
+export function WorkspaceRunTreeSections(props: WorkspaceRunTreeSectionsProps) {
+  return (
+    <>
+      <WorkspaceRunTreePrimarySection {...props} />
       <WorkspaceArchiveSection
         archivedIndex={props.archivedIndex}
         archivedTotal={props.archivedTotal}

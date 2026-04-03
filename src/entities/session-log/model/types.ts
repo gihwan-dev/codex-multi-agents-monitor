@@ -1,4 +1,5 @@
 import type { LiveConnection, RunStatus } from "../../run";
+import type { ProfileSnapshot } from "./scoreTypes";
 
 export type SessionProvider = "codex" | "claude";
 
@@ -44,6 +45,13 @@ export interface SessionLogSnapshot {
   startedAt: string;
   updatedAt: string;
   model: string | null;
+  score: number | null;
+  scoreNote: string | null;
+  scoredAt: string | null;
+  scoredBy: string | null;
+  profileRevision: string | null;
+  profileLabel: string | null;
+  profileSnapshot: ProfileSnapshot | null;
   maxContextWindowTokens?: number | null;
   entries: SessionEntrySnapshot[];
   subagents?: SubagentSnapshot[];
@@ -60,6 +68,11 @@ export interface RecentSessionIndexItem {
   startedAt: string;
   updatedAt: string;
   model: string | null;
+  score: number | null;
+  scoredAt: string | null;
+  scoredBy: string | null;
+  profileRevision: string | null;
+  profileLabel: string | null;
   filePath: string;
   firstUserMessage: string | null;
   title: string;
@@ -81,6 +94,11 @@ export interface ArchivedSessionIndexItem {
   startedAt: string;
   updatedAt: string;
   model: string | null;
+  score: number | null;
+  scoredAt: string | null;
+  scoredBy: string | null;
+  profileRevision: string | null;
+  profileLabel: string | null;
   messageCount: number;
   filePath: string;
   firstUserMessage: string | null;

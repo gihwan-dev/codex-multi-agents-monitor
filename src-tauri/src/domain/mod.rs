@@ -4,4 +4,5 @@ pub(crate) mod eval_candidate;
 pub(crate) mod eval_scorecard;
 pub(crate) mod ingest_policy;
 pub(crate) mod session;
+pub(crate) mod session_score;
 pub(crate) mod workspace;
