@@ -292,7 +292,7 @@ mod tests {
             vendor: "OpenAI".to_owned(),
             model: "gpt-5.4".to_owned(),
             guidance_hash: "abc".to_owned(),
-            guidance_preview: "preview".to_owned(),
+            guidance_preview: None,
             skills_hash: "def".to_owned(),
             skill_names_preview: vec!["review".to_owned()],
             skill_count: 1,

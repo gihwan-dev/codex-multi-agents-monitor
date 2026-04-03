@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-const GUIDANCE_PREVIEW_LIMIT: usize = 160;
 const INVENTORY_PREVIEW_LIMIT: usize = 8;
 const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0001_0000_01b3;
@@ -26,7 +25,8 @@ pub(crate) struct CandidateFingerprint {
     pub(crate) vendor: String,
     pub(crate) model: String,
     pub(crate) guidance_hash: String,
-    pub(crate) guidance_preview: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) guidance_preview: Option<String>,
     pub(crate) skills_hash: String,
     pub(crate) skill_names_preview: Vec<String>,
     pub(crate) skill_count: usize,
@@ -51,7 +51,7 @@ pub(crate) fn build_candidate_fingerprint(
         vendor: normalize_required(&input.vendor),
         model: normalize_required(&input.model),
         guidance_hash: stable_hash(&guidance_text),
-        guidance_preview: truncate_preview(&guidance_text, GUIDANCE_PREVIEW_LIMIT),
+        guidance_preview: None,
         skills_hash: stable_hash(&normalized_skills.join("\n")),
         skill_names_preview: normalized_skills
             .iter()
@@ -89,15 +89,6 @@ fn normalize_inventory(values: &[String]) -> Vec<String> {
     normalized
 }
 
-fn truncate_preview(value: &str, limit: usize) -> String {
-    if value.chars().count() <= limit {
-        return value.to_owned();
-    }
-
-    let truncated = value.chars().take(limit).collect::<String>();
-    format!("{truncated}…")
-}
-
 fn stable_hash(value: &str) -> String {
     let mut hash = FNV_OFFSET_BASIS;
     for byte in value.as_bytes() {
@@ -133,6 +124,7 @@ mod tests {
         assert_eq!(fingerprint.skill_count, 2);
         assert_eq!(fingerprint.skill_names_preview, vec!["qa", "review"]);
         assert_eq!(fingerprint.repo_sha, "abc123");
+        assert!(fingerprint.guidance_preview.is_none());
         assert!(!fingerprint.skills_hash.is_empty());
         assert!(!fingerprint.mcp_inventory_hash.is_empty());
     }
