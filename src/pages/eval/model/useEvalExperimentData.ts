@@ -37,24 +37,29 @@ function useExperimentListState({
     setLoading(true);
     setError(null);
 
-    loadExperimentListResult(selectedExperimentId, selectExperiment, {
-      onError: (message) => {
-        if (!cancelled) {
-          setError(message);
-        }
+    loadExperimentListResult(
+      selectedExperimentId,
+      selectExperiment,
+      {
+        onError: (message) => {
+          if (!cancelled) {
+            setError(message);
+          }
+        },
+        onFinally: () => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        },
+        onSuccess: (items) => {
+          if (!cancelled) {
+            setExperiments(items);
+            void requestKey;
+          }
+        },
       },
-      onFinally: () => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      },
-      onSuccess: (items) => {
-        if (!cancelled) {
-          setExperiments(items);
-          void requestKey;
-        }
-      },
-    });
+      () => !cancelled,
+    );
 
     return () => {
       cancelled = true;
@@ -86,6 +91,7 @@ function startDetailLoad(options: {
   });
   loadExperimentDetailResult({
     handlers,
+    isActive: () => !cancelled,
     selectedCaseId: options.selectedCaseId,
     selectedExperimentId: options.selectedExperimentId,
     selectCase: options.selectCase,
