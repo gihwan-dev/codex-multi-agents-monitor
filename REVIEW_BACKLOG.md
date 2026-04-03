@@ -45,9 +45,58 @@
 - [ ] **T3**: Eval concurrent mutation test (backend)
 - [ ] **T4**: cross-case run_id 거부 test (backend)
 
-## UI/UX
+## UI/UX (Major)
 
-(UI/UX Codex 리뷰 완료 후 추가)
+- [ ] **U1**: Inspector에서 sessionReview가 Summary 위에 렌더링 — UX_SPEC의 "Summary default" 계약 위반
+  - 파일: `src/widgets/causal-inspector/ui/CausalInspectorSections.tsx:31`
+  - 수정: session review를 Summary 아래로 이동
+
+- [ ] **U2**: 왼쪽 rail에 status-first 그룹 없음 — UX_SPEC의 Running/Waiting/Recent 그룹 누락
+  - 파일: `src/widgets/workspace-run-tree/ui/WorkspaceTreeList.tsx:61`
+  - 수정: status group 복원 또는 status + workspace 병행 제공
+
+- [ ] **U3**: Primary run tree에 loading/empty/no-matches 상태 UI 없음
+  - 파일: `src/widgets/workspace-run-tree/ui/WorkspaceTreeList.tsx:61`
+  - 수정: 명시적 빈 상태 UI 추가
+
+- [ ] **U4**: F shortcut이 새 filter UI에 연결 안 됨 — keyboard-first 계약 깨짐
+  - 파일: `src/pages/monitor/lib/useSearchFocusShortcut.ts:4`
+  - 수정: F로 filter control에 포커스되도록 구현 + shortcut help 노출
+
+- [ ] **U5**: Eval compare에서 같은 run 중복 선택 허용 + invalid pair empty state 없음
+  - 파일: `src/pages/eval/ui/EvalRunPicker.tsx:22`
+  - 수정: 중복 선택 방지 + invalid pair UI state 추가
+
+- [ ] **U6**: Compare view 2열 breakpoint가 2xl — 1280px 데스크톱에서 세로 적층
+  - 파일: `src/widgets/eval-compare/ui/EvalCompareView.tsx:45`
+  - 수정: breakpoint를 xl로 내림
+
+- [ ] **U7**: Score save dialog에 error slot 없음 — 실패 이유 미표시
+  - 파일: `src/features/session-scoring/ui/SessionScoreEditorDialog.tsx:42`
+  - 수정: inline error + aria-live 추가
+
+## UI/UX (Minor)
+
+- [ ] **u1**: Provider badge가 CC/CX 2글자만 — aria-label 없음
+  - 파일: `src/widgets/workspace-run-tree/lib/providerBadge.ts:8`
+
+- [ ] **u2**: Unscored session에 placeholder badge 없음 — discoverability 저하
+  - 파일: `src/widgets/workspace-run-tree/ui/ScoreBadge.tsx:42`
+
+- [ ] **u3**: Score editor에 helper text/inline validation 없음
+  - 파일: `src/features/session-scoring/ui/SessionScoreEditorFields.tsx:52`
+
+- [ ] **u4**: Eval 화면 copy에 내부 구현 용어 노출 (issue #23, add_case 등)
+  - 파일: `src/pages/eval/ui/EvalPageHeader.tsx:20`
+
+- [ ] **u5**: 접힘 animation 중 focusable content가 aria-hidden만 — inert 필요
+  - 파일: `src/widgets/workspace-run-tree/ui/ArchiveSectionBody.tsx:36`
+
+- [ ] **u6**: Reduced-motion scope가 .monitor-shell 안에만 — eval은 밖
+  - 파일: `src/theme/motion.css:171`
+
+- [ ] **u7**: EvalScoreBar에서 0점이 4% bar로 과장됨
+  - 파일: `src/widgets/eval-compare/ui/EvalScoreBar.tsx:7`
 
 ## Resolved
 
