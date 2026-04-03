@@ -35,7 +35,9 @@ pub(crate) fn load_snapshot_subagents(
             .into_iter()
             .chain(hinted_candidate_paths(&lookup, HintSource::Source)),
     );
-    collector.append_candidate_paths(collect_fallback_files(&canonical_root)?);
+    if collector.is_empty() {
+        collector.append_candidate_paths(collect_fallback_files(&canonical_root)?);
+    }
 
     Ok(collector.finish())
 }
@@ -105,6 +107,10 @@ impl<'a> SnapshotSubagentCollector<'a> {
 
     fn finish(self) -> Vec<SubagentSnapshot> {
         self.subagents
+    }
+
+    fn is_empty(&self) -> bool {
+        self.subagents.is_empty()
     }
 }
 
@@ -236,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn supplements_sparse_sqlite_hints_with_full_jsonl_scan() {
+    fn prefers_hint_results_without_running_full_jsonl_scan() {
         let temp_dir = TempDir::new("session-relationships-sparse");
         let search_root = temp_dir.path.join("sessions");
         let (selected_file, hinted_child_file, _jsonl_only_child_file) =
@@ -251,6 +257,32 @@ mod tests {
             },
             &[ThreadSubagentHint {
                 rollout_path: hinted_child_file.display().to_string(),
+                edge_parent_thread_id: Some("parent-001".to_owned()),
+                source_parent_thread_id: None,
+            }],
+        )
+        .expect("subagents should load");
+
+        assert_eq!(subagents.len(), 1);
+        assert_eq!(subagents[0].session_id, "child-hinted");
+    }
+
+    #[test]
+    fn falls_back_to_full_jsonl_scan_when_hints_do_not_resolve_subagents() {
+        let temp_dir = TempDir::new("session-relationships-fallback");
+        let search_root = temp_dir.path.join("sessions");
+        let (selected_file, _hinted_child_file, _jsonl_only_child_file) =
+            write_sparse_snapshot_fixture(&search_root);
+        let snapshot = test_snapshot("parent-001");
+
+        let subagents = load_snapshot_subagents(
+            SnapshotSubagentSearch {
+                snapshot: &snapshot,
+                search_root: &search_root,
+                selected_file: &selected_file,
+            },
+            &[ThreadSubagentHint {
+                rollout_path: search_root.join("missing.jsonl").display().to_string(),
                 edge_parent_thread_id: Some("parent-001".to_owned()),
                 source_parent_thread_id: None,
             }],

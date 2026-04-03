@@ -11,10 +11,11 @@ use crate::{
         eval_scorecard::ALL_SCORECARD_AXES,
     },
     infrastructure::eval_storage::{
-        append_audit_event, delete_experiment_detail, load_all_experiment_details,
-        load_experiment_detail, resolve_repository_head_sha, save_experiment_detail,
-        EvalAuditEvent,
+        append_audit_event, delete_experiment_detail, experiment_mutation_lock,
+        load_all_experiment_details, load_experiment_detail, resolve_repository_head_sha,
+        save_experiment_detail, EvalAuditEvent,
     },
+    infrastructure::filesystem::{normalize_path, resolve_codex_home, resolve_project_roots},
 };
 use std::{io, path::Path};
 
@@ -153,79 +154,86 @@ pub(crate) fn update_experiment(
     experiment_id: &str,
     patch: UpdateExperimentInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
 
-    if let Some(name) = patch.name.as_deref() {
-        detail.experiment.name = require_trimmed(name, EXPERIMENT_NAME_LIMIT, "experiment name")?;
-    }
-    if let Some(description) = patch.description {
-        detail.experiment.description = optional_trimmed(Some(&description), CASE_TEXT_LIMIT);
-    }
-    detail.experiment.updated_at_ms = current_time_ms();
+        if let Some(name) = patch.name.as_deref() {
+            detail.experiment.name =
+                require_trimmed(name, EXPERIMENT_NAME_LIMIT, "experiment name")?;
+        }
+        if let Some(description) = patch.description {
+            detail.experiment.description = optional_trimmed(Some(&description), CASE_TEXT_LIMIT);
+        }
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "experimentUpdated",
-        experiment_id: &detail.experiment.id,
-        case_id: None,
-        run_id: None,
-        preview: &detail.experiment.name,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "experimentUpdated",
+            experiment_id: &detail.experiment.id,
+            case_id: None,
+            run_id: None,
+            preview: &detail.experiment.name,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn delete_experiment(experiment_id: &str) -> io::Result<bool> {
-    let deleted = delete_experiment_detail(experiment_id)?;
-    if deleted {
-        record_event(RecordEventInput {
-            event_kind: "experimentDeleted",
-            experiment_id,
-            case_id: None,
-            run_id: None,
-            preview: experiment_id,
-        })?;
-    }
-    Ok(deleted)
+    with_experiment_mutation(experiment_id, || {
+        let deleted = delete_experiment_detail(experiment_id)?;
+        if deleted {
+            record_event(RecordEventInput {
+                event_kind: "experimentDeleted",
+                experiment_id,
+                case_id: None,
+                run_id: None,
+                preview: experiment_id,
+            })?;
+        }
+        Ok(deleted)
+    })
 }
 
 pub(crate) fn add_case(
     experiment_id: &str,
     input: CreateCaseInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let now = current_time_ms();
-    let case = Case {
-        id: generate_id("case", &input.title, now),
-        experiment_id: experiment_id.to_owned(),
-        title: require_trimmed(&input.title, CASE_TITLE_LIMIT, "case title")?,
-        prompt: require_trimmed(&input.prompt, CASE_TEXT_LIMIT, "case prompt")?,
-        expected_result: require_trimmed(
-            &input.expected_result,
-            CASE_TEXT_LIMIT,
-            "case expected result",
-        )?,
-        tags: sanitize_strings(&input.tags, 32, 40),
-        required_artifact_kinds: input.required_artifact_kinds,
-        allowed_path_prefixes: sanitize_strings(&input.allowed_path_prefixes, 24, 180),
-        created_at_ms: now,
-        updated_at_ms: now,
-    };
-    detail.cases.push(case.clone());
-    detail.experiment.updated_at_ms = now;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let now = current_time_ms();
+        let case = Case {
+            id: generate_id("case", &input.title, now),
+            experiment_id: experiment_id.to_owned(),
+            title: require_trimmed(&input.title, CASE_TITLE_LIMIT, "case title")?,
+            prompt: require_trimmed(&input.prompt, CASE_TEXT_LIMIT, "case prompt")?,
+            expected_result: require_trimmed(
+                &input.expected_result,
+                CASE_TEXT_LIMIT,
+                "case expected result",
+            )?,
+            tags: sanitize_strings(&input.tags, 32, 40),
+            required_artifact_kinds: input.required_artifact_kinds,
+            allowed_path_prefixes: sanitize_strings(&input.allowed_path_prefixes, 24, 180),
+            created_at_ms: now,
+            updated_at_ms: now,
+        };
+        detail.cases.push(case.clone());
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseAdded",
-        experiment_id,
-        case_id: Some(&case.id),
-        run_id: None,
-        preview: &case.title,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseAdded",
+            experiment_id,
+            case_id: Some(&case.id),
+            run_id: None,
+            preview: &case.title,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn update_case(
@@ -233,55 +241,59 @@ pub(crate) fn update_case(
     case_id: &str,
     patch: UpdateCaseInput,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = detail.cases.iter_mut().find(|case| case.id == case_id) else {
-        return Ok(None);
-    };
-    apply_case_patch(case, patch)?;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = detail.cases.iter_mut().find(|case| case.id == case_id) else {
+            return Ok(None);
+        };
+        apply_case_patch(case, patch)?;
 
-    let now = current_time_ms();
-    case.updated_at_ms = now;
-    let case_title = case.title.clone();
-    detail.experiment.updated_at_ms = now;
+        let now = current_time_ms();
+        case.updated_at_ms = now;
+        let case_title = case.title.clone();
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseUpdated",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: None,
-        preview: &case_title,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseUpdated",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: None,
+            preview: &case_title,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn delete_case(
     experiment_id: &str,
     case_id: &str,
 ) -> io::Result<Option<ExperimentDetail>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let previous_case_count = detail.cases.len();
-    detail.cases.retain(|case| case.id != case_id);
-    if detail.cases.len() == previous_case_count {
-        return Ok(None);
-    }
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let previous_case_count = detail.cases.len();
+        detail.cases.retain(|case| case.id != case_id);
+        if detail.cases.len() == previous_case_count {
+            return Ok(None);
+        }
 
-    detail.runs.retain(|run| run.case_id != case_id);
-    detail.experiment.updated_at_ms = current_time_ms();
+        detail.runs.retain(|run| run.case_id != case_id);
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "caseDeleted",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: None,
-        preview: case_id,
-    })?;
-    Ok(Some(detail))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "caseDeleted",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: None,
+            preview: case_id,
+        })?;
+        Ok(Some(detail))
+    })
 }
 
 pub(crate) fn save_candidate_run(
@@ -289,34 +301,36 @@ pub(crate) fn save_candidate_run(
     case_id: &str,
     input: SaveCandidateRunInput,
 ) -> io::Result<Option<CandidateRun>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = find_case(detail.cases.as_slice(), case_id) else {
-        return Ok(None);
-    };
-    let now = current_time_ms();
-    let run = build_candidate_run(
-        CandidateRunBuildContext {
-            experiment_id,
-            case_id,
-            privacy_policy: detail.experiment.privacy_policy.clone(),
-            now,
-        },
-        input,
-    )?;
-    upsert_candidate_run(&mut detail.runs, run.clone());
-    detail.experiment.updated_at_ms = now;
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = find_case(detail.cases.as_slice(), case_id) else {
+            return Ok(None);
+        };
+        let now = current_time_ms();
+        let run = build_candidate_run(
+            CandidateRunBuildContext {
+                experiment_id,
+                case_id,
+                privacy_policy: detail.experiment.privacy_policy.clone(),
+                now,
+            },
+            input,
+        )?;
+        upsert_candidate_run(&mut detail.runs, run.clone())?;
+        detail.experiment.updated_at_ms = now;
 
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "candidateRunSaved",
-        experiment_id,
-        case_id: Some(&case.id),
-        run_id: Some(&run.id),
-        preview: &run.candidate_label,
-    })?;
-    Ok(Some(run))
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "candidateRunSaved",
+            experiment_id,
+            case_id: Some(&case.id),
+            run_id: Some(&run.id),
+            preview: &run.candidate_label,
+        })?;
+        Ok(Some(run))
+    })
 }
 
 pub(crate) fn run_grader(
@@ -324,34 +338,37 @@ pub(crate) fn run_grader(
     case_id: &str,
     run_id: &str,
 ) -> io::Result<Option<CandidateRun>> {
-    let Some(mut detail) = load_experiment_detail(experiment_id)? else {
-        return Ok(None);
-    };
-    let Some(case) = detail.cases.iter().find(|case| case.id == case_id).cloned() else {
-        return Ok(None);
-    };
-    let Some(run) = detail
-        .runs
-        .iter_mut()
-        .find(|run| run.id == run_id && run.case_id == case_id)
-    else {
-        return Ok(None);
-    };
+    with_experiment_mutation(experiment_id, || {
+        let Some(mut detail) = load_experiment_detail(experiment_id)? else {
+            return Ok(None);
+        };
+        let Some(case) = detail.cases.iter().find(|case| case.id == case_id).cloned() else {
+            return Ok(None);
+        };
+        let scope = RunScope {
+            experiment_id,
+            case_id,
+            run_id,
+        };
+        let Some(run) = find_run_mut(detail.runs.as_mut_slice(), &scope)? else {
+            return Ok(None);
+        };
 
-    let code_grades = run_code_grader_pipeline(&case, run, None);
-    run.grades = merge_grades(&run.grades, code_grades);
-    detail.experiment.updated_at_ms = current_time_ms();
+        let code_grades = run_code_grader_pipeline(&case, run, None);
+        run.grades = merge_grades(&run.grades, code_grades);
+        detail.experiment.updated_at_ms = current_time_ms();
 
-    let updated_run = run.clone();
-    save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
-        event_kind: "graderRan",
-        experiment_id,
-        case_id: Some(case_id),
-        run_id: Some(run_id),
-        preview: &updated_run.candidate_label,
-    })?;
-    Ok(Some(updated_run))
+        let updated_run = run.clone();
+        save_experiment_detail(&detail)?;
+        record_event(RecordEventInput {
+            event_kind: "graderRan",
+            experiment_id,
+            case_id: Some(case_id),
+            run_id: Some(run_id),
+            preview: &updated_run.candidate_label,
+        })?;
+        Ok(Some(updated_run))
+    })
 }
 
 pub(crate) fn compare_candidates(
@@ -363,27 +380,52 @@ pub(crate) fn compare_candidates(
     let Some(case) = find_case(detail.cases.as_slice(), &query.case_id) else {
         return Ok(None);
     };
-    let Some(baseline_run) = find_run(detail.runs.as_slice(), &query.baseline_run_id) else {
+    let pair = resolve_comparison_pair(&detail, &query)?;
+    let Some((baseline_run, candidate_run)) = pair else {
         return Ok(None);
     };
-    let Some(candidate_run) = find_run(detail.runs.as_slice(), &query.candidate_run_id) else {
-        return Ok(None);
-    };
-
-    let baseline_scorecard = build_scorecard(&baseline_run.grades);
-    let candidate_scorecard = build_scorecard(&candidate_run.grades);
-    let deltas = build_scorecard_deltas(&baseline_scorecard, &candidate_scorecard);
-
+    let bsc = build_scorecard(&baseline_run.grades);
+    let csc = build_scorecard(&candidate_run.grades);
+    let deltas = build_scorecard_deltas(&bsc, &csc);
+    let boundary_note = detail.experiment.boundary_note.clone();
     Ok(Some(CandidateComparison {
-        experiment: detail.experiment.clone(),
+        experiment: detail.experiment,
         case_item: case,
         baseline_run,
         candidate_run,
-        baseline_scorecard,
-        candidate_scorecard,
+        baseline_scorecard: bsc,
+        candidate_scorecard: csc,
         deltas,
-        boundary_note: detail.experiment.boundary_note,
+        boundary_note,
     }))
+}
+
+fn resolve_comparison_pair(
+    detail: &ExperimentDetail,
+    query: &CompareCandidatesQuery,
+) -> io::Result<Option<(CandidateRun, CandidateRun)>> {
+    let (runs, e, c) = (
+        detail.runs.as_slice(),
+        &*query.experiment_id,
+        &*query.case_id,
+    );
+    let bs = RunScope {
+        experiment_id: e,
+        case_id: c,
+        run_id: &query.baseline_run_id,
+    };
+    let cs = RunScope {
+        experiment_id: e,
+        case_id: c,
+        run_id: &query.candidate_run_id,
+    };
+    let Some(baseline) = find_run(runs, &bs)? else {
+        return Ok(None);
+    };
+    let Some(candidate) = find_run(runs, &cs)? else {
+        return Ok(None);
+    };
+    Ok(Some((baseline, candidate)))
 }
 
 fn build_scorecard(grades: &[Grade]) -> Vec<ScorecardAxisSummary> {
@@ -515,8 +557,23 @@ fn find_case(cases: &[Case], case_id: &str) -> Option<Case> {
     cases.iter().find(|case| case.id == case_id).cloned()
 }
 
-fn find_run(runs: &[CandidateRun], run_id: &str) -> Option<CandidateRun> {
-    runs.iter().find(|run| run.id == run_id).cloned()
+struct RunScope<'a> {
+    experiment_id: &'a str,
+    case_id: &'a str,
+    run_id: &'a str,
+}
+
+fn find_run(runs: &[CandidateRun], scope: &RunScope<'_>) -> io::Result<Option<CandidateRun>> {
+    ensure_run_scope(runs, scope)?;
+    Ok(runs.iter().find(|r| run_matches_scope(r, scope)).cloned())
+}
+
+fn find_run_mut<'a>(
+    runs: &'a mut [CandidateRun],
+    scope: &RunScope<'_>,
+) -> io::Result<Option<&'a mut CandidateRun>> {
+    ensure_run_scope(runs, scope)?;
+    Ok(runs.iter_mut().find(|r| run_matches_scope(r, scope)))
 }
 
 fn build_candidate_run(
@@ -644,13 +701,24 @@ fn sanitize_run_payload(input: RunPayloadInput) -> SanitizedRunPayload {
     }
 }
 
-fn upsert_candidate_run(runs: &mut Vec<CandidateRun>, run: CandidateRun) {
-    if let Some(existing_run) = runs.iter_mut().find(|existing| existing.id == run.id) {
+fn upsert_candidate_run(runs: &mut Vec<CandidateRun>, run: CandidateRun) -> io::Result<()> {
+    let scope = RunScope {
+        experiment_id: &run.experiment_id,
+        case_id: &run.case_id,
+        run_id: &run.id,
+    };
+    ensure_run_scope(runs, &scope)?;
+
+    if let Some(existing_run) = runs
+        .iter_mut()
+        .find(|existing| run_matches_scope(existing, &scope))
+    {
         *existing_run = merge_existing_run(existing_run, run);
-        return;
+        return Ok(());
     }
 
     runs.push(run);
+    Ok(())
 }
 
 fn merge_existing_run(existing_run: &CandidateRun, run: CandidateRun) -> CandidateRun {
@@ -661,6 +729,28 @@ fn merge_existing_run(existing_run: &CandidateRun, run: CandidateRun) -> Candida
     };
 
     CandidateRun { grades, ..run }
+}
+
+fn ensure_run_scope(runs: &[CandidateRun], scope: &RunScope<'_>) -> io::Result<()> {
+    if runs
+        .iter()
+        .any(|run| run.id == scope.run_id && !run_matches_scope(run, scope))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "run {} does not belong to experiment {} case {}",
+                scope.run_id, scope.experiment_id, scope.case_id
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn run_matches_scope(run: &CandidateRun, scope: &RunScope<'_>) -> bool {
+    run.experiment_id == scope.experiment_id
+        && run.case_id == scope.case_id
+        && run.id == scope.run_id
 }
 
 fn build_scorecard_deltas(
@@ -718,7 +808,26 @@ fn resolve_candidate_repo_sha(input: &CandidateFingerprintInput) -> io::Result<S
             )
         })?;
 
-    resolve_repository_head_sha(Path::new(repo_path))
+    let repo_path = normalize_path(Path::new(repo_path))?;
+    ensure_repo_path_is_within_project_roots(&repo_path)?;
+    resolve_repository_head_sha(&repo_path)
+}
+
+fn ensure_repo_path_is_within_project_roots(repo_path: &Path) -> io::Result<()> {
+    let codex_home = resolve_codex_home()?;
+    let project_roots = resolve_project_roots(&codex_home)?;
+    if project_roots.into_iter().any(|root| {
+        normalize_path(&root)
+            .map(|normalized_root| repo_path.starts_with(&normalized_root))
+            .unwrap_or(false)
+    }) {
+        return Ok(());
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "candidate fingerprint repo_path must stay within configured project roots",
+    ))
 }
 
 fn normalize_execution_stats(
@@ -856,6 +965,15 @@ fn current_time_ms() -> u64 {
         .map_or(0, |duration| duration.as_millis() as u64)
 }
 
+fn with_experiment_mutation<T>(
+    experiment_id: &str,
+    mutate: impl FnOnce() -> io::Result<T>,
+) -> io::Result<T> {
+    let lock = experiment_mutation_lock(experiment_id);
+    let _guard = lock.lock().unwrap_or_else(|error| error.into_inner());
+    mutate()
+}
+
 fn record_event(input: RecordEventInput<'_>) -> io::Result<()> {
     append_audit_event(&EvalAuditEvent {
         timestamp_ms: current_time_ms(),
@@ -869,8 +987,11 @@ fn record_event(input: RecordEventInput<'_>) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::{
-        build_scorecard, calculate_delta, create_experiment, run_grader, save_candidate_run,
+        build_scorecard, calculate_delta, compare_candidates, create_experiment, run_grader,
+        save_candidate_run,
     };
     use crate::domain::{
         eval::{
@@ -882,7 +1003,7 @@ mod tests {
         eval_scorecard::ScorecardAxis,
     };
     use crate::test_support::RecentSessionTestContext;
-    use std::{fs, path::Path};
+    use std::{fs, io, path::Path};
 
     fn create_case_for_test(experiment_id: &str) -> crate::domain::eval::Case {
         let detail = super::add_case(
@@ -960,6 +1081,17 @@ mod tests {
         }
     }
 
+    fn sample_run_input_with_id(
+        repo_path: &Path,
+        run_id: &str,
+        candidate_label: &str,
+    ) -> SaveCandidateRunInput {
+        let mut input = sample_run_input(repo_path);
+        input.id = Some(run_id.to_owned());
+        input.candidate_label = candidate_label.to_owned();
+        input
+    }
+
     #[test]
     fn creates_and_grades_candidate_runs() {
         let context = RecentSessionTestContext::new("eval-service");
@@ -969,7 +1101,7 @@ mod tests {
         })
         .expect("create experiment");
         let case = create_case_for_test(&experiment.experiment.id);
-        let repo_path = context.temp_root.join("repo");
+        let repo_path = context.projects_root.join("repo");
         create_repo_fixture(&repo_path);
         let run = save_candidate_run(
             &experiment.experiment.id,
@@ -1029,5 +1161,108 @@ mod tests {
         };
 
         assert_eq!(query.case_id, "case");
+    }
+
+    struct CrossCaseSetup {
+        _context: RecentSessionTestContext,
+        experiment_id: String,
+        _first_case_id: String,
+        second_case_id: String,
+        repo_path: PathBuf,
+    }
+
+    fn minimal_case_input(title: &str) -> CreateCaseInput {
+        CreateCaseInput {
+            title: title.to_owned(),
+            prompt: "p".to_owned(),
+            expected_result: "r".to_owned(),
+            tags: vec![],
+            required_artifact_kinds: vec![],
+            allowed_path_prefixes: vec![],
+        }
+    }
+
+    fn setup_cross_case_fixture(label: &str) -> CrossCaseSetup {
+        let context = RecentSessionTestContext::new(label);
+        let exp = create_experiment(CreateExperimentInput {
+            name: label.to_owned(),
+            description: None,
+        })
+        .expect("create experiment");
+        let c1 = create_case_for_test(&exp.experiment.id);
+        let c2 = super::add_case(&exp.experiment.id, minimal_case_input("Other"))
+            .expect("add case")
+            .expect("detail")
+            .cases
+            .into_iter()
+            .find(|c| c.id != c1.id)
+            .expect("second case");
+        let repo = context.projects_root.join("repo");
+        create_repo_fixture(&repo);
+        save_candidate_run(
+            &exp.experiment.id,
+            &c1.id,
+            sample_run_input_with_id(&repo, "run-shared", "baseline"),
+        )
+        .expect("save")
+        .expect("saved");
+        CrossCaseSetup {
+            _context: context,
+            experiment_id: exp.experiment.id,
+            _first_case_id: c1.id,
+            second_case_id: c2.id,
+            repo_path: repo,
+        }
+    }
+
+    #[test]
+    fn rejects_upserting_run_id_into_a_different_case() {
+        let s = setup_cross_case_fixture("eval-run-scope-upsert");
+        let error = save_candidate_run(
+            &s.experiment_id,
+            &s.second_case_id,
+            sample_run_input_with_id(&s.repo_path, "run-shared", "candidate"),
+        )
+        .expect_err("mismatched case run should fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("does not belong to experiment"));
+    }
+
+    #[test]
+    fn rejects_comparing_run_id_from_a_different_case() {
+        let s = setup_cross_case_fixture("eval-run-scope-compare");
+        let error = compare_candidates(CompareCandidatesQuery {
+            experiment_id: s.experiment_id,
+            case_id: s.second_case_id,
+            baseline_run_id: "run-shared".to_owned(),
+            candidate_run_id: "missing".to_owned(),
+        })
+        .expect_err("cross-case compare should fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_repo_paths_outside_configured_project_roots() {
+        let context = RecentSessionTestContext::new("eval-service-repo-path-roots");
+        let experiment = create_experiment(CreateExperimentInput {
+            name: "Scoped repo".to_owned(),
+            description: None,
+        })
+        .expect("create experiment");
+        let case = create_case_for_test(&experiment.experiment.id);
+        let repo_path = context.temp_root.join("external-repo");
+        create_repo_fixture(&repo_path);
+
+        let error = save_candidate_run(
+            &experiment.experiment.id,
+            &case.id,
+            sample_run_input(&repo_path),
+        )
+        .expect_err("repo path outside project roots should fail");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error
+            .to_string()
+            .contains("repo_path must stay within configured project roots"));
     }
 }

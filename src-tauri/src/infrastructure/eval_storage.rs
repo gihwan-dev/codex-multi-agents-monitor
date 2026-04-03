@@ -7,15 +7,19 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 const STORAGE_SCHEMA_VERSION: u32 = 1;
 const STORAGE_SUBDIR: &str = "monitor/evals";
 const EXPERIMENTS_DIR_NAME: &str = "experiments";
 const EVENTS_FILE_NAME: &str = "events.jsonl";
+static EXPERIMENT_MUTATION_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+    OnceLock::new();
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +65,15 @@ pub(crate) fn load_experiment_detail(experiment_id: &str) -> io::Result<Option<E
     }
 
     load_experiment_detail_from_path(&path).map(Some)
+}
+
+pub(crate) fn experiment_mutation_lock(experiment_id: &str) -> Arc<Mutex<()>> {
+    let registry = EXPERIMENT_MUTATION_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = registry.lock().unwrap_or_else(|error| error.into_inner());
+    guard
+        .entry(experiment_id.to_owned())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
 }
 
 pub(crate) fn save_experiment_detail(detail: &ExperimentDetail) -> io::Result<()> {
@@ -190,10 +203,11 @@ fn resolve_packed_reference(refs_root: &Path, reference: &str) -> io::Result<Str
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_repository_head_sha;
+    use super::{experiment_mutation_lock, resolve_repository_head_sha};
     use std::{
         fs,
         path::PathBuf,
+        sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -228,5 +242,15 @@ mod tests {
         let sha = resolve_repository_head_sha(&repo.path).expect("resolve sha");
 
         assert_eq!(sha, "abc123");
+    }
+
+    #[test]
+    fn reuses_the_same_mutation_lock_per_experiment() {
+        let first = experiment_mutation_lock("exp-1");
+        let second = experiment_mutation_lock("exp-1");
+        let other = experiment_mutation_lock("exp-2");
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(!Arc::ptr_eq(&first, &other));
     }
 }
