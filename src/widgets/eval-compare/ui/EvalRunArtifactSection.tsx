@@ -34,7 +34,9 @@ export function EvalRunArtifactSection({ run }: EvalRunArtifactSectionProps) {
               <span className="font-mono text-xs text-muted-foreground">{artifact.path}</span>
             )}
             {artifact.preview && (
-              <p className="line-clamp-3 text-sm text-foreground/90">{artifact.preview}</p>
+              <p className="line-clamp-3 text-sm text-foreground/90" title={artifact.preview}>
+                {artifact.preview}
+              </p>
             )}
           </div>
         ))
