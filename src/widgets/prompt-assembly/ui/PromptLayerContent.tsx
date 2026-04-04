@@ -14,7 +14,7 @@ export function PromptLayerContent({ label, preview, rawContent }: PromptLayerCo
       className="px-3 pb-2"
     >
       <LayerExpandButton label={label} content={displayText} />
-      <pre className="m-0 line-clamp-4 whitespace-pre-wrap break-words text-xs leading-6 font-mono text-muted-foreground">
+      <pre className="m-0 line-clamp-4 whitespace-pre-wrap break-words text-xs leading-6 font-mono text-muted-foreground" title={displayText}>
         {displayText}
       </pre>
     </div>
