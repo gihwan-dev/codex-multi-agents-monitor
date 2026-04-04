@@ -52,7 +52,15 @@ pub(crate) fn load_all_experiment_details() -> io::Result<Vec<ExperimentDetail>>
         let Some(path) = read_experiment_entry_path(entry)? else {
             continue;
         };
-        details.push(load_experiment_detail_from_path(&path)?);
+        match load_experiment_detail_from_path(&path) {
+            Ok(detail) => details.push(detail),
+            Err(error) => {
+                eprintln!(
+                    "failed to load experiment detail from {}: {error}",
+                    path.display()
+                );
+            }
+        }
     }
 
     Ok(details)

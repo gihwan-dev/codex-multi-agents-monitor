@@ -79,7 +79,7 @@ fn visit_directory_entries(
 
         if is_scannable_directory(&path) {
             collect_jsonl_files_recursive(&path, files, depth + 1)?;
-        } else if is_jsonl_path(&path) {
+        } else if is_jsonl_path(&path) && !path.is_symlink() {
             files.push(path);
         }
     }

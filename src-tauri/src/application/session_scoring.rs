@@ -477,7 +477,7 @@ fn build_profile_revisions(records: Vec<SessionScoreRecord>) -> Vec<ProfileRevis
 
     let mut revisions = by_revision
         .into_values()
-        .map(|records| build_profile_revision_summary(&records))
+        .filter_map(|records| build_profile_revision_summary(&records))
         .collect::<Vec<_>>();
 
     revisions.sort_by(|left, right| {
@@ -491,11 +491,8 @@ fn build_profile_revisions(records: Vec<SessionScoreRecord>) -> Vec<ProfileRevis
     revisions
 }
 
-fn build_profile_revision_summary(records: &[SessionScoreRecord]) -> ProfileRevision {
-    let first =
-        records.first().expect(
-            "build_profile_revision_summary requires at least one record",
-        );
+fn build_profile_revision_summary(records: &[SessionScoreRecord]) -> Option<ProfileRevision> {
+    let first = records.first()?;
     let label = first.profile_snapshot.label.clone();
     let revision = first.profile_snapshot.revision.clone();
     let score_sum = records
@@ -512,12 +509,12 @@ fn build_profile_revision_summary(records: &[SessionScoreRecord]) -> ProfileRevi
         .filter(|record| record.session_score.is_some())
         .count();
 
-    ProfileRevision {
+    Some(ProfileRevision {
         revision,
         label,
         session_count: records.len(),
         average_score: (scored_count > 0).then_some(score_sum / scored_count as f64),
-    }
+    })
 }
 
 fn compare_optional_f64(left: Option<f64>, right: Option<f64>) -> Ordering {
