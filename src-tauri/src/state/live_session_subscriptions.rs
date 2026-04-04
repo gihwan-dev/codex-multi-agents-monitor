@@ -45,7 +45,7 @@ impl LiveSessionSubscriptionRegistry {
             .remove(subscription_id);
 
         if let Some(cancel) = cancel {
-            cancel.store(true, Ordering::Relaxed);
+            cancel.store(true, Ordering::Release);
             true
         } else {
             false
