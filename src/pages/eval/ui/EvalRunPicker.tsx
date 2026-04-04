@@ -26,7 +26,9 @@ export function EvalRunPicker({
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value || null)}
       >
-        <option value="">Select run</option>
+        <option disabled value="">
+          Select run
+        </option>
         {runs.map((run) => (
           <option key={run.id} value={run.id} disabled={run.id === excludeId}>
             {run.candidateLabel} · {formatRelativeTime(run.startedAtMs)} ago
