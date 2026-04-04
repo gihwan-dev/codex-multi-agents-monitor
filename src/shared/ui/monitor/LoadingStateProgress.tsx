@@ -7,7 +7,7 @@ interface LoadingProgressProps {
 
 export function LoadingProgress({ compact, phaseLabel }: LoadingProgressProps) {
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2" role="progressbar" aria-label={phaseLabel}>
       <span className={cn("text-[0.7rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]", compact && "text-[0.66rem]")}>
         {phaseLabel}
       </span>

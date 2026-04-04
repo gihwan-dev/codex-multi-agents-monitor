@@ -50,11 +50,16 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
         aria-label="Search skills"
         placeholder="Search skills…"
         value={props.searchQuery}
+        disabled={props.scanLoading}
         onChange={(e) => props.onSearchChange(e.target.value)}
         className="h-8 w-48 text-sm"
       />
 
-      <Select value={String(props.scanRange)} onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}>
+      <Select
+        value={String(props.scanRange)}
+        disabled={props.scanLoading}
+        onValueChange={(v) => props.onScanRangeChange(Number(v) as ScanRangeValue)}
+      >
         <SelectTrigger className="h-8 w-32 text-sm" aria-label="Scan range">
           <SelectValue />
         </SelectTrigger>
@@ -65,7 +70,11 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
         </SelectContent>
       </Select>
 
-      <Select value={props.freshnessFilter} onValueChange={(v) => props.onFreshnessFilterChange(v as SkillFreshnessFilter)}>
+      <Select
+        value={props.freshnessFilter}
+        disabled={props.scanLoading}
+        onValueChange={(v) => props.onFreshnessFilterChange(v as SkillFreshnessFilter)}
+      >
         <SelectTrigger className="h-8 w-28 text-sm" aria-label="Freshness filter">
           <SelectValue />
         </SelectTrigger>
@@ -77,7 +86,11 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
         </SelectContent>
       </Select>
 
-      <Select value={props.sourceFilter} onValueChange={(v) => props.onSourceFilterChange(v as SkillSourceFilter)}>
+      <Select
+        value={props.sourceFilter}
+        disabled={props.scanLoading}
+        onValueChange={(v) => props.onSourceFilterChange(v as SkillSourceFilter)}
+      >
         <SelectTrigger className="h-8 w-28 text-sm" aria-label="Source filter">
           <SelectValue />
         </SelectTrigger>
@@ -89,7 +102,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
         </SelectContent>
       </Select>
 
-      <Select value={props.sortField} onValueChange={(v) => props.onSortChange(v as SkillSortField)}>
+      <Select value={props.sortField} disabled={props.scanLoading} onValueChange={(v) => props.onSortChange(v as SkillSortField)}>
         <SelectTrigger className="h-8 w-28 text-sm" aria-label="Sort by">
           <SelectValue />
         </SelectTrigger>
