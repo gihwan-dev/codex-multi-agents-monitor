@@ -9,7 +9,7 @@
 }
 
 .workspace {
-  --resize-handle-hit-width: 14px;
+  --resize-handle-hit-width: 32px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0;
