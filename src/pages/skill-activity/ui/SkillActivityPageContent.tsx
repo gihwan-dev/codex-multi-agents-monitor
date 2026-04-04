@@ -25,6 +25,11 @@ export function SkillActivityPageContent(view: SkillActivityPageView) {
         onScanRangeChange={view.setScanRange}
       />
       <SkillActivityLegend />
+      {view.scanError ? (
+        <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
+          {view.scanError}
+        </p>
+      ) : null}
       <SkillActivityGrid
         items={view.items}
         hasCatalog={view.hasCatalog}

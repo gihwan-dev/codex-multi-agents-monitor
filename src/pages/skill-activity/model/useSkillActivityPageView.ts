@@ -24,31 +24,35 @@ interface UseSkillActivityPageViewOptions {
 function useScanInvocations(scanRange: number) {
   const [scanResult, setScanResult] = useState<readonly SkillInvocationSummary[]>([]);
   const [scanLoading, setScanLoading] = useState(true);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setScanLoading(true);
+    setScanError(null);
     loadSkillActivityScan(scanRange)
       .then((result) => {
         if (!cancelled) {
           setScanResult(result);
+          setScanError(null);
           setScanLoading(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
+          setScanError("Failed to load skill activity scan");
           setScanLoading(false);
         }
       });
     return () => { cancelled = true; };
   }, [scanRange]);
 
-  return { scanResult, scanLoading };
+  return { scanResult, scanLoading, scanError };
 }
 
 export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) {
   const [state, dispatch] = useReducer(skillActivityReducer, INITIAL_SKILL_ACTIVITY_STATE);
-  const { scanResult, scanLoading } = useScanInvocations(state.scanRange);
+  const { scanResult, scanLoading, scanError } = useScanInvocations(state.scanRange);
 
   const allItems = useMemo(
     () => buildSkillActivityItems({ datasets: opts.datasets, activeRunId: opts.activeRunId, externalInvocations: scanResult }),
@@ -70,6 +74,7 @@ export function useSkillActivityPageView(opts: UseSkillActivityPageViewOptions) 
     hasCatalog,
     totalCount: allItems.length,
     scanLoading,
+    scanError,
     setSort: (field: SkillSortField) => dispatch({ type: "set-sort", field }),
     setFreshnessFilter: (filter: SkillFreshnessFilter) => dispatch({ type: "set-freshness-filter", filter }),
     setSourceFilter: (filter: SkillSourceFilter) => dispatch({ type: "set-source-filter", filter }),

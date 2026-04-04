@@ -29,7 +29,11 @@ export function GraphEventCardContent({
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
           {totalTokens > 0 ? (
-            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[0.62rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+            <span
+              aria-label={`${formatTokens(totalTokens)} tokens`}
+              role="img"
+              className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[0.62rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]"
+            >
               {formatTokens(totalTokens)}
             </span>
           ) : null}

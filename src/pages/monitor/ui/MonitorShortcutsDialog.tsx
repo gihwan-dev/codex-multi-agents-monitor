@@ -46,7 +46,6 @@ export function MonitorShortcutsDialog({
         </DialogHeader>
         <ul className="grid gap-2 pl-5 text-sm text-muted-foreground">
           <li>`/` or `F` search focus</li>
-          <li>`I` inspector toggle (not yet implemented)</li>
           <li>`.` follow live toggle</li>
           <li>`↑ ↓` event navigation</li>
           <li>`C` context drawer</li>
