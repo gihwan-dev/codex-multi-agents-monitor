@@ -1,5 +1,5 @@
 import type { GraphSceneModel, RunStatus } from "../../../entities/run";
-import { StatusGlyphMark } from "../../../shared/ui/monitor/StatusChipGlyph";
+import { StatusGlyphMark } from "../../../shared/ui/monitor";
 
 import { GRAPH_STATUS_COLORS } from "./graphCanvasStyles";
 

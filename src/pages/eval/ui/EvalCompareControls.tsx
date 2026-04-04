@@ -30,6 +30,7 @@ export function EvalCompareControls(props: EvalCompareControlsProps) {
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-2">
         <EvalRunPicker
+          disabled={!props.selectedCase}
           excludeId={props.candidateRunId}
           label="Baseline run"
           value={props.baselineRunId}
@@ -37,6 +38,7 @@ export function EvalCompareControls(props: EvalCompareControlsProps) {
           onChange={props.onSelectBaselineRun}
         />
         <EvalRunPicker
+          disabled={!props.selectedCase}
           excludeId={props.baselineRunId}
           label="Candidate run"
           value={props.candidateRunId}

@@ -75,12 +75,9 @@ function applyFailedSessionScoreState(
 }
 
 function finishSessionScoreLoad(
-  active: boolean,
   setLoading: SessionScoreStateSetters["setLoading"],
 ) {
-  if (active) {
-    setLoading(false);
-  }
+  setLoading(false);
 }
 
 export function watchSessionScoreLoader(
@@ -98,7 +95,7 @@ export function watchSessionScoreLoader(
   loadSessionScoreState(filePath)
     .then((nextState) => applyLoadedSessionScoreState(active, nextState, setters))
     .catch(() => applyFailedSessionScoreState(active, setters))
-    .finally(() => finishSessionScoreLoad(active, setters.setLoading));
+    .finally(() => finishSessionScoreLoad(setters.setLoading));
 
   return () => {
     active = false;

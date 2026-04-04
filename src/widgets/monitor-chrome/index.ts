@@ -2,4 +2,5 @@ export { MonitorContextObservabilityPanel } from "./ui/MonitorContextObservabili
 export { MonitorGraphToolbar } from "./ui/MonitorGraphToolbar";
 export { MonitorSummaryStrip } from "./ui/MonitorSummaryStrip";
 export { MonitorTopBar } from "./ui/MonitorTopBar";
+export { MonitorTopBarShell } from "./ui/MonitorTopBarShell";
 export { ResizeHandle } from "./ui/ResizeHandle";

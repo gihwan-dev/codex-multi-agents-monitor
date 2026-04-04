@@ -140,13 +140,13 @@ pub(crate) fn create_experiment(input: CreateExperimentInput) -> io::Result<Expe
     };
 
     save_experiment_detail(&detail)?;
-    record_event(RecordEventInput {
+    best_effort_audit(RecordEventInput {
         event_kind: "experimentCreated",
         experiment_id: &detail.experiment.id,
         case_id: None,
         run_id: None,
         preview: &detail.experiment.name,
-    })?;
+    });
     Ok(detail)
 }
 
@@ -169,13 +169,13 @@ pub(crate) fn update_experiment(
         detail.experiment.updated_at_ms = current_time_ms();
 
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "experimentUpdated",
             experiment_id: &detail.experiment.id,
             case_id: None,
             run_id: None,
             preview: &detail.experiment.name,
-        })?;
+        });
         Ok(Some(detail))
     })
 }
@@ -184,13 +184,13 @@ pub(crate) fn delete_experiment(experiment_id: &str) -> io::Result<bool> {
     with_experiment_mutation(experiment_id, || {
         let deleted = delete_experiment_detail(experiment_id)?;
         if deleted {
-            record_event(RecordEventInput {
+            best_effort_audit(RecordEventInput {
                 event_kind: "experimentDeleted",
                 experiment_id,
                 case_id: None,
                 run_id: None,
                 preview: experiment_id,
-            })?;
+            });
         }
         Ok(deleted)
     })
@@ -225,13 +225,13 @@ pub(crate) fn add_case(
         detail.experiment.updated_at_ms = now;
 
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "caseAdded",
             experiment_id,
             case_id: Some(&case.id),
             run_id: None,
             preview: &case.title,
-        })?;
+        });
         Ok(Some(detail))
     })
 }
@@ -256,13 +256,13 @@ pub(crate) fn update_case(
         detail.experiment.updated_at_ms = now;
 
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "caseUpdated",
             experiment_id,
             case_id: Some(case_id),
             run_id: None,
             preview: &case_title,
-        })?;
+        });
         Ok(Some(detail))
     })
 }
@@ -285,13 +285,13 @@ pub(crate) fn delete_case(
         detail.experiment.updated_at_ms = current_time_ms();
 
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "caseDeleted",
             experiment_id,
             case_id: Some(case_id),
             run_id: None,
             preview: case_id,
-        })?;
+        });
         Ok(Some(detail))
     })
 }
@@ -322,13 +322,13 @@ pub(crate) fn save_candidate_run(
         detail.experiment.updated_at_ms = now;
 
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "candidateRunSaved",
             experiment_id,
             case_id: Some(&case.id),
             run_id: Some(&run.id),
             preview: &run.candidate_label,
-        })?;
+        });
         Ok(Some(run))
     })
 }
@@ -360,13 +360,13 @@ pub(crate) fn run_grader(
 
         let updated_run = run.clone();
         save_experiment_detail(&detail)?;
-        record_event(RecordEventInput {
+        best_effort_audit(RecordEventInput {
             event_kind: "graderRan",
             experiment_id,
             case_id: Some(case_id),
             run_id: Some(run_id),
             preview: &updated_run.candidate_label,
-        })?;
+        });
         Ok(Some(updated_run))
     })
 }
@@ -972,6 +972,12 @@ fn with_experiment_mutation<T>(
     let lock = experiment_mutation_lock(experiment_id);
     let _guard = lock.lock().unwrap_or_else(|error| error.into_inner());
     mutate()
+}
+
+fn best_effort_audit(input: RecordEventInput<'_>) {
+    if let Err(err) = record_event(input) {
+        eprintln!("audit event failed: {err}");
+    }
 }
 
 fn record_event(input: RecordEventInput<'_>) -> io::Result<()> {

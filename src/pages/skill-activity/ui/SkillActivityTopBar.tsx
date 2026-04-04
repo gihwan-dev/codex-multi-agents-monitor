@@ -1,6 +1,6 @@
 import { ThemePreferenceSelect } from "../../../shared/theme";
 import { Button } from "../../../shared/ui/primitives/button";
-import { MonitorTopBarShell } from "../../../widgets/monitor-chrome/ui/MonitorTopBarShell";
+import { MonitorTopBarShell } from "../../../widgets/monitor-chrome";
 
 interface SkillActivityTopBarProps {
   onNavigateToMonitor: () => void;

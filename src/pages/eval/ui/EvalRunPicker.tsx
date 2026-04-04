@@ -2,6 +2,7 @@ import type { CandidateRun } from "../../../entities/eval";
 import { formatRelativeTime } from "../../../shared/lib/format";
 
 interface EvalRunPickerProps {
+  disabled?: boolean;
   excludeId?: string | null;
   label: string;
   onChange: (value: string | null) => void;
@@ -10,6 +11,7 @@ interface EvalRunPickerProps {
 }
 
 export function EvalRunPicker({
+  disabled = false,
   excludeId = null,
   label,
   onChange,
@@ -22,7 +24,8 @@ export function EvalRunPicker({
         {label}
       </span>
       <select
-        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] motion-reduce:transition-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={runs.length === 0 || disabled}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value || null)}
       >

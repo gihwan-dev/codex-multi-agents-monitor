@@ -6,7 +6,7 @@ import {
   SOURCE_COLORS,
   SOURCE_DESCRIPTIONS,
   SOURCE_LABELS,
-} from "../../../shared/ui/monitor/SkillStatusBadge.constants";
+} from "../../../shared/ui/monitor";
 
 interface LegendEntryProps {
   label: string;

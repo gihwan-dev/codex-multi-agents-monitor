@@ -141,7 +141,7 @@ fn path_is_allowed(case: &Case, artifact: &Artifact) -> bool {
     artifact.path.as_ref().is_some_and(|path| {
         case.allowed_path_prefixes
             .iter()
-            .any(|prefix| path.starts_with(prefix))
+            .any(|prefix| std::path::Path::new(path).starts_with(prefix))
     })
 }
 

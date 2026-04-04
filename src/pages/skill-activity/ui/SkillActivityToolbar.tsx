@@ -8,7 +8,7 @@ import {
 import {
   FRESHNESS_LABELS,
   SOURCE_LABELS,
-} from "../../../shared/ui/monitor/SkillStatusBadge.constants";
+} from "../../../shared/ui/monitor";
 import { Input } from "../../../shared/ui/primitives/input";
 import {
   Select,

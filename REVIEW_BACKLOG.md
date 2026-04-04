@@ -56,11 +56,35 @@
   - 파일: `src-tauri/src/application/skill_activity.rs:15-25`
   - 수정: unwrap_or_default() 또는 NotFound 허용
 
+- [ ] **SEC-4**: `load_archived_session_snapshot_from_disk`가 canonical_path 대신 original path로 파일 오픈 — 검증 우회 가능
+  - 파일: `src-tauri/src/application/archived_sessions.rs:56-83`
+  - 수정: prefix 검증 통과한 canonical_path로 파일 오픈
+
+- [ ] **PERF-4-be**: `load_snapshot_subagents` 폴백 시 sessions_root 전체 JSONL 무제한 스캔
+  - 파일: `src-tauri/src/application/session_relationships.rs:33-43`
+  - 수정: 최대 파일 수 상한(500) 추가 또는 hint-only 경로 강제
+
+- [ ] **PERF-5-be**: `load_archived_session_index` 동시 요청 시 index 이중 빌드
+  - 파일: `src-tauri/src/commands/sessions.rs:111-127`
+  - 수정: OnceCell/Mutex lazy-init 패턴으로 중복 빌드 방지
+
+- [ ] **CON-3-be**: `LiveSessionSubscriptionRegistry::stop`에서 handle 제거 후 cancel flag 설정 — 1회 추가 이벤트 가능
+  - 파일: `src-tauri/src/state/live_session_subscriptions.rs:39-53`
+  - 수정: lock 보유 중에 flag 설정, 또는 제거 전 flag 설정
+
+- [ ] **ERR-1-be**: `load_recent_session_index`, `scan_skill_activity` 커맨드가 모든 에러를 빈 결과로 삼킴
+  - 파일: `src-tauri/src/commands/sessions.rs:13-21,99-109`
+  - 수정: `Result<Vec<_>, String>` 반환으로 변경 (프론트엔드 에러 표시 연동 필요)
+
+- [ ] **ERR-2-be**: `load_archived/recent_session_snapshot` 커맨드가 IO 에러를 None으로 삼킴
+  - 파일: `src-tauri/src/commands/sessions.rs:24-31,82-91`
+  - 수정: `Result<Option<_>, String>` 반환으로 변경
+
 ## Code Quality (Frontend)
 
-- [ ] **RC-4**: `useGraphSelectionRevealNavigation` options 객체를 dependency로 사용 — Biome exhaustive deps 규칙과 충돌하여 decomposition 불가; shouldSkipSelectionReveal 가드로 실질 성능 영향 최소화
-  - 파일: `src/widgets/causal-graph/ui/useGraphSelectionRevealNavigation.ts:38-41`
-  - 수정: Biome 규칙 개선 대기 또는 caller 측 options memoization 검토
+- [ ] **RC-4**: `useGraphSelectionRevealNavigation` + `useGraphFollowLiveScroll` options 객체를 dependency로 사용 — 매 렌더마다 effect 재실행
+  - 파일: `src/widgets/causal-graph/ui/useGraphSelectionRevealNavigation.ts:38-41`, `useGraphFollowLiveScroll.ts:33-35`
+  - 수정: options bag 대신 개별 primitive/ref 의존성으로 분해, 또는 caller 측 memoization
 
 - [ ] **T-2**: session-log loaders에서 외부 JSON을 as 캐스트로 무검증 사용
   - 파일: `src/entities/session-log/api/loaders.ts:57`
@@ -101,6 +125,46 @@
 - [ ] **FE-19**: EvalCaseListPanel `detail.runs.filter()` O(cases × runs) per render
   - 파일: `src/pages/eval/ui/EvalCaseListPanel.tsx:76`
   - 수정: Map<caseId, number> 사전 계산
+
+- [ ] **FE-56**: `useGraphScrollTopState` `scheduleScrollTopUpdate` 함수가 매 렌더 재생성 — effect 체인 불필요 재실행
+  - 파일: `src/widgets/causal-graph/ui/useGraphScrollTopState.ts:16-27`
+  - 수정: useCallback 래핑 (refs만 사용하므로 deps 불필요)
+
+- [ ] **FE-57**: `beginResizeDrag` pointer 리스너가 unmount 시 정리되지 않음
+  - 파일: `src/widgets/monitor-chrome/ui/resizeHandleDrag.ts:33-51`
+  - 수정: cleanup 함수 반환 → 소비 컴포넌트 useEffect cleanup에서 호출
+
+- [ ] **FE-58**: `resolveActiveSessionFilePath` O(n) entries scan이 매 state 변경마다 실행
+  - 파일: `src/pages/monitor/model/monitorViewSelection.ts:22-25`
+  - 수정: traceId → filePath 역방향 Map 유지
+
+- [ ] **FE-59**: `buildGraphSceneEdgeBundleMap` eventsById Map이 매 scene derivation마다 재생성
+  - 파일: `src/entities/run/lib/graphSceneEdgeBundles.ts:129`
+  - 수정: dataset 인제스트 시 1회 계산 후 캐시, 또는 call site memoization
+
+- [ ] **FE-60**: `closeDrawer` requestAnimationFrame cleanup 누락
+  - 파일: `src/pages/monitor/ui/useMonitorPageView.ts:86-90`
+  - 수정: frameId 추적 → effect cleanup에서 cancelAnimationFrame
+
+## Accessibility
+
+- [ ] **A11Y-1**: `CardTitle`이 `<div>`로 렌더링 — heading 계층 없음, 스크린리더 heading 탐색 불가
+  - 파일: `src/shared/ui/primitives/card-title.tsx:5-11`
+  - 수정: `as` prop 또는 기본 `<h3>` 렌더링으로 변경
+
+- [ ] **A11Y-2**: `MonitorDrawer` 닫을 때 focus가 호출 원점으로 복귀하지 않음
+  - 파일: `src/widgets/monitor-drawer/ui/MonitorDrawer.tsx`
+  - 수정: onCloseAutoFocus 핸들러 추가 → trigger ref로 focus 복귀
+
+- [ ] **A11Y-3**: `CausalGraphCanvas`에 role/aria-label 없음 — 스크린리더에서 그래프 용도 불명
+  - 파일: `src/widgets/causal-graph/ui/CausalGraphCanvas.tsx:32-83`
+  - 수정: role="img" 또는 role="figure" + aria-label="Agent causal graph" 추가
+
+## Architecture
+
+- [ ] **ARCH-6**: `live_sessions.rs` application 레이어에 `tauri::Window<R>` 타입 침투 — 테스트 시 Tauri 런타임 필요
+  - 파일: `src-tauri/src/application/live_sessions.rs:17`
+  - 수정: emit 클로저를 주입받는 방식으로 리팩터링
 
 ## New UI/UX Issues
 
@@ -206,6 +270,13 @@
 
 ## Resolved
 
+- [x] **COR-9-be**: `path_is_allowed` str::starts_with → Path::starts_with 세그먼트 비교 (이번 세션)
+- [x] **ERR-3-be**: `record_event` best-effort 패턴 — audit 실패가 트랜잭션에 영향 주지 않음 (이번 세션)
+- [x] **FE-55**: `finishSessionScoreLoad` active 가드 제거 — 취소 후 stuck loading 해소 (이번 세션)
+- [x] **ARCH-3**: `MonitorTopBarShell` monitor-chrome/index.ts export 추가 + internal bypass 제거 (이번 세션)
+- [x] **ARCH-4**: `StatusGlyphMark` shared/ui/monitor/index.ts export 추가 + internal bypass 제거 (이번 세션)
+- [x] **ARCH-5**: `SkillStatusBadge.constants` shared/ui/monitor/index.ts export 추가 + internal bypass 제거 (이번 세션)
+- [x] **UX-42**: `EvalRunPicker` disabled prop + `EvalCompareControls` case 미선택 시 picker 비활성화 (이번 세션)
 - [x] **SEC-3-be**: `is_main_claude_session_path` symlink 가드 추가 (이번 세션)
 - [x] **COR-7-be**: `load_all_session_score_records` best-effort 패턴 — corrupt 파일 로깅 후 건너뛰기 (이번 세션)
 - [x] **COR-8-be**: `ClaudeUsageMetrics` 누적 토큰 추적 — last/total 구분 (이번 세션)
