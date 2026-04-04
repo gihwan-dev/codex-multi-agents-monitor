@@ -64,14 +64,7 @@
 
 ## New UI/UX Issues
 
-- [ ] **N1**: Resize handle hit target 14px — UX_SPEC 최소 32px 위반
-  - 파일: `src/app/styles/layout.css:1`, `src/widgets/monitor-chrome/ui/ResizeHandle.tsx:26`
-
-- [ ] **N2-ui**: Button size `xs`/`icon-xs` hit target 24px — 최소 32px 미달
-  - 파일: `src/shared/ui/primitives/button.tsx:25,29`
-
-- [ ] **N3-ui**: Checkbox hit target 16px — 최소 32px 미달
-  - 파일: `src/shared/ui/primitives/checkbox.tsx:15`
+(없음)
 
 ## Test Gaps
 
@@ -139,3 +132,8 @@
 - [x] **N8-ui**: TextViewerModal clipboard.writeText .catch 추가 (이번 세션)
 - [x] **N9-ui**: EvalRunArtifactSection, EvalRunStepSection "Showing X of Y" 절단 표시 (이번 세션)
 - [x] **N10-ui**: DatasetMonitorTopBarHeading 절단 텍스트에 title 속성 추가 (이번 세션)
+- [x] **N1**: Resize handle hit target 14px→32px (이번 세션 — layout.css --resize-handle-hit-width)
+- [x] **N2-ui**: Button xs/icon-xs hit target 24px→32px (이번 세션 — h-8/size-8)
+- [x] **N3-ui**: Checkbox hit target 16px→32px (이번 세션 — after pseudo-element)
+- [x] **N11-ui**: 6개 위젯 truncate 텍스트에 title 속성 추가 (이번 세션)
+- [x] **N12-ui**: Dialog/Select zoom 애니메이션 motion-reduce:animate-none (이번 세션)
