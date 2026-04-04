@@ -47,12 +47,12 @@ export function buildContextObservabilityBase(dataset: RunDataset): ContextObser
   return {
     laneSummaries: buildLaneSummaries(dataset, orderedEvents, pointsByEventId),
     maxContextWindowTokens: dataset.run.maxContextWindowTokens ?? null,
-    peakContextWindowTokens: Math.max(
-      ...timelinePoints.map((point) => point.contextWindowTokens),
+    peakContextWindowTokens: timelinePoints.reduce(
+      (max, point) => (point.contextWindowTokens > max ? point.contextWindowTokens : max),
       0,
     ),
-    peakCumulativeContextTokens: Math.max(
-      ...timelinePoints.map((point) => point.cumulativeContextTokens),
+    peakCumulativeContextTokens: timelinePoints.reduce(
+      (max, point) => (point.cumulativeContextTokens > max ? point.cumulativeContextTokens : max),
       0,
     ),
     timelinePoints,
