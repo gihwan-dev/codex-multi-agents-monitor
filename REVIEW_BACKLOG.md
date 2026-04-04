@@ -108,7 +108,33 @@
 
 ## New Code Quality Issues
 
-(없음)
+### Frontend
+
+- [ ] **FE-27**: `useWorkspaceIdentityOverrides` datasets 배열 참조 변경마다 IPC 재실행 — repoPaths 기반 의존성으로 변경 필요
+  - 파일: `src/features/workspace-identity/model/useWorkspaceIdentityOverrides.ts:10`
+  - 수정: datasets에서 repoPaths 문자열을 추출해 useEffect 의존성으로 사용
+
+- [ ] **FE-32**: `normalizerHelpers.ts` 하드코딩된 기본 모델명 "gpt-5" — 존재하지 않는 모델
+  - 파일: `src/features/import-run/normalizerHelpers.ts:144`
+  - 수정: "unknown" 또는 빈 문자열로 변경
+
+### Backend
+
+- [ ] **SEC-1**: `load_archived_session_snapshot_from_disk` 심볼릭 링크 우회 가능 — canonicalize 전 symlink 검사 누락
+  - 파일: `src-tauri/src/application/archived_sessions.rs:64-83`
+  - 수정: `fs::symlink_metadata`로 링크 여부 먼저 확인
+
+- [ ] **PERF-1-be**: `list_experiments` 전체 ExperimentDetail deserialization → ExperimentSummary만 필요
+  - 파일: `src-tauri/src/infrastructure/eval_storage.rs:44-59`
+  - 수정: 경량 파서 또는 별도 summary 저장
+
+- [ ] **PERF-2-be**: `build_codex_archived_index_entries` 개별 score record 파일 I/O — O(n) 파일 읽기
+  - 파일: `src-tauri/src/application/archived_sessions.rs:162-175`
+  - 수정: load_all_session_score_records()로 일괄 로드 후 Map 조회
+
+- [ ] **COR-4-be**: `resolve_claude_recent_snapshot_selection` 같은 파일 이중 파싱
+  - 파일: `src-tauri/src/application/recent_sessions.rs:443-461`
+  - 수정: 첫 파싱 결과(workspace_path)를 Selection variant에 포함
 
 ## Motion-Reduce Consistency
 
@@ -207,12 +233,23 @@
 - [x] **U-22**: PromptLayerContent line-clamp-4 displayText에 title 속성 추가 (이전 세션)
 - [x] **U-23**: WorkspaceGroupButton motion-reduce:transition-none + focus-visible ring 추가 (이전 세션)
 - [x] **FE-20**: sidebarTreeAssembly Math.max spread → reduce 교체 (이전 세션)
-- [x] **U-24**: ArchivedSessionGroup truncated session title에 title 속성 추가 (이번 세션)
-- [x] **U-25**: WorkspaceGroupButton dynamic aria-label 추가 (이번 세션)
-- [x] **U-26**: ArchivedWorkspaceGroupSection toggle dynamic aria-label 추가 (이번 세션)
-- [x] **U-27**: WorkspaceGroup collapsed body에 inert 속성 추가 (이번 세션)
-- [x] **U-28**: MonitorDrawer closed state에 inert 속성 추가 (이번 세션)
-- [x] **U-29**: EvalExperimentListPanel/EvalCaseListPanel error state 표시 추가 (이번 세션)
-- [x] **MR-primitives**: scroll-area, tabs-trigger, select-trigger, badge, input, textarea에 motion-reduce:transition-none 추가 (이번 세션)
-- [x] **MR-eval**: EvalCaseListPanel CaseRow, EvalExperimentListRow, EvalRunPicker에 motion-reduce:transition-none 추가 (이번 세션)
-- [x] **MR-widgets**: MonitorContextLaneSummarySection, ResizeHandle, CausalInspectorJumpButton, PromptLayerToggle에 motion-reduce:transition-none 추가 (이번 세션)
+- [x] **U-24**: ArchivedSessionGroup truncated session title에 title 속성 추가 (이전 세션)
+- [x] **U-25**: WorkspaceGroupButton dynamic aria-label 추가 (이전 세션)
+- [x] **U-26**: ArchivedWorkspaceGroupSection toggle dynamic aria-label 추가 (이전 세션)
+- [x] **U-27**: WorkspaceGroup collapsed body에 inert 속성 추가 (이전 세션)
+- [x] **U-28**: MonitorDrawer closed state에 inert 속성 추가 (이전 세션)
+- [x] **U-29**: EvalExperimentListPanel/EvalCaseListPanel error state 표시 추가 (이전 세션)
+- [x] **MR-primitives**: scroll-area, tabs-trigger, select-trigger, badge, input, textarea에 motion-reduce:transition-none 추가 (이전 세션)
+- [x] **MR-eval**: EvalCaseListPanel CaseRow, EvalExperimentListRow, EvalRunPicker에 motion-reduce:transition-none 추가 (이전 세션)
+- [x] **MR-widgets**: MonitorContextLaneSummarySection, ResizeHandle, CausalInspectorJumpButton, PromptLayerToggle에 motion-reduce:transition-none 추가 (이전 세션)
+- [x] **UX-30**: StatusChipGlyph + GraphStatusDot AC-004 shape 규칙 적용 — running=filled, waiting=hollow, blocked=slashed, failed=diamond, done=small (이번 세션)
+- [x] **UX-31**: EvalRunPicker placeholder option disabled 추가 (이번 세션)
+- [x] **UX-32**: EvalRunGradeSection badge truncate + title 추가 (이번 세션)
+- [x] **UX-33**: SkillActivityToolbar scanLoading 시 모든 Input/Select disabled (이번 세션)
+- [x] **UX-34**: SkillActivityLegend summary focus-visible ring 추가 (이번 세션)
+- [x] **UX-35**: LoadingProgress role="progressbar" + aria-label 추가 (이번 세션)
+- [x] **FE-22**: findLastHandoff O(E×H) → Map pre-computation O(E+H) (이번 세션)
+- [x] **FE-24**: Worker onmessageerror 핸들러 추가 — 메모리 누수 방지 (이번 세션)
+- [x] **COR-1-be**: read_tail_buffer UTF-8 경계 안전 처리 — from_utf8_lossy (이번 세션)
+- [x] **ARCH-1-be**: validate_head_reference Component::Normal 강화 + null byte 거부 (이번 세션)
+- [x] **COR-5-be**: load_recent_session_index 에러 로깅 — unwrap_or_default → match + eprintln (이번 세션)
