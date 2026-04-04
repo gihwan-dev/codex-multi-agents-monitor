@@ -1,5 +1,5 @@
 import { ClipboardCopyIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
   Dialog,
@@ -90,14 +90,18 @@ function MultiSectionBody({ sections }: { sections: TextViewerSection[] }) {
 
 function CopyButton({ content }: { content: string | null }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const handleCopy = useCallback(() => {
     if (!content) return;
     navigator.clipboard
       .writeText(content)
       .then(() => {
+        clearTimeout(timerRef.current);
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        timerRef.current = setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {});
   }, [content]);

@@ -66,6 +66,14 @@ struct ClaudeMessageContext<'a> {
     timestamp: &'a str,
 }
 
+#[derive(Clone, Copy)]
+struct ClaudeEntryFinalizationContext<'a> {
+    record: &'a Value,
+    record_type: &'a str,
+    timestamp: &'a str,
+    entries_added: bool,
+}
+
 #[derive(Clone, Copy, Default)]
 struct ClaudeUsageMetrics {
     input_tokens: u64,
@@ -333,31 +341,44 @@ impl ClaudeTranscriptCollector {
             self.record_usage(&usage);
         }
 
-        if self.entries.len() > before_len {
-            if should_append_task_complete(record_type, record) {
-                self.entries.push(SessionEntrySnapshot {
-                    timestamp: timestamp.clone(),
-                    entry_type: "task_complete".to_owned(),
-                    role: None,
-                    text: extract_record_text(record),
-                    function_name: None,
-                    function_call_id: None,
-                    function_arguments_preview: None,
-                });
-            }
-
-            if let Some(usage) = usage.filter(|usage| !usage.is_empty()) {
-                self.entries.push(build_usage_entry(
-                    &usage,
-                    &self.cumulative_usage,
-                    &timestamp,
-                ));
-            }
-        }
+        let finalization = ClaudeEntryFinalizationContext {
+            record,
+            record_type,
+            timestamp: &timestamp,
+            entries_added: self.entries.len() > before_len,
+        };
+        self.finalize_captured_entries(finalization, usage);
     }
 
     fn record_usage(&mut self, record: &ClaudeUsageMetrics) {
         self.cumulative_usage.accumulate(record);
+    }
+
+    fn finalize_captured_entries(
+        &mut self,
+        context: ClaudeEntryFinalizationContext<'_>,
+        usage: Option<ClaudeUsageMetrics>,
+    ) {
+        if !context.entries_added {
+            return;
+        }
+
+        if should_append_task_complete(context.record_type, context.record) {
+            self.entries.push(SessionEntrySnapshot {
+                timestamp: context.timestamp.to_owned(),
+                entry_type: "task_complete".to_owned(),
+                role: None,
+                text: extract_record_text(context.record),
+                function_name: None,
+                function_call_id: None,
+                function_arguments_preview: None,
+            });
+        }
+
+        if let Some(usage) = usage.filter(|usage| !usage.is_empty()) {
+            self.entries
+                .push(build_usage_entry(&usage, &self.cumulative_usage, context.timestamp));
+        }
     }
 
     fn capture_message_entries(
