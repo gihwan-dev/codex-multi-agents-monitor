@@ -60,7 +60,7 @@ function CaseListContent({
     );
   }
 
-  if (!detailLoading && error) {
+  if (error) {
     return (
       <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
         {error}
@@ -68,7 +68,7 @@ function CaseListContent({
     );
   }
 
-  if (!detailLoading && (detail?.cases.length ?? 0) === 0) {
+  if ((detail?.cases.length ?? 0) === 0) {
     return (
       <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">
         Add a case with `add_case` before comparing candidates.
