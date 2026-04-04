@@ -14,7 +14,7 @@ export function ScrollBar({
       orientation={orientation}
       className={cn(
         "flex touch-none p-px select-none",
-        "opacity-0 transition-opacity duration-150",
+        "opacity-0 transition-opacity motion-reduce:transition-none duration-150",
         "group-hover/scroll-area:opacity-100 group-focus-within/scroll-area:opacity-100",
         orientation === "vertical" && "h-full w-1.5 border-l border-l-transparent",
         orientation === "horizontal" && "h-1.5 flex-col border-t border-t-transparent",
@@ -24,7 +24,7 @@ export function ScrollBar({
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
-        className="relative flex-1 rounded-full bg-border/40 transition-colors hover:bg-border/60"
+        className="relative flex-1 rounded-full bg-border/40 transition-colors motion-reduce:transition-none hover:bg-border/60"
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   )
