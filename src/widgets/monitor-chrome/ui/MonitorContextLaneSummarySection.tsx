@@ -21,6 +21,7 @@ export function MonitorContextLaneSummarySection({
         type="button"
         data-slot="lane-summary-toggle"
         aria-expanded={laneSummaryOpen}
+        aria-label={laneSummaryOpen ? "Collapse lane summary" : "Expand lane summary"}
         className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-soft)] border border-transparent px-1 py-0.5 text-left transition-colors hover:border-white/8 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-active)]/45"
         onClick={toggleLaneSummary}
       >
