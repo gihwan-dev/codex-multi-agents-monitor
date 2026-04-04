@@ -1,5 +1,8 @@
 # Continuous Quality Loop
 
+이 프롬프트의 위치: `/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor/PROMPT.md`
+대상 프로젝트: `/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor`
+
 매번 새 세션에서 실행된다. 너는 오케스트레이터다.
 리뷰는 너가 하고, 수정은 Codex에 지시한다.
 
@@ -154,3 +157,5 @@ Codex에 보내는 모든 프롬프트는 아래 구조를 따른다:
 - 매 Phase 완료 후 반드시 전체 검증을 돌린다.
 - `REVIEW_BACKLOG.md`가 세션 간 유일한 상태 전달 수단이다.
 - 이 루프는 종료하지 않는다. Phase 4 완료 후 세션을 끝내면 외부 loop이 다시 시작한다.
+- **`PROMPT.md` 파일을 절대 수정하지 않는다.** 이 파일은 사용자가 직접 관리한다. 어떤 이유로든 이 파일이나 다른 프로젝트의 PROMPT.md를 읽거나 수정하지 마라.
+- **작업 범위는 이 프로젝트(`/Users/choegihwan/Documents/Projects/codex-multi-agent-monitor`)로 한정한다.** 다른 프로젝트 디렉토리의 파일을 읽거나 수정하지 마라.
