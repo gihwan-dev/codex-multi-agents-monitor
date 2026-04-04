@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, ScrollArea } from "../../../s
 
 interface EvalCaseListPanelProps {
   detail: ExperimentDetail | null;
+  error?: string | null;
   detailLoading: boolean;
   selectedCaseId: string | null;
   onSelect: (value: string | null) => void;
@@ -27,7 +28,7 @@ function CaseRow({
     <button
       type="button"
       aria-label={`Select case: ${item.title}`}
-      className={`grid gap-1 rounded-[var(--radius-soft)] border px-3 py-3 text-left transition-colors ${
+      className={`grid gap-1 rounded-[var(--radius-soft)] border px-3 py-3 text-left transition-colors motion-reduce:transition-none ${
         selected
           ? "border-[color:color-mix(in_srgb,var(--color-active)_50%,white_15%)] bg-[color:color-mix(in_srgb,var(--color-active)_12%,transparent)]"
           : "border-white/8 bg-black/10 hover:bg-white/[0.05]"
@@ -45,6 +46,7 @@ function CaseRow({
 
 function CaseListContent({
   detail,
+  error,
   detailLoading,
   onSelect,
   selectedCaseId,
@@ -55,6 +57,14 @@ function CaseListContent({
         <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
         <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
       </div>
+    );
+  }
+
+  if (!detailLoading && error) {
+    return (
+      <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
+        {error}
+      </p>
     );
   }
 

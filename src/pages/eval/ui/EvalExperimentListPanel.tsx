@@ -9,6 +9,7 @@ import {
 import { EvalExperimentListRow } from "./EvalExperimentListRow";
 
 interface EvalExperimentListPanelProps {
+  error?: string | null;
   experiments: ExperimentSummary[];
   loading: boolean;
   selectedExperimentId: string | null;
@@ -34,6 +35,7 @@ const ExperimentListEmptyState = () => {
 };
 
 export function EvalExperimentListPanel({
+  error,
   experiments,
   loading,
   selectedExperimentId,
@@ -55,6 +57,11 @@ export function EvalExperimentListPanel({
         <ScrollArea className="h-[calc(100vh-16rem)] pr-2 xl:h-full">
           <div className="grid gap-2">
             {loading && isEmpty && <ExperimentListSkeleton />}
+            {!loading && error && (
+              <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
+                {error}
+              </p>
+            )}
             {experiments.map((item) => (
               <EvalExperimentListRow
                 key={item.experiment.id}
@@ -63,7 +70,7 @@ export function EvalExperimentListPanel({
                 onSelect={onSelect}
               />
             ))}
-            {!loading && isEmpty && <ExperimentListEmptyState />}
+            {!loading && !error && isEmpty && <ExperimentListEmptyState />}
           </div>
         </ScrollArea>
       </CardContent>
