@@ -130,7 +130,10 @@ export function buildWorkspaceTreeFromSources(options: {
   const { sources, search, scoreSort, scoreFilter } = options;
   const referenceTimestamp =
     sources.length > 0
-      ? Math.max(...sources.map((source) => source.row.lastActivityTs))
+      ? sources.reduce(
+          (max, source) => Math.max(max, source.row.lastActivityTs),
+          0,
+        )
       : 0;
   const normalizedSearch = search.trim().toLowerCase();
   const workspaceMap = new Map<string, WorkspaceTreeItem>();
