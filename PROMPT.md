@@ -29,13 +29,27 @@ cd src-tauri && cargo test
 
 ## Phase 2: UI/UX 리뷰 — 사용자 경험이 좋은가?
 
-전체 프론트엔드 코드를 리뷰한다. 관점:
+**이 앱은 멀티 에이전트 런 디버깅 워크벤치다.** 사용자는 개발자이며, 에이전트 실행을 추적·분석한다.
+리뷰할 때 이 도메인 맥락을 반드시 고려한다:
 
-- **상태 처리**: loading/empty/error 상태 누락
+- 이 앱은 관측 콘솔이다. 화려한 UI가 아니라 **정보 밀도와 스캔 효율**이 핵심이다.
+- 사용자는 "이상한 run을 빠르게 찾고, 원인을 파악"하는 흐름으로 움직인다.
+- 대량 이벤트(수천 개)를 다루므로 성능과 가상화가 중요하다.
+
+리뷰 관점:
+
+- **도메인 적합성**: 이 앱의 사용 맥락에서 실제로 문제가 되는가? 일반론적 UX 개선은 하지 않는다.
+- **상태 처리**: loading/empty/error 상태 누락 (실제 사용 시나리오에서 발생하는 것만)
 - **접근성**: aria-label, keyboard nav, focus indicator, reduced-motion
 - **레이아웃**: overflow, responsive, 정렬 불일치
-- **인터랙션**: 빈 선택, 중복 선택, invalid state 허용
 - **UX 계약**: `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md`와 대조
+
+**UI/UX 절대 금지 패턴:**
+- 과한 카드 UI, 장식적 border/shadow/radius 남용
+- 정보 밀도를 낮추는 과도한 padding/spacing
+- 관측 콘솔 톤에 맞지 않는 마케팅 스타일 UI
+- 불필요한 모달/토스트/알림 추가
+- 기존 compact한 레이아웃을 깨는 변경
 
 발견된 이슈를 **파일 겹침 기준으로 그룹핑**한다.
 겹치지 않는 그룹은 Codex에 **병렬 지시**한다:
@@ -59,6 +73,11 @@ node "...codex-companion.mjs" task '<그룹2 프롬프트>' --write --cwd .workt
 
 ## Phase 3: 코드 품질 리뷰 — 견고한가?
 
+**이 앱의 도메인 특성을 고려한다:**
+- Tauri 2 데스크톱 앱 — 로컬 파일시스템 접근, IPC, SQLite
+- 대량 JSONL 파싱 — 수천 개 이벤트, 스트리밍 처리
+- 실시간 세션 감시 — file watcher, polling, live subscription
+
 전체 코드베이스를 리뷰한다. 관점:
 
 - **보안**: path traversal, 인젝션, 민감정보 노출, 샌드박스 우회
@@ -79,6 +98,11 @@ Phase 2와 동일하게 그룹핑 → Codex 병렬 수정 → 머지 → 검증.
 4. worktree 정리: `git worktree prune && rm -rf .worktrees/fix-*`
 
 ## Codex 프롬프트 규칙
+
+**UI/UX 수정을 지시할 때는 반드시 아래를 포함한다:**
+- `~/.codex/skills/ui-ux-pro-max/SKILL.md`를 참조하라는 지시
+- 앱 특성 명시: "멀티 에이전트 런 디버깅 관측 콘솔. 정보 밀도 우선. 과한 카드 UI, 장식적 스타일링, 마케팅 톤 절대 금지."
+- `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md` 참조 지시
 
 Codex에 보내는 모든 프롬프트는 아래 구조를 따른다:
 
