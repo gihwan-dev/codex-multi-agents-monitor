@@ -68,18 +68,12 @@ function CaseListContent({
     );
   }
 
-  if (detail === null) {
+  if (!detail || detail.cases.length === 0) {
     return (
       <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">
-        Select an experiment to view its cases.
-      </p>
-    );
-  }
-
-  if (detail.cases.length === 0) {
-    return (
-      <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">
-        Add a case with `add_case` before comparing candidates.
+        {!detail
+          ? "Select an experiment to view its cases."
+          : "Add a case with `add_case` before comparing candidates."}
       </p>
     );
   }
