@@ -62,7 +62,9 @@ export function CausalGraphLaneStrip({
             }}
           />
           <div className="relative flex min-w-0 flex-1 items-center justify-center gap-2">
-            <strong className="truncate">{lane.name}</strong>
+            <strong className="truncate" title={lane.name}>
+              {lane.name}
+            </strong>
             {lane.role !== "session" && lane.role !== "user" ? (
               <span className="rounded bg-[color:var(--color-graph-lane-role-bg)] px-1.5 py-0.5 text-[0.68rem] font-medium text-[var(--color-text-muted)]">
                 {lane.role}

@@ -23,7 +23,9 @@ export function MonitorContextLaneSummaryCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <strong className="block truncate text-sm text-foreground">{lane.laneName}</strong>
+          <strong className="block truncate text-sm text-foreground" title={lane.laneName}>
+            {lane.laneName}
+          </strong>
           <span className="text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
             {lane.laneKind} · {lane.laneRole}
           </span>
