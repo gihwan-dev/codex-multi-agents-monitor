@@ -104,7 +104,11 @@
 
 ## New UI/UX Issues
 
-(없음)
+- [x] **UX-36**: SessionScoreEditorDialog hardcoded dark-only `bg-[rgb(14_18_28)]` → `--gradient-dialog-surface` 토큰 사용 (이번 세션)
+
+- [ ] **UX-37**: 59개 파일에서 `border-white/N`, `bg-white/[X]`, `bg-black/N` 패턴 사용 — light theme에서 보이지 않는 경계/배경
+  - 범위: eval, widget, shared 전반
+  - 수정: 별도 테마 세션에서 `border-[color:var(--color-chrome-border)]` 등으로 일괄 변환
 
 ## New Code Quality Issues
 
@@ -117,6 +121,22 @@
 - [ ] **FE-32**: `normalizerHelpers.ts` 하드코딩된 기본 모델명 "gpt-5" — 존재하지 않는 모델
   - 파일: `src/features/import-run/normalizerHelpers.ts:144`
   - 수정: "unknown" 또는 빈 문자열로 변경
+
+- [ ] **FE-35**: `buildDatasetFromSessionLogAsync` Worker가 요청 취소 시 terminate 안 됨 — 대형 JSONL에서 CPU 낭비
+  - 파일: `src/entities/session-log/model/datasetBuilderAsync.ts:12-33`
+  - 수정: cancel/AbortSignal 파라미터 추가하여 Worker.terminate() 호출
+
+- [ ] **FE-41**: `promptAssembly.ts` layerType을 `as PromptLayerType` 무검증 캐스트 — 미지 타입 통과 가능
+  - 파일: `src/entities/session-log/model/promptAssembly.ts:26`
+  - 수정: 유효값 검증 후 fallback
+
+- [ ] **FE-42**: `useMonitorDrawerPresence`/`workspaceTreeMotion` — `mounted`가 deps에 포함되어 close 애니메이션 중 불필요한 effect 재실행
+  - 파일: `src/widgets/monitor-drawer/ui/useMonitorDrawerPresence.ts:58`, `src/widgets/workspace-run-tree/ui/workspaceTreeMotion.ts:55`
+  - 수정: useRef로 mounted 읽기, deps에서 제거
+
+- [ ] **FE-52**: `workspaceIdentityResolver` 모듈 싱글턴 캐시가 영구 — workspace 이름 변경 시 stale
+  - 파일: `src/features/workspace-identity/lib/workspaceIdentityResolver.ts:59`
+  - 수정: TTL 또는 dataset-version 기반 무효화
 
 ### Backend
 
@@ -136,6 +156,14 @@
   - 파일: `src-tauri/src/application/recent_sessions.rs:443-461`
   - 수정: 첫 파싱 결과(workspace_path)를 Selection variant에 포함
 
+- [ ] **COR-3-be**: `current_time_ms`가 시스템 시계 오류 시 0 반환 — 1970년 타임스탬프 무경고 삽입
+  - 파일: `src-tauri/src/application/eval_service.rs:965`, `eval_grader.rs:276`
+  - 수정: eprintln 경고 추가
+
+- [ ] **N-6-be**: `scan_skill_invocations_in_file`에서 mid-read I/O 에러 시 무경고 중단
+  - 파일: `src-tauri/src/application/skill_activity.rs:99`
+  - 수정: map_while(Result::ok) → match + eprintln + break
+
 ## Motion-Reduce Consistency
 
 (이번 세션에서 전수 점검 완료 — 잔여 위반 없음)
@@ -152,6 +180,12 @@
 
 ## Resolved
 
+- [x] **UX-36**: SessionScoreEditorDialog dark-only bg → gradient-dialog-surface 토큰 (이번 세션)
+- [x] **SEC-2**: symlink .jsonl 파일 스캔 우회 차단 — `!path.is_symlink()` 가드 추가 (이번 세션)
+- [x] **COR-1**: `build_profile_revision_summary` expect 패닉 → Option ��환 (이번 세션)
+- [x] **COR-2**: `load_all_experiment_details` 단일 파일 오류 시 전체 중단 → 로깅 후 건너뛰기 (이번 세션)
+- [x] **FE-38**: `collectAnomalyCandidates` O(n log n)×2 → O(n) 단일 순회 (이번 세션)
+- [x] **FE-39**: `findLastHandoff` 렌더당 2회 호출 → 1회로 통합 (이번 세션)
 - [x] **M1**: Monitor 뷰 전환 시 keyboard listener + live IPC 활성 (이번 세션 — isActive prop threading)
 - [x] **M2**: Archived score 저장 후 캐시 stale — badge 갱신 안 됨 (commit 6a2d78d)
 - [x] **M3**: Eval mutation 동시성 — lock 없이 데이터 유실 가능 (commit ad638c2)
