@@ -23,6 +23,10 @@ export async function buildDatasetFromSessionLogAsync(
       worker.terminate();
       reject(event.error ?? new Error("Dataset hydration worker failed."));
     };
+    worker.onmessageerror = () => {
+      worker.terminate();
+      reject(new Error("Dataset hydration worker: message deserialization failed."));
+    };
 
     worker.postMessage(snapshot);
   });

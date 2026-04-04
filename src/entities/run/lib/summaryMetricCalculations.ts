@@ -100,15 +100,15 @@ function calculateDerivedDuration(events: EventRecord[]) {
 }
 
 export function findLastHandoff(dataset: RunDataset, orderedEvents: EventRecord[]) {
+  const tsById = new Map(orderedEvents.map((event) => [event.eventId, event.startTs]));
+
   return (
     [...dataset.edges]
       .filter((edge) => edge.edgeType === "handoff")
       .sort((left, right) => {
-        const sourceA =
-          orderedEvents.find((event) => event.eventId === left.sourceEventId)?.startTs ?? 0;
-        const sourceB =
-          orderedEvents.find((event) => event.eventId === right.sourceEventId)?.startTs ?? 0;
-        return sourceB - sourceA;
+        return (
+          (tsById.get(right.sourceEventId) ?? 0) - (tsById.get(left.sourceEventId) ?? 0)
+        );
       })[0] ?? null
   );
 }
