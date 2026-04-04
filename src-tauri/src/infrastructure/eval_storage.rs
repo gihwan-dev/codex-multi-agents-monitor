@@ -97,8 +97,9 @@ pub(crate) fn delete_experiment_detail(experiment_id: &str) -> io::Result<bool> 
 }
 
 pub(crate) fn append_audit_event(event: &EvalAuditEvent) -> io::Result<()> {
-    fs::create_dir_all(resolve_storage_root()?)?;
-    let event_path = resolve_storage_root()?.join(EVENTS_FILE_NAME);
+    let storage_root = resolve_storage_root()?;
+    fs::create_dir_all(&storage_root)?;
+    let event_path = storage_root.join(EVENTS_FILE_NAME);
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -125,6 +126,12 @@ pub(crate) fn resolve_repository_head_sha(repo_path: &Path) -> io::Result<String
     let head_contents = read_first_line(&git_dir.join("HEAD"))?;
 
     if let Some(reference) = head_contents.strip_prefix("ref:").map(str::trim) {
+        if !reference.starts_with("refs/") || reference.contains("..") {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HEAD contains an invalid reference path",
+            ));
+        }
         let ref_path = refs_root.join(reference);
         if ref_path.exists() {
             return read_first_line(&ref_path);
