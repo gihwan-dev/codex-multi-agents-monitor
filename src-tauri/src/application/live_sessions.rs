@@ -203,7 +203,7 @@ where
         poll_interval,
     } = watch_loop;
 
-    while !cancel.load(std::sync::atomic::Ordering::Relaxed) {
+    while !cancel.load(std::sync::atomic::Ordering::Acquire) {
         if let Some(update) = watch.poll() {
             if !emit(update) {
                 break;
@@ -409,7 +409,7 @@ mod tests {
         });
 
         thread::sleep(Duration::from_millis(30));
-        cancel.store(true, Ordering::Relaxed);
+        cancel.store(true, Ordering::Release);
         handle.join().expect("watch thread should join");
 
         assert!(
