@@ -20,7 +20,7 @@ export function EvalCompareWorkspace(props: EvalCompareWorkspaceProps) {
     <div className="grid min-h-0 gap-4">
       <EvalCompareControls {...props} />
       {props.error && (
-        <Card className="border-destructive/40 bg-destructive/10">
+        <Card role="alert" className="border-destructive/40 bg-destructive/10">
           <CardContent className="py-4 text-sm text-foreground">{props.error}</CardContent>
         </Card>
       )}
