@@ -33,7 +33,9 @@ function ArchiveSessionItem({
       title={session.workspacePath}
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 truncate">{deriveArchiveItemTitle(session)}</span>
+        <span className="min-w-0 flex-1 truncate" title={deriveArchiveItemTitle(session)}>
+          {deriveArchiveItemTitle(session)}
+        </span>
         <div className="flex shrink-0 items-center gap-1.5">
           {providerBadge ? (
             <span
@@ -93,6 +95,7 @@ export function ArchivedWorkspaceGroupSection({
         className="flex min-h-7 min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-[0.78rem] text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45"
         onClick={onToggle}
         aria-expanded={expanded}
+        aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
       >
         <ChevronRight
           className={cn("size-3 transition-transform motion-reduce:transition-none", expanded && "rotate-90")}
