@@ -59,9 +59,10 @@ pub(crate) fn extract_prompt_layers(entry: &Value, layers: &mut Vec<PromptAssemb
 
 pub(crate) fn truncate_utf8_safe(text: &str, max_chars: usize) -> String {
     let trimmed = text.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_owned();
+    let truncated = trimmed.chars().take(max_chars).collect::<String>();
+    if truncated.len() < trimmed.len() {
+        truncated
+    } else {
+        trimmed.to_owned()
     }
-
-    trimmed.chars().take(max_chars).collect()
 }
