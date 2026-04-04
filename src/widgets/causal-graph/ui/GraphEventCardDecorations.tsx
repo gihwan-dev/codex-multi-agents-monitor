@@ -1,4 +1,5 @@
 import type { GraphSceneModel, RunStatus } from "../../../entities/run";
+import { StatusGlyphMark } from "../../../shared/ui/monitor/StatusChipGlyph";
 
 import { GRAPH_STATUS_COLORS } from "./graphCanvasStyles";
 
@@ -14,12 +15,11 @@ export function resolveEventCardClasses(
 
 export function GraphStatusDot({ status }: { status: RunStatus }) {
   return (
-    <span
-      aria-hidden="true"
-      data-slot="graph-status-dot"
-      data-status={status}
-      className="mt-1 inline-flex size-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: GRAPH_STATUS_COLORS[status] }}
+    <StatusGlyphMark
+      status={status}
+      tone={GRAPH_STATUS_COLORS[status]}
+      className="mt-1"
+      slot="graph-status-dot"
     />
   );
 }
