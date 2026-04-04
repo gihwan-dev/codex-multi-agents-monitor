@@ -810,8 +810,9 @@ fn read_tail_buffer(session_file: &Path, max_bytes: u64) -> io::Result<(String, 
     let offset = file_len.saturating_sub(max_bytes);
     file.seek(SeekFrom::Start(offset))?;
 
-    let mut buffer = String::new();
-    file.read_to_string(&mut buffer)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+    let buffer = String::from_utf8_lossy(&buffer).into_owned();
 
     Ok((buffer, offset > 0))
 }
@@ -840,7 +841,7 @@ fn parse_tail_entries(buffer: &str, skip_first_line: bool) -> Vec<SessionEntrySn
 mod tests {
     use super::{
         parse_archived_index_entry, parse_archived_session_snapshot, parse_live_session_snapshot,
-        read_subagent_snapshot,
+        read_subagent_snapshot, read_tail_entry_snapshots,
     };
     use crate::test_support::TempDir;
     use std::fs;
@@ -976,6 +977,23 @@ mod tests {
             snapshot.entries[1].text.as_deref(),
             Some("Late child marker works.")
         );
+    }
+
+    #[test]
+    fn reads_tail_entries_when_offset_splits_a_utf8_sequence() {
+        let temp_dir = TempDir::new("tail-buffer-utf8");
+        let session_file = temp_dir.path.join("tail.jsonl");
+        let tail_line = r#"{"timestamp":"2026-03-20T00:00:02.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Tail entry survives"}]}}"#;
+        let mut raw = Vec::new();
+        raw.extend_from_slice("😀\n".as_bytes());
+        raw.extend_from_slice(tail_line.as_bytes());
+        fs::write(&session_file, raw).expect("session file should be written");
+
+        let entries = read_tail_entry_snapshots(&session_file, tail_line.len() as u64 + 2, 10)
+            .expect("tail entries should load");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].text.as_deref(), Some("Tail entry survives"));
     }
 
     #[test]
