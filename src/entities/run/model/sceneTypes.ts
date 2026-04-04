@@ -121,6 +121,8 @@ export interface GraphSceneEdgeBundle {
   targetEventId: string;
   sourceLaneId: string;
   targetLaneId: string;
+  sourceDisplayName: string;
+  targetDisplayName: string;
   edgeType: EdgeType;
   label: string;
   bundleCount: number;

@@ -9,6 +9,28 @@ interface InteractiveGraphRouteAnchorProps {
   route: EdgeRouteLayout;
 }
 
+function formatEdgeTypeLabel(edgeType: GraphSceneEdgeBundle["edgeType"]) {
+  switch (edgeType) {
+    case "handoff":
+      return "Handoff";
+    case "spawn":
+      return "Spawn";
+    case "transfer":
+      return "Transfer";
+    case "merge":
+      return "Merge";
+  }
+}
+
+function buildEdgeAccessibleName(bundle: GraphSceneEdgeBundle) {
+  const relationshipLabel = `${formatEdgeTypeLabel(bundle.edgeType)} from ${bundle.sourceDisplayName} to ${bundle.targetDisplayName}`;
+  if (bundle.bundleCount === 1) {
+    return relationshipLabel;
+  }
+
+  return `${relationshipLabel} (${bundle.bundleCount} edges)`;
+}
+
 function handleEdgeKeyDown(
   event: KeyboardEvent<HTMLAnchorElement>,
   edgeId: string,
@@ -27,17 +49,19 @@ export function InteractiveGraphRouteAnchor({
   onSelectEdge,
   route,
 }: InteractiveGraphRouteAnchorProps) {
+  const accessibleName = buildEdgeAccessibleName(bundle);
+
   return (
     <a
       href={`#${bundle.primaryEdgeId}`}
-      aria-label={`${bundle.edgeType} edge between ${bundle.sourceEventId} and ${bundle.targetEventId}`}
+      aria-label={accessibleName}
       onClick={(event) => {
         event.preventDefault();
         onSelectEdge(bundle.primaryEdgeId);
       }}
       onKeyDown={(event) => handleEdgeKeyDown(event, bundle.primaryEdgeId, onSelectEdge)}
     >
-      <title>{`${bundle.edgeType}: ${bundle.label}`}</title>
+      <title>{accessibleName}</title>
       <path
         data-slot="graph-route-hitbox"
         data-edge-type={bundle.edgeType}

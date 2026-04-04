@@ -1,10 +1,6 @@
-import type {
-  EventRecord,
-  GraphSceneEdgeBundle,
-  GraphSceneModel,
-  RunDataset,
-  SelectionState,
-} from "../model/types.js";
+import type { EventRecord, GraphSceneEdgeBundle, GraphSceneModel, RunDataset, SelectionState } from "../model/types.js";
+import { resolveEdgeBundleEndpoints } from "./graphEdgeBundleEndpoints.js";
+import { buildEdgeEndpointDisplayName } from "./graphEdgeDisplayName.js";
 
 interface GraphSceneEdgeBundleArgs {
   dataset: RunDataset;
@@ -24,6 +20,14 @@ type GraphSceneEdgeBundleSharedArgs = Pick<
   | "hasMultiAgentTopology"
   | "visibleRowsByEventId"
 >;
+
+interface AppendDatasetEdgeBundleArgs {
+  edgeBundleMap: Map<string, GraphSceneEdgeBundle>;
+  eventsById: Map<string, EventRecord>;
+  laneNameById: Map<string, string>;
+  edge: RunDataset["edges"][number];
+  shared: GraphSceneEdgeBundleSharedArgs;
+}
 
 function buildEdgeBundleKey(
   edge: RunDataset["edges"][number],
@@ -57,6 +61,8 @@ function createEdgeBundle(
     edge: RunDataset["edges"][number];
     sourceEvent: EventRecord;
     targetEvent: EventRecord;
+    sourceLaneName: string;
+    targetLaneName: string;
     selection: SelectionState | null;
     selectionPathEventIds: Set<string>;
     selectionPathEdgeIds: Set<string>;
@@ -71,6 +77,8 @@ function createEdgeBundle(
     targetEventId: args.edge.targetEventId,
     sourceLaneId: args.sourceEvent.laneId,
     targetLaneId: args.targetEvent.laneId,
+    sourceDisplayName: buildEdgeEndpointDisplayName(args.sourceEvent.title, args.sourceLaneName),
+    targetDisplayName: buildEdgeEndpointDisplayName(args.targetEvent.title, args.targetLaneName),
     edgeType: args.edge.edgeType,
     label: args.edge.payloadPreview ?? args.edge.edgeType,
     bundleCount: 1,
@@ -127,11 +135,13 @@ function buildGraphSceneEdgeBundleMap({
 }: GraphSceneEdgeBundleArgs) {
   const edgeBundleMap = new Map<string, GraphSceneEdgeBundle>();
   const eventsById = new Map(dataset.events.map((event) => [event.eventId, event]));
+  const laneNameById = new Map(dataset.lanes.map((lane) => [lane.laneId, lane.name]));
 
   for (const edge of dataset.edges) {
     appendDatasetEdgeBundle({
       edgeBundleMap,
       eventsById,
+      laneNameById,
       edge,
       shared: args,
     });
@@ -149,25 +159,17 @@ function buildVisibleLaneEdgeBundles(
     .filter((bundle) => laneIds.has(bundle.sourceLaneId) && laneIds.has(bundle.targetLaneId));
 }
 
-function appendDatasetEdgeBundle(
-  args: {
-    edgeBundleMap: Map<string, GraphSceneEdgeBundle>;
-    eventsById: Map<string, EventRecord>;
-    edge: RunDataset["edges"][number];
-    shared: GraphSceneEdgeBundleSharedArgs;
-  },
-) {
-  const sourceEvent = args.eventsById.get(args.edge.sourceEventId);
-  const targetEvent = args.eventsById.get(args.edge.targetEventId);
-  if (!sourceEvent || !targetEvent) {
+function appendDatasetEdgeBundle(args: AppendDatasetEdgeBundleArgs) {
+  const endpoints = resolveEdgeBundleEndpoints(args);
+  if (!endpoints) {
     return;
   }
 
   if (
     shouldSkipEdge({
       edge: args.edge,
-      sourceEvent,
-      targetEvent,
+      sourceEvent: endpoints.sourceEvent,
+      targetEvent: endpoints.targetEvent,
       visibleRowsByEventId: args.shared.visibleRowsByEventId,
     })
   ) {
@@ -176,8 +178,7 @@ function appendDatasetEdgeBundle(
 
   appendEdgeBundle(args.edgeBundleMap, {
     edge: args.edge,
-    sourceEvent,
-    targetEvent,
+    ...endpoints,
     selection: args.shared.selection,
     selectionPathEventIds: args.shared.selectionPathEventIds,
     selectionPathEdgeIds: args.shared.selectionPathEdgeIds,

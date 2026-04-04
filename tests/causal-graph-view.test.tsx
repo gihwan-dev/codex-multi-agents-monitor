@@ -296,6 +296,39 @@ describe("CausalGraphView edge rendering", () => {
     expect(hitboxes.length).toBe(routeElements.length);
   });
 
+  it("uses human-readable aria labels for interactive edge hit targets", async () => {
+    const dataset = requireDataset("trace-fix-002");
+    const scene = buildGraphSceneModel(dataset, null);
+
+    await act(async () => {
+      root.render(
+        createElement(CausalGraphView, {
+          scene,
+          onSelect: () => undefined,
+          selectionNavigationRequestId: 0,
+          selectionNavigationRunId: null,
+          runTraceId: dataset.run.traceId,
+          selectionRevealTarget: null,
+          followLive: false,
+          liveMode: dataset.run.liveMode,
+          onPauseFollowLive: () => undefined,
+          viewportHeightOverride: CLIENT_HEIGHT,
+          laneHeaderHeightOverride: LANE_HEADER_HEIGHT,
+        }),
+      );
+    });
+
+    const interactiveLinks = [...container.querySelectorAll("a[aria-label]")];
+    expect(interactiveLinks.length).toBeGreaterThan(0);
+
+    const handoffLink = interactiveLinks.find((element) =>
+      element.getAttribute("aria-label")?.startsWith("Handoff from "),
+    );
+    expect(handoffLink).toBeDefined();
+    expect(handoffLink?.getAttribute("aria-label")).not.toMatch(/evt_/);
+    expect(handoffLink?.getAttribute("aria-label")).toMatch(/\(.+\)/);
+  });
+
   it("positions event cards and lane guides from the layout x coordinates", async () => {
     const dataset = requireDataset("trace-fix-002");
     const scene = buildGraphSceneModel(dataset, null);
