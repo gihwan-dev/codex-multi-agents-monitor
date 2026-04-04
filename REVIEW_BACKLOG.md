@@ -192,3 +192,5 @@
 - [x] **P-1-be**: append_audit_event resolve_storage_root() 중복 호출 제거 (이번 세션)
 - [x] **FE-16**: contextObservability Math.max spread→reduce 교체 (이번 세션)
 - [x] **FE-14**: throwSessionScoreSaveFailure dead code 제거 (이번 세션)
+- [x] **N16-a11y**: SkillActivityToolbar 검색 Input에 aria-label="Search skills" 추가 (이번 세션)
+- [x] **N17-title**: GraphEventCardContent line-clamp-2 적용된 title/summary에 title 속성 추가 (이번 세션)

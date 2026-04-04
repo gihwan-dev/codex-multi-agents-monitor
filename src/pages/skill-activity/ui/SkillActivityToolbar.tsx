@@ -47,6 +47,7 @@ export function SkillActivityToolbar(props: SkillActivityToolbarProps) {
     <div className="flex flex-wrap items-center gap-3">
       <Input
         type="search"
+        aria-label="Search skills"
         placeholder="Search skills…"
         value={props.searchQuery}
         onChange={(e) => props.onSearchChange(e.target.value)}
