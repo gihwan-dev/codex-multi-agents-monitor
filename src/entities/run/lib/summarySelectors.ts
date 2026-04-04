@@ -1,23 +1,22 @@
 import { formatDuration } from "../../../shared/lib/format";
 import type {
-  AnomalyJump,
   EventRecord,
   RunDataset,
   SelectionPath,
   SummaryFact,
 } from "../model/types.js";
+import type { MaybeLastHandoff } from "./anomalyJumps.js";
 import { sortEvents } from "./selectorShared.js";
 import {
   calculateSummaryMetrics,
   findLastHandoff,
 } from "./summaryMetricCalculations.js";
 
+export { buildAnomalyJumps } from "./anomalyJumps.js";
 export { calculateSummaryMetrics };
 
 const BLOCKING_STATUSES = ["blocked", "waiting", "interrupted"] as const;
 const AFFECTED_STATUSES = [...BLOCKING_STATUSES, "failed"] as const;
-type LastHandoff = NonNullable<ReturnType<typeof findLastHandoff>>;
-type MaybeLastHandoff = LastHandoff | null;
 
 function findBlockerEvent(events: EventRecord[]) {
   return (
@@ -78,110 +77,12 @@ function resolveBlockerLaneName(dataset: RunDataset, blockerEvent: EventRecord |
   return dataset.lanes.find((lane) => lane.laneId === blockerEvent.laneId)?.name ?? blockerEvent.title;
 }
 
-function createAnomalyJump(
-  label: string,
-  selection: AnomalyJump["selection"],
-  emphasis: AnomalyJump["emphasis"],
-) {
-  return { label, selection, emphasis } satisfies AnomalyJump;
-}
-
-function appendAnomalyJump(
-  jumps: AnomalyJump[],
-  jump: AnomalyJump | null,
-) {
-  if (jump) {
-    jumps.push(jump);
-  }
-}
-
-function resolveWaitingEventJump(waitingEvent: EventRecord | undefined) {
-  return waitingEvent
-    ? createAnomalyJump("Longest wait", { kind: "event", id: waitingEvent.eventId }, "warning")
-    : null;
-}
-
-function resolveFirstErrorJump(firstError: EventRecord | undefined) {
-  return firstError
-    ? createAnomalyJump("First error", { kind: "event", id: firstError.eventId }, "danger")
-    : null;
-}
-
-function resolveExpensiveJump(expensive: EventRecord | undefined) {
-  return expensive
-    ? createAnomalyJump("Most expensive", { kind: "event", id: expensive.eventId }, "accent")
-    : null;
-}
-
-function resolveLastHandoffJump(lastHandoff: MaybeLastHandoff) {
-  return lastHandoff
-    ? createAnomalyJump("Last handoff", { kind: "edge", id: lastHandoff.edgeId }, "accent")
-    : null;
-}
-
-function resolveFinalArtifactJump(finalArtifact: RunDataset["artifacts"][number] | undefined) {
-  return finalArtifact
-    ? createAnomalyJump(
-        "Final artifact",
-        { kind: "artifact", id: finalArtifact.artifactId },
-        "default",
-      )
-    : null;
-}
-
-function isBlockingStatus(event: EventRecord) {
-  return BLOCKING_STATUSES.includes(event.status as (typeof BLOCKING_STATUSES)[number]);
-}
-
-function collectAnomalyCandidates(
+function resolveSummaryLastHandoff(
   dataset: RunDataset,
+  orderedEvents: EventRecord[],
   lastHandoff?: MaybeLastHandoff,
 ) {
-  const events = sortEvents(dataset.events);
-  let firstError: EventRecord | undefined;
-  let waitingEvent: EventRecord | undefined;
-  let expensive: EventRecord | undefined;
-
-  for (const event of events) {
-    if (!firstError && (event.status === "failed" || event.eventType === "error")) {
-      firstError = event;
-    }
-
-    if (isBlockingStatus(event) && (!waitingEvent || event.durationMs > waitingEvent.durationMs)) {
-      waitingEvent = event;
-    }
-
-    if (!expensive || event.costUsd > expensive.costUsd) {
-      expensive = event;
-    }
-  }
-
-  return {
-    firstError,
-    waitingEvent,
-    lastHandoff: lastHandoff === undefined ? findLastHandoff(dataset, events) : lastHandoff,
-    finalArtifact: dataset.artifacts.find(
-      (artifact) => artifact.artifactId === dataset.run.finalArtifactId,
-    ),
-    expensive,
-  };
-}
-
-export function buildAnomalyJumps(
-  dataset: RunDataset,
-  lastHandoff?: MaybeLastHandoff,
-): AnomalyJump[] {
-  const { firstError, waitingEvent, lastHandoff: resolvedLastHandoff, finalArtifact, expensive } =
-    collectAnomalyCandidates(dataset, lastHandoff);
-  const jumps: AnomalyJump[] = [];
-
-  appendAnomalyJump(jumps, resolveWaitingEventJump(waitingEvent));
-  appendAnomalyJump(jumps, resolveFirstErrorJump(firstError));
-  appendAnomalyJump(jumps, resolveExpensiveJump(expensive));
-  appendAnomalyJump(jumps, resolveLastHandoffJump(resolvedLastHandoff));
-  appendAnomalyJump(jumps, resolveFinalArtifactJump(finalArtifact));
-
-  return jumps;
+  return lastHandoff === undefined ? findLastHandoff(dataset, orderedEvents) : lastHandoff;
 }
 
 export function buildSummaryFacts(
@@ -192,8 +93,7 @@ export function buildSummaryFacts(
   const orderedEvents = sortEvents(dataset.events);
   const blockerEvent = findBlockerEvent(orderedEvents);
   const affectedLaneIds = buildAffectedLaneIds(orderedEvents, selectionPath, blockerEvent);
-  const resolvedLastHandoff =
-    lastHandoff === undefined ? findLastHandoff(dataset, orderedEvents) : lastHandoff;
+  const resolvedLastHandoff = resolveSummaryLastHandoff(dataset, orderedEvents, lastHandoff);
   const { handoff: finalLastHandoff, label: lastHandoffLabel } = buildLastHandoffLabel(
     dataset,
     resolvedLastHandoff,
