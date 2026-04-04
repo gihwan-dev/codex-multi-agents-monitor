@@ -34,7 +34,31 @@ const ExperimentListEmptyState = () => {
   );
 };
 
-function ExperimentListContent({
+const ExperimentListErrorState = ({ message }: { message: string }) => (
+  <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
+    {message}
+  </p>
+);
+
+const getExperimentListVisibility = ({
+  error,
+  isEmpty,
+  loading,
+}: Pick<EvalExperimentListPanelProps, "error" | "loading"> & {
+  isEmpty: boolean;
+}) => {
+  const showSkeleton = loading && isEmpty;
+  const showError = !loading && !!error;
+  const showEmpty = !loading && !error && isEmpty;
+
+  return {
+    showEmpty,
+    showError,
+    showSkeleton,
+  };
+};
+
+export function EvalExperimentListPanel({
   error,
   experiments,
   loading,
@@ -42,52 +66,37 @@ function ExperimentListContent({
   onSelect,
 }: EvalExperimentListPanelProps) {
   const isEmpty = experiments.length === 0;
+  const errorMessage = error ?? "";
+  const { showEmpty, showError, showSkeleton } = getExperimentListVisibility({
+    error,
+    isEmpty,
+    loading,
+  });
 
-  if (loading && isEmpty) {
-    return <ExperimentListSkeleton />;
-  }
-
-  if (error) {
-    return (
-      <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
-        {error}
-      </p>
-    );
-  }
-
-  if (isEmpty) {
-    return <ExperimentListEmptyState />;
-  }
-
-  return (
-    <>
-      {experiments.map((item) => (
-        <EvalExperimentListRow
-          key={item.experiment.id}
-          item={item}
-          selected={item.experiment.id === selectedExperimentId}
-          onSelect={onSelect}
-        />
-      ))}
-    </>
-  );
-}
-
-export function EvalExperimentListPanel(props: EvalExperimentListPanelProps) {
   return (
     <Card className="min-h-0 border-white/8 bg-white/[0.03]">
       <CardHeader>
         <CardTitle className="text-sm font-medium">
           Experiments
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {props.experiments.length} available
+            {experiments.length} available
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="min-h-0">
         <ScrollArea className="h-[calc(100vh-16rem)] pr-2 xl:h-full">
           <div className="grid gap-2">
-            <ExperimentListContent {...props} />
+            {showSkeleton && <ExperimentListSkeleton />}
+            {showError && <ExperimentListErrorState message={errorMessage} />}
+            {experiments.map((item) => (
+              <EvalExperimentListRow
+                key={item.experiment.id}
+                item={item}
+                selected={item.experiment.id === selectedExperimentId}
+                onSelect={onSelect}
+              />
+            ))}
+            {showEmpty && <ExperimentListEmptyState />}
           </div>
         </ScrollArea>
       </CardContent>
