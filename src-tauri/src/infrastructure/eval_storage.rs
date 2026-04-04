@@ -126,12 +126,7 @@ pub(crate) fn resolve_repository_head_sha(repo_path: &Path) -> io::Result<String
     let head_contents = read_first_line(&git_dir.join("HEAD"))?;
 
     if let Some(reference) = head_contents.strip_prefix("ref:").map(str::trim) {
-        if !reference.starts_with("refs/") || reference.contains("..") {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "HEAD contains an invalid reference path",
-            ));
-        }
+        validate_head_reference(reference)?;
         let ref_path = refs_root.join(reference);
         if ref_path.exists() {
             return read_first_line(&ref_path);
@@ -141,6 +136,17 @@ pub(crate) fn resolve_repository_head_sha(repo_path: &Path) -> io::Result<String
     }
 
     Ok(head_contents)
+}
+
+fn validate_head_reference(reference: &str) -> io::Result<()> {
+    if !reference.starts_with("refs/") || reference.contains("..") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HEAD contains an invalid reference path",
+        ));
+    }
+
+    Ok(())
 }
 
 fn resolve_storage_root() -> io::Result<PathBuf> {
