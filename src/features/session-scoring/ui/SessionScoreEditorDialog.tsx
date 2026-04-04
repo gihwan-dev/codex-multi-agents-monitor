@@ -43,7 +43,7 @@ export function SessionScoreEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/10 bg-[rgb(14_18_28)] sm:max-w-md">
+      <DialogContent className="border-white/10 bg-[image:var(--gradient-dialog-surface)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Score session</DialogTitle>
           <DialogDescription>
