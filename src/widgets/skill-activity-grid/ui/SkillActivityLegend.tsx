@@ -30,7 +30,7 @@ function LegendEntry({ label, color, description }: LegendEntryProps) {
 export function SkillActivityLegend() {
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer text-[0.68rem] text-muted-foreground hover:text-foreground/70">
+      <summary className="cursor-pointer rounded-sm text-[0.68rem] text-muted-foreground hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
         Tag legend
       </summary>
       <div className="mt-2 grid grid-cols-2 gap-x-8 gap-y-1 rounded-[var(--radius-soft)] border border-white/8 bg-white/[0.02] px-3 py-2">
