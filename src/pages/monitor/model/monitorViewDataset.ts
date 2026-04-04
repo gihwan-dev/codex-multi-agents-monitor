@@ -43,6 +43,24 @@ export const EMPTY_GRAPH_SCENE: GraphSceneModel = {
   latestVisibleEventId: null,
 };
 
+function resolveLastHandoffFromJumps(
+  activeDataset: MonitorState["datasets"][number],
+  anomalyJumps: ReturnType<typeof buildAnomalyJumps>,
+) {
+  for (const jump of anomalyJumps) {
+    if (jump.selection.kind !== "edge") {
+      continue;
+    }
+
+    const edge = activeDataset.edges.find((candidate) => candidate.edgeId === jump.selection.id);
+    if (edge?.edgeType === "handoff") {
+      return edge;
+    }
+  }
+
+  return null;
+}
+
 function resolveActiveFollowLive(
   activeDataset: MonitorState["datasets"][number] | null,
   state: MonitorState,
@@ -71,6 +89,11 @@ export function buildDatasetDerivedState(
   state: MonitorState,
   graphScene: GraphSceneModel,
 ) {
+  const anomalyJumps = activeDataset ? buildAnomalyJumps(activeDataset) : [];
+  const lastHandoff = activeDataset
+    ? resolveLastHandoffFromJumps(activeDataset, anomalyJumps)
+    : null;
+
   return {
     activeFollowLive: resolveActiveFollowLive(activeDataset, state),
     activeLiveConnection: resolveActiveLiveConnection(activeDataset, state),
@@ -89,8 +112,8 @@ export function buildDatasetDerivedState(
       : null,
     contextObservability: activeDataset ? graphScene.contextObservability : null,
     summaryFacts: activeDataset
-      ? buildSummaryFacts(activeDataset, graphScene.selectionPath)
+      ? buildSummaryFacts(activeDataset, graphScene.selectionPath, lastHandoff)
       : [],
-    anomalyJumps: activeDataset ? buildAnomalyJumps(activeDataset) : [],
+    anomalyJumps,
   };
 }
