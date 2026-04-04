@@ -25,6 +25,7 @@ export function WorkspaceRunItem({
 }: WorkspaceRunItemProps) {
   const active = optimisticActiveRunId === run.id;
   const providerBadge = resolveProviderBadge(run.provider);
+  const runSummary = run.profileLabel ? `${run.profileLabel} · ${run.lastEventSummary}` : run.lastEventSummary;
 
   return (
     <button type="button" data-slot="run-tree-item" data-run-id={run.id} data-active={active ? "true" : "false"} data-tree-id={treeId} role="treeitem" aria-level={2} tabIndex={activeTreeId === treeId ? 0 : -1} className={cn("grid min-w-0 translate-x-0 gap-1 rounded-md px-2 py-1.5 text-left text-[0.82rem] text-muted-foreground transition-[translate,background-color,color] duration-[var(--duration-fast)] ease-[var(--easing-emphasized)] motion-reduce:transition-none hover:translate-x-0.5 hover:bg-white/[0.04] hover:text-foreground motion-reduce:hover:translate-x-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-active)]/45 data-[active=true]:translate-x-0.5", active && "bg-[color:color-mix(in_srgb,var(--color-active)_8%,transparent)] text-foreground")} onClick={() => (run.filePath ? selectRecentRun(workspaceId, run.id, run.filePath) : selectRun(workspaceId, run.id))} title={run.title}>
@@ -49,9 +50,7 @@ export function WorkspaceRunItem({
       <div className="flex min-w-0 items-center gap-1 text-[0.72rem] text-[var(--color-text-tertiary)]">
         <span className="shrink-0">{run.relativeTime}</span>
         <span className="shrink-0">·</span>
-        <span className="truncate">
-          {run.profileLabel ? `${run.profileLabel} · ${run.lastEventSummary}` : run.lastEventSummary}
-        </span>
+        <span className="truncate" title={runSummary}>{runSummary}</span>
       </div>
     </button>
   );
