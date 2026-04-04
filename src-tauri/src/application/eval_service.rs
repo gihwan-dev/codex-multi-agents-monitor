@@ -926,13 +926,12 @@ fn optional_trimmed(value: Option<&str>, limit: usize) -> Option<String> {
 }
 
 fn truncate_text(value: &str, limit: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= limit {
-        return value.to_owned();
-    }
-
     let truncated = value.chars().take(limit).collect::<String>();
-    format!("{truncated}…")
+    if truncated.len() < value.len() {
+        format!("{truncated}…")
+    } else {
+        value.to_owned()
+    }
 }
 
 fn generate_id(prefix: &str, seed: &str, timestamp_ms: u64) -> String {
