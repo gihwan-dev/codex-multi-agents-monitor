@@ -40,6 +40,22 @@
   - 파일: `src-tauri/src/application/archived_sessions.rs:515`, `infrastructure/filesystem.rs:288`
   - 수정: RecentSessionTestContext 사용 또는 mutex 선점
 
+- [ ] **C-2-be**: `current_time_ms` 함수가 eval_service.rs와 eval_grader.rs에 중복
+  - 파일: `src-tauri/src/application/eval_service.rs:962`, `eval_grader.rs:273`
+  - 수정: N8과 함께 support/ 모듈로 추출
+
+- [ ] **CON-1-be**: `resolve_existing_live_session_identity`에서 `origin_path.exists()` check-then-act race
+  - 파일: `src-tauri/src/application/workspace_identity.rs:225`
+  - 수정: N9와 동일 패턴 — 직접 연산 후 NotFound 매칭
+
+- [ ] **N-1-be**: `scan_skill_activity` limit 파라미터가 invocation이 아닌 file 수 제한 — 이름과 동작 불일치
+  - 파일: `src-tauri/src/application/skill_activity.rs:108-116`
+  - 수정: file_limit으로 이름 변경 또는 invocations vec에서 cap
+
+- [ ] **N-2-be**: `collect_session_files`에서 archived_sessions 디렉토리 에러 시 전체 스캔 중단
+  - 파일: `src-tauri/src/application/skill_activity.rs:15-25`
+  - 수정: unwrap_or_default() 또는 NotFound 허용
+
 ## Code Quality (Frontend)
 
 - [ ] **RC-4**: `useGraphSelectionRevealNavigation` options 객체를 dependency로 사용 — Biome exhaustive deps 규칙과 충돌하여 decomposition 불가; shouldSkipSelectionReveal 가드로 실질 성능 영향 최소화
@@ -61,6 +77,30 @@
 - [ ] **FE-11**: `subscribeRecentSessionLive` listenTauri↔invokeTauri 사이 dispose 체크 누락
   - 파일: `src/entities/session-log/api/liveTransport.ts:98-112`
   - 수정: 두 await 사이에 disposed 체크 추가
+
+- [ ] **FE-12**: `loadExperimentListResult` onSuccess가 isActive() 체크 전에 호출 — 취소 후 stale 상태 업데이트
+  - 파일: `src/pages/eval/model/evalExperimentDataHelpers.ts:53,77`
+  - 수정: onSuccess를 isActive() 가드 안으로 이동
+
+- [ ] **FE-13**: `persistSessionScore`에서 loadProfileRevisions await 후 cancellation guard 누락
+  - 파일: `src/features/session-scoring/model/sessionScoreDetailsHelpers.ts:123-125`
+  - 수정: active flag 또는 AbortController 스레딩
+
+- [ ] **FE-15**: `void requestKey` dead code가 미구현 stale-load guard를 은폐
+  - 파일: `src/pages/eval/model/useEvalExperimentData.ts:57`, `evalExperimentDataHelpers.ts:111`
+  - 수정: requestKey 파라미터 제거 또는 실제 비교 구현
+
+- [ ] **FE-17**: SkillStatusBadge가 shared에서 entities/skill 임포트 — FSD 하향 의존 위반
+  - 파일: `src/shared/ui/monitor/SkillStatusBadge.constants.ts:1`, `SkillStatusBadge.tsx:1`
+  - 수정: 타입을 shared로 이동 또는 컴포넌트를 entities/skill/ui로 이동
+
+- [ ] **FE-18**: SkillActivityToolbar `Number(v) as ScanRangeValue` — NaN 통과 가능
+  - 파일: `src/pages/skill-activity/ui/SkillActivityToolbar.tsx:56`
+  - 수정: SCAN_RANGE_OPTIONS 값과 비교 검증 추가
+
+- [ ] **FE-19**: EvalCaseListPanel `detail.runs.filter()` O(cases × runs) per render
+  - 파일: `src/pages/eval/ui/EvalCaseListPanel.tsx:76`
+  - 수정: Map<caseId, number> 사전 계산
 
 ## New UI/UX Issues
 
@@ -116,29 +156,37 @@
 - [x] **RC-2**: useSkillActivityPageView unhandled rejection + 영구 loading (이전 세션)
 - [x] **C-6**: sessionScoreEditorState 빈 문자열 score=0 처리 (이전 세션)
 - [x] Phase 1: scrollIntoView jsdom guard + live follow scroll behavior fix (이전 세션)
-- [x] **P2-a11y**: workspace-run-tree 6개 파일 motion-reduce + focus-visible 추가 (이번 세션)
-- [x] **P2-dialog**: dialog close 버튼 focus → focus-visible 변경 (이번 세션)
-- [x] **P2-edge**: InteractiveGraphRouteAnchor Enter 키 지원 추가 (이번 세션)
-- [x] **P2-chevron**: MonitorContextLaneSummarySection ChevronDown motion-reduce 추가 (이번 세션)
-- [x] **P2-eval-loading**: EvalExperimentListPanel, EvalCaseListPanel 로딩 skeleton 추가 (이번 세션)
-- [x] **P2-score**: EvalScoreBar role="img" → native meter + aria attributes (이번 세션)
-- [x] **P3-catch**: useRecentMonitorRequests, useArchiveMonitorRequests catch에서 loading 해제 dispatch (이번 세션)
-- [x] **P3-kbnav**: monitorKeyboardSelectionNavigation selection.kind === "event" 가드 추가 (이번 세션)
-- [x] **P3-runid**: recentRequestState nextActiveRunId를 빈 문자열로 고정 (이번 세션)
-- [x] **P3-perf**: buildEdgeMaps O(n²)→O(n) push, buildLaneEventMaps O(L×E)→O(E), Math.max spread→reduce (이번 세션)
-- [x] **N1-be**: eval_grader/eval_service `as u8` → `.min(100) as u8` 안전 캐스트 (이번 세션)
-- [x] **N4-be**: session_scoring records[0] → .first().expect() 안전 인덱싱 (이번 세션)
-- [x] **N4-ui**: Dialog close 버튼 hit target 16px→32px 확대 (이번 세션)
-- [x] **N5-ui**: SelectItem focus: → focus-visible: 일관성 수정 (이번 세션)
-- [x] **FE-7**: throwSessionScoreSaveFailure re-throw 제거 → setError만 호출 (이번 세션)
-- [x] **N6-ui**: PromptLayerToggle ChevronRight motion-reduce:transition-none 추가 (이번 세션)
-- [x] **N7-ui**: MonitorShortcutsDialog 구현된 단축키 전체 표시 (이번 세션)
-- [x] **N8-ui**: TextViewerModal clipboard.writeText .catch 추가 (이번 세션)
-- [x] **N9-ui**: EvalRunArtifactSection, EvalRunStepSection "Showing X of Y" 절단 표시 (이번 세션)
-- [x] **N10-ui**: DatasetMonitorTopBarHeading 절단 텍스트에 title 속성 추가 (이번 세션)
-- [x] **N1**: Resize handle hit target 14px→32px (이번 세션 — layout.css --resize-handle-hit-width)
-- [x] **N2-ui**: Button xs/icon-xs hit target 24px→32px (이번 세션 — h-8/size-8)
-- [x] **N3-ui**: Checkbox hit target 16px→32px (이번 세션 — after pseudo-element)
-- [x] **N11-ui**: 6개 위젯 truncate 텍스트에 title 속성 추가 (이번 세션)
+- [x] **P2-a11y**: workspace-run-tree 6개 파일 motion-reduce + focus-visible 추가 (이전 세션)
+- [x] **P2-dialog**: dialog close 버튼 focus → focus-visible 변경 (이전 세션)
+- [x] **P2-edge**: InteractiveGraphRouteAnchor Enter 키 지원 추가 (이전 세션)
+- [x] **P2-chevron**: MonitorContextLaneSummarySection ChevronDown motion-reduce 추가 (이전 세션)
+- [x] **P2-eval-loading**: EvalExperimentListPanel, EvalCaseListPanel 로딩 skeleton 추가 (이전 세션)
+- [x] **P2-score**: EvalScoreBar role="img" → native meter + aria attributes (이전 세션)
+- [x] **P3-catch**: useRecentMonitorRequests, useArchiveMonitorRequests catch에서 loading 해제 dispatch (이전 세션)
+- [x] **P3-kbnav**: monitorKeyboardSelectionNavigation selection.kind === "event" 가드 추가 (이전 세션)
+- [x] **P3-runid**: recentRequestState nextActiveRunId를 빈 문자열로 고정 (이전 세션)
+- [x] **P3-perf**: buildEdgeMaps O(n²)→O(n) push, buildLaneEventMaps O(L×E)→O(E), Math.max spread→reduce (이전 세션)
+- [x] **N1-be**: eval_grader/eval_service `as u8` → `.min(100) as u8` 안전 캐스트 (이전 세션)
+- [x] **N4-be**: session_scoring records[0] → .first().expect() 안전 인덱싱 (이전 세션)
+- [x] **N4-ui**: Dialog close 버튼 hit target 16px→32px 확대 (이전 세션)
+- [x] **N5-ui**: SelectItem focus: → focus-visible: 일관성 수정 (이전 세션)
+- [x] **FE-7**: throwSessionScoreSaveFailure re-throw 제거 → setError만 호출 (이전 세션)
+- [x] **N6-ui**: PromptLayerToggle ChevronRight motion-reduce:transition-none 추가 (이전 세션)
+- [x] **N7-ui**: MonitorShortcutsDialog 구현된 단축키 전체 표시 (이전 세션)
+- [x] **N8-ui**: TextViewerModal clipboard.writeText .catch 추가 (이전 세션)
+- [x] **N9-ui**: EvalRunArtifactSection, EvalRunStepSection "Showing X of Y" 절단 표시 (이전 세션)
+- [x] **N10-ui**: DatasetMonitorTopBarHeading 절단 텍스트에 title 속성 추가 (이전 세션)
+- [x] **N1**: Resize handle hit target 14px→32px (이전 세션 — layout.css --resize-handle-hit-width)
+- [x] **N2-ui**: Button xs/icon-xs hit target 24px→32px (이전 세션 — h-8/size-8)
+- [x] **N3-ui**: Checkbox hit target 16px→32px (이전 세션 — after pseudo-element)
+- [x] **N11-ui**: 6개 위젯 truncate 텍스트에 title 속성 추가 (이전 세션)
 - [x] **N12-ui**: Dialog/Select zoom 애니메이션 motion-reduce:animate-none (이전 세션)
-- [x] **N13-ui**: PromptLayerPreview, EvalCaseListPanel 절단 텍스트에 title 속성 추가 (이번 세션)
+- [x] **N13-ui**: PromptLayerPreview, EvalCaseListPanel 절단 텍스트에 title 속성 추가 (이전 세션)
+- [x] **P2-overlay-motion**: DialogOverlay motion-reduce:animate-none 추가 (이번 세션)
+- [x] **P2-close-motion**: Dialog close 버튼 motion-reduce:transition-none 추가 (이번 세션)
+- [x] **P2-scroll-a11y**: SelectScrollUpButton/DownButton aria-label 추가 (이번 세션)
+- [x] **P2-run-title**: WorkspaceRunItem truncated run summary에 title 속성 추가 (이번 세션)
+- [x] **S-1-be**: resolve_repository_head_sha reference path traversal 검증 추가 (이번 세션)
+- [x] **P-1-be**: append_audit_event resolve_storage_root() 중복 호출 제거 (이번 세션)
+- [x] **FE-16**: contextObservability Math.max spread→reduce 교체 (이번 세션)
+- [x] **FE-14**: throwSessionScoreSaveFailure dead code 제거 (이번 세션)
