@@ -31,7 +31,7 @@ export function MonitorDrawer({
   if (!mounted) return <div aria-hidden="true" />;
 
   return (
-    <div data-slot="monitor-drawer-shell" data-state={phase} aria-hidden={phase !== "open"} className={cn(phase !== "open" && "pointer-events-none")}>
+    <div data-slot="monitor-drawer-shell" data-state={phase} aria-hidden={phase !== "open"} inert={phase !== "open" ? true : undefined} className={cn(phase !== "open" && "pointer-events-none")}>
       <MonitorDrawerPanel drawerState={drawerState} activeDataset={activeDataset} rawTabAvailable={rawTabAvailable} onSetDrawerTab={onSetDrawerTab} onImport={onImport} onImportTextChange={onImportTextChange} onAllowRawChange={onAllowRawChange} onNoRawChange={onNoRawChange} onCloseDrawer={onCloseDrawer} />
     </div>
   );

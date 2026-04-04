@@ -19,7 +19,7 @@ export function PromptLayerToggle({
       type="button"
       data-slot="prompt-layer-toggle"
       data-layer-id={layer.layerId}
-      className="flex min-h-10 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[color:var(--color-prompt-layer-hover)]"
+      className="flex min-h-10 w-full items-center gap-3 px-3 py-2 text-left transition-colors motion-reduce:transition-none hover:bg-[color:var(--color-prompt-layer-hover)]"
       onClick={() => onToggle(layer.layerId)}
       aria-expanded={expanded}
       aria-label={`${expanded ? "Collapse" : "Expand"} ${layer.label}`}
