@@ -35,7 +35,7 @@ function CaseRow({
       onClick={() => onSelect(item.id)}
     >
       <span className="text-sm font-medium text-foreground">{item.title}</span>
-      <span className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+      <span className="line-clamp-2 text-xs leading-5 text-muted-foreground" title={item.expectedResult}>
         {item.expectedResult}
       </span>
       <span className="text-xs text-muted-foreground">{runCount} runs</span>

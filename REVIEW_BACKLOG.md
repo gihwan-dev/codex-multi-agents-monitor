@@ -66,6 +66,10 @@
 
 (없음)
 
+## New Code Quality Issues
+
+(없음)
+
 ## Test Gaps
 
 - [ ] **T1**: Monitor/Eval 뷰 전환 시 keyboard listener 비활성화 테스트
@@ -136,4 +140,5 @@
 - [x] **N2-ui**: Button xs/icon-xs hit target 24px→32px (이번 세션 — h-8/size-8)
 - [x] **N3-ui**: Checkbox hit target 16px→32px (이번 세션 — after pseudo-element)
 - [x] **N11-ui**: 6개 위젯 truncate 텍스트에 title 속성 추가 (이번 세션)
-- [x] **N12-ui**: Dialog/Select zoom 애니메이션 motion-reduce:animate-none (이번 세션)
+- [x] **N12-ui**: Dialog/Select zoom 애니메이션 motion-reduce:animate-none (이전 세션)
+- [x] **N13-ui**: PromptLayerPreview, EvalCaseListPanel 절단 텍스트에 title 속성 추가 (이번 세션)
