@@ -12,10 +12,11 @@
 
 ## New UI/UX Issues (이번 세션)
 
-- [x] **UX-39**: EvalExperimentListRow + EvalCaseListPanel CaseRow 버튼에 `focus-visible:ring-[3px] focus-visible:ring-ring/50` 추가 (이번 세션)
-- [x] **UX-40**: EvalExperimentListRow + EvalCaseListPanel CaseRow 버튼에 `aria-pressed={selected}` 추가 (이번 세션)
-- [x] **UX-41**: ScoreBadge 하드코딩 Tailwind 팔레트(rose/emerald/sky/amber) → 시맨틱 CSS 변수(--color-success/active/waiting/failed) 교체 (이번 세션)
-- [x] **UX-42-b**: TextViewerModal CopyButton `text-green-500` → `text-[var(--color-success)]` 교체 (이번 세션)
+- [x] **UX-43**: FollowLiveAction 토글 버튼에 `aria-pressed={followLive}` 추가 (이번 세션)
+- [x] **UX-44**: CausalGraphLaneStrip 레인 `<header>` → `<section>` + aria-label 추가 (이번 세션)
+- [x] **UX-45**: GraphGapRow time cell에 gap label 텍스트 렌더링 추가 (이번 세션)
+- [x] **UX-46**: MonitorRail 에러 표시 조건에서 `!recentIndex.length` 제거 + role="alert" 추가 (이번 세션)
+- [x] **UX-47**: MonitorTopBarBadges liveConnection 원시 값 → 사용자 친화적 레이블 매핑 + aria-label 추가 (이번 세션)
 
 ## Code Quality (Backend)
 
@@ -281,10 +282,15 @@
 
 ## Resolved
 
-- [x] **UX-39**: EvalExperimentListRow + CaseRow focus-visible ring 추가 (이번 세션)
-- [x] **UX-40**: EvalExperimentListRow + CaseRow aria-pressed 추가 (이번 세션)
-- [x] **UX-41**: ScoreBadge 하드코딩 팔레트 → 시맨틱 CSS 변수 교체 (이번 세션)
-- [x] **UX-42-b**: TextViewerModal CopyButton text-green-500 → --color-success 토큰 교체 (이번 세션)
+- [x] **UX-43**: FollowLiveAction aria-pressed 추가 (이번 세션)
+- [x] **UX-44**: CausalGraphLaneStrip 레인 header → section + aria-label (이번 세션)
+- [x] **UX-45**: GraphGapRow time cell gap label 렌더링 (이번 세션)
+- [x] **UX-46**: MonitorRail 부분 에러 표시 + role="alert" (이번 세션)
+- [x] **UX-47**: MonitorTopBarBadges liveConnection 사용자 친화 레이블 + aria-label (이번 세션)
+- [x] **UX-39**: EvalExperimentListRow + CaseRow focus-visible ring 추가 (이전 세션)
+- [x] **UX-40**: EvalExperimentListRow + CaseRow aria-pressed 추가 (이전 세션)
+- [x] **UX-41**: ScoreBadge 하드코딩 팔레트 → 시맨틱 CSS 변수 교체 (이전 세션)
+- [x] **UX-42-b**: TextViewerModal CopyButton text-green-500 → --color-success 토큰 교체 (이전 세션)
 - [x] **COR-9-be**: `path_is_allowed` str::starts_with → Path::starts_with 세그먼트 비교 (이번 세션)
 - [x] **ERR-3-be**: `record_event` best-effort 패턴 — audit 실패가 트랜잭션에 영향 주지 않음 (이번 세션)
 - [x] **FE-55**: `finishSessionScoreLoad` active 가드 제거 — 취소 후 stuck loading 해소 (이번 세션)

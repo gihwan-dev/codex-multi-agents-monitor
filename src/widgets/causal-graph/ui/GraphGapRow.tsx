@@ -42,7 +42,9 @@ export function GraphGapRow({
         data-slot="graph-gap-time"
         className="sticky left-0 z-[3] flex min-h-full items-center px-3 text-[0.74rem] font-mono text-muted-foreground"
         style={{ background: "var(--gradient-graph-time)" }}
-      />
+      >
+        <span>{label}</span>
+      </div>
       <div
         className="relative z-[1] flex items-center justify-center"
         style={{ gridColumn: `2 / span ${laneCount || 1}` }}

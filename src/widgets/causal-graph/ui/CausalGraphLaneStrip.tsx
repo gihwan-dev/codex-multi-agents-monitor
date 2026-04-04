@@ -47,10 +47,15 @@ export function CausalGraphLaneStrip({
         Time (dur)
       </div>
       {scene.lanes.map((lane) => (
-        <header
+        <section
           key={lane.laneId}
           data-slot="graph-lane-header"
           data-lane-id={lane.laneId}
+          aria-label={
+            lane.role === "session" || lane.role === "user"
+              ? `${lane.name} lane · ${lane.model}`
+              : `${lane.name} lane · ${lane.role} · ${lane.model}`
+          }
           className="relative flex min-h-12 items-center overflow-hidden border-l border-[color:var(--color-chrome-border-subtle)] px-3.5 py-2"
         >
           <span
@@ -74,7 +79,7 @@ export function CausalGraphLaneStrip({
               {lane.model}
             </span>
           </div>
-        </header>
+        </section>
       ))}
     </div>
   );

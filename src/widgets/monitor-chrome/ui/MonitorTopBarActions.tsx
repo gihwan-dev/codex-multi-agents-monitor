@@ -69,6 +69,7 @@ function FollowLiveAction({
     <Button
       type="button"
       variant={followLive ? "default" : "outline"}
+      aria-pressed={followLive}
       disabled={followLiveDisabled}
       onClick={onToggleFollowLive}
       className={resolveFollowLiveButtonClassName(followLive)}

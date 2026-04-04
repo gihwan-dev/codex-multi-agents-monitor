@@ -8,7 +8,9 @@ function MonitorRailError({
   recentIndexError: string | null;
 }) {
   return recentIndexError ? (
-    <p className="archive-list__error">{recentIndexError}</p>
+    <p role="alert" className="archive-list__error">
+      {recentIndexError}
+    </p>
   ) : null;
 }
 
@@ -49,7 +51,7 @@ export function MonitorRail(view: MonitorPageView) {
     >
       <div className="workspace__rail-pane">
         <MonitorRailTree {...view} />
-        {view.recentIndexError && !view.state.recentIndex.length ? (
+        {view.recentIndexError ? (
           <MonitorRailError recentIndexError={view.recentIndexError} />
         ) : null}
       </div>
