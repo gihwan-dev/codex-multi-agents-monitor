@@ -182,6 +182,8 @@
 - [x] **N11-ui**: 6개 위젯 truncate 텍스트에 title 속성 추가 (이전 세션)
 - [x] **N12-ui**: Dialog/Select zoom 애니메이션 motion-reduce:animate-none (이전 세션)
 - [x] **N13-ui**: PromptLayerPreview, EvalCaseListPanel 절단 텍스트에 title 속성 추가 (이전 세션)
+- [x] **N14-a11y**: ArchiveSectionToggle 동적 aria-label 추가 (이번 세션)
+- [x] **N15-a11y**: MonitorContextLaneSummarySection toggle 동적 aria-label 추가 (이번 세션)
 - [x] **P2-overlay-motion**: DialogOverlay motion-reduce:animate-none 추가 (이번 세션)
 - [x] **P2-close-motion**: Dialog close 버튼 motion-reduce:transition-none 추가 (이번 세션)
 - [x] **P2-scroll-a11y**: SelectScrollUpButton/DownButton aria-label 추가 (이번 세션)
