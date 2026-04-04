@@ -68,7 +68,10 @@ pub(crate) fn load_all_session_score_records() -> io::Result<Vec<SessionScoreRec
         let Some(path) = read_storage_entry_path(entry)? else {
             continue;
         };
-        records.push(load_session_score_record_from_path(&path)?);
+        match load_session_score_record_from_path(&path) {
+            Ok(record) => records.push(record),
+            Err(error) => eprintln!("skipping corrupt score record {}: {error}", path.display()),
+        }
     }
 
     Ok(records)
@@ -141,8 +144,18 @@ fn stable_hash(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::build_storage_key;
-    use crate::domain::session::SessionProvider;
+    use super::{
+        build_storage_key, load_all_session_score_records, resolve_storage_root,
+        save_session_score_record,
+    };
+    use crate::{
+        domain::{
+            session::SessionProvider,
+            session_score::{ProfileSnapshot, SessionScoreRecord},
+        },
+        test_support::RecentSessionTestContext,
+    };
+    use std::fs;
 
     #[test]
     fn builds_stable_key_from_provider_session_and_workspace() {
@@ -152,5 +165,38 @@ mod tests {
 
         assert_eq!(first, second);
         assert_ne!(first, third);
+    }
+
+    #[test]
+    fn load_all_session_score_records_skips_corrupt_files() {
+        let _ctx = RecentSessionTestContext::new("score-storage-best-effort");
+        let valid_record = SessionScoreRecord {
+            provider: SessionProvider::Claude,
+            session_id: "session-1".to_owned(),
+            file_path: "/tmp/session-1.jsonl".to_owned(),
+            workspace_path: "/tmp/workspace".to_owned(),
+            session_score: None,
+            profile_snapshot: ProfileSnapshot {
+                revision: "rev-1".to_owned(),
+                label: "Profile A".to_owned(),
+                provider: SessionProvider::Claude,
+                main_model: Some("claude-opus-4-1".to_owned()),
+                guidance_hash: Some("guidance-hash".to_owned()),
+                subagents: Vec::new(),
+            },
+        };
+        save_session_score_record(&valid_record).expect("valid score record should be written");
+        fs::write(
+            resolve_storage_root()
+                .expect("storage root should resolve")
+                .join("corrupt.json"),
+            "{",
+        )
+        .expect("corrupt record should be written");
+
+        let records =
+            load_all_session_score_records().expect("best-effort score record load should succeed");
+
+        assert_eq!(records, vec![valid_record]);
     }
 }

@@ -93,7 +93,9 @@ pub(crate) fn resolve_claude_subagent_meta_path(session_file: &Path) -> Option<P
 }
 
 fn is_main_claude_session_path(path: &Path) -> bool {
-    path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("jsonl")
+    !path.is_symlink()
+        && path.is_file()
+        && path.extension().and_then(|value| value.to_str()) == Some("jsonl")
 }
 
 fn read_dir_if_available(directory: &Path) -> io::Result<Option<fs::ReadDir>> {
@@ -128,6 +130,9 @@ mod tests {
     use crate::test_support::TempDir;
     use std::{fs, path::PathBuf};
 
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
+
     #[test]
     fn collects_only_top_level_project_session_files() {
         let temp_dir = TempDir::new("claude-discovery-main");
@@ -140,6 +145,29 @@ mod tests {
         let nested_subagent = nested_root.join("agent-1.jsonl");
         fs::write(&main_file, "").expect("main session file should exist");
         fs::write(&nested_subagent, "").expect("subagent file should exist");
+
+        let files =
+            collect_claude_main_session_files(&projects_root).expect("discovery should succeed");
+
+        assert_eq!(files, vec![main_file]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_symlinked_main_session_files() {
+        let temp_dir = TempDir::new("claude-discovery-main-symlink");
+        let projects_root = temp_dir.path.join("projects");
+        let project_root = projects_root.join("demo-app");
+        let external_root = temp_dir.path.join("external");
+        fs::create_dir_all(&project_root).expect("project directory should exist");
+        fs::create_dir_all(&external_root).expect("external directory should exist");
+
+        let main_file = project_root.join("session-001.jsonl");
+        let external_file = external_root.join("outside.jsonl");
+        let symlinked_file = project_root.join("session-link.jsonl");
+        fs::write(&main_file, "").expect("main session file should exist");
+        fs::write(&external_file, "").expect("external session file should exist");
+        symlink(&external_file, &symlinked_file).expect("symlink should be created");
 
         let files =
             collect_claude_main_session_files(&projects_root).expect("discovery should succeed");

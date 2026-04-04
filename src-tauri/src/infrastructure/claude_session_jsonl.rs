@@ -32,6 +32,7 @@ struct ClaudeTranscriptCollector {
     updated_at: Option<String>,
     model: Option<String>,
     entries: Vec<SessionEntrySnapshot>,
+    cumulative_usage: ClaudeUsageMetrics,
     is_sidechain: bool,
     saw_record: bool,
 }
@@ -65,6 +66,7 @@ struct ClaudeMessageContext<'a> {
     timestamp: &'a str,
 }
 
+#[derive(Clone, Copy, Default)]
 struct ClaudeUsageMetrics {
     input_tokens: u64,
     output_tokens: u64,
@@ -319,11 +321,16 @@ impl ClaudeTranscriptCollector {
             record_type,
             timestamp: &timestamp,
         };
+        let usage = ClaudeUsageMetrics::from_record(record);
 
         if let Some(message) = record.get("message").and_then(Value::as_object) {
             self.capture_message_entries(message, context);
         } else {
             self.capture_record_note(record, context);
+        }
+
+        if let Some(usage) = usage {
+            self.record_usage(&usage);
         }
 
         if self.entries.len() > before_len {
@@ -339,10 +346,18 @@ impl ClaudeTranscriptCollector {
                 });
             }
 
-            if let Some(usage_entry) = build_usage_entry(record, &timestamp) {
-                self.entries.push(usage_entry);
+            if let Some(usage) = usage.filter(|usage| !usage.is_empty()) {
+                self.entries.push(build_usage_entry(
+                    &usage,
+                    &self.cumulative_usage,
+                    &timestamp,
+                ));
             }
         }
+    }
+
+    fn record_usage(&mut self, record: &ClaudeUsageMetrics) {
+        self.cumulative_usage.accumulate(record);
     }
 
     fn capture_message_entries(
@@ -720,21 +735,20 @@ fn should_append_task_complete(record_type: &str, record: &Value) -> bool {
     has_completion_block && !has_tool_use
 }
 
-fn build_usage_entry(record: &Value, timestamp: &str) -> Option<SessionEntrySnapshot> {
-    let usage = ClaudeUsageMetrics::from_record(record)?;
-    if usage.is_empty() {
-        return None;
-    }
-
-    Some(SessionEntrySnapshot {
+fn build_usage_entry(
+    usage: &ClaudeUsageMetrics,
+    cumulative_usage: &ClaudeUsageMetrics,
+    timestamp: &str,
+) -> SessionEntrySnapshot {
+    SessionEntrySnapshot {
         timestamp: timestamp.to_owned(),
         entry_type: "token_count".to_owned(),
         role: None,
-        text: Some(usage.to_payload().to_string()),
+        text: Some(usage.build_payload(cumulative_usage).to_string()),
         function_name: None,
         function_call_id: None,
         function_arguments_preview: None,
-    })
+    }
 }
 
 fn read_claude_subagent_identity(
@@ -791,19 +805,29 @@ impl ClaudeUsageMetrics {
         self.input_tokens + self.output_tokens + self.reasoning_tokens
     }
 
-    fn to_payload(&self) -> Value {
-        let usage_totals = json!({
+    fn accumulate(&mut self, other: &Self) {
+        self.input_tokens += other.input_tokens;
+        self.output_tokens += other.output_tokens;
+        self.cache_read_tokens += other.cache_read_tokens;
+        self.cache_write_tokens += other.cache_write_tokens;
+        self.reasoning_tokens += other.reasoning_tokens;
+    }
+
+    fn usage_totals_json(&self) -> Value {
+        json!({
             "in": self.input_tokens,
             "out": self.output_tokens,
             "cached": self.cache_read_tokens,
             "cache_write": self.cache_write_tokens,
             "reasoning": self.reasoning_tokens,
             "total": self.total_tokens(),
-        });
+        })
+    }
 
+    fn build_payload(&self, total: &Self) -> Value {
         json!({
-            "last": usage_totals,
-            "total": usage_totals,
+            "last": self.usage_totals_json(),
+            "total": total.usage_totals_json(),
         })
     }
 }
@@ -852,6 +876,7 @@ mod tests {
         parse_claude_session_snapshot, read_claude_subagent_snapshots,
     };
     use crate::{domain::session::SessionProvider, test_support::TempDir};
+    use serde_json::Value;
     use std::fs;
 
     fn write_claude_main_fixture(path: &std::path::Path) {
@@ -860,6 +885,20 @@ mod tests {
             [
                 r#"{"type":"user","sessionId":"claude-main","timestamp":"2026-04-01T00:00:00.000Z","cwd":"/tmp/workspace","message":{"role":"user","content":[{"type":"text","text":"Investigate the workspace tree."}]}}"#,
                 r#"{"type":"assistant","sessionId":"claude-main","timestamp":"2026-04-01T00:00:01.000Z","cwd":"/tmp/workspace","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"thinking","thinking":"Need to inspect the layout first."},{"type":"text","text":"I found the tree issue."}],"usage":{"input_tokens":120,"output_tokens":48,"cache_read_input_tokens":32,"cache_creation_input_tokens":8}}}"#,
+            ]
+            .join("\n"),
+        )
+        .expect("claude fixture should be written");
+    }
+
+    fn write_claude_multi_turn_fixture(path: &std::path::Path) {
+        fs::write(
+            path,
+            [
+                r#"{"type":"user","sessionId":"claude-main","timestamp":"2026-04-01T00:00:00.000Z","cwd":"/tmp/workspace","message":{"role":"user","content":[{"type":"text","text":"Investigate the workspace tree."}]}}"#,
+                r#"{"type":"assistant","sessionId":"claude-main","timestamp":"2026-04-01T00:00:01.000Z","cwd":"/tmp/workspace","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"I found the tree issue."}],"usage":{"input_tokens":120,"output_tokens":48,"cache_read_input_tokens":32,"cache_creation_input_tokens":8}}}"#,
+                r#"{"type":"user","sessionId":"claude-main","timestamp":"2026-04-01T00:00:02.000Z","cwd":"/tmp/workspace","message":{"role":"user","content":[{"type":"text","text":"Apply the fix."}]}}"#,
+                r#"{"type":"assistant","sessionId":"claude-main","timestamp":"2026-04-01T00:00:03.000Z","cwd":"/tmp/workspace","message":{"role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"Applied the patch."}],"usage":{"input_tokens":30,"output_tokens":20,"cache_read_input_tokens":10,"cache_creation_input_tokens":5,"reasoning_output_tokens":7}}}"#,
             ]
             .join("\n"),
         )
@@ -902,6 +941,45 @@ mod tests {
         assert_eq!(parsed.entries[2].entry_type, "message");
         assert_eq!(parsed.entries[3].entry_type, "task_complete");
         assert_eq!(parsed.entries[4].entry_type, "token_count");
+    }
+
+    #[test]
+    fn parses_claude_session_snapshot_usage_totals_across_turns() {
+        let temp_dir = TempDir::new("claude-snapshot-usage-total");
+        let session_file = temp_dir.path.join("session.jsonl");
+        write_claude_multi_turn_fixture(&session_file);
+
+        let parsed = parse_claude_session_snapshot(&session_file)
+            .expect("snapshot parse should succeed")
+            .expect("snapshot should parse");
+        let token_payloads = parsed
+            .entries
+            .iter()
+            .filter(|entry| entry.entry_type == "token_count")
+            .map(|entry| {
+                serde_json::from_str::<Value>(
+                    entry
+                        .text
+                        .as_deref()
+                        .expect("token_count entry should have payload"),
+                )
+                .expect("token_count payload should parse")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(token_payloads.len(), 2);
+        assert_eq!(token_payloads[1]["last"]["in"].as_u64(), Some(30));
+        assert_eq!(token_payloads[1]["last"]["out"].as_u64(), Some(20));
+        assert_eq!(token_payloads[1]["last"]["cached"].as_u64(), Some(10));
+        assert_eq!(token_payloads[1]["last"]["cache_write"].as_u64(), Some(5));
+        assert_eq!(token_payloads[1]["last"]["reasoning"].as_u64(), Some(7));
+        assert_eq!(token_payloads[1]["last"]["total"].as_u64(), Some(57));
+        assert_eq!(token_payloads[1]["total"]["in"].as_u64(), Some(150));
+        assert_eq!(token_payloads[1]["total"]["out"].as_u64(), Some(68));
+        assert_eq!(token_payloads[1]["total"]["cached"].as_u64(), Some(42));
+        assert_eq!(token_payloads[1]["total"]["cache_write"].as_u64(), Some(13));
+        assert_eq!(token_payloads[1]["total"]["reasoning"].as_u64(), Some(7));
+        assert_eq!(token_payloads[1]["total"]["total"].as_u64(), Some(225));
     }
 
     #[test]
