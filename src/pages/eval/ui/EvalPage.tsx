@@ -20,6 +20,7 @@ export function EvalPage({ onNavigateToMonitor }: EvalPageProps) {
 
       <div className="grid min-h-0 gap-4 xl:grid-cols-[16rem_18rem_minmax(0,1fr)]">
         <EvalExperimentListPanel
+          error={view.listError}
           experiments={view.experiments}
           loading={view.loading}
           selectedExperimentId={view.selectedExperimentId}
@@ -27,6 +28,7 @@ export function EvalPage({ onNavigateToMonitor }: EvalPageProps) {
         />
         <EvalCaseListPanel
           detail={view.detail}
+          error={view.detailError}
           detailLoading={view.detailLoading}
           selectedCaseId={view.selectedCaseId}
           onSelect={view.selectCase}
