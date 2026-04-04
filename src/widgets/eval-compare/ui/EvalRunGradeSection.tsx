@@ -20,7 +20,12 @@ export function EvalRunGradeSection({ run }: EvalRunGradeSectionProps) {
       {topGrades.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {topGrades.map((grade) => (
-            <Badge key={grade.id} variant={gradeTone(grade)}>
+            <Badge
+              key={grade.id}
+              variant={gradeTone(grade)}
+              className="max-w-[12rem] truncate"
+              title={`${grade.metricName}: ${grade.score}`}
+            >
               {grade.metricName}: {grade.score}
             </Badge>
           ))}
