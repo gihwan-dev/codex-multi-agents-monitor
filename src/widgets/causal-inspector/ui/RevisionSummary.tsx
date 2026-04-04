@@ -22,7 +22,9 @@ export function RevisionSummary({
             currentRevision === revision.revision && "border-white/18 bg-white/[0.06]",
           )}
         >
-          <span className="truncate">{revision.label}</span>
+          <span className="truncate" title={revision.label}>
+            {revision.label}
+          </span>
           <span className="tabular-nums text-muted-foreground">{revision.sessionCount} runs</span>
           <span className="tabular-nums text-muted-foreground">
             {revision.averageScore === null

@@ -27,6 +27,7 @@ export function GraphContextCardHeader({
         <span
           data-slot="graph-context-card-event"
           className="mt-1 block truncate text-[0.72rem] text-[var(--color-text-secondary)]"
+          title={presentation.activeEventLabel}
         >
           {presentation.activeEventLabel}
         </span>

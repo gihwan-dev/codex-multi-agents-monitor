@@ -13,6 +13,7 @@ export function GraphContextCardCause({
       <span
         data-slot="graph-context-card-cause"
         className="mt-1 block truncate text-[0.76rem] text-[var(--color-text-secondary)]"
+        title={presentation.causeEventLabel}
       >
         {presentation.causeEventLabel}
       </span>

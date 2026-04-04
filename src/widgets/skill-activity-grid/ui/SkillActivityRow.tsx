@@ -26,7 +26,10 @@ export function SkillActivityRow({ item }: SkillActivityRowProps) {
       <div className="flex min-w-0 items-baseline gap-2">
         <span className="shrink-0 font-medium text-foreground">{item.skillName}</span>
         {item.description && (
-          <span className="truncate text-xs text-muted-foreground">
+          <span
+            className="truncate text-xs text-muted-foreground"
+            title={item.description}
+          >
             {item.description}
           </span>
         )}
