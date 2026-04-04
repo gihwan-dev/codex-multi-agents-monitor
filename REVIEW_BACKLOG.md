@@ -110,6 +110,10 @@
 
 (없음)
 
+## Infra
+
+- [x] **INFRA-1**: biome.json에 `.worktrees` 무시 규칙 추가 (worktree 병렬 작업 시 nested root config 충돌 방지)
+
 ## Test Gaps
 
 - [ ] **T1**: Monitor/Eval 뷰 전환 시 keyboard listener 비활성화 테스트
@@ -193,4 +197,9 @@
 - [x] **FE-16**: contextObservability Math.max spread→reduce 교체 (이번 세션)
 - [x] **FE-14**: throwSessionScoreSaveFailure dead code 제거 (이번 세션)
 - [x] **N16-a11y**: SkillActivityToolbar 검색 Input에 aria-label="Search skills" 추가 (이번 세션)
-- [x] **N17-title**: GraphEventCardContent line-clamp-2 적용된 title/summary에 title 속성 추가 (이번 세션)
+- [x] **N17-title**: GraphEventCardContent line-clamp-2 적용된 title/summary에 title 속성 추가 (이전 세션)
+- [x] **U-20**: EvalRunArtifactSection line-clamp-3 artifact.preview에 title 속성 추가 (이번 세션)
+- [x] **U-21**: EvalRunStepSection line-clamp-3 step.outputPreview에 title 속성 추가 (이번 세션)
+- [x] **U-22**: PromptLayerContent line-clamp-4 displayText에 title 속성 추가 (이번 세션)
+- [x] **U-23**: WorkspaceGroupButton motion-reduce:transition-none + focus-visible ring 추가 (이번 세션)
+- [x] **FE-20**: sidebarTreeAssembly Math.max spread → reduce 교체 (이번 세션)

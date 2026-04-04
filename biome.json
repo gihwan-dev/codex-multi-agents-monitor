@@ -17,7 +17,8 @@
       "!**/*.story.*",
       "!**/__snapshots__",
       "!**/__fixtures__",
-      "!**/generated"
+      "!**/generated",
+      "!.worktrees"
     ]
   },
   "formatter": {

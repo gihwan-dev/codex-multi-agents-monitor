@@ -39,9 +39,7 @@ export function EvalRunStepSection({ run }: EvalRunStepSectionProps) {
                 : "still open"}
             </span>
             {step.outputPreview && (
-              <p className="line-clamp-3 text-sm text-foreground/90" title={step.outputPreview}>
-                {step.outputPreview}
-              </p>
+              <p className="line-clamp-3 text-sm text-foreground/90" title={step.outputPreview}>{step.outputPreview}</p>
             )}
           </div>
         ))
