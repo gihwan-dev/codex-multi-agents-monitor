@@ -132,10 +132,3 @@ export function startSessionScoreSave(options: Pick<
   options.setPending(true);
   options.setError(null);
 }
-
-export function throwSessionScoreSaveFailure(
-  setError: SessionScoreStateSetters["setError"],
-) {
-  setError("Failed to save the session score.");
-  throw new Error("save-session-score-failed");
-}
