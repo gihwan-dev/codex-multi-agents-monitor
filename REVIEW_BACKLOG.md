@@ -110,6 +110,10 @@
   - 범위: eval, widget, shared 전반
   - 수정: 별도 테마 세션에서 `border-[color:var(--color-chrome-border)]` 등으로 일괄 변환
 
+- [ ] **UX-38**: `button.tsx:8` `transition-all` without `motion-reduce:transition-none` — 다른 프리미티브와 인라인 일관성 위반
+  - 파일: `src/shared/ui/primitives/button.tsx:8`
+  - 수정: `transition-all` 뒤에 `motion-reduce:transition-none` 추가 (기능적으로는 motion.css 글로벌 룰이 커버하므로 low priority)
+
 ## New Code Quality Issues
 
 ### Frontend
@@ -138,6 +142,10 @@
   - 파일: `src/features/workspace-identity/lib/workspaceIdentityResolver.ts:59`
   - 수정: TTL 또는 dataset-version 기반 무효화
 
+- [ ] **FE-53**: `monitorStateReducer` unsafe double cast가 monitorActionHandlers의 exhaustiveness 검사를 무효화
+  - 파일: `src/pages/monitor/model/state/reducer.ts:8-11`
+  - 수정: `as (currentState, currentAction) => MonitorState` 캐스트 제거, `action as never` 패턴 또는 타입 안전한 dispatch
+
 ### Backend
 
 - [ ] **SEC-1**: `load_archived_session_snapshot_from_disk` 심볼릭 링크 우회 가능 — canonicalize 전 symlink 검사 누락
@@ -152,6 +160,10 @@
   - 파일: `src-tauri/src/application/archived_sessions.rs:162-175`
   - 수정: load_all_session_score_records()로 일괄 로드 후 Map 조회
 
+- [ ] **PERF-3-be**: `load_profile_revisions` 매 호출마다 전체 score record 파일 로드+역직렬화
+  - 파일: `src-tauri/src/application/session_scoring.rs:67-73`
+  - 수정: 캐시 또는 경량 인덱스 도입
+
 - [ ] **COR-4-be**: `resolve_claude_recent_snapshot_selection` 같은 파일 이중 파싱
   - 파일: `src-tauri/src/application/recent_sessions.rs:443-461`
   - 수정: 첫 파싱 결과(workspace_path)를 Selection variant에 포함
@@ -160,9 +172,23 @@
   - 파일: `src-tauri/src/application/eval_service.rs:965`, `eval_grader.rs:276`
   - 수정: eprintln 경고 추가
 
+- [ ] **COR-6-be**: `parse_section_header` `[[...]]` TOML array-of-tables 구문 잘못 파싱
+  - 파일: `src-tauri/src/infrastructure/codex_config.rs:84-86`
+  - 수정: 이중 대괄호 검사 추가
+
 - [ ] **N-6-be**: `scan_skill_invocations_in_file`에서 mid-read I/O 에러 시 무경고 중단
   - 파일: `src-tauri/src/application/skill_activity.rs:99`
   - 수정: map_while(Result::ok) → match + eprintln + break
+
+- [ ] **N-7-be**: `build_subagent_meta` parent_thread_id 누락 시 빈 문자열 → orphan subagent 무경고
+  - 파일: `src-tauri/src/infrastructure/session_jsonl.rs:362-390`
+  - 수정: Option<String>으로 변경 또는 빈 값 시 None 반환
+
+### Architecture
+
+- [ ] **ARCH-2**: `widgets/monitor-drawer` → `widgets/prompt-assembly` cross-slice import — FSD 위반
+  - 파일: `src/widgets/monitor-drawer/ui/MonitorDrawerContextTab.tsx:1`
+  - 수정: PromptAssemblyView를 pages/monitor에서 render prop으로 전달
 
 ## Motion-Reduce Consistency
 
@@ -180,6 +206,12 @@
 
 ## Resolved
 
+- [x] **SEC-3-be**: `is_main_claude_session_path` symlink 가드 추가 (이번 세션)
+- [x] **COR-7-be**: `load_all_session_score_records` best-effort 패턴 — corrupt 파일 로깅 후 건너뛰기 (이번 세션)
+- [x] **COR-8-be**: `ClaudeUsageMetrics` 누적 토큰 추적 — last/total 구분 (이번 세션)
+- [x] **CON-2-be**: live session cancel flag Acquire/Release ordering (이번 세션)
+- [x] **FE-54**: CopyButton setTimeout cleanup on unmount (이번 세션)
+- [x] **LINT-1**: `summarySelectors.ts` 파일 길이 초과 + `collectAnomalyCandidates` 인지 복잡도 → anomalyJumps.ts 분리 (이번 세션)
 - [x] **UX-36**: SessionScoreEditorDialog dark-only bg → gradient-dialog-surface 토큰 (이번 세션)
 - [x] **SEC-2**: symlink .jsonl 파일 스캔 우회 차단 — `!path.is_symlink()` 가드 추가 (이번 세션)
 - [x] **COR-1**: `build_profile_revision_summary` expect 패닉 → Option ��환 (이번 세션)
