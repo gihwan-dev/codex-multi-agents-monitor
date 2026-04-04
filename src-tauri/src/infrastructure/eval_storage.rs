@@ -139,7 +139,27 @@ pub(crate) fn resolve_repository_head_sha(repo_path: &Path) -> io::Result<String
 }
 
 fn validate_head_reference(reference: &str) -> io::Result<()> {
-    if !reference.starts_with("refs/") || reference.contains("..") {
+    if !reference.starts_with("refs/") || reference.contains('\0') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HEAD contains an invalid reference path",
+        ));
+    }
+
+    if reference
+        .split('/')
+        .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HEAD contains an invalid reference path",
+        ));
+    }
+
+    if Path::new(reference)
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "HEAD contains an invalid reference path",
@@ -242,10 +262,12 @@ fn resolve_packed_reference(refs_root: &Path, reference: &str) -> io::Result<Str
 
 #[cfg(test)]
 mod tests {
-    use super::{experiment_file_path, experiment_mutation_lock, resolve_repository_head_sha};
+    use super::{
+        experiment_file_path, experiment_mutation_lock, resolve_repository_head_sha,
+        validate_head_reference,
+    };
     use std::{
-        fs,
-        io,
+        fs, io,
         path::PathBuf,
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
@@ -301,5 +323,23 @@ mod tests {
 
         let error = experiment_file_path("nested/id").expect_err("reject nested path");
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_head_references_with_non_normal_components() {
+        let error = validate_head_reference("refs/./heads/main")
+            .expect_err("reject current-directory segment");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        let error = validate_head_reference("refs/heads/../main")
+            .expect_err("reject parent-directory segment");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_head_references_with_null_bytes() {
+        let error =
+            validate_head_reference("refs/heads/main\0packed").expect_err("reject null byte");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }

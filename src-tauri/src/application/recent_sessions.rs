@@ -73,9 +73,22 @@ pub(crate) fn load_recent_session_index_from_disk() -> io::Result<Vec<RecentSess
     let codex_home = resolve_codex_home()?;
     let project_roots = resolve_project_roots(&codex_home).unwrap_or_default();
     let sessions_root = codex_home.join("sessions");
-    let mut items = load_codex_recent_index_items(&codex_home, &sessions_root, &project_roots)
-        .unwrap_or_default();
-    items.extend(load_claude_recent_index_items(&project_roots).unwrap_or_default());
+    let mut items = match load_codex_recent_index_items(&codex_home, &sessions_root, &project_roots)
+    {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!("[recent-sessions] codex index load failed: {err}");
+            Vec::new()
+        }
+    };
+    let claude_items = match load_claude_recent_index_items(&project_roots) {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!("[recent-sessions] claude index load failed: {err}");
+            Vec::new()
+        }
+    };
+    items.extend(claude_items);
     items.retain(|item| !should_hide_recent_boot_thread(item));
     items.sort_by(|left, right| {
         right
