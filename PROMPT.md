@@ -104,15 +104,31 @@ Phase 2와 동일하게 그룹핑 → Codex 병렬 수정 → 머지 → 검증.
 - 앱 특성 명시: "멀티 에이전트 런 디버깅 관측 콘솔. 정보 밀도 우선. 과한 카드 UI, 장식적 스타일링, 마케팅 톤 절대 금지."
 - `UX_SPEC.md`, `UX_BEHAVIOR_ACCESSIBILITY.md` 참조 지시
 
+**Codex는 자율적 판단 능력이 낮다.** 프롬프트가 구체적이지 않으면 엉뚱한 방향으로 간다.
+코드를 대신 써주는 게 아니라, **지시를 구체적으로** 해야 한다:
+
+- "접근성 개선해" (X) → "WorkspaceRunItem.tsx:33의 provider badge span에 aria-label={provider === 'claude' ? 'Claude Code' : 'Codex'} 추가" (O)
+- "성능 개선해" (X) → "buildEdgeMaps (graphSceneLayout.ts:120)에서 edges.filter를 매번 호출하지 말고, edgesBySource Map을 한 번 빌드해서 O(n) 조회로 변경" (O)
+- "UX 개선해" (X) → "EvalRunPicker.tsx:22에서 baselineRunId === candidateRunId일 때 candidate select를 disabled 처리하고, 같은 run 선택 시 '동일한 run은 비교할 수 없습니다' 인라인 메시지 표시" (O)
+
+**왜(why)와 무엇(what)을 명확히, 어떻게(how)는 Codex에게 맡기되 방향은 제시한다.**
+파일 경로, 라인 번호, 현재 동작, 기대 동작을 반드시 포함한다.
+
 Codex에 보내는 모든 프롬프트는 아래 구조를 따른다:
 
 ```xml
 <task>
 ## 목적
-(무엇을 왜 수정하는지)
+(무엇을 왜 수정하는지 — 도메인 맥락 포함)
+
+## 현재 동작
+(지금 코드가 어떻게 동작하는지, 왜 문제인지)
+
+## 기대 동작
+(수정 후 어떻게 동작해야 하는지)
 
 ## 수정 대상
-(파일 경로 + 라인 + 구체적 수정 내용)
+(파일 경로 + 라인 번호 + 구체적 변경 방향)
 
 ## 수정하지 않을 파일
 (다른 병렬 작업의 영역)
