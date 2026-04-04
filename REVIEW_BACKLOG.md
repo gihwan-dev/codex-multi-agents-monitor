@@ -10,6 +10,13 @@
 
 (없음)
 
+## New UI/UX Issues (이번 세션)
+
+- [x] **UX-39**: EvalExperimentListRow + EvalCaseListPanel CaseRow 버튼에 `focus-visible:ring-[3px] focus-visible:ring-ring/50` 추가 (이번 세션)
+- [x] **UX-40**: EvalExperimentListRow + EvalCaseListPanel CaseRow 버튼에 `aria-pressed={selected}` 추가 (이번 세션)
+- [x] **UX-41**: ScoreBadge 하드코딩 Tailwind 팔레트(rose/emerald/sky/amber) → 시맨틱 CSS 변수(--color-success/active/waiting/failed) 교체 (이번 세션)
+- [x] **UX-42-b**: TextViewerModal CopyButton `text-green-500` → `text-[var(--color-success)]` 교체 (이번 세션)
+
 ## Code Quality (Backend)
 
 - [ ] **I3**: `ArchivedIndexCache`의 populate-then-read TOCTOU — clear() 직후 stale 인덱스 populate 가능
@@ -55,6 +62,10 @@
 - [ ] **N-2-be**: `collect_session_files`에서 archived_sessions 디렉토리 에러 시 전체 스캔 중단
   - 파일: `src-tauri/src/application/skill_activity.rs:15-25`
   - 수정: unwrap_or_default() 또는 NotFound 허용
+
+- [ ] **PERF-7-be**: `collapse_whitespace` 함수가 Vec<&str> 할당 후 join — 인덱스 빌드 시 entry당 임시 Vec 생성
+  - 파일: `src-tauri/src/support/text_recent_index.rs:183-184`
+  - 수정: iterator 기반 단일 패스 또는 in-place 처리로 변경
 
 - [ ] **SEC-4**: `load_archived_session_snapshot_from_disk`가 canonical_path 대신 original path로 파일 오픈 — 검증 우회 가능
   - 파일: `src-tauri/src/application/archived_sessions.rs:56-83`
@@ -270,6 +281,10 @@
 
 ## Resolved
 
+- [x] **UX-39**: EvalExperimentListRow + CaseRow focus-visible ring 추가 (이번 세션)
+- [x] **UX-40**: EvalExperimentListRow + CaseRow aria-pressed 추가 (이번 세션)
+- [x] **UX-41**: ScoreBadge 하드코딩 팔레트 → 시맨틱 CSS 변수 교체 (이번 세션)
+- [x] **UX-42-b**: TextViewerModal CopyButton text-green-500 → --color-success 토큰 교체 (이번 세션)
 - [x] **COR-9-be**: `path_is_allowed` str::starts_with → Path::starts_with 세그먼트 비교 (이번 세션)
 - [x] **ERR-3-be**: `record_event` best-effort 패턴 — audit 실패가 트랜잭션에 영향 주지 않음 (이번 세션)
 - [x] **FE-55**: `finishSessionScoreLoad` active 가드 제거 — 취소 후 stuck loading 해소 (이번 세션)

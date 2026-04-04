@@ -28,7 +28,8 @@ function CaseRow({
     <button
       type="button"
       aria-label={`Select case: ${item.title}`}
-      className={`grid gap-1 rounded-[var(--radius-soft)] border px-3 py-3 text-left transition-colors motion-reduce:transition-none ${
+      aria-pressed={selected}
+      className={`grid gap-1 rounded-[var(--radius-soft)] border px-3 py-3 text-left transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none ${
         selected
           ? "border-[color:color-mix(in_srgb,var(--color-active)_50%,white_15%)] bg-[color:color-mix(in_srgb,var(--color-active)_12%,transparent)]"
           : "border-white/8 bg-black/10 hover:bg-white/[0.05]"

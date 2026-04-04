@@ -8,21 +8,21 @@ interface ScoreBadgeProps {
 }
 
 const EMPTY_SCORE_TONE =
-  "border-white/10 bg-white/[0.04] text-[var(--color-text-tertiary)]";
+  "border-[color:var(--color-chrome-border)] bg-[var(--color-surface-tint)] text-[var(--color-text-tertiary)]";
 const FALLBACK_SCORE_TONE =
-  "border-rose-400/30 bg-rose-400/12 text-rose-100";
+  "border-[color:color-mix(in_srgb,var(--color-failed)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--color-failed)_12%,transparent)] text-[var(--color-failed)]";
 const SCORED_TONES = [
   {
     minScore: 85,
-    tone: "border-emerald-400/30 bg-emerald-400/12 text-emerald-100",
+    tone: "border-[color:color-mix(in_srgb,var(--color-success)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)]",
   },
   {
     minScore: 70,
-    tone: "border-sky-400/30 bg-sky-400/12 text-sky-100",
+    tone: "border-[color:color-mix(in_srgb,var(--color-active)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--color-active)_12%,transparent)] text-[var(--color-active)]",
   },
   {
     minScore: 50,
-    tone: "border-amber-400/30 bg-amber-400/12 text-amber-100",
+    tone: "border-[color:color-mix(in_srgb,var(--color-waiting)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--color-waiting)_12%,transparent)] text-[var(--color-waiting)]",
   },
 ] as const;
 

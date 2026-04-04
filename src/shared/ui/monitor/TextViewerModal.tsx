@@ -116,7 +116,7 @@ function CopyButton({ content }: { content: string | null }) {
       onClick={handleCopy}
       aria-label={copied ? "Copied" : "Copy to clipboard"}
     >
-      <ClipboardCopyIcon className={copied ? "text-green-500" : undefined} />
+      <ClipboardCopyIcon className={copied ? "text-[var(--color-success)]" : undefined} />
     </Button>
   );
 }
