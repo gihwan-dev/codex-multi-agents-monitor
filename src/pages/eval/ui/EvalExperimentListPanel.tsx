@@ -16,63 +16,33 @@ interface EvalExperimentListPanelProps {
   onSelect: (value: string | null) => void;
 }
 
-const ExperimentListSkeleton = () => {
-  return (
-    <div className="grid gap-2">
-      <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
-      <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
-    </div>
-  );
-};
+const ExperimentListSkeleton = () => (
+  <div className="grid gap-2">
+    <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
+    <div className="h-16 animate-pulse rounded-[var(--radius-soft)] bg-white/[0.03] motion-reduce:animate-none" />
+  </div>
+);
 
-const ExperimentListEmptyState = () => {
+const ExperimentListEmptyState = () => (
+  <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">
+    No experiments yet. Create one through the Tauri eval commands and it will
+    appear here.
+  </p>
+);
+
+const ExperimentListErrorBanner = ({ error }: { error?: string | null }) => {
+  if (!error) return null;
   return (
-    <p className="rounded-[var(--radius-soft)] border border-dashed border-white/10 px-3 py-4 text-sm leading-6 text-muted-foreground">
-      No experiments yet. Create one through the Tauri eval commands and it will
-      appear here.
+    <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
+      {error}
     </p>
   );
 };
 
-const ExperimentListErrorState = ({ message }: { message: string }) => (
-  <p className="rounded-[var(--radius-soft)] border border-destructive/40 bg-destructive/5 px-3 py-4 text-sm leading-6 text-destructive">
-    {message}
-  </p>
-);
-
-const getExperimentListVisibility = ({
-  error,
-  isEmpty,
-  loading,
-}: Pick<EvalExperimentListPanelProps, "error" | "loading"> & {
-  isEmpty: boolean;
-}) => {
-  const showSkeleton = loading && isEmpty;
-  const showError = !loading && !!error;
-  const showEmpty = !loading && !error && isEmpty;
-
-  return {
-    showEmpty,
-    showError,
-    showSkeleton,
-  };
-};
-
 export function EvalExperimentListPanel({
-  error,
-  experiments,
-  loading,
-  selectedExperimentId,
-  onSelect,
+  error, experiments, loading, selectedExperimentId, onSelect,
 }: EvalExperimentListPanelProps) {
   const isEmpty = experiments.length === 0;
-  const errorMessage = error ?? "";
-  const { showEmpty, showError, showSkeleton } = getExperimentListVisibility({
-    error,
-    isEmpty,
-    loading,
-  });
-
   return (
     <Card className="min-h-0 border-white/8 bg-white/[0.03]">
       <CardHeader>
@@ -86,8 +56,8 @@ export function EvalExperimentListPanel({
       <CardContent className="min-h-0">
         <ScrollArea className="h-[calc(100vh-16rem)] pr-2 xl:h-full">
           <div className="grid gap-2">
-            {showSkeleton && <ExperimentListSkeleton />}
-            {showError && <ExperimentListErrorState message={errorMessage} />}
+            {loading && isEmpty && <ExperimentListSkeleton />}
+            <ExperimentListErrorBanner error={error} />
             {experiments.map((item) => (
               <EvalExperimentListRow
                 key={item.experiment.id}
@@ -96,7 +66,7 @@ export function EvalExperimentListPanel({
                 onSelect={onSelect}
               />
             ))}
-            {showEmpty && <ExperimentListEmptyState />}
+            {!loading && isEmpty && !error && <ExperimentListEmptyState />}
           </div>
         </ScrollArea>
       </CardContent>
